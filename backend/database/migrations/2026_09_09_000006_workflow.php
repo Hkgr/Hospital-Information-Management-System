@@ -57,7 +57,9 @@ return new class extends Migration
             $table->foreign(['requested_by'], 'fk_correction_requests_7448af99fc')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['reviewed_by'], 'fk_correction_requests_c1366b3862')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `correction_requests` ADD CONSTRAINT `ck_correction_requests_b6589fc6ab` CHECK (status IN (\'pending\',\'approved\',\'rejected\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `correction_requests` ADD CONSTRAINT `ck_correction_requests_b6589fc6ab` CHECK (status IN (\'pending\',\'approved\',\'rejected\'))');
+        }
 
         Schema::create('entry_drafts', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -102,7 +104,9 @@ return new class extends Migration
             $table->foreign(['target_patient_id'], 'fk_patient_merges_98f729cab0')->references(['id'])->on('patients')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['merged_by'], 'fk_patient_merges_402d733850')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `patient_merges` ADD CONSTRAINT `ck_patient_merges_b6589fc6ab` CHECK (source_patient_id <> target_patient_id)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `patient_merges` ADD CONSTRAINT `ck_patient_merges_b6589fc6ab` CHECK (source_patient_id <> target_patient_id)');
+        }
 
         Schema::create('import_batches', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -122,7 +126,9 @@ return new class extends Migration
             $table->foreign(['facility_id'], 'fk_import_batches_07c6c82781')->references(['id'])->on('facilities')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['created_by'], 'fk_import_batches_71a8aeb311')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `import_batches` ADD CONSTRAINT `ck_import_batches_b6589fc6ab` CHECK (status IN (\'staged\',\'validated\',\'imported\',\'failed\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `import_batches` ADD CONSTRAINT `ck_import_batches_b6589fc6ab` CHECK (status IN (\'staged\',\'validated\',\'imported\',\'failed\'))');
+        }
 
         Schema::create('import_rows', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -143,7 +149,9 @@ return new class extends Migration
             $table->unique(['import_batch_id', 'source_key'], 'unique_import_rows_c5be609403');
             $table->foreign(['import_batch_id'], 'fk_import_rows_f408daa3bb')->references(['id'])->on('import_batches')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `import_rows` ADD CONSTRAINT `ck_import_rows_b6589fc6ab` CHECK (status IN (\'pending\',\'valid\',\'invalid\',\'imported\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `import_rows` ADD CONSTRAINT `ck_import_rows_b6589fc6ab` CHECK (status IN (\'pending\',\'valid\',\'invalid\',\'imported\'))');
+        }
     }
 
     public function down(): void

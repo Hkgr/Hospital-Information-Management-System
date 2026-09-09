@@ -44,8 +44,12 @@ return new class extends Migration
             $table->foreign(['report_definition_id'], 'fk_report_versions_6adead064b')->references(['id'])->on('report_definitions')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['created_by'], 'fk_report_versions_71a8aeb311')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `report_versions` ADD CONSTRAINT `ck_report_versions_b6589fc6ab` CHECK (status IN (\'draft\',\'published\',\'retired\'))');
-        DB::statement('ALTER TABLE `report_versions` ADD CONSTRAINT `ck_report_versions_356a192b79` CHECK (effective_to IS NULL OR effective_to >= effective_from)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_versions` ADD CONSTRAINT `ck_report_versions_b6589fc6ab` CHECK (status IN (\'draft\',\'published\',\'retired\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_versions` ADD CONSTRAINT `ck_report_versions_356a192b79` CHECK (effective_to IS NULL OR effective_to >= effective_from)');
+        }
 
         Schema::create('age_bands', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -63,8 +67,12 @@ return new class extends Migration
             $table->unique(['id', 'report_version_id'], 'unique_age_bands_6915b5d33f');
             $table->foreign(['report_version_id'], 'fk_age_bands_8004087a0a')->references(['id'])->on('report_versions')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `age_bands` ADD CONSTRAINT `ck_age_bands_b6589fc6ab` CHECK (min_months >= 0)');
-        DB::statement('ALTER TABLE `age_bands` ADD CONSTRAINT `ck_age_bands_356a192b79` CHECK (max_months_exclusive IS NULL OR max_months_exclusive > min_months)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `age_bands` ADD CONSTRAINT `ck_age_bands_b6589fc6ab` CHECK (min_months >= 0)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `age_bands` ADD CONSTRAINT `ck_age_bands_356a192b79` CHECK (max_months_exclusive IS NULL OR max_months_exclusive > min_months)');
+        }
 
         Schema::create('report_metrics', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -92,12 +100,24 @@ return new class extends Migration
             $table->foreign(['report_version_id'], 'fk_report_metrics_8004087a0a')->references(['id'])->on('report_versions')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['age_band_id', 'report_version_id'], 'fk_report_metrics_1375b1a48b')->references(['id', 'report_version_id'])->on('age_bands')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_b6589fc6ab` CHECK (source IN (\'visits\',\'diagnoses\',\'services\',\'procedures\',\'dose_sessions\',\'dose_items\',\'medications\',\'outcomes\',\'disabilities\',\'staff_work_days\',\'blood_donations\',\'blood_transfusions\',\'admissions\',\'deaths\',\'cancer_cases\'))');
-        DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_356a192b79` CHECK (aggregation IN (\'count_events\',\'distinct_patients\',\'distinct_visits\',\'sum_quantity\',\'daily_average\'))');
-        DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_da4b9237ba` CHECK (date_basis IN (\'event_date\',\'visit_date\'))');
-        DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_77de68daec` CHECK (newness_basis IN (\'hospital\',\'clinic\'))');
-        DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_1b64538924` CHECK (split_by IN (\'none\',\'gender\'))');
-        DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_ac3478d69a` CHECK (validation_status IN (\'pending\',\'verified\',\'rejected\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_b6589fc6ab` CHECK (source IN (\'visits\',\'diagnoses\',\'services\',\'procedures\',\'dose_sessions\',\'dose_items\',\'medications\',\'outcomes\',\'disabilities\',\'staff_work_days\',\'blood_donations\',\'blood_transfusions\',\'admissions\',\'deaths\',\'cancer_cases\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_356a192b79` CHECK (aggregation IN (\'count_events\',\'distinct_patients\',\'distinct_visits\',\'sum_quantity\',\'daily_average\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_da4b9237ba` CHECK (date_basis IN (\'event_date\',\'visit_date\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_77de68daec` CHECK (newness_basis IN (\'hospital\',\'clinic\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_1b64538924` CHECK (split_by IN (\'none\',\'gender\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_metrics` ADD CONSTRAINT `ck_report_metrics_ac3478d69a` CHECK (validation_status IN (\'pending\',\'verified\',\'rejected\'))');
+        }
 
         Schema::create('diagnosis_report_classifications', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -119,8 +139,12 @@ return new class extends Migration
             $table->foreign(['verified_by'], 'fk_diagnosis_report_classifi_59b6a5cf1a')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['report_metric_id', 'report_version_id'], 'fk_diagnosis_report_classifi_3c784e8bfb')->references(['id', 'report_version_id'])->on('report_metrics')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `diagnosis_report_classifications` ADD CONSTRAINT `ck_diagnosis_report_classifi_b6589fc6ab` CHECK (status IN (\'proposed\',\'verified\',\'rejected\'))');
-        DB::statement('ALTER TABLE `diagnosis_report_classifications` ADD CONSTRAINT `ck_diagnosis_report_classifi_356a192b79` CHECK ((status = \'verified\' AND verified_by IS NOT NULL AND verified_at IS NOT NULL) OR (status <> \'verified\' AND verified_by IS NULL AND verified_at IS NULL))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `diagnosis_report_classifications` ADD CONSTRAINT `ck_diagnosis_report_classifi_b6589fc6ab` CHECK (status IN (\'proposed\',\'verified\',\'rejected\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `diagnosis_report_classifications` ADD CONSTRAINT `ck_diagnosis_report_classifi_356a192b79` CHECK ((status = \'verified\' AND verified_by IS NOT NULL AND verified_at IS NOT NULL) OR (status <> \'verified\' AND verified_by IS NULL AND verified_at IS NULL))');
+        }
 
         Schema::create('report_metric_catalog_items', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -169,9 +193,15 @@ return new class extends Migration
             $table->foreign(['disability_type_id'], 'fk_report_metric_catalog_ite_bbe5f03cf0')->references(['id'])->on('disability_types')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['verified_by'], 'fk_report_metric_catalog_ite_59b6a5cf1a')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `report_metric_catalog_items` ADD CONSTRAINT `ck_report_metric_catalog_ite_b6589fc6ab` CHECK ((CASE WHEN diagnosis_id IS NULL THEN 0 ELSE 1 END + CASE WHEN diagnosis_category_id IS NULL THEN 0 ELSE 1 END + CASE WHEN service_id IS NULL THEN 0 ELSE 1 END + CASE WHEN service_category_id IS NULL THEN 0 ELSE 1 END + CASE WHEN procedure_id IS NULL THEN 0 ELSE 1 END + CASE WHEN result_id IS NULL THEN 0 ELSE 1 END + CASE WHEN medication_id IS NULL THEN 0 ELSE 1 END + CASE WHEN staff_id IS NULL THEN 0 ELSE 1 END + CASE WHEN clinic_id IS NULL THEN 0 ELSE 1 END + CASE WHEN funding_source_id IS NULL THEN 0 ELSE 1 END + CASE WHEN disability_type_id IS NULL THEN 0 ELSE 1 END) = 1)');
-        DB::statement('ALTER TABLE `report_metric_catalog_items` ADD CONSTRAINT `ck_report_metric_catalog_ite_356a192b79` CHECK (mapping_status IN (\'pending\',\'verified\',\'rejected\'))');
-        DB::statement('ALTER TABLE `report_metric_catalog_items` ADD CONSTRAINT `ck_report_metric_catalog_ite_da4b9237ba` CHECK ((mapping_status = \'verified\' AND verified_by IS NOT NULL AND verified_at IS NOT NULL) OR (mapping_status <> \'verified\' AND verified_by IS NULL AND verified_at IS NULL))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_metric_catalog_items` ADD CONSTRAINT `ck_report_metric_catalog_ite_b6589fc6ab` CHECK ((CASE WHEN diagnosis_id IS NULL THEN 0 ELSE 1 END + CASE WHEN diagnosis_category_id IS NULL THEN 0 ELSE 1 END + CASE WHEN service_id IS NULL THEN 0 ELSE 1 END + CASE WHEN service_category_id IS NULL THEN 0 ELSE 1 END + CASE WHEN procedure_id IS NULL THEN 0 ELSE 1 END + CASE WHEN result_id IS NULL THEN 0 ELSE 1 END + CASE WHEN medication_id IS NULL THEN 0 ELSE 1 END + CASE WHEN staff_id IS NULL THEN 0 ELSE 1 END + CASE WHEN clinic_id IS NULL THEN 0 ELSE 1 END + CASE WHEN funding_source_id IS NULL THEN 0 ELSE 1 END + CASE WHEN disability_type_id IS NULL THEN 0 ELSE 1 END) = 1)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_metric_catalog_items` ADD CONSTRAINT `ck_report_metric_catalog_ite_356a192b79` CHECK (mapping_status IN (\'pending\',\'verified\',\'rejected\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_metric_catalog_items` ADD CONSTRAINT `ck_report_metric_catalog_ite_da4b9237ba` CHECK ((mapping_status = \'verified\' AND verified_by IS NOT NULL AND verified_at IS NOT NULL) OR (mapping_status <> \'verified\' AND verified_by IS NULL AND verified_at IS NULL))');
+        }
 
         Schema::create('report_fields', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -193,8 +223,12 @@ return new class extends Migration
             $table->foreign(['report_version_id'], 'fk_report_fields_8004087a0a')->references(['id'])->on('report_versions')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['report_metric_id', 'report_version_id'], 'fk_report_fields_3c784e8bfb')->references(['id', 'report_version_id'])->on('report_metrics')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `report_fields` ADD CONSTRAINT `ck_report_fields_b6589fc6ab` CHECK (field_type IN (\'metadata\',\'metric\',\'note\'))');
-        DB::statement('ALTER TABLE `report_fields` ADD CONSTRAINT `ck_report_fields_356a192b79` CHECK ((field_type = \'metric\' AND report_metric_id IS NOT NULL) OR (field_type <> \'metric\' AND report_metric_id IS NULL))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_fields` ADD CONSTRAINT `ck_report_fields_b6589fc6ab` CHECK (field_type IN (\'metadata\',\'metric\',\'note\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_fields` ADD CONSTRAINT `ck_report_fields_356a192b79` CHECK ((field_type = \'metric\' AND report_metric_id IS NOT NULL) OR (field_type <> \'metric\' AND report_metric_id IS NULL))');
+        }
 
         Schema::create('report_runs', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -225,8 +259,12 @@ return new class extends Migration
             $table->foreign(['submitted_by'], 'fk_report_runs_4da5f901f2')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['supersedes_id'], 'fk_report_runs_ac77267208')->references(['id'])->on('report_runs')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `report_runs` ADD CONSTRAINT `ck_report_runs_b6589fc6ab` CHECK (ends_on >= starts_on)');
-        DB::statement('ALTER TABLE `report_runs` ADD CONSTRAINT `ck_report_runs_356a192b79` CHECK (revision > 0)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_runs` ADD CONSTRAINT `ck_report_runs_b6589fc6ab` CHECK (ends_on >= starts_on)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `report_runs` ADD CONSTRAINT `ck_report_runs_356a192b79` CHECK (revision > 0)');
+        }
 
         Schema::create('report_values', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -302,7 +340,9 @@ return new class extends Migration
             $table->foreign(['requested_by'], 'fk_export_jobs_7448af99fc')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['report_run_id'], 'fk_export_jobs_feeec78304')->references(['id'])->on('report_runs')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `export_jobs` ADD CONSTRAINT `ck_export_jobs_b6589fc6ab` CHECK (status IN (\'queued\',\'running\',\'complete\',\'failed\',\'expired\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `export_jobs` ADD CONSTRAINT `ck_export_jobs_b6589fc6ab` CHECK (status IN (\'queued\',\'running\',\'complete\',\'failed\',\'expired\'))');
+        }
     }
 
     public function down(): void

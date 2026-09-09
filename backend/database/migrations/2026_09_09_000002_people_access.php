@@ -94,7 +94,9 @@ return new class extends Migration
             $table->foreign(['clinic_id'], 'fk_clinic_staff_8e97c18deb')->references(['id'])->on('clinics')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['staff_id'], 'fk_clinic_staff_e4ee98bb55')->references(['id'])->on('staff')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `clinic_staff` ADD CONSTRAINT `ck_clinic_staff_b6589fc6ab` CHECK (ends_on IS NULL OR ends_on >= starts_on)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `clinic_staff` ADD CONSTRAINT `ck_clinic_staff_b6589fc6ab` CHECK (ends_on IS NULL OR ends_on >= starts_on)');
+        }
 
         Schema::create('users', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -214,8 +216,12 @@ return new class extends Migration
             $table->foreign(['facility_id'], 'fk_medical_equipment_07c6c82781')->references(['id'])->on('facilities')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['equipment_category_id'], 'fk_medical_equipment_78bb3e6faa')->references(['id'])->on('equipment_categories')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `medical_equipment` ADD CONSTRAINT `ck_medical_equipment_b6589fc6ab` CHECK (quantity > 0)');
-        DB::statement('ALTER TABLE `medical_equipment` ADD CONSTRAINT `ck_medical_equipment_356a192b79` CHECK (operational_status IN (\'operational\',\'limited\',\'out_of_service\',\'unknown\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `medical_equipment` ADD CONSTRAINT `ck_medical_equipment_b6589fc6ab` CHECK (quantity > 0)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `medical_equipment` ADD CONSTRAINT `ck_medical_equipment_356a192b79` CHECK (operational_status IN (\'operational\',\'limited\',\'out_of_service\',\'unknown\'))');
+        }
 
         Schema::create('staff_work_days', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -239,7 +245,9 @@ return new class extends Migration
             $table->foreign(['entered_by'], 'fk_staff_work_days_020d7f1cfb')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['clinic_id', 'facility_id'], 'fk_staff_work_days_7c0a1e0767')->references(['id', 'facility_id'])->on('clinics')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `staff_work_days` ADD CONSTRAINT `ck_staff_work_days_b6589fc6ab` CHECK (source_type IN (\'documented\',\'derived\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `staff_work_days` ADD CONSTRAINT `ck_staff_work_days_b6589fc6ab` CHECK (source_type IN (\'documented\',\'derived\'))');
+        }
     }
 
     public function down(): void

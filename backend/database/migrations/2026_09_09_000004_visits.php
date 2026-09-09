@@ -33,8 +33,12 @@ return new class extends Migration
             $table->foreign(['submitted_by'], 'fk_reporting_periods_4da5f901f2')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['locked_by'], 'fk_reporting_periods_d3241209a9')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `reporting_periods` ADD CONSTRAINT `ck_reporting_periods_b6589fc6ab` CHECK (ends_on >= starts_on)');
-        DB::statement('ALTER TABLE `reporting_periods` ADD CONSTRAINT `ck_reporting_periods_356a192b79` CHECK (status IN (\'open\',\'submitted\',\'locked\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `reporting_periods` ADD CONSTRAINT `ck_reporting_periods_b6589fc6ab` CHECK (ends_on >= starts_on)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `reporting_periods` ADD CONSTRAINT `ck_reporting_periods_356a192b79` CHECK (status IN (\'open\',\'submitted\',\'locked\'))');
+        }
 
         Schema::create('visits', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -83,12 +87,24 @@ return new class extends Migration
             $table->foreign(['reporting_period_id', 'facility_id'], 'fk_visits_5fc8d62ae0')->references(['id', 'facility_id'])->on('reporting_periods')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['clinic_id', 'facility_id'], 'fk_visits_7c0a1e0767')->references(['id', 'facility_id'])->on('clinics')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_b6589fc6ab` CHECK (status IN (\'draft\',\'complete\',\'void\'))');
-        DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_356a192b79` CHECK (status <> \'complete\' OR attending_staff_id IS NOT NULL)');
-        DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_da4b9237ba` CHECK ((status = \'void\' AND voided_at IS NOT NULL) OR (status <> \'void\' AND voided_at IS NULL))');
-        DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_77de68daec` CHECK (newness_override IS NULL OR newness_override IN (\'new\',\'returning\',\'unknown\'))');
-        DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_1b64538924` CHECK (newness_override IS NULL OR newness_reason IS NOT NULL)');
-        DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_ac3478d69a` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_b6589fc6ab` CHECK (status IN (\'draft\',\'complete\',\'void\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_356a192b79` CHECK (status <> \'complete\' OR attending_staff_id IS NOT NULL)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_da4b9237ba` CHECK ((status = \'void\' AND voided_at IS NOT NULL) OR (status <> \'void\' AND voided_at IS NULL))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_77de68daec` CHECK (newness_override IS NULL OR newness_override IN (\'new\',\'returning\',\'unknown\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_1b64538924` CHECK (newness_override IS NULL OR newness_reason IS NOT NULL)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visits` ADD CONSTRAINT `ck_visits_ac3478d69a` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
 
         Schema::create('visit_demographics', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -108,9 +124,15 @@ return new class extends Migration
             $table->foreign(['visit_id'], 'fk_visit_demographics_c9919ef5a0')->references(['id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['governorate_id'], 'fk_visit_demographics_852f1fafdf')->references(['id'])->on('governorates')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `visit_demographics` ADD CONSTRAINT `ck_visit_demographics_b6589fc6ab` CHECK (gender IN (\'male\',\'female\',\'unknown\'))');
-        DB::statement('ALTER TABLE `visit_demographics` ADD CONSTRAINT `ck_visit_demographics_356a192b79` CHECK (birth_date_accuracy IN (\'exact\',\'year_only\',\'estimated\',\'unknown\'))');
-        DB::statement('ALTER TABLE `visit_demographics` ADD CONSTRAINT `ck_visit_demographics_da4b9237ba` CHECK (displacement_status IN (\'resident\',\'idp\',\'unknown\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_demographics` ADD CONSTRAINT `ck_visit_demographics_b6589fc6ab` CHECK (gender IN (\'male\',\'female\',\'unknown\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_demographics` ADD CONSTRAINT `ck_visit_demographics_356a192b79` CHECK (birth_date_accuracy IN (\'exact\',\'year_only\',\'estimated\',\'unknown\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_demographics` ADD CONSTRAINT `ck_visit_demographics_da4b9237ba` CHECK (displacement_status IN (\'resident\',\'idp\',\'unknown\'))');
+        }
     }
 
     public function down(): void

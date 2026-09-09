@@ -48,8 +48,12 @@ return new class extends Migration
             $table->foreign(['visit_id', 'facility_id'], 'fk_visit_diagnoses_769a9cb1ee')->references(['id', 'facility_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['reporting_period_id', 'facility_id'], 'fk_visit_diagnoses_5fc8d62ae0')->references(['id', 'facility_id'])->on('reporting_periods')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `visit_diagnoses` ADD CONSTRAINT `ck_visit_diagnoses_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
-        DB::statement('ALTER TABLE `visit_diagnoses` ADD CONSTRAINT `ck_visit_diagnoses_356a192b79` CHECK (diagnosis_status IN (\'provisional\',\'final\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_diagnoses` ADD CONSTRAINT `ck_visit_diagnoses_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_diagnoses` ADD CONSTRAINT `ck_visit_diagnoses_356a192b79` CHECK (diagnosis_status IN (\'provisional\',\'final\'))');
+        }
 
         Schema::create('visit_services', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -89,9 +93,15 @@ return new class extends Migration
             $table->foreign(['visit_id', 'facility_id'], 'fk_visit_services_769a9cb1ee')->references(['id', 'facility_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['reporting_period_id', 'facility_id'], 'fk_visit_services_5fc8d62ae0')->references(['id', 'facility_id'])->on('reporting_periods')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `visit_services` ADD CONSTRAINT `ck_visit_services_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
-        DB::statement('ALTER TABLE `visit_services` ADD CONSTRAINT `ck_visit_services_356a192b79` CHECK (quantity > 0)');
-        DB::statement('ALTER TABLE `visit_services` ADD CONSTRAINT `ck_visit_services_da4b9237ba` CHECK (delivery_location IN (\'internal\',\'external\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_services` ADD CONSTRAINT `ck_visit_services_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_services` ADD CONSTRAINT `ck_visit_services_356a192b79` CHECK (quantity > 0)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_services` ADD CONSTRAINT `ck_visit_services_da4b9237ba` CHECK (delivery_location IN (\'internal\',\'external\'))');
+        }
 
         Schema::create('visit_procedures', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -132,8 +142,12 @@ return new class extends Migration
             $table->foreign(['visit_id', 'facility_id'], 'fk_visit_procedures_769a9cb1ee')->references(['id', 'facility_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['reporting_period_id', 'facility_id'], 'fk_visit_procedures_5fc8d62ae0')->references(['id', 'facility_id'])->on('reporting_periods')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `visit_procedures` ADD CONSTRAINT `ck_visit_procedures_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
-        DB::statement('ALTER TABLE `visit_procedures` ADD CONSTRAINT `ck_visit_procedures_356a192b79` CHECK (quantity > 0)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_procedures` ADD CONSTRAINT `ck_visit_procedures_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_procedures` ADD CONSTRAINT `ck_visit_procedures_356a192b79` CHECK (quantity > 0)');
+        }
 
         Schema::create('dose_sessions', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -170,7 +184,9 @@ return new class extends Migration
             $table->foreign(['visit_id', 'facility_id'], 'fk_dose_sessions_769a9cb1ee')->references(['id', 'facility_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['reporting_period_id', 'facility_id'], 'fk_dose_sessions_5fc8d62ae0')->references(['id', 'facility_id'])->on('reporting_periods')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `dose_sessions` ADD CONSTRAINT `ck_dose_sessions_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `dose_sessions` ADD CONSTRAINT `ck_dose_sessions_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
 
         Schema::create('dose_session_items', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -198,10 +214,18 @@ return new class extends Migration
             $table->foreign(['entered_by'], 'fk_dose_session_items_020d7f1cfb')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['updated_by'], 'fk_dose_session_items_a133791554')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `dose_session_items` ADD CONSTRAINT `ck_dose_session_items_b6589fc6ab` CHECK (dose_value IS NULL OR dose_value > 0)');
-        DB::statement('ALTER TABLE `dose_session_items` ADD CONSTRAINT `ck_dose_session_items_356a192b79` CHECK (quantity IS NULL OR quantity > 0)');
-        DB::statement('ALTER TABLE `dose_session_items` ADD CONSTRAINT `ck_dose_session_items_da4b9237ba` CHECK (dose_value IS NULL OR dose_unit IS NOT NULL)');
-        DB::statement('ALTER TABLE `dose_session_items` ADD CONSTRAINT `ck_dose_session_items_77de68daec` CHECK (quantity IS NULL OR quantity_unit IS NOT NULL)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `dose_session_items` ADD CONSTRAINT `ck_dose_session_items_b6589fc6ab` CHECK (dose_value IS NULL OR dose_value > 0)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `dose_session_items` ADD CONSTRAINT `ck_dose_session_items_356a192b79` CHECK (quantity IS NULL OR quantity > 0)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `dose_session_items` ADD CONSTRAINT `ck_dose_session_items_da4b9237ba` CHECK (dose_value IS NULL OR dose_unit IS NOT NULL)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `dose_session_items` ADD CONSTRAINT `ck_dose_session_items_77de68daec` CHECK (quantity IS NULL OR quantity_unit IS NOT NULL)');
+        }
 
         Schema::create('visit_medications', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -244,9 +268,15 @@ return new class extends Migration
             $table->foreign(['visit_id', 'facility_id'], 'fk_visit_medications_769a9cb1ee')->references(['id', 'facility_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['reporting_period_id', 'facility_id'], 'fk_visit_medications_5fc8d62ae0')->references(['id', 'facility_id'])->on('reporting_periods')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `visit_medications` ADD CONSTRAINT `ck_visit_medications_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
-        DB::statement('ALTER TABLE `visit_medications` ADD CONSTRAINT `ck_visit_medications_356a192b79` CHECK (quantity IS NULL OR quantity > 0)');
-        DB::statement('ALTER TABLE `visit_medications` ADD CONSTRAINT `ck_visit_medications_da4b9237ba` CHECK (quantity IS NULL OR quantity_unit IS NOT NULL)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_medications` ADD CONSTRAINT `ck_visit_medications_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_medications` ADD CONSTRAINT `ck_visit_medications_356a192b79` CHECK (quantity IS NULL OR quantity > 0)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_medications` ADD CONSTRAINT `ck_visit_medications_da4b9237ba` CHECK (quantity IS NULL OR quantity_unit IS NOT NULL)');
+        }
 
         Schema::create('visit_outcomes', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -285,7 +315,9 @@ return new class extends Migration
             $table->foreign(['visit_id', 'facility_id'], 'fk_visit_outcomes_769a9cb1ee')->references(['id', 'facility_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['reporting_period_id', 'facility_id'], 'fk_visit_outcomes_5fc8d62ae0')->references(['id', 'facility_id'])->on('reporting_periods')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `visit_outcomes` ADD CONSTRAINT `ck_visit_outcomes_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `visit_outcomes` ADD CONSTRAINT `ck_visit_outcomes_b6589fc6ab` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
 
         Schema::create('case_reviews', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -310,7 +342,9 @@ return new class extends Migration
             $table->foreign(['followup_visit_id'], 'fk_case_reviews_800cabcc6a')->references(['id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['entered_by'], 'fk_case_reviews_020d7f1cfb')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `case_reviews` ADD CONSTRAINT `ck_case_reviews_b6589fc6ab` CHECK (status IN (\'awaiting\',\'reviewed\',\'cancelled\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `case_reviews` ADD CONSTRAINT `ck_case_reviews_b6589fc6ab` CHECK (status IN (\'awaiting\',\'reviewed\',\'cancelled\'))');
+        }
 
         Schema::create('death_records', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -345,8 +379,12 @@ return new class extends Migration
             $table->foreign(['voided_by'], 'fk_death_records_38e6c142a3')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['visit_id', 'facility_id'], 'fk_death_records_769a9cb1ee')->references(['id', 'facility_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `death_records` ADD CONSTRAINT `ck_death_records_b6589fc6ab` CHECK (place IN (\'inside\',\'outside\',\'unknown\'))');
-        DB::statement('ALTER TABLE `death_records` ADD CONSTRAINT `ck_death_records_356a192b79` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `death_records` ADD CONSTRAINT `ck_death_records_b6589fc6ab` CHECK (place IN (\'inside\',\'outside\',\'unknown\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `death_records` ADD CONSTRAINT `ck_death_records_356a192b79` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
 
         Schema::create('admissions', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -382,9 +420,15 @@ return new class extends Migration
             $table->foreign(['visit_id', 'patient_id'], 'fk_admissions_076554b0ec')->references(['id', 'patient_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['reporting_period_id', 'facility_id'], 'fk_admissions_5fc8d62ae0')->references(['id', 'facility_id'])->on('reporting_periods')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `admissions` ADD CONSTRAINT `ck_admissions_b6589fc6ab` CHECK (discharged_on IS NULL OR discharged_on >= admitted_on)');
-        DB::statement('ALTER TABLE `admissions` ADD CONSTRAINT `ck_admissions_356a192b79` CHECK (admission_type IN (\'routine\',\'emergency\',\'unknown\'))');
-        DB::statement('ALTER TABLE `admissions` ADD CONSTRAINT `ck_admissions_da4b9237ba` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `admissions` ADD CONSTRAINT `ck_admissions_b6589fc6ab` CHECK (discharged_on IS NULL OR discharged_on >= admitted_on)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `admissions` ADD CONSTRAINT `ck_admissions_356a192b79` CHECK (admission_type IN (\'routine\',\'emergency\',\'unknown\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `admissions` ADD CONSTRAINT `ck_admissions_da4b9237ba` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
 
         Schema::create('blood_donors', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -417,10 +461,18 @@ return new class extends Migration
             $table->foreign(['entered_by'], 'fk_blood_donors_020d7f1cfb')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['city_id', 'governorate_id'], 'fk_blood_donors_8e225095bc')->references(['id', 'governorate_id'])->on('cities')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `blood_donors` ADD CONSTRAINT `ck_blood_donors_b6589fc6ab` CHECK (gender IN (\'male\',\'female\',\'unknown\'))');
-        DB::statement('ALTER TABLE `blood_donors` ADD CONSTRAINT `ck_blood_donors_356a192b79` CHECK (blood_group IS NULL OR blood_group IN (\'A\',\'B\',\'AB\',\'O\'))');
-        DB::statement('ALTER TABLE `blood_donors` ADD CONSTRAINT `ck_blood_donors_da4b9237ba` CHECK (rh IS NULL OR rh IN (\'positive\',\'negative\'))');
-        DB::statement('ALTER TABLE `blood_donors` ADD CONSTRAINT `ck_blood_donors_77de68daec` CHECK (city_id IS NULL OR governorate_id IS NOT NULL)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donors` ADD CONSTRAINT `ck_blood_donors_b6589fc6ab` CHECK (gender IN (\'male\',\'female\',\'unknown\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donors` ADD CONSTRAINT `ck_blood_donors_356a192b79` CHECK (blood_group IS NULL OR blood_group IN (\'A\',\'B\',\'AB\',\'O\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donors` ADD CONSTRAINT `ck_blood_donors_da4b9237ba` CHECK (rh IS NULL OR rh IN (\'positive\',\'negative\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donors` ADD CONSTRAINT `ck_blood_donors_77de68daec` CHECK (city_id IS NULL OR governorate_id IS NOT NULL)');
+        }
 
         Schema::create('blood_donations', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -452,11 +504,21 @@ return new class extends Migration
             $table->foreign(['voided_by'], 'fk_blood_donations_38e6c142a3')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['reporting_period_id', 'facility_id'], 'fk_blood_donations_5fc8d62ae0')->references(['id', 'facility_id'])->on('reporting_periods')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_b6589fc6ab` CHECK (blood_group IN (\'A\',\'B\',\'AB\',\'O\'))');
-        DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_356a192b79` CHECK (rh IN (\'positive\',\'negative\'))');
-        DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_da4b9237ba` CHECK (units > 0)');
-        DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_77de68daec` CHECK (status IN (\'pending\',\'accepted\',\'rejected\'))');
-        DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_1b64538924` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_b6589fc6ab` CHECK (blood_group IN (\'A\',\'B\',\'AB\',\'O\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_356a192b79` CHECK (rh IN (\'positive\',\'negative\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_da4b9237ba` CHECK (units > 0)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_77de68daec` CHECK (status IN (\'pending\',\'accepted\',\'rejected\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donations` ADD CONSTRAINT `ck_blood_donations_1b64538924` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
 
         Schema::create('blood_donation_screenings', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -476,7 +538,9 @@ return new class extends Migration
             $table->foreign(['screening_test_id'], 'fk_blood_donation_screenings_8b71a8d6ea')->references(['id'])->on('screening_tests')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['entered_by'], 'fk_blood_donation_screenings_020d7f1cfb')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `blood_donation_screenings` ADD CONSTRAINT `ck_blood_donation_screenings_b6589fc6ab` CHECK (result IN (\'negative\',\'positive\',\'indeterminate\',\'not_done\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_donation_screenings` ADD CONSTRAINT `ck_blood_donation_screenings_b6589fc6ab` CHECK (result IN (\'negative\',\'positive\',\'indeterminate\',\'not_done\'))');
+        }
 
         Schema::create('blood_transfusions', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -517,12 +581,24 @@ return new class extends Migration
             $table->foreign(['visit_id', 'facility_id'], 'fk_blood_transfusions_769a9cb1ee')->references(['id', 'facility_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['visit_id', 'patient_id'], 'fk_blood_transfusions_076554b0ec')->references(['id', 'patient_id'])->on('visits')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_b6589fc6ab` CHECK (patient_id IS NOT NULL OR external_recipient_name IS NOT NULL)');
-        DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_356a192b79` CHECK (visit_id IS NULL OR patient_id IS NOT NULL)');
-        DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_da4b9237ba` CHECK (blood_group IS NULL OR blood_group IN (\'A\',\'B\',\'AB\',\'O\'))');
-        DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_77de68daec` CHECK (rh IS NULL OR rh IN (\'positive\',\'negative\'))');
-        DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_1b64538924` CHECK (units > 0)');
-        DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_ac3478d69a` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_b6589fc6ab` CHECK (patient_id IS NOT NULL OR external_recipient_name IS NOT NULL)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_356a192b79` CHECK (visit_id IS NULL OR patient_id IS NOT NULL)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_da4b9237ba` CHECK (blood_group IS NULL OR blood_group IN (\'A\',\'B\',\'AB\',\'O\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_77de68daec` CHECK (rh IS NULL OR rh IN (\'positive\',\'negative\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_1b64538924` CHECK (units > 0)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_transfusions` ADD CONSTRAINT `ck_blood_transfusions_ac3478d69a` CHECK (((voided_at IS NULL AND voided_by IS NULL AND void_reason IS NULL) OR (voided_at IS NOT NULL AND voided_by IS NOT NULL AND void_reason IS NOT NULL)))');
+        }
 
         Schema::create('blood_recipient_procedures', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -544,7 +620,9 @@ return new class extends Migration
             $table->foreign(['specialist_id'], 'fk_blood_recipient_procedure_461a4a90df')->references(['id'])->on('staff')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['entered_by'], 'fk_blood_recipient_procedure_020d7f1cfb')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `blood_recipient_procedures` ADD CONSTRAINT `ck_blood_recipient_procedure_b6589fc6ab` CHECK (quantity > 0)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `blood_recipient_procedures` ADD CONSTRAINT `ck_blood_recipient_procedure_b6589fc6ab` CHECK (quantity > 0)');
+        }
 
         Schema::create('cancer_cases', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -577,7 +655,9 @@ return new class extends Migration
             $table->foreign(['entered_by'], 'fk_cancer_cases_020d7f1cfb')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['updated_by'], 'fk_cancer_cases_a133791554')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `cancer_cases` ADD CONSTRAINT `ck_cancer_cases_b6589fc6ab` CHECK (status IN (\'active\',\'remission\',\'closed\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `cancer_cases` ADD CONSTRAINT `ck_cancer_cases_b6589fc6ab` CHECK (status IN (\'active\',\'remission\',\'closed\'))');
+        }
 
         Schema::create('cancer_case_diagnoses', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -619,7 +699,9 @@ return new class extends Migration
             $table->foreign(['treatment_type_id'], 'fk_cancer_treatments_b7d7dcb549')->references(['id'])->on('cancer_treatment_types')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['entered_by'], 'fk_cancer_treatments_020d7f1cfb')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `cancer_treatments` ADD CONSTRAINT `ck_cancer_treatments_b6589fc6ab` CHECK (ended_on IS NULL OR started_on IS NULL OR ended_on >= started_on)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `cancer_treatments` ADD CONSTRAINT `ck_cancer_treatments_b6589fc6ab` CHECK (ended_on IS NULL OR started_on IS NULL OR ended_on >= started_on)');
+        }
 
         Schema::create('cancer_case_related_people', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -638,7 +720,9 @@ return new class extends Migration
             $table->foreign(['cancer_case_id'], 'fk_cancer_case_related_peopl_de32f30308')->references(['id'])->on('cancer_cases')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['entered_by'], 'fk_cancer_case_related_peopl_020d7f1cfb')->references(['id'])->on('users')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `cancer_case_related_people` ADD CONSTRAINT `ck_cancer_case_related_peopl_b6589fc6ab` CHECK (relation_type IN (\'donor\',\'caregiver\',\'other\'))');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `cancer_case_related_people` ADD CONSTRAINT `ck_cancer_case_related_peopl_b6589fc6ab` CHECK (relation_type IN (\'donor\',\'caregiver\',\'other\'))');
+        }
     }
 
     public function down(): void

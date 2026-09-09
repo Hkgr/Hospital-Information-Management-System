@@ -54,13 +54,27 @@ return new class extends Migration
             $table->foreign(['city_id', 'governorate_id'], 'fk_patients_8e225095bc')->references(['id', 'governorate_id'])->on('cities')->restrictOnDelete()->restrictOnUpdate();
             $table->foreign(['merged_into_id'], 'fk_patients_9fd879e03a')->references(['id'])->on('patients')->restrictOnDelete()->restrictOnUpdate();
         });
-        DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_b6589fc6ab` CHECK (gender IN (\'male\',\'female\',\'unknown\'))');
-        DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_356a192b79` CHECK (birth_date_accuracy IN (\'exact\',\'year_only\',\'estimated\',\'unknown\'))');
-        DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_da4b9237ba` CHECK (displacement_status IN (\'resident\',\'idp\',\'unknown\'))');
-        DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_77de68daec` CHECK (identity_check_status IN (\'pending\',\'verified\'))');
-        DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_1b64538924` CHECK (city_id IS NULL OR governorate_id IS NOT NULL)');
-        DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_ac3478d69a` CHECK ((status = \'active\' AND merged_into_id IS NULL) OR (status = \'merged\' AND merged_into_id IS NOT NULL))');
-        DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_c1dfd96eea` CHECK (birth_date IS NOT NULL OR birth_date_accuracy = \'unknown\')');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_b6589fc6ab` CHECK (gender IN (\'male\',\'female\',\'unknown\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_356a192b79` CHECK (birth_date_accuracy IN (\'exact\',\'year_only\',\'estimated\',\'unknown\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_da4b9237ba` CHECK (displacement_status IN (\'resident\',\'idp\',\'unknown\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_77de68daec` CHECK (identity_check_status IN (\'pending\',\'verified\'))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_1b64538924` CHECK (city_id IS NULL OR governorate_id IS NOT NULL)');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_ac3478d69a` CHECK ((status = \'active\' AND merged_into_id IS NULL) OR (status = \'merged\' AND merged_into_id IS NOT NULL))');
+        }
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `patients` ADD CONSTRAINT `ck_patients_c1dfd96eea` CHECK (birth_date IS NOT NULL OR birth_date_accuracy = \'unknown\')');
+        }
 
         Schema::create('patient_identifiers', function (Blueprint $table) {
             $table->engine = 'InnoDB';
@@ -123,7 +137,9 @@ return new class extends Migration
             $table->dateTime('updated_at')->nullable();
             $table->unique(['sequence_key', 'scope_key', 'period_key'], 'unique_number_sequences_8d2edb8730');
         });
-        DB::statement('ALTER TABLE `number_sequences` ADD CONSTRAINT `ck_number_sequences_b6589fc6ab` CHECK (current_value >= 0)');
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement('ALTER TABLE `number_sequences` ADD CONSTRAINT `ck_number_sequences_b6589fc6ab` CHECK (current_value >= 0)');
+        }
     }
 
     public function down(): void
