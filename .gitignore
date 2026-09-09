@@ -1,0 +1,25 @@
+# Environment and secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencies
+**/vendor/
+**/node_modules/
+**/.venv/
+
+# Build output
+**/.next/
+**/out/
+**/dist/
+*.tsbuildinfo
+
+# Python cache
+**/__pycache__/
+**/.pytest_cache/
+*.py[cod]
+
+# Logs and local databases
+*.log
+*.sqlite
+*.sqlite3
