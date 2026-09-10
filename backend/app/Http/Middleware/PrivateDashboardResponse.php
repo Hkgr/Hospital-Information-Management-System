@@ -21,6 +21,7 @@ class PrivateDashboardResponse
             $response = $next($request);
         } catch (\Throwable $exception) {
             $handler = app(ExceptionHandler::class);
+            $handler->report($exception);
             $response = $handler->render($request, $exception);
         }
         if ($response->getStatusCode() >= 500) {

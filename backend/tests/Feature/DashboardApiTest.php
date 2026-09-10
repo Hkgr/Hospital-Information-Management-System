@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Responses\AuthError;
 use App\Models\User;
 use App\Services\Auth\UserAccessContext;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\PersonalAccessToken;
@@ -174,9 +175,17 @@ class DashboardApiTest extends TestCase
     public function test_unexpected_errors_are_redacted_and_private_even_with_debug_enabled(): void
     {
         config(['app.debug' => true]);
+        $reported = [];
+        app(ExceptionHandler::class)->reportable(function (\Throwable $exception) use (&$reported) {
+            $reported[] = $exception;
+
+            return false;
+        });
+        $exception = new \RuntimeException('internal database detail');
         $token = $this->token(User::factory()->create());
-        $this->mock(UserAccessContext::class)->shouldReceive('forUser')->andThrow(new \RuntimeException('internal database detail'));
+        $this->mock(UserAccessContext::class)->shouldReceive('forUser')->andThrow($exception);
         $this->getDashboard('/api/dashboards', $token)->assertStatus(500)->assertHeader('Cache-Control', 'no-store, private')
             ->assertExactJson(['error' => ['code' => 'DASHBOARD_UNAVAILABLE', 'message' => 'تعذّر تحميل لوحة التحكم. حاول مجددًا.']]);
+        $this->assertSame([$exception], $reported);
     }
 }
