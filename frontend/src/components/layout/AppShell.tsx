@@ -20,7 +20,7 @@ export default function AppShell({ user, children, onLogout, logoutPending, logo
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
   const collapsed = collapsedOverride ?? tablet;
-  const title = primaryNavigation.find(item => item.href === pathname)?.label ?? "نظام إدارة المشفى";
+  const title = pathname.startsWith("/dashboard/") ? "لوحة التحكم" : primaryNavigation.find(item => item.href === pathname)?.label ?? "نظام إدارة المشفى";
 
   return <div className={styles.shell} data-collapsed={collapsed}>
     <a className={styles.skipLink} href="#main-content">انتقل إلى المحتوى</a>

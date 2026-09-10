@@ -1,31 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { AuthError, currentUser, getToken, logout, type Identity } from "./api";
+import { AuthError, currentUser, getToken, logout, subscribeSession, type Identity } from "./api";
 import AppShell from "@/components/layout/AppShell";
 import styles from "./login.module.css";
 
-// Retain the existing current-user check and logout flow around internal routes.
+const IdentityContext = createContext<Identity | null>(null);
+export function useIdentity() {
+  const identity = useContext(IdentityContext);
+  if (!identity) throw new Error("Identity requires an authenticated layout");
+  return identity;
+}
+
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
+  const token = useSyncExternalStore(subscribeSession, getToken, () => null);
+  const router = useRouter();
+  useEffect(() => { if (!getToken()) router.replace("/login"); }, [token, router]);
+  // A session change unmounts all previous personalized state before rendering another user.
+  return token ? <AuthenticatedSession key={token}>{children}</AuthenticatedSession> : <p role="status">جارٍ التحقق من الدخول…</p>;
+}
+
+function AuthenticatedSession({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
-    if (!getToken()) { router.replace("/login"); return; }
-    let cancelled = false;
-    currentUser().then(result => {
-      if (!cancelled) { setIdentity(result); setError(""); }
+    const controller = new AbortController();
+    currentUser(controller.signal).then(result => {
+      if (!controller.signal.aborted) { setIdentity(result); setError(""); }
     }).catch(reason => {
-      if (cancelled) return;
-      if (reason instanceof AuthError && reason.status === 401) router.replace("/login");
+      if (controller.signal.aborted) return;
       setError(reason instanceof AuthError ? reason.message : "تعذّر تحميل بيانات المستخدم.");
     });
-    return () => { cancelled = true; };
-  }, [router, attempt]);
+    return () => controller.abort();
+  }, [attempt]);
 
   async function signOut() {
     if (busy) return;
@@ -38,9 +50,9 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
     } finally { setBusy(false); }
   }
 
-  if (identity) return <AppShell user={identity.user} onLogout={signOut} logoutPending={busy} logoutError={error}>
+  if (identity) return <IdentityContext.Provider value={identity}><AppShell user={identity.user} onLogout={signOut} logoutPending={busy} logoutError={error}>
     {children}
-  </AppShell>;
+  </AppShell></IdentityContext.Provider>;
 
   return <main className={styles.identity}>
     <Image src="/brand/logos/logo-ar-color.svg" alt="مشفى محمد بن زايد الإماراتي" width={200} height={95} style={{ height: "auto" }} priority />

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureActiveAccount;
+use App\Http\Middleware\PrivateDashboardResponse;
 use App\Http\Responses\AuthError;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(PrivateDashboardResponse::class);
         $middleware->alias([
             'account.active' => EnsureActiveAccount::class,
             'abilities' => CheckAbilities::class,

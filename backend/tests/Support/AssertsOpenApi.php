@@ -53,6 +53,11 @@ trait AssertsOpenApi
                 $this->assertArrayHasKey($required, $value);
             }
             foreach ($value as $key => $item) {
+                if (! isset($schema['properties'][$key]) && is_array($schema['additionalProperties'] ?? null)) {
+                    $this->assertMatchesSchema($document, $schema['additionalProperties'], $item);
+
+                    continue;
+                }
                 $this->assertArrayHasKey($key, $schema['properties']);
                 $this->assertMatchesSchema($document, $schema['properties'][$key], $item);
             }

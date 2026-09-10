@@ -1,6 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
+import { dashboardFixture } from "./dashboard-fixtures.mjs";
 
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3000";
 if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(base).hostname)) {
@@ -24,6 +25,10 @@ async function openShell({ width = 1440, height = 900, logoutFailure = false, cl
     if (url.origin !== new URL(base).origin) return route.abort();
     if (url.pathname.startsWith("/hospital-api/")) {
       requests.push({ path: url.pathname, authorization: request.headers().authorization });
+      if (url.pathname.startsWith("/hospital-api/dashboards")) {
+        const fixture = dashboardFixture({ id: 11, name: "مستخدم الاختبار", username: "shell-test", must_change_password: false });
+        return route.fulfill({ json: { data: url.pathname.endsWith("/general") ? fixture.detail : fixture.catalog } });
+      }
       if (url.pathname.endsWith("/user")) return route.fulfill({ json: { data: { user: { id: 11, staff_id: null, username: "shell-test", name: "مستخدم الاختبار", email: null, must_change_password: false, last_login_at: null }, access: [] } } });
       if (url.pathname.endsWith("/logout")) return logoutFailure ? route.abort() : route.fulfill({ status: 204 });
       throw new Error("Unexpected API call in layout test");
@@ -32,8 +37,9 @@ async function openShell({ width = 1440, height = 900, logoutFailure = false, cl
   });
   // Test fixture only. Production components use the unchanged auth client.
   await context.addInitScript(() => sessionStorage.setItem("hospital.bearer", "shell-test-token"));
-  await page.goto(base);
+  await page.goto(`${base}/dashboard/general`);
   await page.getByRole("heading", { name: "لوحة التحكم", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "مرحبًا، مستخدم الاختبار", exact: true }).waitFor();
   await page.evaluate(() => document.fonts.ready);
   return { context, page, requests, errors };
 }
@@ -51,14 +57,14 @@ test("RTL joined header/brand/sidebar and footer geometry at all six requested w
         const rect = selector => { const r = document.querySelector(selector).getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, right: r.right, bottom: r.bottom }; };
         return { dir: getComputedStyle(document.documentElement).direction, scrollWidth: document.documentElement.scrollWidth,
           sidebar: rect("aside"), brand: rect("aside > div"), header: rect("header"), main: rect("#main-content"), footer: rect("footer"),
-          empty: document.querySelector("#main-content > div").childElementCount === 0,
+          personal: document.querySelector("#welcome-heading") !== null,
           images: [...document.images].filter(image => image.getBoundingClientRect().width > 0).every(image => image.complete && image.naturalWidth > 0),
           seamless: ["header", "footer", "aside", "aside > div", "main"].every(selector => {
             const css = getComputedStyle(document.querySelector(selector));
             return [css.borderTopWidth, css.borderRightWidth, css.borderBottomWidth, css.borderLeftWidth].every(width => width === "0px");
           }),
           corner: getComputedStyle(document.querySelector("main")).borderStartStartRadius,
-          gradient: getComputedStyle(document.querySelector("aside")).backgroundImage,
+          frame: ["header", "footer", "aside"].map(selector => getComputedStyle(document.querySelector(selector)).backgroundColor),
           font: getComputedStyle(document.querySelector("header")).fontFamily };
       });
       assert.equal(geometry.dir, "rtl");
@@ -69,11 +75,11 @@ test("RTL joined header/brand/sidebar and footer geometry at all six requested w
       assert.equal(geometry.footer.width, width - sidebarWidth);
       assert.equal(geometry.footer.bottom, 900);
       assert.ok(geometry.main.y >= geometry.header.bottom);
-      assert.equal(geometry.empty, true);
+      assert.equal(geometry.personal, true);
       assert.equal(geometry.images, true);
       assert.equal(geometry.seamless, true);
       assert.equal(geometry.corner, width < 768 ? "16px" : "20px");
-      assert.match(geometry.gradient, /^linear-gradient/);
+      assert.deepEqual(geometry.frame, ["rgb(11, 97, 120)", "rgb(11, 97, 120)", "rgb(11, 97, 120)"]);
       assert.match(geometry.font, /Cairo/);
       if (sidebarWidth) {
         assert.equal(geometry.sidebar.x, width - sidebarWidth);
@@ -86,7 +92,7 @@ test("RTL joined header/brand/sidebar and footer geometry at all six requested w
     }
     assert.ok(initialRequests >= 1);
     assert.equal(requests.length, initialRequests);
-    assert.ok(requests.every(request => request.path === "/hospital-api/user"));
+    assert.ok(requests.every(request => request.authorization === "Bearer shell-test-token"));
     assert.equal(requests[0].authorization, "Bearer shell-test-token");
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
