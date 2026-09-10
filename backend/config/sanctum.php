@@ -37,7 +37,10 @@ return [
     |
     */
 
-    'guard' => ['web'],
+    'guard' => [],
+
+    // This API only accepts personal access tokens, never session cookies.
+    'routes' => false,
 
     /*
     |--------------------------------------------------------------------------
