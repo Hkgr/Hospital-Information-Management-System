@@ -74,7 +74,7 @@ test("RTL joined header/brand/sidebar and footer geometry at all six requested w
       assert.equal(geometry.seamless, true);
       assert.equal(geometry.corner, width < 768 ? "16px" : "20px");
       assert.match(geometry.gradient, /^linear-gradient/);
-      assert.match(geometry.font, /MBZ Sans/);
+      assert.match(geometry.font, /Cairo/);
       if (sidebarWidth) {
         assert.equal(geometry.sidebar.x, width - sidebarWidth);
         assert.equal(geometry.sidebar.height, 900);
