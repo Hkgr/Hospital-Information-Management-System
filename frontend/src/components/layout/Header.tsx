@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { LuBell, LuChevronDown, LuLogOut, LuMenu, LuUserRound } from "react-icons/lu";
 import type { User } from "@/features/auth/api";
 import HeaderDateTime from "./HeaderDateTime";
+import FrameOrnaments from "./FrameOrnaments";
 import styles from "./shell.module.css";
 
 type Props = { title: string; user: User; onOpenNavigation: () => void; navigationOpen: boolean; onLogout: () => Promise<void>; logoutPending: boolean; logoutError: string };
@@ -51,5 +52,6 @@ export default function Header({ title, user, onOpenNavigation, navigationOpen, 
         </section>}
       </div>
     </div>
+    <FrameOrnaments />
   </header>;
 }

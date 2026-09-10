@@ -134,12 +134,16 @@ test("desktop and tablet collapse controls retain usable navigation names withou
   const { context, page } = await openShell();
   try {
     const nav = page.getByRole("navigation", { name: "التنقل الرئيسي" });
-    assert.equal(await nav.getByRole("link").count(), 1);
-    assert.equal(await nav.locator("button:disabled").count(), 12);
-    assert.equal(await nav.getByRole("link", { name: "لوحة التحكم", exact: true }).getAttribute("aria-current"), "page");
+    const labels = ["الإضبارات", "المرضى", "الأطباء والعيادات", "الخدمات والإجراءات", "الأدوية", "تقارير", "السجل"];
+    assert.equal(await nav.getByRole("link").count(), 0);
+    assert.equal(await nav.locator("button:disabled").count(), labels.length);
+    assert.deepEqual(await nav.getByRole("button").evaluateAll(items => items.map(item => item.getAttribute("aria-label"))), labels.map(label => `${label} — قريبًا، غير متاح بعد`));
+    assert.deepEqual(await nav.locator("small").allTextContents(), labels.map(() => "قريبًا"));
+    const brand = page.getByRole("complementary").getByRole("link", { name: "مشفى محمد بن زايد الإماراتي — لوحة التحكم" });
+    assert.equal(await brand.getAttribute("href"), "/");
     await page.getByRole("button", { name: "طي القائمة الجانبية" }).click();
     assert.equal((await page.getByRole("complementary").boundingBox()).width, 84);
-    assert.equal(await nav.getByRole("link", { name: "لوحة التحكم", exact: true }).isVisible(), true);
+    for (const label of labels) assert.equal(await nav.getByRole("button", { name: `${label} — قريبًا، غير متاح بعد`, exact: true }).isVisible(), true);
     await page.getByRole("button", { name: "توسيع القائمة الجانبية" }).focus();
     await page.keyboard.press("Enter");
     assert.equal((await page.getByRole("complementary").boundingBox()).width, 268);
@@ -153,34 +157,53 @@ test("desktop and tablet collapse controls retain usable navigation names withou
     await page.getByRole("button", { name: "طي القائمة الجانبية" }).click();
     assert.equal((await page.getByRole("complementary").boundingBox()).width, 84);
     assert.equal(await page.locator('a[href="#"]').count(), 0);
+    await brand.click();
+    await page.waitForURL(`${base}/dashboard/general`);
+    await page.getByRole("heading", { name: "مرحبًا، مستخدم الاختبار" }).waitFor();
   } finally { await context.close(); }
 });
 
-test("sidebar keeps official white assets, calm hover and reduced-motion support", async () => {
+test("collapse and expansion keep frame edges synchronized without overflow, and reduced motion skips interpolation", async () => {
   const { context, page } = await openShell();
   try {
     const sidebar = page.getByRole("complementary");
-    assert.equal(await sidebar.locator("img").getAttribute("src"), "/brand/logos/logo-ar-white.svg");
-    const active = sidebar.getByRole("link", { name: "لوحة التحكم", exact: true });
-    const readStyles = () => active.evaluate(el => {
-      const style = getComputedStyle(el), icon = el.querySelector("svg"), container = icon.parentElement;
-      return { background: style.backgroundColor, transition: style.transitionDuration, transform: style.transform,
-        color: style.color, iconSize: icon.getBoundingClientRect().width, containerSize: container.getBoundingClientRect().width,
-        indicator: getComputedStyle(el, "::before").width };
+    const logo = sidebar.locator('img[src="/brand/logos/logo-ar-white.svg"]');
+    const mark = sidebar.locator('img[src="/brand/logos/mark-white.svg"]');
+    assert.equal((await logo.boundingBox()).width, 140);
+    assert.equal(await logo.evaluate(el => getComputedStyle(el).opacity), "1");
+    const sampleToggle = () => page.evaluate(async () => {
+      const samples = [];
+      const toggle = document.querySelector('aside button[aria-controls="desktop-navigation"]');
+      toggle.click();
+      for (let frame = 0; frame < 90; frame++) {
+        await new Promise(requestAnimationFrame);
+        const side = document.querySelector("aside").getBoundingClientRect();
+        const nav = document.querySelector("aside nav");
+        const iconsContained = [...nav.querySelectorAll("button")].every(button => {
+          const item = button.getBoundingClientRect(), icon = button.querySelector("svg").getBoundingClientRect();
+          return item.left >= side.left && item.right <= side.right && icon.left >= item.left && icon.right <= item.right;
+        });
+        samples.push({ width: side.width, edges: ["header", "main", "footer"].map(selector => document.querySelector(selector).getBoundingClientRect().right - side.left), overflow: document.documentElement.scrollWidth > innerWidth || nav.scrollWidth > nav.clientWidth, iconsContained });
+        if (frame > 1 && !document.getAnimations().some(animation => animation.playState === "running")) break;
+      }
+      return samples;
     });
-    const resting = await readStyles();
-    assert.equal(resting.transition, "0s");
-    assert.equal(resting.color, "rgb(255, 255, 255)");
-    assert.equal(resting.containerSize, 32);
-    assert.equal(resting.iconSize, 19);
-    assert.equal(resting.indicator, "3px");
-    await active.hover();
-    assert.notEqual((await readStyles()).background, resting.background);
-    assert.equal((await readStyles()).transform, "none");
+    const assertJoined = samples => {
+      assert.ok(samples.every(sample => !sample.overflow && sample.iconsContained && sample.edges.every(gap => Math.abs(gap) < 1)), "Frame parts and navigation icons must stay contained throughout the transition");
+    };
+    const reduced = await sampleToggle();
+    assertJoined(reduced);
+    assert.ok(reduced.every(sample => sample.width === 84));
+    assert.equal(await mark.evaluate(el => getComputedStyle(el).opacity), "1");
+    assert.equal((await mark.boundingBox()).width, 42);
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    assert.match((await readStyles()).transition, /0\.18s/);
-    await page.getByRole("button", { name: "طي القائمة الجانبية" }).click();
-    await page.waitForFunction(() => document.querySelector("aside img").getAttribute("src") === "/brand/logos/mark-white.svg");
+    for (const target of [268, 84]) {
+      const samples = await sampleToggle();
+      assertJoined(samples);
+      assert.ok(samples.some(sample => sample.width > 85 && sample.width < 267), "Motion should interpolate rather than jump");
+      assert.equal(samples.at(-1).width, target);
+    }
+    assert.equal(await sidebar.getByRole("button", { name: "توسيع القائمة الجانبية" }).evaluate(el => document.elementFromPoint(el.getBoundingClientRect().x + 20, el.getBoundingClientRect().y + 20)?.closest("button") === el), true);
   } finally { await context.close(); }
 });
 
@@ -205,7 +228,7 @@ test("mobile drawer traps focus, restores it, dismisses with Escape/backdrop/nav
     await menu.click(); await page.mouse.click(20, 150);
     await dialog.waitFor({ state: "hidden" });
     await page.waitForFunction(() => document.body.style.overflow === "");
-    await menu.click(); await dialog.getByRole("link", { name: "لوحة التحكم", exact: true }).click();
+    await menu.click(); await dialog.getByRole("link", { name: "مشفى محمد بن زايد الإماراتي — لوحة التحكم", exact: true }).click();
     await dialog.waitFor({ state: "hidden" });
     await page.waitForFunction(() => document.body.style.overflow === "");
     await menu.click(); await page.setViewportSize({ width: 1024, height: 900 });
@@ -215,9 +238,9 @@ test("mobile drawer traps focus, restores it, dismisses with Escape/backdrop/nav
     await page.setViewportSize({ width: 320, height: 500 });
     assert.equal(await menu.getAttribute("aria-expanded"), "false");
     await menu.click();
-    await dialog.getByRole("button", { name: "الإعدادات — غير متاح بعد" }).scrollIntoViewIfNeeded();
-    const settings = await dialog.getByRole("button", { name: "الإعدادات — غير متاح بعد" }).boundingBox();
-    assert.ok(settings.y >= 80 && settings.y + settings.height <= 440);
+    await dialog.getByRole("button", { name: "السجل — قريبًا، غير متاح بعد" }).scrollIntoViewIfNeeded();
+    const lastItem = await dialog.getByRole("button", { name: "السجل — قريبًا، غير متاح بعد" }).boundingBox();
+    assert.ok(lastItem.y >= 80 && lastItem.y + lastItem.height <= 440);
     await dialog.getByRole("button", { name: "إغلاق قائمة التنقل" }).click();
     await dialog.waitFor({ state: "hidden" });
   } finally { await context.close(); }

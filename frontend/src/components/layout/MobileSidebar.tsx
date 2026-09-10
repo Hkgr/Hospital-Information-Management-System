@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { SidebarContent } from "./Sidebar";
+import FrameOrnaments from "./FrameOrnaments";
 import styles from "./shell.module.css";
 
 export default function MobileSidebar({ open, onClose, pathname }: { open: boolean; onClose: () => void; pathname: string }) {
@@ -31,6 +32,6 @@ export default function MobileSidebar({ open, onClose, pathname }: { open: boole
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }}
     onClick={event => { if (event.target === event.currentTarget) dialogRef.current?.close(); }}>
-    <div className={styles.mobileSidebarContent}><SidebarContent pathname={pathname} onNavigate={onClose} mobile /></div>
+    <div className={styles.mobileSidebarContent}><SidebarContent pathname={pathname} onNavigate={onClose} mobile /><FrameOrnaments /></div>
   </dialog>;
 }
