@@ -6,7 +6,6 @@ use App\Http\Responses\AuthError;
 use App\Models\User;
 use App\OpenApi\AuthDocumentTransformer;
 use App\Support\TestDatabaseSafety;
-use Dedoc\Scramble\Scramble;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Request;
@@ -33,21 +32,52 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('login', function (Request $request) {
             $username = $request->input('username');
-            $normalized = is_string($username) ? Str::lower(trim($username)) : '';
+            $normalized = is_string($username)
+                ? Str::lower(trim($username))
+                : '';
 
             return Limit::perMinute(5)
                 ->by(hash('sha256', $normalized).'|'.$request->ip())
-                ->response(fn (Request $request, array $headers) => AuthError::TooManyRequests->response($headers));
+                ->response(
+                    fn (Request $request, array $headers) =>
+                        AuthError::TooManyRequests->response($headers)
+                );
         });
 
-        Gate::define('viewApiDocs', fn (?User $user = null) => config('scramble.enabled') ?? app()->environment(['local', 'testing']));
-        Scramble::configure()->withDocumentTransformers(AuthDocumentTransformer::class);
+        Gate::define(
+            'viewApiDocs',
+            fn (?User $user = null) =>
+                config('scramble.enabled')
+                ?? app()->environment(['local', 'testing'])
+        );
+
+        /*
+         * Scramble is a development dependency and is not installed
+         * during production deployment with Composer --no-dev.
+         */
+        if (class_exists(\Dedoc\Scramble\Scramble::class)) {
+            \Dedoc\Scramble\Scramble::configure()
+                ->withDocumentTransformers(AuthDocumentTransformer::class);
+        }
 
         Event::listen(CommandStarting::class, function (CommandStarting $event) {
-            if (app()->environment('testing') && Str::is(['migrate*', 'db:wipe', 'db:seed', 'schema:dump'], $event->command ?? '')) {
+            $databaseCommands = [
+                'migrate*',
+                'db:wipe',
+                'db:seed',
+                'schema:dump',
+            ];
+
+            if (
+                app()->environment('testing')
+                && Str::is($databaseCommands, $event->command ?? '')
+            ) {
                 if ($event->input->hasParameterOption('--database')) {
-                    throw new \RuntimeException('Testing database overrides are forbidden; configure the confirmed default mysql connection.');
+                    throw new \RuntimeException(
+                        'Testing database overrides are forbidden; configure the confirmed default mysql connection.'
+                    );
                 }
+
                 TestDatabaseSafety::assertAvailable(app());
             }
         });
