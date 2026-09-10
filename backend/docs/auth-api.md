@@ -64,15 +64,28 @@ In the interactive UI, use the **Authorization** control for `bearerAuth` and
 paste the token value; the UI adds the Bearer header. These are Sanctum personal
 access tokens, not JWTs. No session/cookie login is enabled.
 
+Protected API routes run `auth:sanctum`, `account.active`, then `abilities:api`.
+The current user must remain active and the Bearer token must carry the `api`
+ability. Disabling a user after issuance makes their next protected request
+return `403 ACCOUNT_INACTIVE` and revokes **all** that user's tokens. Subsequent
+requests with revoked tokens return 401. Tokens of other users remain intact.
+
 - `GET /api/user`: `200`, the same `data.user` and current `data.access`, without a token.
 - `POST /api/logout`: `204` with no body; revokes only `currentAccessToken()`.
   That device's token then returns `401`; tokens belonging to other devices remain valid.
 - `401 INVALID_CREDENTIALS`: identical Arabic error for unknown username and bad password.
-- `403 ACCOUNT_INACTIVE`: correct credentials for an inactive account.
+- `403 ACCOUNT_INACTIVE`: correct credentials for an inactive account at login,
+  or a previously issued token whose account has since been disabled.
+- `403 MISSING_API_ABILITY`: the active user's token lacks the required `api` ability.
+  This refusal does not revoke that token. Both 403 alternatives appear in OpenAPI.
 - `422`: Laravel JSON validation response with `message` and field `errors`.
 - `401 UNAUTHENTICATED`: missing/invalid Bearer token on protected endpoints, always JSON.
 - `429 TOO_MANY_REQUESTS`: five login attempts per minute for trimmed, Unicode-lowercase
   username plus IP, with rate-limit/retry headers.
+
+The production-default cache store remains `database`. The standard Laravel
+`cache` and `cache_locks` migration supports the login limiter on a fresh MySQL
+installation; production does not use an array or null limiter store.
 
 `must_change_password` communicates that a password change is required by the
 account policy. This PR reports the flag; it does not implement or enforce a
@@ -124,10 +137,17 @@ test intentionally uses no transaction because MySQL DDL implicitly commits.
 The demo seeder runs only in local/testing, creates no roles, and must never
 be used as a production account source.
 
-The tests cover login/token/logout behavior, active access, validation/rate
-limits, transaction rollback, password rehashing, schema/response parity,
-documentation visibility, and MySQL migration/rollback/seed. They were **not run
-for this PR, at the user's explicit request**. No MySQL testing database was used.
-Static document generation produced OpenAPI 3.1.0 with Scramble 0.13.43; array
-Resources produce JR001 model-inference warnings while their explicit field
-schemas are generated. These are not results of runtime or database tests.
+The tests cover login/token/logout behavior, account deactivation and token
+revocation, required token abilities, active access, validation/rate limits,
+transaction rollback, rehashing, schema/response parity, documentation visibility,
+and MySQL migration/rollback/seed. The migration test switches the actual named
+login limiter to the database cache, exercises cache locks and login through 429,
+then restores isolated test cache state. It never changes production cache config.
+
+Review validation uses a dedicated MySQL 8.4.7 instance at `127.0.0.1:13306`,
+database `hospital_testing`, with newly initialized data and a database-scoped
+test user. Credentials are saved only in the ignored `.env.testing`. This is
+separate from the existing MySQL/WAMP services and production configuration.
+See the PR validation report for command results. Scramble 0.13.43 generates
+OpenAPI 3.1.0; array Resources can emit JR001 model-inference warnings while
+their explicit schemas remain available.

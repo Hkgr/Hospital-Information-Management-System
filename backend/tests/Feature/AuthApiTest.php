@@ -163,6 +163,56 @@ class AuthApiTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 1);
     }
 
+    public static function protectedEndpoints(): array
+    {
+        return [['GET', '/api/user'], ['POST', '/api/logout']];
+    }
+
+    #[DataProvider('protectedEndpoints')]
+    public function test_deactivation_rejects_issued_token_and_revokes_all_user_tokens(string $method, string $path): void
+    {
+        $user = User::factory()->create(['username' => 'admin']);
+        $plain = $this->login()->assertOk()->json('data.token');
+        $otherDevice = $user->createToken('other-device', ['api'])->plainTextToken;
+        $otherUser = User::factory()->create();
+        $unrelated = $otherUser->createToken('unrelated', ['api'])->plainTextToken;
+        $this->bearer('GET', '/api/user', $plain)->assertOk();
+        $user->is_active = false;
+        $user->save();
+
+        $response = $this->bearer($method, $path, $plain)->assertForbidden()
+            ->assertExactJson(AuthError::InactiveAccount->body());
+        $this->assertSame(0, $user->tokens()->count());
+        $this->assertNull(PersonalAccessToken::findToken($plain));
+        $this->assertNull(PersonalAccessToken::findToken($otherDevice));
+        $this->assertNotNull(PersonalAccessToken::findToken($unrelated));
+        $this->bearer('GET', '/api/user', $plain)->assertUnauthorized();
+        $this->bearer('GET', '/api/user', $otherDevice)->assertUnauthorized();
+        $this->bearer('GET', '/api/user', $unrelated)->assertOk();
+        $doc = $this->getJson('/docs/api.json')->assertOk()->json();
+        $this->assertMatchesSchema($doc, $doc['paths'][$path][strtolower($method)]['responses'][403]['content']['application/json']['schema'], $response->json());
+    }
+
+    #[DataProvider('protectedEndpoints')]
+    public function test_token_without_api_ability_is_forbidden(string $method, string $path): void
+    {
+        $user = User::factory()->create();
+        $plain = $user->createToken('no-abilities', [])->plainTextToken;
+        $response = $this->bearer($method, $path, $plain)->assertForbidden()
+            ->assertExactJson(AuthError::MissingApiAbility->body());
+        $this->assertNotNull(PersonalAccessToken::findToken($plain));
+        $doc = $this->getJson('/docs/api.json')->assertOk()->json();
+        $this->assertMatchesSchema($doc, $doc['paths'][$path][strtolower($method)]['responses'][403]['content']['application/json']['schema'], $response->json());
+    }
+
+    public function test_inactive_account_check_precedes_ability_check(): void
+    {
+        $user = User::factory()->create(['is_active' => false]);
+        $plain = $user->createToken('no-abilities', [])->plainTextToken;
+        $this->bearer('GET', '/api/user', $plain)->assertForbidden()->assertExactJson(AuthError::InactiveAccount->body());
+        $this->assertNull(PersonalAccessToken::findToken($plain));
+    }
+
     public function test_protected_endpoints_require_bearer_even_without_accept_header_or_with_web_guard(): void
     {
         $this->get('/api/user')->assertUnauthorized()->assertExactJson(AuthError::Unauthenticated->body());

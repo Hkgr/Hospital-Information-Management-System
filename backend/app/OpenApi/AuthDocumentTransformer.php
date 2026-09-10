@@ -3,6 +3,7 @@
 namespace App\OpenApi;
 
 use App\Http\Responses\AuthError;
+use Dedoc\Scramble\Support\Generator\Combined\AnyOf;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\Reference;
 use Dedoc\Scramble\Support\Generator\Response;
@@ -43,7 +44,8 @@ class AuthDocumentTransformer
 
                 $errors = $login
                     ? [AuthError::InvalidCredentials, AuthError::InactiveAccount, AuthError::TooManyRequests]
-                    : [AuthError::Unauthenticated];
+                    : [AuthError::Unauthenticated, AuthError::InactiveAccount, AuthError::MissingApiAbility];
+                $forbidden = [];
                 foreach ($errors as $error) {
                     // Schema literals and examples come from the actual response contract.
                     $properties = new ObjectType;
@@ -54,8 +56,18 @@ class AuthDocumentTransformer
                         ->addProperty('error', $properties->setRequired(['code', 'message']))
                         ->setRequired(['error']));
                     $reference = $document->components->addSchema($error->name.'Error', $schema);
+                    if (! $login && $error->status() === 403) {
+                        $forbidden[] = $reference;
+
+                        continue;
+                    }
                     $operation->addResponse(Response::make($error->status())
                         ->setDescription($error->message())->setContent('application/json', $reference));
+                }
+                if ($forbidden) {
+                    $operation->addResponse(Response::make(403)
+                        ->setDescription('Account is inactive (all its tokens are revoked), or the Bearer token lacks the api ability.')
+                        ->setContent('application/json', Schema::fromType((new AnyOf)->setItems($forbidden))));
                 }
             }
         }

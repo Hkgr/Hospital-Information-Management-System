@@ -71,7 +71,7 @@ class AuthController extends Controller
     }
 
     /** Return the current user and active facility access, without a token or credentials. */
-    #[Endpoint(operationId: 'currentUser', title: 'Get the current user and access', description: 'Requires a Bearer token. Returns the user and current active facility access without a token, password or remember_token.')]
+    #[Endpoint(operationId: 'currentUser', title: 'Get the current user and access', description: 'Requires a Bearer token with the api ability and an active account. An account disabled after token issuance receives 403 and all its tokens are revoked. A token without the api ability receives 403. Returns the user and current active facility access without a token, password or remember_token.')]
     #[DocumentedResponse(200, description: 'Current user and active access.', examples: [[
         'data' => [
             'user' => ['id' => 1, 'staff_id' => null, 'username' => 'admin', 'name' => 'اسم المستخدم',
@@ -87,7 +87,7 @@ class AuthController extends Controller
     }
 
     /** Revoke only the Bearer token used for this request. Other device tokens remain valid. */
-    #[Endpoint(operationId: 'logout', title: 'Log out the current device', description: 'Requires a Bearer token. Revokes only the current token; other devices remain signed in. Returns 204 without a response body.')]
+    #[Endpoint(operationId: 'logout', title: 'Log out the current device', description: 'Requires a Bearer token with the api ability and an active account. An account disabled after token issuance receives 403 and all its tokens are revoked. A token without the api ability receives 403. Successful logout revokes only the current token; other devices remain signed in. Returns 204 without a response body.')]
     public function logout(Request $request): Response
     {
         $request->user()->currentAccessToken()->delete();

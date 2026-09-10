@@ -22,8 +22,8 @@ class ApiDocumentationTest extends TestCase
         $this->assertEqualsCanonicalizing(['/api/login', '/api/user', '/api/logout'], array_keys($doc['paths']));
         $this->assertSame(['type' => 'http', 'scheme' => 'bearer'], $doc['components']['securitySchemes']['bearerAuth']);
         foreach ([['/api/login', 'post', 'login', [200, 401, 403, 422, 429]],
-            ['/api/user', 'get', 'currentUser', [200, 401]],
-            ['/api/logout', 'post', 'logout', [204, 401]]] as [$path, $method, $id, $statuses]) {
+            ['/api/user', 'get', 'currentUser', [200, 401, 403]],
+            ['/api/logout', 'post', 'logout', [204, 401, 403]]] as [$path, $method, $id, $statuses]) {
             $operation = $doc['paths'][$path][$method];
             $this->assertSame($id, $operation['operationId']);
             $this->assertSame(['Authentication'], $operation['tags']);
@@ -31,11 +31,15 @@ class ApiDocumentationTest extends TestCase
             $this->assertNotEmpty($operation['description']);
             $this->assertEqualsCanonicalizing($statuses, array_keys($operation['responses']));
             $this->assertSame($id === 'login' ? [] : [['bearerAuth' => []]], $operation['security']);
+            if ($id !== 'login') {
+                $this->assertStringContainsString('api ability', $operation['description']);
+                $this->assertCount(2, $operation['responses'][403]['content']['application/json']['schema']['anyOf']);
+            }
         }
         $this->assertArrayNotHasKey('content', $doc['paths']['/api/logout']['post']['responses'][204]);
         foreach (['LoginRequest', 'LoginResponse', 'CurrentUserResponse', 'User', 'FacilityAccess',
             'Facility', 'Role', 'InvalidCredentialsError', 'InactiveAccountError', 'ValidationError',
-            'UnauthenticatedError', 'TooManyRequestsError'] as $name) {
+            'UnauthenticatedError', 'TooManyRequestsError', 'MissingApiAbilityError'] as $name) {
             $this->assertArrayHasKey($name, $doc['components']['schemas']);
         }
         $request = $doc['components']['schemas']['LoginRequest'];

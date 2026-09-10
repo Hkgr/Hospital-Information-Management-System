@@ -14,8 +14,8 @@ class CheckTestDatabase extends Command
     public function handle(): int
     {
         $db = config('database.connections.'.config('database.default'), []);
-        $this->table(['APP_ENV', 'Driver', 'Database', 'Host'], [[
-            app()->environment(), $db['driver'] ?? '', $db['database'] ?? '', $db['host'] ?? '',
+        $this->table(['APP_ENV', 'Driver', 'Database', 'Host', 'Port'], [[
+            app()->environment(), $db['driver'] ?? '', $db['database'] ?? '', $db['host'] ?? '', $db['port'] ?? '',
         ]]);
         TestDatabaseSafety::assertSafe(app());
         if ($this->option('connect')) {

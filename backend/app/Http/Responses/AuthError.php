@@ -10,12 +10,13 @@ enum AuthError: string
     case InactiveAccount = 'ACCOUNT_INACTIVE';
     case Unauthenticated = 'UNAUTHENTICATED';
     case TooManyRequests = 'TOO_MANY_REQUESTS';
+    case MissingApiAbility = 'MISSING_API_ABILITY';
 
     public function status(): int
     {
         return match ($this) {
             self::InvalidCredentials, self::Unauthenticated => 401,
-            self::InactiveAccount => 403,
+            self::InactiveAccount, self::MissingApiAbility => 403,
             self::TooManyRequests => 429,
         };
     }
@@ -27,6 +28,7 @@ enum AuthError: string
             self::InactiveAccount => 'هذا الحساب غير فعال.',
             self::Unauthenticated => 'يلزم تسجيل الدخول.',
             self::TooManyRequests => 'محاولات كثيرة. حاول مرة أخرى بعد دقيقة.',
+            self::MissingApiAbility => 'هذا التوكن لا يملك قدرة الوصول إلى API.',
         };
     }
 

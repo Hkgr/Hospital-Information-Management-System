@@ -2,6 +2,8 @@
 
 namespace Tests\Support;
 
+use PHPUnit\Framework\AssertionFailedError;
+
 trait AssertsOpenApi
 {
     protected function resolveSchema(array $document, array $schema): array
@@ -21,6 +23,18 @@ trait AssertsOpenApi
     protected function assertMatchesSchema(array $document, array $schema, mixed $value): void
     {
         $schema = $this->resolveSchema($document, $schema);
+        if (isset($schema['anyOf'])) {
+            foreach ($schema['anyOf'] as $variant) {
+                try {
+                    $this->assertMatchesSchema($document, $variant, $value);
+
+                    return;
+                } catch (AssertionFailedError) {
+                    // Try the other documented response alternative.
+                }
+            }
+            $this->fail('Response matches none of the documented alternatives.');
+        }
         $types = (array) ($schema['type'] ?? []);
         if ($value === null) {
             $this->assertContains('null', $types);
