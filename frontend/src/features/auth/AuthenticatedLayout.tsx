@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { AuthError, currentUser, getToken, logout, type Identity } from "./api";
+import AppShell from "@/components/layout/AppShell";
 import styles from "./login.module.css";
 
-// The application has no medical dashboard yet. This small authenticated entry
-// confirms the real API identity without inventing modules or role-based routes.
-export default function IdentityPage() {
+// Retain the existing current-user check and logout flow around internal routes.
+export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [error, setError] = useState("");
@@ -38,16 +38,15 @@ export default function IdentityPage() {
     } finally { setBusy(false); }
   }
 
+  if (identity) return <AppShell user={identity.user} onLogout={signOut} logoutPending={busy} logoutError={error}>
+    {children}
+  </AppShell>;
+
   return <main className={styles.identity}>
     <Image src="/brand/logos/logo-ar-color.svg" alt="مشفى محمد بن زايد الإماراتي" width={200} height={95} style={{ height: "auto" }} priority />
-    <h1>{identity ? `مرحبًا، ${identity.user.name}` : "نظام إدارة المشفى"}</h1>
+    <h1>نظام إدارة المشفى</h1>
     {error && <p className={styles.error} role="alert">{error}</p>}
-    {identity ? <>
-      <p>تم تسجيل دخولك بنجاح.</p>
-      {identity.user.must_change_password && <p>يتطلب حسابك تغيير كلمة المرور. راجع مسؤول النظام.</p>}
-      {identity.access.length > 0 && <ul aria-label="المنشآت المتاحة">{identity.access.map(entry => <li key={entry.facility.id}>{entry.facility.name_ar}</li>)}</ul>}
-      <button type="button" className={styles.submit} onClick={signOut} disabled={busy}>{busy ? "جارٍ تسجيل الخروج…" : "تسجيل الخروج"}</button>
-    </> : error ? <button type="button" className={styles.submit} onClick={() => { setError(""); setAttempt(value => value + 1); }}>إعادة المحاولة</button>
+    {error ? <button type="button" className={styles.submit} onClick={() => { setError(""); setAttempt(value => value + 1); }}>إعادة المحاولة</button>
       : <p role="status">جارٍ التحقق من الدخول…</p>}
   </main>;
 }
