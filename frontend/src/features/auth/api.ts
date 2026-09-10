@@ -33,6 +33,12 @@ function saveToken(token: string | null) {
     if (token) sessionStorage.setItem(TOKEN_KEY, token);
     else sessionStorage.removeItem(TOKEN_KEY);
   } catch { /* Storage-disabled browsers retain only the in-memory token. */ }
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("hospital-session-change"));
+}
+
+export function subscribeSession(listener: () => void) {
+  for (const event of ["hospital-session-change", "storage", "focus"]) window.addEventListener(event, listener);
+  return () => { for (const event of ["hospital-session-change", "storage", "focus"]) window.removeEventListener(event, listener); };
 }
 
 export class AuthError extends Error {
@@ -42,22 +48,25 @@ export class AuthError extends Error {
   }
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   let response: Response;
   try {
     response = await fetch(`/hospital-api/${endpoint}`, {
-      ...options, cache: "no-store", credentials: "omit", signal: AbortSignal.timeout(15000),
+      ...options, cache: "no-store", credentials: "omit", signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
       headers: {
         Accept: "application/json", "Content-Type": "application/json",
         ...(token && endpoint !== "login" ? { Authorization: `Bearer ${token}` } : {}),
       },
     });
   } catch {
+    if (options.signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
     throw new AuthError(0, "NETWORK_ERROR", "تعذّر الاتصال بالخادم. تحقق من اتصالك ثم حاول مجددًا.");
   }
+  if (getToken() !== token) throw new AuthError(0, "STALE_SESSION", "تغيرت جلسة المستخدم.");
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => null);
+  if (getToken() !== token) throw new AuthError(0, "STALE_SESSION", "تغيرت جلسة المستخدم.");
   if (!response.ok) {
     const code = body?.error?.code || "REQUEST_FAILED";
     if (endpoint !== "login" && (response.status === 401 || code === "ACCOUNT_INACTIVE")) saveToken(null);
@@ -79,7 +88,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export async function login(username: string, password: string) {
-  const data = await request<Identity & { token: string; token_type: string }>("login", {
+  const data = await apiRequest<Identity & { token: string; token_type: string }>("login", {
     method: "POST", body: JSON.stringify({ username: username.trim(), password, device_name: "hospital-web" }),
   });
   if (!data.token || data.token_type !== "Bearer" || !data.user?.id || !Array.isArray(data.access)) {
@@ -89,8 +98,8 @@ export async function login(username: string, password: string) {
   return data;
 }
 
-export const currentUser = () => request<Identity>("user");
+export const currentUser = (signal?: AbortSignal) => apiRequest<Identity>("user", { signal });
 export async function logout() {
-  await request<void>("logout", { method: "POST" });
+  await apiRequest<void>("logout", { method: "POST" });
   saveToken(null);
 }

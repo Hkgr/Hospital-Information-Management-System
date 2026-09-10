@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import DashboardScreen from "@/features/dashboards/DashboardScreen";
 
 export const metadata: Metadata = { title: "لوحة التحكم" };
 
-// Dashboard content will be introduced separately. The shared layout owns the canvas.
-export default function DashboardPage() { return null; }
+export default function DashboardPage() { return <Suspense fallback={null}><DashboardScreen /></Suspense>; }

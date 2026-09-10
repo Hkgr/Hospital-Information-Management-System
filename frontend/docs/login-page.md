@@ -38,8 +38,9 @@
 النسخة المحلية. فشل الخروج بسبب الشبكة يحتفظ بالتوكن لإعادة المحاولة.
 
 بعد النجاح يتحول المستخدم إلى `/`، ويجلب الغلاف الداخلي الهوية من `GET /api/user`.
-يعرض [Application Shell](app-shell.md) اسم المستخدم وقائمة الحساب وزر الخروج، مع مساحة
-Dashboard فارغة للمرحلة التالية. `must_change_password` يعرض تنبيهًا داخل قائمة الحساب
+يختار `/` لوحة التحكم الافتراضية المسموحة من Laravel ثم يوجّه إلى `/dashboard/general`.
+يعرض [Application Shell](app-shell.md) اسم المستخدم وقائمة الحساب وزر الخروج، وتعرض
+اللوحة العامة سياق المستخدم ومنشآته فقط. `must_change_password` يعرض تنبيهًا داخل قائمة الحساب
 دون اختلاق واجهة تغيير كلمة المرور.
 لا تُستخدم الأدوار المخزنة محليًا لمنح الوصول؛ Laravel هو حد المصادقة والصلاحيات الفعلي.
 إذا رفض الخادم التوكن بـ401 أو `ACCOUNT_INACTIVE` يُحذف محليًا.
@@ -48,7 +49,7 @@ Dashboard فارغة للمرحلة التالية. `must_change_password` يع�
 
 انسخ `.env.example` إلى `.env.local` داخل frontend واضبط `LARAVEL_API_URL` على نسخة Laravel
 المحلية/الاختبارية المصرح بها. القيمة الإرشادية `http://127.0.0.1:8000/api`.
-يمرّر Next.js المسارات الثلاثة فقط عبر `/hospital-api/login|user|logout` إلى Laravel؛
+يمرّر Next.js مسارات `/hospital-api/login|user|logout` و`/hospital-api/dashboards` و`/hospital-api/dashboards/:key` إلى Laravel؛
 لا توجد مصادقة بديلة في Next.js. أعد التشغيل والبناء بعد تغيير العنوان.
 
 ```bash

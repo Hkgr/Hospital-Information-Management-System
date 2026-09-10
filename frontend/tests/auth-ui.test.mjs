@@ -2,6 +2,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { chromium } from "playwright";
+import { dashboardFixture } from "./dashboard-fixtures.mjs";
 
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3000";
 if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(base).hostname)) {
@@ -14,12 +15,17 @@ before(async () => {
 });
 after(async () => { await browser?.close(); });
 
-async function pageFor(options = {}) {
+async function pageFor({ mockDashboards = true, ...options } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...options });
   const page = await context.newPage();
   // Every test is isolated and denies external resources, including university APIs.
   await page.route("**/*", route => {
     if (new URL(route.request().url()).origin !== new URL(base).origin) return route.abort();
+    const path = new URL(route.request().url()).pathname;
+    if (mockDashboards && path.startsWith("/hospital-api/dashboards")) {
+      const fixture = dashboardFixture(identity.user);
+      return route.fulfill({ json: { data: path.endsWith("/general") ? fixture.detail : fixture.catalog } });
+    }
     return route.continue();
   });
   return { context, page };
@@ -172,12 +178,7 @@ test("protected API rejection clears expired or disabled-account tokens (mocked)
       const rejectedUser = page.waitForResponse(response => response.url().endsWith("/hospital-api/user"));
       await page.getByRole("button", { name: "دخول", exact: true }).click();
       await rejectedUser;
-      if (status === 401) await page.waitForURL(`${base}/login`);
-      else {
-        await page.getByRole("alert").filter({ hasText: "هذا الحساب غير فعال. راجع مسؤول النظام." }).waitFor();
-        await page.getByRole("button", { name: "إعادة المحاولة" }).click();
-        await page.waitForURL(`${base}/login`);
-      }
+      await page.waitForURL(`${base}/login`);
       await page.waitForFunction(() => sessionStorage.getItem("hospital.bearer") === null);
     } finally { await context.close(); }
   }
@@ -212,7 +213,7 @@ test("desktop pointer tilts the card while the original mark remains fixed; touc
 test("real local Laravel/MySQL login, Bearer user, logout and token revocation", { skip: process.env.AUTH_LIVE_TEST !== "1" }, async () => {
   // Opt in only after test-db:check and serving Laravel with --env=testing.
   // Uses an EXISTING local/testing seeder account; never creates users or schemas.
-  const { context, page } = await pageFor({ reducedMotion: "reduce" });
+  const { context, page } = await pageFor({ reducedMotion: "reduce", mockDashboards: false });
   let token;
   try {
     await page.goto(`${base}/login`);
@@ -228,6 +229,12 @@ test("real local Laravel/MySQL login, Bearer user, logout and token revocation",
     const user = await context.request.get(`${base}/hospital-api/user`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
     assert.equal(user.status(), 200);
     assert.equal((await user.json()).data.user.username, "demo");
+    await page.waitForURL(`${base}/dashboard/general`);
+    await page.getByRole("heading", { name: "مرحبًا، Test User" }).waitFor();
+    await page.reload();
+    await page.getByRole("heading", { name: "مرحبًا، Test User" }).waitFor();
+    await page.goto(`${base}/dashboard/general`);
+    await page.getByRole("heading", { name: "مرحبًا، Test User" }).waitFor();
     await page.getByRole("button", { name: "حساب Test User" }).waitFor();
     await page.getByRole("button", { name: "حساب Test User" }).click();
     const logoutResponse = page.waitForResponse(r => r.url().endsWith("/hospital-api/logout"));
@@ -236,6 +243,8 @@ test("real local Laravel/MySQL login, Bearer user, logout and token revocation",
     await page.waitForURL(`${base}/login`);
     const revoked = await context.request.get(`${base}/hospital-api/user`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
     assert.equal(revoked.status(), 401);
+    const revokedDashboard = await context.request.get(`${base}/hospital-api/dashboards/general`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+    assert.equal(revokedDashboard.status(), 401);
   } finally {
     if (token) await context.request.post(`${base}/hospital-api/logout`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
     await context.close();

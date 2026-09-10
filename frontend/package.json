@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:ui": "node --test tests/auth-ui.test.mjs",
-    "test:shell": "node --test tests/app-shell.test.mjs"
+    "test:shell": "node --test tests/app-shell.test.mjs",
+    "test:dashboards": "node --test tests/dashboards.test.mjs"
   },
   "dependencies": {
     "framer-motion": "^13.2.0",

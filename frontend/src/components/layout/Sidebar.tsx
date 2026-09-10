@@ -11,7 +11,7 @@ export function SidebarContent({ pathname, collapsed = false, onToggle, onNaviga
     <div className={styles.brandCorner}>
       <Link className={styles.brandLink} href="/" onClick={onNavigate} aria-label="مشفى محمد بن زايد الإماراتي — لوحة التحكم">
         <Image src={collapsed ? "/brand/logos/mark-white.svg" : "/brand/logos/logo-ar-white.svg"}
-          alt="مشفى محمد بن زايد الإماراتي" width={collapsed ? 42 : 160} height={collapsed ? 47 : 74} priority
+          alt="مشفى محمد بن زايد الإماراتي" width={collapsed ? 42 : 140} height={collapsed ? 47 : 65} priority
           className={collapsed ? styles.brandMark : styles.brandLogo} />
       </Link>
       {mobile && <button className={styles.iconButton} type="button" onClick={onNavigate} aria-label="إغلاق قائمة التنقل"><LuX aria-hidden="true" /></button>}
@@ -35,7 +35,7 @@ export function SidebarContent({ pathname, collapsed = false, onToggle, onNaviga
 
 function NavigationItems({ items, pathname, onNavigate }: { items: typeof primaryNavigation; pathname: string; onNavigate?: () => void }) {
   return <ul className={styles.navigationList}>{items.map(({ label, icon: Icon, href }) => <li key={label}>
-    {href ? <Link href={href} className={styles.navigationItem} aria-label={label} aria-current={pathname === href ? "page" : undefined} onClick={onNavigate} title={label}>
+    {href ? <Link href={href} className={styles.navigationItem} aria-label={label} aria-current={pathname === href || (href === "/" && pathname.startsWith("/dashboard/")) ? "page" : undefined} onClick={onNavigate} title={label}>
       <span className={styles.navigationIcon}><Icon aria-hidden="true" /></span><span className={styles.navigationText}>{label}</span>
     </Link> : <button type="button" className={styles.navigationItem} disabled aria-label={`${label} — غير متاح بعد`} title={`${label} — غير متاح بعد`}>
       <span className={styles.navigationIcon}><Icon aria-hidden="true" /></span><span className={styles.navigationText}>{label}</span>
