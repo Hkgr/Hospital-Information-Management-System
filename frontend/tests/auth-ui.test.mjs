@@ -34,6 +34,8 @@ test("desktop geometry, local assets, labels, validation and keyboard password t
   const { context, page } = await pageFor({ reducedMotion: "reduce" });
   try {
     const failures = [];
+    const fontRequests = [];
+    page.on("request", request => { if (request.resourceType() === "font") fontRequests.push(request.url()); });
     page.on("pageerror", error => failures.push(error.message));
     page.on("response", response => { if (response.status() >= 400) failures.push(String(response.status())); });
     await page.goto(`${base}/login`);
@@ -41,8 +43,11 @@ test("desktop geometry, local assets, labels, validation and keyboard password t
     const geometry = await page.locator('section[aria-labelledby="login-heading"]').evaluate(el => ({ width: el.getBoundingClientRect().width, radius: getComputedStyle(el).borderRadius }));
     assert.deepEqual(geometry, { width: 440, radius: "26px" });
     assert.equal(await page.evaluate(() => [...document.images].every(i => i.complete && i.naturalWidth > 0)), true);
-    assert.equal(await page.evaluate(() => document.fonts.check('14px "MBZ Sans"', 'مشفى')), true);
-    assert.match(await page.locator("body").evaluate(el => getComputedStyle(el).fontFamily), /MBZ Sans/);
+    assert.equal(await page.evaluate(() => document.fonts.check('14px "Cairo"', 'مشفى Hospital')), true);
+    assert.equal(await page.evaluate(() => [...document.fonts].some(font => font.family.replaceAll('"', '') === "Cairo" && font.status === "loaded")), true);
+    assert.match(await page.locator("body").evaluate(el => getComputedStyle(el).fontFamily), /Cairo/);
+    assert.ok(fontRequests.length > 0);
+    assert.ok(fontRequests.every(url => new URL(url).origin === new URL(base).origin));
     await page.screenshot({ path: "test-results/hospital-desktop.png", fullPage: true });
     await page.getByRole("button", { name: "دخول", exact: true }).click();
     assert.equal(await page.locator("form").getByRole("alert").count(), 2);

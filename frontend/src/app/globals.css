@@ -1,5 +1,12 @@
 @import "tailwindcss";
-@import "../../public/brand/css/brand-fonts.css";
+
+@font-face {
+  font-family: "Cairo";
+  src: url("../../public/fonts/cairo/Cairo-Variable.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 200 1000;
+  font-display: swap;
+}
 
 :root {
   color-scheme: light;
@@ -10,7 +17,7 @@
   --mbz-surface: #f4f8ff;
   --mbz-action: #0b6178;
   --mbz-gradient: linear-gradient(55deg, var(--mbz-blue) 0%, var(--mbz-teal) 100%);
-  --mbz-font: "MBZ Sans", Arial, sans-serif;
+  --mbz-font: "Cairo", Arial, sans-serif;
 }
 
 @theme inline { --font-sans: var(--mbz-font); }

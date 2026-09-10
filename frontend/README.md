@@ -18,7 +18,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-The hospital login at `/login` uses local MBZ Sans fonts and the supplied hospital identity. See [login setup, authentication and verification](docs/login-page.md) for the Laravel connection, local testing and reference design details.
+The application uses the local Cairo variable font in `public/fonts/cairo`, with no external font requests during builds or browsing. The hospital login at `/login` retains the supplied hospital identity. See [login setup, authentication and verification](docs/login-page.md) for the Laravel connection, local testing and reference design details.
 
 Authenticated routes share the RTL [Application Shell](docs/app-shell.md): joined header/right sidebar, mobile drawer, empty content canvas and footer. Run `npm run test:shell` against a local Next.js server to check its responsive layout and interactions.
 
