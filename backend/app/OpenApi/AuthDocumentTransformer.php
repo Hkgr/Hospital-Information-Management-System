@@ -3,6 +3,7 @@
 namespace App\OpenApi;
 
 use App\Http\Responses\AuthError;
+use App\Http\Responses\DashboardError;
 use Dedoc\Scramble\Support\Generator\Combined\AnyOf;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\Reference;
@@ -21,7 +22,7 @@ class AuthDocumentTransformer
 
         foreach ($document->paths as $path) {
             foreach ($path->operations as $operation) {
-                if (! in_array($operation->operationId, ['login', 'currentUser', 'logout'], true)) {
+                if (! in_array($operation->operationId, ['login', 'currentUser', 'logout', 'dashboards', 'dashboardDetail'], true)) {
                     continue;
                 }
                 $login = $operation->operationId === 'login';
@@ -45,6 +46,14 @@ class AuthDocumentTransformer
                 $errors = $login
                     ? [AuthError::InvalidCredentials, AuthError::InactiveAccount, AuthError::TooManyRequests]
                     : [AuthError::Unauthenticated, AuthError::InactiveAccount, AuthError::MissingApiAbility];
+                if (in_array($operation->operationId, ['dashboards', 'dashboardDetail'], true)) {
+                    $errors[] = DashboardError::FacilityForbidden;
+                    $errors[] = DashboardError::Unavailable;
+                }
+                if ($operation->operationId === 'dashboardDetail') {
+                    $errors[] = DashboardError::Forbidden;
+                    $errors[] = DashboardError::NotFound;
+                }
                 $forbidden = [];
                 foreach ($errors as $error) {
                     // Schema literals and examples come from the actual response contract.
@@ -62,11 +71,11 @@ class AuthDocumentTransformer
                         continue;
                     }
                     $operation->addResponse(Response::make($error->status())
-                        ->setDescription($error->message())->setContent('application/json', $reference));
+                        ->setDescription($error->body()['error']['message'])->setContent('application/json', $reference));
                 }
                 if ($forbidden) {
                     $operation->addResponse(Response::make(403)
-                        ->setDescription('Account is inactive (all its tokens are revoked), or the Bearer token lacks the api ability.')
+                        ->setDescription('Account is inactive (all its tokens are revoked), the token lacks the api ability, or access to the requested dashboard/facility is denied.')
                         ->setContent('application/json', Schema::fromType((new AnyOf)->setItems($forbidden))));
                 }
             }
