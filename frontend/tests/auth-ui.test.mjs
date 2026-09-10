@@ -113,12 +113,14 @@ test("Enter submits username contract once; loading, Bearer current-user, identi
     await page.getByLabel("كلمة المرور", { exact: true }).press("Enter");
     await page.screenshot({ path: "test-results/hospital-loading.png" });
     assert.equal(logins, 1); release();
-    await page.getByRole("heading", { name: "مرحبًا، مستخدم الواجهة" }).waitFor();
+    await page.getByRole("button", { name: "حساب مستخدم الواجهة" }).waitFor();
+    await page.getByRole("button", { name: "حساب مستخدم الواجهة" }).click();
     await page.getByText("يتطلب حسابك تغيير كلمة المرور. راجع مسؤول النظام.").waitFor();
     assert.ok(users > 0);
     assert.equal(await page.evaluate(() => localStorage.length), 0);
     assert.doesNotMatch(await page.locator("body").innerText(), /test-only-token|example-password/);
-    await page.reload(); await page.getByRole("heading", { name: "مرحبًا، مستخدم الواجهة" }).waitFor();
+    await page.reload(); await page.getByRole("button", { name: "حساب مستخدم الواجهة" }).waitFor();
+    await page.getByRole("button", { name: "حساب مستخدم الواجهة" }).click();
     await page.getByRole("button", { name: "تسجيل الخروج", exact: true }).click();
     await page.waitForURL(`${base}/login`);
     assert.equal(logouts, 1);
@@ -221,7 +223,8 @@ test("real local Laravel/MySQL login, Bearer user, logout and token revocation",
     const user = await context.request.get(`${base}/hospital-api/user`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
     assert.equal(user.status(), 200);
     assert.equal((await user.json()).data.user.username, "demo");
-    await page.getByRole("heading", { name: "مرحبًا، Test User" }).waitFor();
+    await page.getByRole("button", { name: "حساب Test User" }).waitFor();
+    await page.getByRole("button", { name: "حساب Test User" }).click();
     const logoutResponse = page.waitForResponse(r => r.url().endsWith("/hospital-api/logout"));
     await page.getByRole("button", { name: "تسجيل الخروج", exact: true }).click();
     assert.equal((await logoutResponse).status(), 204);

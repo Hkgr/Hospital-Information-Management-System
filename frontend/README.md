@@ -20,6 +20,8 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 The hospital login at `/login` uses local MBZ Sans fonts and the supplied hospital identity. See [login setup, authentication and verification](docs/login-page.md) for the Laravel connection, local testing and reference design details.
 
+Authenticated routes share the RTL [Application Shell](docs/app-shell.md): joined header/right sidebar, mobile drawer, empty content canvas and footer. Run `npm run test:shell` against a local Next.js server to check its responsive layout and interactions.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
