@@ -34,6 +34,21 @@ class ClinicDocumentTransformer
         return (new ArrayType)->setItems($item);
     }
 
+    protected function lifecycleDescription(): string
+    {
+        return '\nDefault lists exclude archived_at records; status=archived explicitly lists them. Detail/history remain readable with existing view permission. Deletion preview requires delete authority; organizational_links counts periods in the authorized facility only, has_other_references is a boolean without identities. DELETE rechecks all references transactionally; 204 means hard deletion only. POST archive requires delete permission, preserves records/history, closes current periods at the facility date and cancels future periods with ends_on=starts_on. POST deactivate changes activity only; reactivate validates an active configured doctor type. POST restore clears archived_at but keeps is_active=false and never reopens periods. These three actions require update authority. Doctor actions are GLOBAL and require explicit doctors.directory.*; clinic actions require the facility permission. All mutations require lock_version. Stale/duplicate state returns 409 VERSION_CONFLICT/STATE_CONFLICT, no implicit retries or archive fallback. Counts/new assignments require both endpoints active and unarchived. link-history is paginated and scoped to the selected facility; names and half-open periods survive archive.';
+    }
+
+    protected function deletionPreviewSchema(): ObjectType
+    {
+        return $this->object(['action' => (new StringType)->enum(['delete', 'archive']), 'organizational_links' => new IntegerType, 'has_other_references' => new BooleanType, 'lock_version' => new IntegerType, 'archived' => new BooleanType]);
+    }
+
+    protected function historySchema(): ObjectType
+    {
+        return $this->object(['id' => new IntegerType, 'code' => new StringType, 'name' => new StringType, 'starts_on' => new StringType, 'ends_on' => (new StringType)->nullable(true)]);
+    }
+
     protected function unavailableChoices(): ArrayType
     {
         return $this->list($this->object(['id' => new IntegerType, 'reason' => (new StringType)->enum(['INACTIVE', 'UNAVAILABLE'])]));
@@ -62,7 +77,7 @@ class ClinicDocumentTransformer
         $clinic = $this->object([
             'id' => new IntegerType, 'facility_id' => new IntegerType, 'code' => (new StringType)->example('001'),
             'name_ar' => (new StringType)->example('عيادة اختبارية'), 'description' => (new StringType)->nullable(true),
-            'specialty' => (clone $specialty)->nullable(true), 'is_active' => new BooleanType, 'lock_version' => (new IntegerType)->example(1),
+            'specialty' => (clone $specialty)->nullable(true), 'archived_at' => (new StringType)->nullable(true), 'is_active' => new BooleanType, 'lock_version' => (new IntegerType)->example(1),
             'doctor_count' => new IntegerType, 'patient_count' => new IntegerType,
             'doctors_preview' => $this->list($this->object(['id' => new IntegerType, 'name' => new StringType])),
             'patient_count_definition' => (new StringType)->example(ClinicCounts::PATIENT_DEFINITION),
@@ -100,6 +115,7 @@ class ClinicDocumentTransformer
                     }
                 }
                 $operation->description .= "\nRequires auth:sanctum → active account → api ability, then clinics.view and the operation permission in the SAME active facility. Deactivated accounts lose all tokens (403 ACCOUNT_INACTIVE). Every response is private, no-store. Staff is a global directory; eligible doctors have active staff/type and an explicitly configured staff_types.code. Current intervals are [starts_on, ends_on) in the facility timezone. Edits use lock_version plus doctor_add_ids/doctor_remove_ids, never replacement sync. Doctor/patient counts are distinct. Exports include ALL filtered rows, selected columns, server issuer/number/timezone; caps 1000 clinics / 5000 current links, 422 instead of truncation. Long texts continue in explicit appendices; Cairo is embedded in PDF and named in XLSX. Relationship writes also increment staff.lock_version and lock staff before clinics. Report bytes are never public.";
+                $operation->description .= $this->lifecycleDescription();
                 if ($operation->method === 'delete') {
                     $operation->addResponse(Response::make(204)->setDescription('Unreferenced clinic deleted and audited. No content.'));
                 } elseif (str_contains($route, '/export/') || str_ends_with($route, '/report')) {
@@ -123,6 +139,11 @@ class ClinicDocumentTransformer
                         $fields['unavailable'] = $this->unavailableChoices();
                         $this->configureLookup($operation);
                     }
+                    if (str_ends_with($route, '/deletion-preview')) {
+                        $fields = ['data' => $this->deletionPreviewSchema()];
+                    } elseif (str_ends_with($route, '/link-history')) {
+                        $fields = ['data' => $this->list($this->historySchema()), 'meta' => $meta];
+                    }
                     $operation->addResponse(Response::make($route === 'clinics' && $operation->method === 'post' ? 201 : 200)
                         ->setDescription('Clinic response; fields are limited to this operation.')->setContent('application/json', Schema::fromType($this->object($fields))));
                 }
@@ -130,7 +151,7 @@ class ClinicDocumentTransformer
                     401 => [AuthError::Unauthenticated->value],
                     403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'CLINIC_ACCESS_DENIED'],
                     404 => ['CLINIC_NOT_FOUND'],
-                    409 => ['CLINIC_VERSION_CONFLICT', 'CLINIC_PERIOD_CONFLICT', 'CLINIC_REFERENCED'],
+                    409 => ['CLINIC_VERSION_CONFLICT', 'CLINIC_PERIOD_CONFLICT', 'CLINIC_REFERENCED', 'CLINIC_STATE_CONFLICT'],
                     500 => ['CLINICS_UNAVAILABLE'],
                 ];
                 foreach ($errors as $status => $codes) {

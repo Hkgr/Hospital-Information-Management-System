@@ -7,6 +7,7 @@ use App\Http\Requests\Clinics\ClinicVersionRequest;
 use App\Http\Requests\Directory\LinkOptionsRequest;
 use App\Http\Requests\Doctors\DoctorQueryRequest;
 use App\Http\Requests\Doctors\SaveDoctorRequest;
+use App\Services\Directory\DirectoryLifecycle;
 use App\Services\Doctors\DoctorAccess;
 use App\Services\Doctors\DoctorQueries;
 use App\Services\Doctors\DoctorReports;
@@ -20,6 +21,49 @@ use Symfony\Component\HttpFoundation\Response;
 class DoctorController extends Controller
 {
     public function __construct(private DoctorAccess $access, private DoctorQueries $queries, private DoctorWriter $writer) {}
+
+    /** Historical organizational periods in the authorized facility, including archived/inactive names. */
+    public function linkHistory(DoctorQueryRequest $request, int $doctor, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+
+        return response()->json($lifecycle->history($facility, true, $doctor, $request->validated()));
+    }
+
+    /** Deletion eligibility only; no patient or unauthorized facility details. Rechecked during the write. */
+    public function deletionPreview(DoctorQueryRequest $request, int $doctor, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+
+        return response()->json(['data' => $lifecycle->preview($request, $facility, true, $doctor)]);
+    }
+
+    /** Archive and close current/cancel future periods without deleting history. Requires delete permission. */
+    public function archive(ClinicVersionRequest $request, int $doctor, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+        $lifecycle->apply($request, $facility, true, $doctor, $request->integer('lock_version'), 'archive');
+
+        return response()->json(['data' => $this->queries->find($facility, $doctor)]);
+    }
+
+    /** Restore as inactive; never reopen periods. Requires update permission. */
+    public function restore(ClinicVersionRequest $request, int $doctor, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+        $lifecycle->apply($request, $facility, true, $doctor, $request->integer('lock_version'), 'restore');
+
+        return response()->json(['data' => $this->queries->find($facility, $doctor)]);
+    }
+
+    /** Reactivate an inactive, unarchived record. Requires update permission. */
+    public function reactivate(ClinicVersionRequest $request, int $doctor, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+        $lifecycle->apply($request, $facility, true, $doctor, $request->integer('lock_version'), 'reactivate');
+
+        return response()->json(['data' => $this->queries->find($facility, $doctor)]);
+    }
 
     /** Global professional directory; counts/links are limited to the authorized facility. Requires doctors.view. */
     public function index(DoctorQueryRequest $request): JsonResponse

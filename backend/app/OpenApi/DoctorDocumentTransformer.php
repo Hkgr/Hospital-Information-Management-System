@@ -22,7 +22,7 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
         $link = $this->object(['id' => new IntegerType, 'code' => new StringType, 'name_ar' => new StringType, 'starts_on' => (new StringType)->nullable(true), 'is_linked' => new BooleanType, 'can_view' => new BooleanType]);
         $doctor = $this->object(['id' => new IntegerType, 'code' => new StringType, 'name' => new StringType, 'description' => (new StringType)->nullable(true),
             'staff_type' => $type, 'specialties' => $this->list($this->object(['id' => new IntegerType, 'name_ar' => new StringType, 'is_active' => new BooleanType])),
-            'license_no' => (new StringType)->nullable(true), 'phone' => (new StringType)->nullable(true), 'is_active' => new BooleanType, 'lock_version' => new IntegerType,
+            'license_no' => (new StringType)->nullable(true), 'phone' => (new StringType)->nullable(true), 'archived_at' => (new StringType)->nullable(true), 'is_active' => new BooleanType, 'lock_version' => new IntegerType,
             'clinic_count' => new IntegerType, 'patient_count' => new IntegerType, 'clinics_preview' => $this->list($type), 'patient_count_definition' => (new StringType)->example(DoctorCounts::PATIENT_DEFINITION)]);
         $meta = $this->object(['page' => new IntegerType, 'per_page' => new IntegerType, 'total' => new IntegerType, 'last_page' => new IntegerType]);
         $caps = $this->object(array_fill_keys(['create', 'update', 'delete', 'link', 'export', 'view_clinics'], new BooleanType));
@@ -60,6 +60,7 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
                         $parameter->setSchema(Schema::fromType((new StringType)->enum(['xlsx', 'pdf'])));
                     }
                 }
+                $operation->description .= $this->lifecycleDescription();
                 if ($operation->method === 'delete') {
                     $operation->addResponse(Response::make(204)->setDescription('Unreferenced doctor deleted and audited; no body.'));
                 } elseif (str_contains($route, '/export/') || str_ends_with($route, '/report')) {
@@ -84,9 +85,14 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
                         $fields['unavailable'] = $this->unavailableChoices();
                         $this->configureLookup($operation);
                     }
+                    if (str_ends_with($route, '/deletion-preview')) {
+                        $fields = ['data' => $this->deletionPreviewSchema()];
+                    } elseif (str_ends_with($route, '/link-history')) {
+                        $fields = ['data' => $this->list($this->historySchema()), 'meta' => $meta];
+                    }
                     $operation->addResponse(Response::make($isCreate ? 201 : 200)->setDescription('Professional fields; facility-scoped counts and links.')->setContent('application/json', Schema::fromType($this->object($fields))));
                 }
-                foreach ([401 => ['UNAUTHENTICATED'], 403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'DOCTOR_ACCESS_DENIED', 'DOCTOR_DIRECTORY_ACCESS_DENIED'], 404 => ['DOCTOR_NOT_FOUND'], 409 => ['DOCTOR_VERSION_CONFLICT', 'DOCTOR_REFERENCED', 'CLINIC_PERIOD_CONFLICT'], 500 => ['DOCTORS_UNAVAILABLE']] as $status => $codes) {
+                foreach ([401 => ['UNAUTHENTICATED'], 403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'DOCTOR_ACCESS_DENIED', 'DOCTOR_DIRECTORY_ACCESS_DENIED'], 404 => ['DOCTOR_NOT_FOUND'], 409 => ['DOCTOR_VERSION_CONFLICT', 'DOCTOR_REFERENCED', 'DOCTOR_STATE_CONFLICT', 'CLINIC_PERIOD_CONFLICT'], 500 => ['DOCTORS_UNAVAILABLE']] as $status => $codes) {
                     $operation->addResponse(Response::make($status)->setDescription(implode(' / ', $codes))->setContent('application/json', Schema::fromType($this->object(['error' => $this->object(['code' => (new StringType)->enum($codes), 'message' => new StringType])]))));
                 }
                 $errors = new ObjectType;

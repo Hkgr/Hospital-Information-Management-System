@@ -5,7 +5,7 @@ export type ClinicLink = { id: number; code: string; name_ar: string; starts_on:
 export type Doctor = {
   id: number; code: string; name: string; description: string | null; staff_type: { id: number; code: string; name_ar: string };
   specialties: { id: number; name_ar: string; is_active?: boolean }[]; license_no: string | null; phone: string | null;
-  is_active: boolean; lock_version: number; clinic_count: number; patient_count: number;
+  is_active: boolean; archived_at: string | null; lock_version: number; clinic_count: number; patient_count: number;
   clinics_preview: Pick<ClinicLink, "id" | "code" | "name_ar">[]; patient_count_definition: string;
 };
 export type Capabilities = { create: boolean; update: boolean; delete: boolean; link: boolean; export: boolean; view_clinics: boolean };

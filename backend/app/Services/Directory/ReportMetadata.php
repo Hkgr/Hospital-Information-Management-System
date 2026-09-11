@@ -23,7 +23,7 @@ class ReportMetadata
             $parts[] = 'البحث: '.$filters['search'];
         }
         $parts[] = 'الحالة: '.match ($filters['status'] ?? '') {
-            'active' => 'فعال', 'inactive' => 'غير فعال', default => 'كل الحالات'
+            'active' => 'فعال', 'inactive' => 'غير فعال', 'archived' => 'مؤرشف', default => 'الفعال والمعطل'
         };
         if (! empty($filters['specialty_id'])) {
             $parts[] = 'التخصص: '.(DB::table('specialties')->where('id', $filters['specialty_id'])->value('name_ar') ?? 'غير متاح');

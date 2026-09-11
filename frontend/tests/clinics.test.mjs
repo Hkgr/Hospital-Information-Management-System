@@ -22,6 +22,7 @@ async function setup({ width = 1440, access = [{ facility, permissions, roles: [
     if (!url.pathname.startsWith("/hospital-api/")) return route.continue();
     calls.push({ url, method: request.method(), body: request.postDataJSON(), auth: request.headers().authorization });
     if (await override(route, url)) return;
+    if (url.pathname.endsWith("/deletion-preview")) return route.fulfill({json:{data:{action:"delete",organizational_links:0,has_other_references:false,lock_version:1,archived:false}}});
     if (url.pathname.endsWith("/user")) return route.fulfill({ json: { data: { user, access } } });
     if (url.pathname.endsWith("/options/specialties")) return route.fulfill({ json: { data: [{ id: 1, name_ar: "الطب الداخلي" }] } });
     if (url.pathname.endsWith("/options/doctors")) return route.fulfill({ json: { ...paginated(doctors.map(d => ({ ...d, is_linked: url.searchParams.has("clinic_id") && d.is_linked }))), doctor_types_configured: true } });
@@ -140,11 +141,11 @@ test("adding zero doctors is supported and deletion errors keep explicit deactiv
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "حذف نهائي" }).click();
     await dialog.getByRole("alert").waitFor();
-    assert.match(await dialog.innerText(), /يمكنك تعطيلها بإجراء منفصل/);
-    await dialog.getByRole("button", { name: "إلغاء", exact: true }).click();
+    assert.match(await dialog.innerText(), /أرشفة وإزالة من الدليل/);
+    await dialog.getByRole("button", { name: "إغلاق وتحديث السجل", exact: true }).click();
     assert.equal(calls.filter(call => call.url.pathname.endsWith("/deactivate")).length, 0);
     await page.getByRole("button", { name: "تعطيل العيادة الداخلية", exact: true }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "تعطيل العيادة", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "تعطيل مؤقت", exact: true }).click();
     await page.getByRole("dialog").waitFor({ state: "detached" });
     assert.equal(calls.filter(call => call.url.pathname.endsWith("/deactivate")).length, 1);
   } finally { await context.close(); }

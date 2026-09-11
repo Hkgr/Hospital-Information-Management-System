@@ -17,7 +17,7 @@ class ClinicQueryRequest extends FormRequest
         return [
             'facility_id' => ['required', 'integer', 'min:1'],
             'search' => ['nullable', 'string', 'max:200'],
-            'status' => ['nullable', Rule::in(['active', 'inactive'])],
+            'status' => ['nullable', Rule::in(['active', 'inactive', 'archived'])],
             'doctor_id' => ['nullable', 'integer', 'min:1'],
             'clinic_id' => ['nullable', 'integer', 'min:1'],
             'specialty_id' => ['nullable', 'integer', 'min:1'],
