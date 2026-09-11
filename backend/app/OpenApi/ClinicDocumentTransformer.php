@@ -19,7 +19,7 @@ use Dedoc\Scramble\Support\Generator\Types\Type;
 
 class ClinicDocumentTransformer
 {
-    private function object(array $fields): ObjectType
+    protected function object(array $fields): ObjectType
     {
         $type = new ObjectType;
         foreach ($fields as $key => $value) {
@@ -29,7 +29,7 @@ class ClinicDocumentTransformer
         return $type->setRequired(array_keys($fields));
     }
 
-    private function list(Type $item): ArrayType
+    protected function list(Type $item): ArrayType
     {
         return (new ArrayType)->setItems($item);
     }
@@ -77,7 +77,7 @@ class ClinicDocumentTransformer
                         $parameter->setSchema(Schema::fromType((new StringType)->enum(['xlsx', 'pdf'])));
                     }
                 }
-                $operation->description .= "\nRequires auth:sanctum → active account → api ability, then clinics.view and the operation permission in the SAME active facility. Deactivated accounts lose all tokens (403 ACCOUNT_INACTIVE). Every response is private, no-store. Staff is a global directory; eligible doctors have active staff/type and an explicitly configured staff_types.code. Current intervals are [starts_on, ends_on) in the facility timezone. Edits use lock_version plus doctor_add_ids/doctor_remove_ids, never replacement sync. Doctor/patient counts are distinct. Exports include ALL filtered rows, selected columns, server issuer/number/timezone; caps 1000 clinics / 5000 current links, 422 instead of truncation. Oversized PDF list cells return PDF_LAYOUT_LIMIT_EXCEEDED (description >1800 or doctor names >600 characters); hide those columns or use Excel/detail PDF. Report bytes are never public.";
+                $operation->description .= "\nRequires auth:sanctum → active account → api ability, then clinics.view and the operation permission in the SAME active facility. Deactivated accounts lose all tokens (403 ACCOUNT_INACTIVE). Every response is private, no-store. Staff is a global directory; eligible doctors have active staff/type and an explicitly configured staff_types.code. Current intervals are [starts_on, ends_on) in the facility timezone. Edits use lock_version plus doctor_add_ids/doctor_remove_ids, never replacement sync. Doctor/patient counts are distinct. Exports include ALL filtered rows, selected columns, server issuer/number/timezone; caps 1000 clinics / 5000 current links, 422 instead of truncation. Long texts continue in explicit appendices; Cairo is embedded in PDF and named in XLSX. Relationship writes also increment staff.lock_version and lock staff before clinics. Report bytes are never public.";
                 if ($operation->method === 'delete') {
                     $operation->addResponse(Response::make(204)->setDescription('Unreferenced clinic deleted and audited. No content.'));
                 } elseif (str_contains($route, '/export/') || str_ends_with($route, '/report')) {
@@ -118,7 +118,7 @@ class ClinicDocumentTransformer
                     $validationErrors = new ObjectType;
                     $validationErrors->additionalProperties = $this->list(new StringType);
                     $validation = $this->object(['message' => new StringType, 'errors' => $validationErrors]);
-                    $limit = $this->object(['error' => $this->object(['code' => (new StringType)->enum(['EXPORT_LIMIT_EXCEEDED', 'PDF_LAYOUT_LIMIT_EXCEEDED']), 'message' => new StringType])]);
+                    $limit = $this->object(['error' => $this->object(['code' => (new StringType)->enum(['EXPORT_LIMIT_EXCEEDED']), 'message' => new StringType])]);
                     $operation->addResponse(Response::make(422)->setDescription('Invalid input, or export exceeds safe bounds (no truncation).')->setContent('application/json', Schema::fromType((new AnyOf)->setItems([$validation, $limit]))));
                 }
             }

@@ -10,7 +10,8 @@
     "test:ui": "node --test tests/auth-ui.test.mjs",
     "test:shell": "node --test tests/app-shell.test.mjs",
     "test:dashboards": "node --test tests/dashboards.test.mjs",
-    "test:clinics": "node --test tests/clinics.test.mjs"
+    "test:clinics": "node --test tests/clinics.test.mjs",
+    "test:doctors": "node --test tests/doctors.test.mjs"
   },
   "dependencies": {
     "framer-motion": "^13.2.0",

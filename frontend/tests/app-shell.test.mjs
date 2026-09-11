@@ -134,7 +134,7 @@ test("desktop and tablet collapse controls retain usable navigation names withou
   const { context, page } = await openShell();
   try {
     const nav = page.getByRole("navigation", { name: "التنقل الرئيسي" });
-    const labels = ["الإضبارات", "المرضى", "الأطباء", "الخدمات والإجراءات", "الأدوية", "تقارير", "السجل"];
+    const labels = ["الإضبارات", "المرضى", "الخدمات والإجراءات", "الأدوية", "تقارير", "السجل"];
     assert.equal(await nav.getByRole("link").count(), 0);
     assert.equal(await nav.locator("button:disabled").count(), labels.length);
     assert.deepEqual(await nav.getByRole("button").evaluateAll(items => items.map(item => item.getAttribute("aria-label"))), labels.map(label => `${label} — قريبًا، غير متاح بعد`));

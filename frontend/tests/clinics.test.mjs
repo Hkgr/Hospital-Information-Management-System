@@ -39,7 +39,7 @@ test("navigation, columns, direct detail and back preserve list context", async 
   try {
     await page.getByRole("link", { name: "001", exact: true }).waitFor();
     assert.equal(await page.locator("#desktop-navigation").getByRole("link", { name: "العيادات", exact: true }).count(), 1);
-    assert.equal(await page.locator("#desktop-navigation").getByRole("button", { name: /الأطباء — قريبًا/ }).isDisabled(), true);
+    assert.equal(await page.locator("#desktop-navigation").getByRole("link", { name: "الأطباء", exact: true }).count(), 0);
     await page.getByText("الأعمدة", { exact: true }).click();
     await page.getByRole("checkbox", { name: "التوصيف", exact: true }).uncheck();
     assert.equal(await page.getByRole("columnheader", { name: "التوصيف", exact: true }).count(), 0);
@@ -464,7 +464,7 @@ test("facility selection cancels pending search and filter changes commit the vi
   } finally { await context.close(); }
 });
 
-for (const width of [390, 1440]) test(`responsive list, editor, doctors and detail at ${width}px`, async () => {
+for (const width of [390, 768, 1440]) test(`responsive list, editor, doctors and detail at ${width}px`, async () => {
   const { page, context, errors } = await setup({ width });
   const capture = async name => {
     if (process.env.CLINIC_CAPTURE !== "1") return;

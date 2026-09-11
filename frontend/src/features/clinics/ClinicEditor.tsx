@@ -64,13 +64,14 @@ export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onR
         setSnapshot(null); setConflict(false); setError(null); setReloadError("");
       }} />}
       <fieldset disabled={busy || conflict} className={styles.fields}>
+        <div className={styles.sectionHeading}><span>01</span><div><h3>بيانات العيادة</h3><p>تعريف العيادة وتخصصها داخل المنشأة.</p></div></div>
         <label>كود العيادة *<input autoFocus required maxLength={40} dir="auto" value={fields.code} onChange={e => setFields({ ...fields, code: e.target.value })} aria-invalid={!!error?.fields.code} aria-describedby={error?.fields.code ? "clinic-error-code" : undefined} />{fieldError("code")}</label>
         <label>اسم العيادة *<input required maxLength={200} value={fields.name_ar} onChange={e => setFields({ ...fields, name_ar: e.target.value })} aria-invalid={!!error?.fields.name_ar} aria-describedby={error?.fields.name_ar ? "clinic-error-name_ar" : undefined} />{fieldError("name_ar")}</label>
         <label className={styles.full}>التوصيف<textarea rows={3} maxLength={10000} value={fields.description} onChange={e => setFields({ ...fields, description: e.target.value })} />{fieldError("description")}</label>
         <label>التخصص<select value={fields.specialty_id} onChange={e => setFields({ ...fields, specialty_id: e.target.value })}><option value="">دون تخصص</option>{baseClinic?.specialty && !specialties.data?.some(s => s.id === baseClinic.specialty?.id) && <option value={baseClinic.specialty.id}>{baseClinic.specialty.name_ar}</option>}{specialties.data?.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}</select>{fieldError("specialty_id")}</label>
         <label>الحالة<select value={String(fields.is_active)} onChange={e => setFields({ ...fields, is_active: e.target.value === "true" })}><option value="true">فعالة</option><option value="false">غير فعالة</option></select></label>
         {specialties.error && <p role="alert" className={styles.full}>{specialties.error} <button type="button" onClick={specialties.retry}>إعادة تحميل التخصصات</button></p>}
-        <div className={styles.full}><DoctorPicker key={baseClinic?.lock_version ?? "new"} clinicId={clinic?.id} facilityId={facilityId} changes={changes} onChange={(id, selected, original, doctor) => {
+        <div className={styles.full}><div className={styles.sectionHeading}><span>02</span><div><h3>فريق العيادة</h3><p>الأطباء العاملون، مع الاحتفاظ بسجل الارتباطات.</p></div></div><DoctorPicker key={baseClinic?.lock_version ?? "new"} clinicId={clinic?.id} facilityId={facilityId} changes={changes} onChange={(id, selected, original, doctor) => {
           setChanges(previous => { const next = { ...previous }; if (selected === original) delete next[id]; else next[id] = selected; return next; });
           setChangedDoctors(previous => { const next = { ...previous }; if (selected === original) delete next[id]; else next[id] = doctor; return next; });
         }} />{fieldError("doctor_add_ids")}{fieldError("doctor_remove_ids")}</div>

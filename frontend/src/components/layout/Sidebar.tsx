@@ -5,9 +5,9 @@ import { primaryNavigation } from "./navigation";
 import FrameOrnaments from "./FrameOrnaments";
 import styles from "./shell.module.css";
 
-type Props = { pathname: string; canViewClinics: boolean; collapsed?: boolean; onToggle?: () => void; onNavigate?: () => void; mobile?: boolean };
+type Props = { pathname: string; canViewClinics: boolean; canViewDoctors: boolean; collapsed?: boolean; onToggle?: () => void; onNavigate?: () => void; mobile?: boolean };
 
-export function SidebarContent({ pathname, canViewClinics, collapsed = false, onToggle, onNavigate, mobile = false }: Props) {
+export function SidebarContent({ pathname, canViewClinics, canViewDoctors, collapsed = false, onToggle, onNavigate, mobile = false }: Props) {
   return <>
     <div className={styles.brandCorner}>
       <Link className={styles.brandLink} href="/" onClick={onNavigate} aria-label="مشفى محمد بن زايد الإماراتي — لوحة التحكم">
@@ -17,7 +17,7 @@ export function SidebarContent({ pathname, canViewClinics, collapsed = false, on
       {mobile && <button className={styles.iconButton} type="button" onClick={onNavigate} aria-label="إغلاق قائمة التنقل"><LuX aria-hidden="true" /></button>}
     </div>
     <nav className={styles.navigation} id={mobile ? "mobile-navigation" : "desktop-navigation"} aria-label="التنقل الرئيسي">
-      <NavigationItems items={primaryNavigation.filter(item => !item.permission || canViewClinics)} pathname={pathname} onNavigate={onNavigate} />
+      <NavigationItems items={primaryNavigation.filter(item => !item.permission || (item.permission === "doctors.view" ? canViewDoctors : canViewClinics))} pathname={pathname} onNavigate={onNavigate} />
     </nav>
     <div className={styles.sidebarBottom}>
       {onToggle ? <button className={styles.collapseButton} type="button" onClick={onToggle} aria-expanded={!collapsed} aria-controls="desktop-navigation" aria-label={collapsed ? "توسيع القائمة الجانبية" : "طي القائمة الجانبية"}>

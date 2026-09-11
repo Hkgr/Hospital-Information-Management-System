@@ -84,6 +84,10 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {},
       if (body?.errors?.password) fields.password = "أدخل كلمة المرور.";
     }
     const clinicMessages: Record<string, string> = {
+      DOCTOR_VERSION_CONFLICT: "تغيّرت بيانات الطبيب أو ارتباطاته. اجلب أحدث نسخة وراجع مسودتك قبل الحفظ.",
+      DOCTOR_DIRECTORY_ACCESS_DENIED: "تعديل دليل الأطباء المشترك يحتاج تفويضًا عالميًا صريحًا.",
+      DOCTOR_REFERENCED: "لا يمكن حذف طبيب له مراجع أو تاريخ محفوظ. التعطيل العالمي إجراء منفصل للمخوّل به.",
+      DOCTOR_NOT_FOUND: "الطبيب غير موجود في الدليل المتاح.",
       CLINIC_VERSION_CONFLICT: "عدّل مستخدم آخر هذه العيادة. أغلق النافذة وأعد تحميل البيانات قبل التعديل.",
       CLINIC_PERIOD_CONFLICT: "يوجد ارتباط مجدول أو فترات متداخلة لهذا الطبيب. راجع السجل قبل التعديل.",
       CLINIC_REFERENCED: "لا يمكن حذف عيادة مرتبطة بسجلات. يمكنك تعطيلها بإجراء منفصل.",
