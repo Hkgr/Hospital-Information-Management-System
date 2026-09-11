@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiRequest, AuthError, getToken } from "@/features/auth/api";
 
 export type Specialty = { id: number; name_ar: string };
@@ -14,10 +14,12 @@ export type Column = keyof typeof columns;
 export const columnKeys = Object.keys(columns) as Column[];
 
 export function useClinicRequest<T>(path: string | null, envelope = false, retainPrevious = false, revision = 0) {
-  const [state, setState] = useState<{ key: string; scope: string; token: string | null; data?: T; error?: string }>({ key: "", scope: "", token: null });
+  const [state, setState] = useState<{ key: object | null; scope: string; token: string | null; data?: T; error?: string }>({ key: null, scope: "", token: null });
   const [attempt, setAttempt] = useState(0);
-  const key = `${path}:${attempt}:${revision}`;
   const token = getToken();
+  // A -> B -> A starts a new request, even though A's parameters match old data.
+  // A fresh identity invalidates readiness without discarding same-context rows.
+  const key = useMemo(() => ({ path, attempt, revision, token, envelope }), [path, attempt, revision, token, envelope]);
   const url = path ? new URL(path, "http://directory.local/") : null;
   const scope = url ? `${url.pathname}:${url.searchParams.get("facility_id") ?? ""}` : "";
   useEffect(() => {

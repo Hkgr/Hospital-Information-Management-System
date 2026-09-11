@@ -42,13 +42,17 @@ function DoctorWorkspace({ facilityId, doctorId, cancelRef }: { facilityId: numb
   for (const key of ["status", "clinic_id", "specialty_id", "sort", "direction", "page", "per_page"]) { const value = params.get(key); if (value) query.set(key, value); }
   if (committed) query.set("search", committed);
   const encoded = query.toString();
+  // One request snapshot drives both rows and exports; its key includes query,
+  // retry, revision and session, so retained rows never imply export readiness.
+  const list = useDirectoryRequest<Page<Doctor>>(doctorId ? null : `doctors?${encoded}`, true, true, revision);
+  const exportReady = !searching && (!!doctorId || (!!list.data && !list.loading && !list.error));
   function filter(key: string, value: string) {
     const next = new URLSearchParams(encoded); cancel(); if (search) next.set("search", search); else next.delete("search");
     if (value) next.set(key, value); else next.delete(key); if (key !== "page") next.delete("page");
     router.replace(`${pathname}?${next}`, { scroll: false });
   }
   async function exportFile(format: "xlsx" | "pdf") {
-    if (pending.current || searching) return; pending.current = true; setExporting(true); setExportError("");
+    if (pending.current || !exportReady || !visible.length || !cap.export) return; pending.current = true; setExporting(true); setExportError("");
     const active = new AbortController(); controller.current = active; const exportQuery = new URLSearchParams(encoded); for (const key of visible) exportQuery.append("columns[]", key);
     try { await downloadReport(doctorId ? `doctors/${doctorId}/report?facility_id=${facilityId}` : `doctors/export/${format}?${exportQuery}`, active.signal); }
     catch (reason) { if (!active.signal.aborted) setExportError(reason instanceof AuthError ? reason.message : "تعذّر تنزيل التقرير."); }
@@ -56,7 +60,7 @@ function DoctorWorkspace({ facilityId, doctorId, cancelRef }: { facilityId: numb
   }
   const settings = options.data, cap = settings?.capabilities ?? { create: false, update: false, delete: false, link: false, export: false, view_clinics: false };
   const saved = () => { setModal(null); setRevision(n => n + 1); };
-  const exports = cap.export && <div className={styles.actions}>{!doctorId && <button className={styles.secondary} disabled={exporting || searching || !visible.length} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}<button className={styles.secondary} disabled={exporting || searching || !visible.length} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{doctorId ? "تصدير تقرير الطبيب PDF" : "PDF"}</button>{exporting && <span role="status">جارٍ إعداد التقرير…</span>}</div>;
+  const exports = cap.export && <div className={styles.actions}>{!doctorId && <button className={styles.secondary} disabled={exporting || !exportReady || !visible.length} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}<button className={styles.secondary} disabled={exporting || !exportReady || !visible.length} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{doctorId ? "تصدير تقرير الطبيب PDF" : "PDF"}</button>{exporting && <span role="status">جارٍ إعداد التقرير…</span>}</div>;
   return <>
     {options.error && <p role="alert" className={styles.error}>{options.error} <button type="button" onClick={options.retry}>إعادة تحميل خيارات الدليل</button></p>}
     {settings && !settings.doctor_types_configured && <p role="status" className={styles.scopeNote}>لا يوجد نوع طبي فعال مطابق للإعداد المعتمد. راجع مسؤول النظام؛ لا تُستنتج الأنواع من أسمائها أو أرقامها.</p>}
@@ -69,7 +73,7 @@ function DoctorWorkspace({ facilityId, doctorId, cancelRef }: { facilityId: numb
           <RelationFilter kind="clinic" facilityId={facilityId} value={query.get("clinic_id") ?? ""} onChange={value => filter("clinic_id", value)} />
           <label>الترتيب<select value={query.get("sort") ?? "code"} onChange={e => filter("sort", e.target.value)}>{["code", "name", "clinic_count", "patient_count", "is_active"].map(key => <option key={key} value={key}>{columns[key as Column]}</option>)}</select></label>
           <label>الاتجاه<select value={query.get("direction") ?? "asc"} onChange={e => filter("direction", e.target.value)}><option value="asc">تصاعدي</option><option value="desc">تنازلي</option></select></label><ColumnMenu labels={columns} visible={visible} onChange={setVisible} />
-        </div><DoctorTable revision={revision} query={encoded} visible={visible} searching={searching} cap={cap} onAction={(type, doctor) => setModal({ type, doctor })} onPage={page => filter("page", String(page))} onPageSize={size => filter("per_page", size)} />
+        </div><DoctorTable result={list} query={encoded} visible={visible} searching={searching} cap={cap} onAction={(type, doctor) => setModal({ type, doctor })} onPage={page => filter("page", String(page))} onPageSize={size => filter("per_page", size)} />
       </section><p className={styles.hint}>عدد المرضى: المرضى المختلفون في الزيارات المكتملة وغير الملغاة التي يكون الطبيب فيها الطبيب المعالج داخل المنشأة. لا يجمع مرضى عياداته أو الوصفات والإجراءات.</p>
     </>}
     {exportError && <p role="alert" className={styles.error}>{exportError}</p>}
@@ -79,12 +83,12 @@ function DoctorWorkspace({ facilityId, doctorId, cancelRef }: { facilityId: numb
   </>;
 }
 
-function DoctorTable({ query, visible, searching, cap, onAction, onPage, onPageSize, revision }: { query: string; visible: Column[]; searching: boolean; cap: Capabilities; onAction: (action: Action, doctor: Doctor) => void; onPage: (n: number) => void; onPageSize: (value: string) => void; revision: number }) {
-  const result = useDirectoryRequest<Page<Doctor>>(`doctors?${query}`, true, true, revision);
+function DoctorTable({ query, visible, searching, cap, onAction, onPage, onPageSize, result }: { query: string; visible: Column[]; searching: boolean; cap: Capabilities; onAction: (action: Action, doctor: Doctor) => void; onPage: (n: number) => void; onPageSize: (value: string) => void; result: ReturnType<typeof useDirectoryRequest<Page<Doctor>>> }) {
+
   if (result.error && !result.data) return <div className={styles.status}><p role="alert">{result.error}</p><button className={styles.secondary} onClick={result.retry}>إعادة المحاولة</button></div>;
   if (!result.data) return <p role="status" className={styles.status}>جارٍ تحميل الأطباء…</p>;
   const { data, meta } = result.data;
-  return <>{result.error && <p role="alert" className={styles.error}>{result.error} <button onClick={result.retry}>إعادة المحاولة</button></p>}<div className={styles.resultSummary}><strong>{meta.total} طبيب</strong><span role={searching || result.loading ? "status" : undefined}>{searching || result.loading ? "جارٍ تحديث النتائج…" : "التصدير يشمل جميع النتائج المطابقة"}</span></div><div className={styles.tableScroll} tabIndex={0} role="region" aria-label="جدول الأطباء" aria-busy={searching || result.loading}><table><thead><tr>{visible.map(key => <th key={key} scope="col">{columns[key]}</th>)}<th scope="col">الإجراءات</th></tr></thead><tbody>
+  return <>{result.error && <p role="alert" className={styles.error}>{result.error} المعروض نتائج سابقة؛ يلزم نجاح إعادة التحميل لإتاحة التصدير. <button onClick={result.retry}>إعادة المحاولة</button></p>}<div className={styles.resultSummary}><strong>{meta.total} طبيب</strong><span role={searching || result.loading ? "status" : undefined}>{searching || result.loading ? "جارٍ تحديث النتائج…" : "التصدير يشمل جميع النتائج المطابقة"}</span></div><div className={styles.tableScroll} tabIndex={0} role="region" aria-label="جدول الأطباء" aria-busy={searching || result.loading}><table><thead><tr>{visible.map(key => <th key={key} scope="col">{columns[key]}</th>)}<th scope="col">الإجراءات</th></tr></thead><tbody>
     {data.map((doctor, index) => <tr key={doctor.id}>{visible.map(key => <td key={key}>{key === "number" ? (meta.page - 1) * meta.per_page + index + 1 : key === "code" ? <Link className={styles.code} href={`/doctors/${doctor.id}?${query}`}><bdi>{doctor.code}</bdi></Link>
       : key === "name" ? <div className={styles.clinicName}><strong>{doctor.name}</strong><small>{doctor.staff_type.name_ar}</small></div>
       : key === "specialties" ? <div className={styles.badges}>{doctor.specialties.map(s => <span className={styles.badge} key={s.id}>{s.name_ar}</span>)}</div>

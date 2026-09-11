@@ -54,6 +54,10 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
   query.set("facility_id", String(facilityId));
   if (committed) query.set("search", committed);
   const encoded = query.toString();
+  // Share the keyed request snapshot with the table instead of accepting a
+  // delayed readiness notification from a previous query or save revision.
+  const list = useClinicRequest<Page<Clinic>>(clinicId ? null : `clinics?${encoded}`, true, true, revision);
+  const exportReady = !searching && (!!clinicId || (!!list.data && !list.loading && !list.error));
   // Only allowlisted same-origin query values survive the return link.
   const returnPath = `/clinics?${encoded}`;
   const updateFilter = (key: string, value: string) => {
@@ -67,7 +71,7 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
   const can = (action: string) => permissions.includes(`clinics.${action}`);
   const saved = () => { setModal(null); setRevision(value => value + 1); };
   async function exportFile(format: "xlsx" | "pdf") {
-    if (exportPending.current || searching) return;
+    if (exportPending.current || !exportReady || !visible.length || !can("export")) return;
     exportPending.current = true; setExporting(true); setExportError("");
     const controller = new AbortController(); exportController.current = controller;
     const exportQuery = new URLSearchParams(encoded);
@@ -77,8 +81,8 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
     finally { if (!controller.signal.aborted) { exportPending.current = false; setExporting(false); } }
   }
   const exports = can("export") && <div className={styles.actions}>
-    {!clinicId && <button className={styles.secondary} disabled={exporting || !visible.length || searching} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}
-    <button className={styles.secondary} disabled={exporting || !visible.length || searching} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{clinicId ? "تصدير تقرير العيادة PDF" : "PDF"}</button>
+    {!clinicId && <button className={styles.secondary} disabled={exporting || !visible.length || !exportReady} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}
+    <button className={styles.secondary} disabled={exporting || !visible.length || !exportReady} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{clinicId ? "تصدير تقرير العيادة PDF" : "PDF"}</button>
     {exporting && <span role="status">جارٍ إعداد التقرير…</span>}
   </div>;
   return <>
@@ -94,7 +98,7 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
           <label>الاتجاه<select value={query.get("direction") ?? "asc"} onChange={e => updateFilter("direction", e.target.value)}><option value="asc">تصاعدي</option><option value="desc">تنازلي</option></select></label>
           <ColumnMenu labels={columns} visible={visible} onChange={setVisible} />
         </div>
-        <ClinicTable revision={revision} query={encoded} searching={searching} visible={visible} can={can} onAction={(type, clinic) => setModal({ type, clinic })} onPage={value => updateFilter("page", String(value))} onPageSize={value => updateFilter("per_page", value)} />
+        <ClinicTable result={list} query={encoded} searching={searching} visible={visible} can={can} onAction={(type, clinic) => setModal({ type, clinic })} onPage={value => updateFilter("page", String(value))} onPageSize={value => updateFilter("per_page", value)} />
       </section>
       <p className={styles.hint}>عدد المرضى: المرضى المختلفون في الزيارات المكتملة وغير الملغاة المرتبطة مباشرة بالعيادة. لا يزيد العدد بتكرار الزيارة.</p>
     </>}
@@ -105,12 +109,12 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
   </>;
 }
 
-function ClinicTable({ query, searching, visible, can, onAction, onPage, onPageSize, revision }: { query: string; searching: boolean; visible: Column[]; can: (action: string) => boolean; onAction: (type: "edit" | "doctors" | "delete" | "deactivate", clinic: Clinic) => void; onPage: (page: number) => void; onPageSize: (value: string) => void; revision: number }) {
-  const result = useClinicRequest<Page<Clinic>>(`clinics?${query}`, true, true, revision);
+function ClinicTable({ query, searching, visible, can, onAction, onPage, onPageSize, result }: { query: string; searching: boolean; visible: Column[]; can: (action: string) => boolean; onAction: (type: "edit" | "doctors" | "delete" | "deactivate", clinic: Clinic) => void; onPage: (page: number) => void; onPageSize: (value: string) => void; result: ReturnType<typeof useClinicRequest<Page<Clinic>>> }) {
+
   if (result.error && !result.data) return <div className={styles.status}><p role="alert">{result.error}</p><button onClick={result.retry} className={styles.secondary}>إعادة المحاولة</button></div>;
   if (!result.data) return <div className={styles.status} role="status">جارٍ تحميل العيادات…</div>;
   const { data, meta } = result.data;
-  return <>{result.error && <p role="alert" className={styles.error}>{result.error} <button onClick={result.retry}>إعادة المحاولة</button></p>}<div className={styles.resultSummary}><strong>{meta.total} عيادة</strong><span role={searching || result.loading ? "status" : undefined}>{searching || result.loading ? "جارٍ تحديث النتائج…" : "التصدير يشمل جميع النتائج المطابقة"}</span></div>
+  return <>{result.error && <p role="alert" className={styles.error}>{result.error} المعروض نتائج سابقة؛ يلزم نجاح إعادة التحميل لإتاحة التصدير. <button onClick={result.retry}>إعادة المحاولة</button></p>}<div className={styles.resultSummary}><strong>{meta.total} عيادة</strong><span role={searching || result.loading ? "status" : undefined}>{searching || result.loading ? "جارٍ تحديث النتائج…" : "التصدير يشمل جميع النتائج المطابقة"}</span></div>
     <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="جدول العيادات" aria-busy={searching || result.loading}><table><thead><tr>{visible.map(key => <th key={key} scope="col">{columns[key]}</th>)}<th scope="col">الإجراءات</th></tr></thead><tbody>
       {data.map((clinic, index) => <tr key={clinic.id}>{visible.map(key => <td key={key}>{key === "number" ? (meta.page - 1) * meta.per_page + index + 1
         : key === "code" ? <Link className={styles.code} href={`/clinics/${clinic.id}?${query}`}>{clinic.code}</Link>
