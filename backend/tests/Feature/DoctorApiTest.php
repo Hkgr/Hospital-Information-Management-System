@@ -103,6 +103,58 @@ class DoctorApiTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['entity_type' => 'doctor', 'entity_id' => $doctor['id'], 'event' => 'deleted']);
     }
 
+    public function test_conflict_lookup_uses_stable_ids_deduplicates_and_hides_foreign_clinics(): void
+    {
+        $clinic = $this->clinic('OLD');
+        $foreign = $this->clinic('FOREIGN-SECRET', $this->other);
+        $inactive = $this->clinic('INACTIVE', active: false);
+        $this->clinic('UNTOUCHED');
+        $doctor = $this->create(['clinic_add_ids' => [$clinic]]);
+        DB::table('clinics')->where('id', $clinic)->update(['code' => 'CURRENT', 'name_ar' => 'الاسم الحالي']);
+        DB::table('clinic_staff')->insert(['clinic_id' => $foreign, 'staff_id' => $doctor['id'], 'starts_on' => '2020-01-01']);
+        $missing = $foreign + 100000;
+        $result = $this->callApi('GET', '/options/clinics', ['doctor_id' => $doctor['id'], 'ids' => [$clinic, $foreign, $inactive, $missing, $clinic]])
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.code', 'CURRENT')->assertJsonPath('data.0.name_ar', 'الاسم الحالي')
+            ->assertJsonPath('data.0.is_linked', true)->assertDontSee('FOREIGN-SECRET')->assertDontSee('UNTOUCHED');
+        $this->assertSame([['id' => $foreign, 'reason' => 'UNAVAILABLE'], ['id' => $inactive, 'reason' => 'INACTIVE'], ['id' => $missing, 'reason' => 'UNAVAILABLE']], $result->json('unavailable'));
+        foreach ([[], range(1, 101), ['bad'], [-1], [[1]]] as $ids) {
+            $this->callApi('GET', '/options/clinics', ['ids' => $ids])->assertUnprocessable();
+        }
+        $this->callApi('GET', '/options/clinics', ['facility_id' => $this->other, 'ids' => [$foreign]])->assertForbidden();
+    }
+
+    public function test_batched_doctor_choices_keep_current_codes_and_only_selected_clinic_linkage(): void
+    {
+        $clinic = $this->clinic();
+        $doctor = $this->create(['clinic_add_ids' => [$clinic]]);
+        $this->create(['code' => 'UNTOUCHED']);
+        DB::table('staff')->where('id', $doctor['id'])->update(['staff_code' => 'RENAMED', 'full_name' => 'الاسم الحالي']);
+        $headers = ['Authorization' => 'Bearer '.$this->token];
+        $this->json('GET', '/api/clinics/options/doctors', ['facility_id' => $this->facility, 'clinic_id' => $clinic, 'ids' => [$doctor['id'], $doctor['id']]], $headers)
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.code', 'RENAMED')->assertJsonPath('data.0.is_linked', true);
+        $foreign = $this->clinic('FOREIGN', $this->other);
+        $this->json('GET', '/api/clinics/options/doctors', ['facility_id' => $this->facility, 'clinic_id' => $foreign, 'ids' => [$doctor['id']]], $headers)->assertNotFound();
+    }
+
+    public function test_full_lookup_batch_is_complete_and_query_count_does_not_grow_per_id(): void
+    {
+        $doctor = $this->create();
+        $ids = [];
+        foreach (range(1, 100) as $i) {
+            $ids[] = $this->clinic('BATCH-'.$i);
+        }
+        $counts = [];
+        foreach ([[$ids[0]], $ids] as $batch) {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $result = $this->callApi('GET', '/options/clinics', ['doctor_id' => $doctor['id'], 'ids' => $batch])->assertOk()->assertJsonCount(count($batch), 'data')->assertJsonPath('meta.last_page', 1);
+            $counts[] = collect(DB::getQueryLog())->filter(fn ($query) => str_starts_with(strtolower(ltrim($query['query'])), 'select '))->count();
+            DB::disableQueryLog();
+            $this->assertEqualsCanonicalizing($batch, array_column($result->json('data'), 'id'));
+        }
+        $this->assertSame($counts[0], $counts[1]);
+    }
+
     public function test_facility_role_is_never_global_and_two_facility_doctor_is_isolated(): void
     {
         $doctor = $this->create();
@@ -273,11 +325,12 @@ class DoctorApiTest extends TestCase
             $this->assertSame('s', $sheet->getCell('B9')->getDataType());
             $this->assertTrue($sheet->getRightToLeft());
             $this->assertSame(0, $sheet->getPageSetup()->getFitToHeight());
+            $this->assertSame($doctor['description'], $sheet->getCell('C9')->getValue());
             $this->assertSame(2, $book->getSheetCount());
             $allText = '';
             foreach ($book->getSheet(1)->toArray() as $index => $row) {
-                if ($index > 0) {
-                    $allText .= $row[2];
+                if ($index > 1) {
+                    $allText .= $row[3];
                 }
             }
             $this->assertSame($doctor['description'], $allText);
@@ -330,6 +383,15 @@ class DoctorApiTest extends TestCase
             }
         }
         $body = $this->resolveSchema($document, $document['paths']['/api/doctors/{doctor}/clinics']['put']['requestBody']['content']['application/json']['schema']);
+        foreach (['/api/doctors/options/clinics', '/api/clinics/options/doctors'] as $path) {
+            $parameters = collect($document['paths'][$path]['get']['parameters']);
+            $ids = $parameters->firstWhere('name', 'ids[]');
+            $this->assertNotNull($ids);
+            $this->assertFalse($ids['required'] ?? false);
+            $this->assertSame(100, $ids['schema']['maxItems']);
+        }
+        $lookup = $this->callApi('GET', '/options/clinics', ['doctor_id' => $doctor['id'], 'ids' => [$doctor['clinics_preview'][0]['id'], 999999]])->assertOk()->json();
+        $this->assertMatchesSchema($document, $document['paths']['/api/doctors/options/clinics']['get']['responses'][200]['content']['application/json']['schema'], $lookup);
         $this->assertArrayNotHasKey('name', $body['properties']);
         $this->assertContains('lock_version', $body['required']);
         $this->assertSame(200, $body['properties']['clinic_add_ids']['maxItems']);

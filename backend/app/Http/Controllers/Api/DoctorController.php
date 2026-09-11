@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Clinics\ClinicVersionRequest;
+use App\Http\Requests\Directory\LinkOptionsRequest;
 use App\Http\Requests\Doctors\DoctorQueryRequest;
 use App\Http\Requests\Doctors\SaveDoctorRequest;
 use App\Services\Doctors\DoctorAccess;
@@ -90,7 +91,7 @@ class DoctorController extends Controller
     }
 
     /** Active clinic choices, with current linkage when doctor_id is provided. */
-    public function clinicOptions(DoctorQueryRequest $request): JsonResponse
+    public function clinicOptions(LinkOptionsRequest $request): JsonResponse
     {
         $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
 

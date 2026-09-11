@@ -34,6 +34,28 @@ class ClinicDocumentTransformer
         return (new ArrayType)->setItems($item);
     }
 
+    protected function unavailableChoices(): ArrayType
+    {
+        return $this->list($this->object(['id' => new IntegerType, 'reason' => (new StringType)->enum(['INACTIVE', 'UNAVAILABLE'])]));
+    }
+
+    protected function lookupDescription(): string
+    {
+        return '\nOptional ids[] performs a complete stable-ID lookup: 1–100 positive safe integers per request, duplicates coalesced. Do not combine with search/page/per_page. Split up to 200 additions + 200 removals into four batches. data contains current eligible identities/linkage; unavailable contains only requested id and reason. INACTIVE means an in-scope inactive record/type; UNAVAILABLE deliberately conflates missing, out-of-scope and ineligible records. Clinic results and all link state are limited to the authorized facility; staff choices retain the existing global eligible professional directory boundary. Re-check parent lock_version after all batches; explicitly review and save, never automatically rebase.';
+    }
+
+    protected function configureLookup($operation): void
+    {
+        $operation->description .= $this->lookupDescription();
+        foreach ($operation->parameters as $parameter) {
+            if ($parameter->name === 'ids[]') {
+                $parameter->required(false)->setStyle('form')->setExplode(true)
+                    ->description('Optional complete batch. Repeated ids[] keys; 1–100 entries, deduplicated by the server. Incompatible with search/page/per_page.')
+                    ->setSchema(Schema::fromType($this->list((new IntegerType)->setMin(1)->setMax(9007199254740991))->setMin(1)->setMax(100)));
+            }
+        }
+    }
+
     public function __invoke(OpenApi $document): void
     {
         $specialty = $this->object(['id' => new IntegerType, 'name_ar' => new StringType]);
@@ -98,6 +120,8 @@ class ClinicDocumentTransformer
                     }
                     if ($options) {
                         $fields['doctor_types_configured'] = new BooleanType;
+                        $fields['unavailable'] = $this->unavailableChoices();
+                        $this->configureLookup($operation);
                     }
                     $operation->addResponse(Response::make($route === 'clinics' && $operation->method === 'post' ? 201 : 200)
                         ->setDescription('Clinic response; fields are limited to this operation.')->setContent('application/json', Schema::fromType($this->object($fields))));

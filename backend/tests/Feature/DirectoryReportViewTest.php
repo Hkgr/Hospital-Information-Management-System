@@ -18,9 +18,9 @@ class DirectoryReportViewTest extends TestCase
         $dom = new DOMDocument;
         $dom->loadHTML($html);
         $xpath = new DOMXPath($dom);
-        $this->assertSame('0', $xpath->query('//p[strong="عدد المرضى:"]/span')->item(0)->textContent);
-        $this->assertSame('—', $xpath->query('//p[strong="الهاتف:"]/span')->item(0)->textContent);
-        $this->assertSame(0, $xpath->query('//script | //img')->length);
+        $this->assertSame('0', $xpath->query('//td[strong="عدد المرضى"]/span')->item(0)->textContent);
+        $this->assertSame('—', $xpath->query('//td[strong="الهاتف"]/span')->item(0)->textContent);
+        $this->assertSame(0, $xpath->query('//script | //img[not(starts-with(@src,"var:"))]')->length);
         $this->assertStringContainsString('<script>alert(1)</script>', $dom->textContent);
         $this->assertStringContainsString('<img src="https://invalid.test/private">', $dom->textContent);
     }

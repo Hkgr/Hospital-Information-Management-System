@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Clinics\ClinicQueryRequest;
 use App\Http\Requests\Clinics\ClinicVersionRequest;
 use App\Http\Requests\Clinics\SaveClinicRequest;
+use App\Http\Requests\Directory\LinkOptionsRequest;
 use App\Services\Clinics\ClinicAccess;
 use App\Services\Clinics\ClinicQueries;
 use App\Services\Clinics\ClinicReports;
@@ -81,7 +82,7 @@ class ClinicController extends Controller
     }
 
     /** Search eligible existing doctors from the global staff directory, gated by facility clinics.view. */
-    public function doctorOptions(ClinicQueryRequest $request): JsonResponse
+    public function doctorOptions(LinkOptionsRequest $request): JsonResponse
     {
         $facility = $this->access->authorize($request->user(), $request->integer('facility_id'));
 

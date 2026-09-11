@@ -78,6 +78,7 @@ class ClinicQueries
 
     public function doctors(array $facility, array $filters, ?int $clinicId = null): array
     {
+        $ids = $clinicId === null && isset($filters['ids']) ? array_values(array_unique(array_map('intval', $filters['ids']))) : null;
         if ($clinicId !== null) {
             $this->find($facility, $clinicId);
             $query = $this->counts->currentDoctors($facility)->where('cs.clinic_id', $clinicId)
@@ -89,7 +90,10 @@ class ClinicQueries
         if (($search = $filters['search'] ?? null) !== null && $search !== '') {
             $query->where(fn (Builder $q) => $q->whereLike('s.full_name', '%'.$search.'%')->orWhereLike('s.staff_code', '%'.$search.'%'));
         }
-        $page = $query->orderBy('s.full_name')->orderBy('s.id')->paginate($filters['per_page'] ?? 20, ['*'], 'page', $filters['page'] ?? 1);
+        if ($ids !== null) {
+            $query->whereIn('s.id', $ids);
+        }
+        $page = $query->orderBy('s.full_name')->orderBy('s.id')->paginate($ids !== null ? 100 : ($filters['per_page'] ?? 20), ['*'], 'page', $ids !== null ? 1 : ($filters['page'] ?? 1));
         $linked = [];
         if ($clinicId === null && ! empty($filters['clinic_id'])) {
             $this->find($facility, (int) $filters['clinic_id']);
@@ -100,12 +104,21 @@ class ClinicQueries
             ->whereIn('ss.staff_id', $page->getCollection()->pluck('id'))->where('sp.is_active', true)
             ->orderBy('sp.name_ar')->orderBy('sp.id')->get(['ss.staff_id', 'sp.id', 'sp.name_ar'])->groupBy('staff_id');
 
+        $unavailable = [];
+        if ($ids !== null) {
+            $missing = array_values(array_diff($ids, $page->getCollection()->pluck('id')->all()));
+            $inactive = DB::table('staff as s')->join('staff_types as st', 'st.id', '=', 's.staff_type_id')
+                ->whereIn('s.id', $missing)->whereIn('st.code', config('clinics.doctor_staff_types'))
+                ->where(fn ($q) => $q->where('s.is_active', false)->orWhere('st.is_active', false))->pluck('s.id')->all();
+            $unavailable = array_map(fn ($id) => ['id' => $id, 'reason' => in_array($id, $inactive) ? 'INACTIVE' : 'UNAVAILABLE'], $missing);
+        }
+
         return ['data' => $page->getCollection()->map(fn ($doctor) => [
             'id' => (int) $doctor->id, 'code' => $doctor->staff_code, 'name' => $doctor->full_name,
             'starts_on' => $doctor->starts_on ?? null,
             'is_linked' => $clinicId !== null || in_array($doctor->id, $linked),
             'specialties' => ($specialties->get($doctor->id) ?? collect())->map(fn ($s) => ['id' => (int) $s->id, 'name_ar' => $s->name_ar])->all(),
-        ])->all(), 'meta' => $this->meta($page)];
+        ])->all(), 'meta' => $this->meta($page)] + ($clinicId === null ? ['unavailable' => $unavailable] : []);
     }
 
     private function meta(LengthAwarePaginator $page): array

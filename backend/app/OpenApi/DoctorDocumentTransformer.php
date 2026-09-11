@@ -80,6 +80,10 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
                     if ($isList || $isLinks) {
                         $fields['meta'] = $meta;
                     }
+                    if ($route === 'doctors/options/clinics') {
+                        $fields['unavailable'] = $this->unavailableChoices();
+                        $this->configureLookup($operation);
+                    }
                     $operation->addResponse(Response::make($isCreate ? 201 : 200)->setDescription('Professional fields; facility-scoped counts and links.')->setContent('application/json', Schema::fromType($this->object($fields))));
                 }
                 foreach ([401 => ['UNAUTHENTICATED'], 403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'DOCTOR_ACCESS_DENIED', 'DOCTOR_DIRECTORY_ACCESS_DENIED'], 404 => ['DOCTOR_NOT_FOUND'], 409 => ['DOCTOR_VERSION_CONFLICT', 'DOCTOR_REFERENCED', 'CLINIC_PERIOD_CONFLICT'], 500 => ['DOCTORS_UNAVAILABLE']] as $status => $codes) {

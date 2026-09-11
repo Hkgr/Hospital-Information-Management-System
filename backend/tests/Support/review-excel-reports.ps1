@@ -1,10 +1,12 @@
 # Requires local Microsoft Excel with Cairo and Microsoft Print to PDF installed. Opens only synthetic samples,
-# with macros/events/links disabled, in a dedicated invisible Excel instance.
-param([string]$Pattern = '*.xlsx')
+# with macros/events/links disabled, in a dedicated instance (visible only for sheet captures).
+param([string]$Pattern = '*.xlsx', [ValidateSet('current','before','after')][string]$Stage = 'current', [switch]$CaptureSheets, [switch]$MeasureRows)
 $ErrorActionPreference = 'Stop'
 $reportRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../docs/samples'))
+if ($Stage -ne 'current') { $reportRoot = Join-Path $reportRoot ('comparison/' + $Stage) }
 $excelReview = New-Object -ComObject Excel.Application
 $excelReview.Visible = $false
+if ($CaptureSheets) { $excelReview.Visible = $true }
 $excelReview.DisplayAlerts = $false
 $excelReview.EnableEvents = $false
 $excelReview.AutomationSecurity = 3
@@ -22,6 +24,30 @@ try {
                 foreach ($worksheetReview in $workbookReview.Worksheets) {
                     if ($worksheetReview.UsedRange.Font.Name -ne 'Cairo') { throw "Unexpected font in $($report.Name)" }
                     Write-Output "$module/$($report.Name): $($worksheetReview.Name), Cairo, $($worksheetReview.UsedRange.Rows.Count) rows, opened by Microsoft Excel $($excelReview.Version)"
+                    if ($MeasureRows -and $worksheetReview.Index -eq 1) {
+                        foreach ($rowNumber in 9..12) {
+                            $rowReview = $worksheetReview.Rows.Item($rowNumber)
+                            $originalHeight = $rowReview.RowHeight
+                            [void]$rowReview.AutoFit()
+                            Write-Output "Row $rowNumber height: generated=$originalHeight pt; Excel AutoFit=$($rowReview.RowHeight) pt"
+                            $rowReview.RowHeight = $originalHeight
+                            [void][Runtime.InteropServices.Marshal]::ReleaseComObject($rowReview)
+                        }
+                    }
+                    if ($CaptureSheets -and $worksheetReview.Visible -eq -1) {
+                        $worksheetReview.Activate()
+                        $captureRange = $worksheetReview.Range($worksheetReview.Cells.Item(1, 1), $worksheetReview.Cells.Item([Math]::Min(12, $worksheetReview.UsedRange.Rows.Count), $worksheetReview.UsedRange.Columns.Count))
+                        $captureRange.CopyPicture(1, 2)
+                        $chartReview = $worksheetReview.ChartObjects().Add(0, 0, $captureRange.Width, $captureRange.Height)
+                        try {
+                            [void]$chartReview.Activate()
+                            [void]$chartReview.Chart.Paste()
+                            [void]$chartReview.Chart.Refresh()
+                            $imagePath = Join-Path $report.DirectoryName ($report.BaseName + '-sheet-' + $worksheetReview.Index + '.png')
+                            [void]$chartReview.Chart.Export($imagePath, 'PNG')
+                        } finally { $chartReview.Delete(); [void][Runtime.InteropServices.Marshal]::ReleaseComObject($chartReview) }
+                        [void][Runtime.InteropServices.Marshal]::ReleaseComObject($captureRange)
+                    }
                     [void][Runtime.InteropServices.Marshal]::ReleaseComObject($worksheetReview)
                 }
                 $previewPath = Join-Path $report.DirectoryName ($report.BaseName + '-excel-preview.pdf')

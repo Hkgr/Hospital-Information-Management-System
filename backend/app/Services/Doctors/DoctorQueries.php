@@ -73,6 +73,7 @@ class DoctorQueries
 
     public function clinics(array $facility, array $filters, ?int $doctorId = null): array
     {
+        $ids = $doctorId === null && isset($filters['ids']) ? array_values(array_unique(array_map('intval', $filters['ids']))) : null;
         if ($doctorId !== null) {
             $this->find($facility, $doctorId);
             $query = $this->counts->currentClinics($facility)->where('cs.staff_id', $doctorId)->select('c.id', 'c.code', 'c.name_ar')
@@ -83,16 +84,27 @@ class DoctorQueries
         if (($search = $filters['search'] ?? '') !== '' && $search !== null) {
             $query->where(fn ($q) => $q->whereLike('c.code', '%'.$search.'%')->orWhereLike('c.name_ar', '%'.$search.'%'));
         }
-        $page = $query->orderBy('c.code')->orderBy('c.id')->paginate($filters['per_page'] ?? 20, ['*'], 'page', $filters['page'] ?? 1);
+        if ($ids !== null) {
+            $query->whereIn('c.id', $ids);
+        }
+        $page = $query->orderBy('c.code')->orderBy('c.id')->paginate($ids !== null ? 100 : ($filters['per_page'] ?? 20), ['*'], 'page', $ids !== null ? 1 : ($filters['page'] ?? 1));
         $linked = [];
         if ($doctorId === null && ! empty($filters['doctor_id'])) {
             $this->find($facility, (int) $filters['doctor_id']);
             $linked = $this->counts->currentClinics($facility)->where('cs.staff_id', $filters['doctor_id'])->whereIn('c.id', $page->getCollection()->pluck('id'))->pluck('c.id')->all();
         }
 
+        $unavailable = [];
+        if ($ids !== null) {
+            $missing = array_values(array_diff($ids, $page->getCollection()->pluck('id')->all()));
+            // Missing and foreign IDs are indistinguishable. Never query foreign linkage.
+            $inactive = DB::table('clinics')->where('facility_id', $facility['id'])->whereIn('id', $missing)->where('is_active', false)->pluck('id')->all();
+            $unavailable = array_map(fn ($id) => ['id' => $id, 'reason' => in_array($id, $inactive) ? 'INACTIVE' : 'UNAVAILABLE'], $missing);
+        }
+
         return ['data' => $page->getCollection()->map(fn ($c) => ['id' => (int) $c->id, 'code' => $c->code, 'name_ar' => $c->name_ar,
             'starts_on' => $c->starts_on ?? null, 'is_linked' => $doctorId !== null || in_array($c->id, $linked),
-            'can_view' => in_array('clinics.view', $facility['permissions'], true)])->all(), 'meta' => $this->meta($page)];
+            'can_view' => in_array('clinics.view', $facility['permissions'], true)])->all(), 'meta' => $this->meta($page)] + ($doctorId === null ? ['unavailable' => $unavailable] : []);
     }
 
     private function meta($page): array

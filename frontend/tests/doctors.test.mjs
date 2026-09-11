@@ -120,6 +120,91 @@ test('failed conflict reload and second conflict preserve draft and can retry wi
   }finally{await context.close();}
 });
 
+test('conflict review recovers a renamed clinic by stable id and shows its current identity',async()=>{
+  let writes=0,failBatch=true;
+  const renamed={...clinicLinks[2],code:'RENAMED-03',name_ar:'الاسم الحالي للعيادة',is_linked:false};
+  const {page,context,calls}=await setup({override:async(route,url)=>{
+    if(route.request().method()==='PUT'){writes++;await route.fulfill({status:409,json:{error:{code:'DOCTOR_VERSION_CONFLICT'}}});return true;}
+    if(url.pathname.endsWith('/options/clinics')&&writes){
+      const ids=url.searchParams.getAll('ids[]').map(Number);
+      if(ids.length&&failBatch){failBatch=false;await route.abort();return true;}
+      const rows=ids.includes(renamed.id)?[renamed]:clinicLinks.filter(c=>c.id!==renamed.id&&(c.code+c.name_ar).includes(url.searchParams.get('search')||''));
+      await route.fulfill({json:{...paginated(rows),unavailable:[]}});return true;
+    }return false;
+  }});
+  try{
+    await page.getByRole('button',{name:'تعديل أحمد الاختباري',exact:true}).click();const dialog=page.getByRole('dialog');
+    await dialog.getByRole('checkbox',{name:/العيادة القلبية/}).check();
+    await dialog.getByRole('button',{name:'حفظ الطبيب',exact:true}).click();await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();
+    await dialog.getByText(/تعذّر الاتصال بالخادم/).waitFor();
+    assert.equal(await dialog.getByRole('checkbox',{name:/العيادة القلبية/}).isChecked(),true);
+    await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();
+    const review=dialog.getByRole('region',{name:'مراجعة تعارض التعديل'});await review.waitFor();
+    assert.match(await review.innerText(),/RENAMED-03/);
+    await review.getByRole('checkbox',{name:'تطبيق اختياري للعيادة: الاسم الحالي للعيادة',exact:true}).check();
+    await review.getByRole('button',{name:'اعتماد الاختيارات للمراجعة',exact:true}).click();assert.equal(writes,1);
+    await dialog.getByRole('button',{name:'حفظ الطبيب',exact:true}).click();
+    await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).waitFor();
+    assert.deepEqual(calls.filter(c=>c.method==='PUT')[1].body.clinic_add_ids,[renamed.id]);
+  }finally{await context.close();}
+});
+
+test('400 explicit link changes recover in four ID batches with a final version check and no automatic save',async()=>{
+  let writes=0;
+  const rows=Array.from({length:400},(_,i)=>({...clinicLinks[0],id:i+1,code:`C${i+1}`,name_ar:`عيادة اختبار ${i+1}`,is_linked:i<200}));
+  const {page,context,calls}=await setup({settings:{...options,capabilities:{...options.capabilities,update:false}},override:async(route,url)=>{
+    if(route.request().method()==='PUT'){writes++;await route.fulfill({status:409,json:{error:{code:'DOCTOR_VERSION_CONFLICT'}}});return true;}
+    if(url.pathname.endsWith('/options/clinics')||url.pathname==='/hospital-api/doctors/1/clinics'){
+      const ids=url.searchParams.getAll('ids[]').map(Number);
+      if(ids.length){await route.fulfill({json:{...paginated(rows.filter(r=>ids.includes(r.id))),unavailable:[]}});return true;}
+      const source=url.pathname.endsWith('/1/clinics')?rows.filter(r=>r.is_linked):rows;
+      const currentPage=Number(url.searchParams.get('page')||1);
+      await route.fulfill({json:{data:source.slice((currentPage-1)*100,currentPage*100),meta:{page:currentPage,per_page:100,total:source.length,last_page:Math.ceil(source.length/100)}}});return true;
+    }return false;
+  }});
+  try{
+    await page.getByRole('button',{name:'إدارة عيادات أحمد الاختباري',exact:true}).click();const dialog=page.getByRole('dialog');
+    const picker=dialog.getByRole('group',{name:'عيادات المنشأة',exact:true});
+    for(let p=1;p<=4;p++){
+      await picker.getByText(`صفحة ${p} من 4`,{exact:true}).waitFor();
+      await picker.locator('input[type=checkbox]').evaluateAll(inputs=>inputs.forEach(input=>input.click()));
+      if(p<4)await picker.getByRole('button',{name:'التالي',exact:true}).click();
+    }
+    await dialog.getByRole('button',{name:'حفظ الارتباطات',exact:true}).click();
+    const first=calls.find(c=>c.method==='PUT').body;assert.equal(first.clinic_add_ids.length,200);assert.equal(first.clinic_remove_ids.length,200);
+    const start=calls.length;await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();
+    const review=dialog.getByRole('region',{name:'مراجعة تعارض التعديل'});await review.waitFor();
+    const lookup=calls.slice(start).filter(c=>c.url.pathname.endsWith('/options/clinics'));
+    assert.equal(lookup.length,4);assert.ok(lookup.every(c=>c.url.searchParams.getAll('ids[]').length===100&&!c.url.searchParams.has('search')));
+    assert.equal(new Set(lookup.flatMap(c=>c.url.searchParams.getAll('ids[]'))).size,400);
+    assert.equal(calls.at(-1).url.pathname,'/hospital-api/doctors/1');
+    assert.equal(await review.getByRole('checkbox').count(),400);assert.equal(writes,1);
+    await review.getByRole('checkbox',{name:'تطبيق اختياري للعيادة: عيادة اختبار 201',exact:true}).check();
+    await review.getByRole('button',{name:'اعتماد الاختيارات للمراجعة',exact:true}).click();assert.equal(writes,1);
+    await dialog.getByRole('button',{name:'حفظ الارتباطات',exact:true}).click();await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).waitFor();
+    const second=calls.filter(c=>c.method==='PUT')[1].body;assert.deepEqual(second.clinic_add_ids,[201]);assert.deepEqual(second.clinic_remove_ids,[]);
+  }finally{await context.close();}
+});
+
+for(const destination of ['close','facility','session'])test(`pending ID batch is cancelled on ${destination} without updating another context`,async()=>{
+  let release,started;const gate=new Promise(r=>{release=r;});const requested=new Promise(r=>{started=r;});let writes=0;
+  const access=[1,2].map(id=>({facility:{...facility,id},permissions,roles:[]}));
+  const {page,context,calls}=await setup({access,override:async(route,url)=>{
+    if(route.request().method()==='PUT'){writes++;await route.fulfill({status:409,json:{error:{code:'DOCTOR_VERSION_CONFLICT'}}});return true;}
+    if(url.pathname.endsWith('/options/clinics')&&url.searchParams.has('ids[]')){started();await gate;try{await route.fulfill({json:{...paginated([{...clinicLinks[2],name_ar:'نتيجة متأخرة'}]),unavailable:[]}});}catch{}return true;}return false;
+  }});
+  try{
+    await page.getByRole('button',{name:'تعديل أحمد الاختباري',exact:true}).click();const dialog=page.getByRole('dialog');await dialog.getByRole('checkbox',{name:/العيادة القلبية/}).check();
+    await dialog.getByRole('button',{name:'حفظ الطبيب',exact:true}).click();await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();await requested;
+    if(destination==='facility')await page.evaluate(()=>history.pushState(null,'','/doctors?facility_id=2'));
+    else if(destination==='session')await page.goto(base+'/login');
+    else await page.keyboard.press('Escape');
+    await dialog.waitFor({state:'detached'});const count=calls.filter(c=>c.url.pathname==='/hospital-api/doctors/1').length;
+    release();await page.waitForTimeout(300);assert.equal(await page.getByText('نتيجة متأخرة',{exact:true}).count(),0);assert.equal(writes,1);
+    assert.equal(calls.filter(c=>c.url.pathname==='/hospital-api/doctors/1').length,count);
+  }finally{release();await context.close();}
+});
+
 test('real history entries restore search filters pagination and cancel obsolete debounce, detail return preserves context',async()=>{
   const first='/doctors?facility_id=1&search=أحمد&status=active&page=2';const second='/doctors?facility_id=1&search=ليلى&status=inactive&page=3';
   const {page,context,calls}=await setup({path:first});

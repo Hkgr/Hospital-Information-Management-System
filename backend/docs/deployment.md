@@ -15,6 +15,8 @@ PHP≥8.3 ومتطلبات Laravel13 وSanctum4، وmPDF8.3 وPhpSpreadsheet5.9 
 
 انشر `resources/fonts/cairo/Cairo-Regular.ttf` و`Cairo-Bold.ttf` وOFL.txt، و`resources/reports/logo-ar-color.png` و`medical-line.svg` وقالب reports.directory. الخطوط ثابتة وليست WOFF2 الواجهة. يحتاج مستخدم PHP الكتابة في storage وbootstrap/cache ومنها `storage/framework/cache/directory-pdf`. لا تجعل مجلد تقارير مؤقتًا عامًا. ملفات XLSX تحتاج Cairo مثبتًا على جهاز المستخدم؛ PDF يضمّن الخط نفسه.
 
+تحسين التقارير في مراجعة PR #9 لا يضيف اعتماد تشغيل أو migration؛ قياس التفاف النص يستعمل mPDF وخط Cairo المحليين الموجودين. افحص الخط المثبت وحجم النص في معاينة الطباعة عند تغيير برنامج فتح XLSX. [السياسة الجديدة للنص الكامل والعينات وطريقة معاينتها](directory-review.md).
+
 ## البيانات والأنواع والصلاحيات
 
 بعد التأكد من هدف الاتصال الصحيح ضمن إجراء النشر المعتمد:
