@@ -6,6 +6,7 @@ use App\Http\Responses\AuthError;
 use App\Models\User;
 use App\OpenApi\AuthDocumentTransformer;
 use App\OpenApi\ClinicDocumentTransformer;
+use App\OpenApi\DoctorDocumentTransformer;
 use App\Support\TestDatabaseSafety;
 use Dedoc\Scramble\Scramble;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -51,13 +52,10 @@ class AppServiceProvider extends ServiceProvider
                 ?? app()->environment(['local', 'testing'])
         );
 
-        /*
-         * Scramble is a development dependency and is not installed
-         * during production deployment with Composer --no-dev.
-         */
+        // Register auth and directory contracts in the existing Scramble document.
         if (class_exists(Scramble::class)) {
             Scramble::configure()
-                ->withDocumentTransformers([AuthDocumentTransformer::class, ClinicDocumentTransformer::class]);
+                ->withDocumentTransformers([AuthDocumentTransformer::class, ClinicDocumentTransformer::class, DoctorDocumentTransformer::class]);
         }
 
         Event::listen(CommandStarting::class, function (CommandStarting $event) {

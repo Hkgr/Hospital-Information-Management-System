@@ -139,7 +139,9 @@ class ClinicApiTest extends TestCase
         $updated = $this->edit($updated, ['doctor_add_ids' => [$this->doctor]])->assertOk()->assertJsonPath('data.doctor_count', 1)->json('data');
         $this->edit($updated, ['doctor_add_ids' => [$this->doctor]])->assertOk();
         $this->assertDatabaseCount('clinic_staff', 1);
-        $this->assertDatabaseCount('audit_logs', 7);
+        $this->assertSame(7, DB::table('audit_logs')->where('entity_type', 'clinic')->count());
+        $this->assertSame(3, DB::table('audit_logs')->where('entity_type', 'doctor')->where('event', 'clinics_changed')->count());
+        $this->assertDatabaseHas('staff', ['id' => $this->doctor, 'lock_version' => 4]);
         $this->travelBack();
     }
 
@@ -225,6 +227,7 @@ class ClinicApiTest extends TestCase
             $book = IOFactory::load($file);
             $sheet = $book->getActiveSheet();
             $this->assertTrue($sheet->getRightToLeft());
+            $this->assertSame('Cairo', $book->getDefaultStyle()->getFont()->getName());
             $this->assertSame('A9', $sheet->getFreezePane());
             $this->assertSame('0002', $sheet->getCell('A9')->getValue());
             $this->assertSame('0001', $sheet->getCell('A10')->getValue());
@@ -262,7 +265,7 @@ class ClinicApiTest extends TestCase
             gc_collect_cycles();
             @unlink($file);
         }
-        $html = view('reports.clinics', ['rows' => [], 'columns' => ['code'], 'metadata' => ['title' => '<script>secret</script>', 'number' => 'TEST', 'issued_at' => '', 'issuer' => '', 'facility' => '', 'filters' => '', 'definition' => ''], 'detail' => false])->render();
+        $html = view('reports.directory', ['rows' => [], 'columns' => ['code'], 'labels' => ['code' => 'الكود'], 'metadata' => ['title' => '<script>secret</script>', 'number' => 'TEST', 'issued_at' => '', 'timezone' => '', 'issuer' => '', 'facility' => '', 'filters' => '', 'definition' => ''], 'detail' => false])->render();
         $this->assertStringNotContainsString('<script>', $html);
         $this->assertStringContainsString('&lt;script&gt;', $html);
     }
@@ -333,7 +336,9 @@ class ClinicApiTest extends TestCase
         $this->assertSame($count, DB::table('role_permissions')->count());
         $this->assertDatabaseHas('permissions', ['code' => 'clinics.delete', 'is_active' => false]);
         $this->create(['description' => str_repeat('توصيف طويل ', 200)]);
-        $this->callApi('GET', '/export/pdf')->assertUnprocessable()->assertJsonPath('error.code', 'PDF_LAYOUT_LIMIT_EXCEEDED');
+        $pdf = $this->callApi('GET', '/export/pdf')->assertOk()->getContent();
+        $this->assertStringContainsString('Cairo', $pdf);
+        $this->assertStringContainsString('/FontFile2', $pdf);
         $this->callApi('GET', '/export/pdf', ['columns' => ['code', 'name_ar']])->assertOk();
         $this->callApi('GET', '/export/xlsx')->assertOk();
     }

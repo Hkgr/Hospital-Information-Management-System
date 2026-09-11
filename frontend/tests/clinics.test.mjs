@@ -39,7 +39,7 @@ test("navigation, columns, direct detail and back preserve list context", async 
   try {
     await page.getByRole("link", { name: "001", exact: true }).waitFor();
     assert.equal(await page.locator("#desktop-navigation").getByRole("link", { name: "العيادات", exact: true }).count(), 1);
-    assert.equal(await page.locator("#desktop-navigation").getByRole("button", { name: /الأطباء — قريبًا/ }).isDisabled(), true);
+    assert.equal(await page.locator("#desktop-navigation").getByRole("link", { name: "الأطباء", exact: true }).count(), 0);
     await page.getByText("الأعمدة", { exact: true }).click();
     await page.getByRole("checkbox", { name: "التوصيف", exact: true }).uncheck();
     assert.equal(await page.getByRole("columnheader", { name: "التوصيف", exact: true }).count(), 0);
@@ -360,6 +360,25 @@ for (const changeFacility of [false, true]) test(`late conflict reload is ignore
   } finally { release(); await context.close(); }
 });
 
+test("renamed doctor remains an explicit recoverable clinic-link choice by stable id", async () => {
+  let writes=0;
+  const renamed={...doctors[2],code:'CURRENT-D',name:'اسم الطبيب الحالي',is_linked:false};
+  const {page,context,calls}=await setup({override:async(route,url)=>{
+    if(route.request().method()==='PUT'){writes++;await route.fulfill({status:409,json:{error:{code:'CLINIC_VERSION_CONFLICT'}}});return true;}
+    if(writes&&url.pathname.endsWith('/options/doctors')){
+      const ids=url.searchParams.getAll('ids[]').map(Number);
+      await route.fulfill({json:{...paginated(ids.includes(renamed.id)?[renamed]:[]),unavailable:[]}});return true;
+    }return false;
+  }});
+  try{
+    await page.getByRole('button',{name:'تعديل العيادة الداخلية',exact:true}).click();const dialog=page.getByRole('dialog');
+    await dialog.getByRole('checkbox',{name:/سامر النموذجي/}).check();await dialog.getByRole('button',{name:'حفظ العيادة',exact:true}).click();await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();
+    const review=dialog.getByRole('region',{name:'مراجعة تعارض التعديل'});await review.waitFor();assert.match(await review.innerText(),/CURRENT-D/);
+    await review.getByRole('checkbox',{name:'تطبيق اختياري للطبيب: اسم الطبيب الحالي',exact:true}).check();await review.getByRole('button',{name:'اعتماد الاختيارات للمراجعة',exact:true}).click();assert.equal(writes,1);
+    await dialog.getByRole('button',{name:'حفظ العيادة',exact:true}).click();await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).waitFor();assert.deepEqual(calls.filter(c=>c.method==='PUT')[1].body.doctor_add_ids,[renamed.id]);
+  }finally{await context.close();}
+});
+
 test("doctor reload failure and a changing snapshot require retry; unavailable draft doctors are not reapplied", async () => {
   let version = 1, writes = 0, failDoctors = true, changeDuringRead = true;
   const current = () => ({ ...clinics[0], lock_version: version, description: `نسخة ${version}` });
@@ -377,7 +396,7 @@ test("doctor reload failure and a changing snapshot require retry; unavailable d
       else { if (changeDuringRead) { changeDuringRead = false; version = 3; } await route.fulfill({ json: paginated(doctors.slice(0, 2)) }); }
       return true;
     }
-    if (url.pathname.endsWith("/options/doctors") && url.searchParams.get("search") === "D003") { await route.fulfill({ json: paginated([]) }); return true; }
+    if (url.pathname.endsWith("/options/doctors") && url.searchParams.getAll("ids[]").includes("3")) { await route.fulfill({ json: { ...paginated([]), unavailable: [{ id: 3, reason: "INACTIVE" }] } }); return true; }
     return false;
   } });
   try {
@@ -464,7 +483,7 @@ test("facility selection cancels pending search and filter changes commit the vi
   } finally { await context.close(); }
 });
 
-for (const width of [390, 1440]) test(`responsive list, editor, doctors and detail at ${width}px`, async () => {
+for (const width of [390, 768, 1440]) test(`responsive list, editor, doctors and detail at ${width}px`, async () => {
   const { page, context, errors } = await setup({ width });
   const capture = async name => {
     if (process.env.CLINIC_CAPTURE !== "1") return;

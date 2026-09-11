@@ -7,7 +7,7 @@ type NavigationItem = { label: string; icon: IconType; href?: string; permission
 export const primaryNavigation: NavigationItem[] = [
   { label: "الإضبارات", icon: LuFolderHeart },
   { label: "المرضى", icon: LuUsersRound },
-  { label: "الأطباء", icon: LuStethoscope },
+  { label: "الأطباء", icon: LuStethoscope, href: "/doctors", permission: "doctors.view" },
   { label: "العيادات", icon: LuHospital, href: "/clinics", permission: "clinics.view" },
   { label: "الخدمات والإجراءات", icon: LuClipboardPlus },
   { label: "الأدوية", icon: LuPill },

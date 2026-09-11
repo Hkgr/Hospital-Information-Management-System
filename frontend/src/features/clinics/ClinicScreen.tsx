@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { LuArrowRight, LuColumns3, LuDownload, LuEye, LuFileText, LuHospital, LuPlus, LuSearch, LuSquarePen, LuTrash2 } from "react-icons/lu";
+import { LuArrowRight, LuDownload, LuEye, LuFileText, LuHospital, LuPlus, LuSearch, LuSquarePen, LuTrash2 } from "react-icons/lu";
 import { useIdentity } from "@/features/auth/AuthenticatedLayout";
 import { apiRequest, AuthError } from "@/features/auth/api";
 import { columns, columnKeys, downloadReport, useClinicRequest, useDebounced, type Clinic, type Column, type Doctor, type Page, type Specialty } from "./api";
@@ -11,6 +11,7 @@ import ClinicEditor from "./ClinicEditor";
 import ClinicDoctors, { DoctorList } from "./ClinicDoctors";
 import useClinicSearch from "./useClinicSearch";
 import Modal from "./Modal";
+import { ColumnMenu, LongText, Pagination } from "../directory/Controls";
 import styles from "./clinics.module.css";
 
 export default function ClinicScreen({ clinicId }: { clinicId?: string }) {
@@ -88,7 +89,7 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
           <DoctorFilter facilityId={facilityId} value={query.get("doctor_id") ?? ""} onChange={value => updateFilter("doctor_id", value)} />
           <label>الترتيب<select value={query.get("sort") ?? "code"} onChange={e => updateFilter("sort", e.target.value)}><option value="code">كود العيادة</option><option value="name_ar">اسم العيادة</option><option value="doctor_count">عدد الأطباء</option><option value="patient_count">عدد المرضى</option><option value="is_active">الحالة</option></select></label>
           <label>الاتجاه<select value={query.get("direction") ?? "asc"} onChange={e => updateFilter("direction", e.target.value)}><option value="asc">تصاعدي</option><option value="desc">تنازلي</option></select></label>
-          <details className={styles.columnMenu}><summary><LuColumns3 aria-hidden="true" />الأعمدة</summary><fieldset><legend>الأعمدة الظاهرة في الجدول والتصدير</legend>{columnKeys.map(key => <label key={key}><input type="checkbox" checked={visible.includes(key)} disabled={visible.length === 1 && visible.includes(key)} onChange={() => setVisible(current => columnKeys.filter(column => column === key ? !current.includes(key) : current.includes(column)))} />{columns[key]}</label>)}</fieldset></details>
+          <ColumnMenu labels={columns} visible={visible} onChange={setVisible} />
         </div>
         <ClinicTable key={revision} query={encoded} searching={searching} visible={visible} can={can} onAction={(type, clinic) => setModal({ type, clinic })} onPage={value => updateFilter("page", String(value))} onPageSize={value => updateFilter("per_page", value)} />
       </section>
@@ -111,12 +112,12 @@ function ClinicTable({ query, searching, visible, can, onAction, onPage, onPageS
       {data.map((clinic, index) => <tr key={clinic.id}>{visible.map(key => <td key={key}>{key === "number" ? (meta.page - 1) * meta.per_page + index + 1
         : key === "code" ? <Link className={styles.code} href={`/clinics/${clinic.id}?${query}`}>{clinic.code}</Link>
         : key === "name_ar" ? <div className={styles.clinicName}><strong>{clinic.name_ar}</strong><span className={clinic.is_active ? styles.active : styles.inactive}>{clinic.is_active ? "فعالة" : "غير فعالة"}</span></div>
-        : key === "description" ? <span className={styles.excerpt} title={clinic.description ?? undefined}>{clinic.description || "—"}</span>
+        : key === "description" ? <LongText text={clinic.description} />
         : key === "doctors" ? <button className={styles.textButton} onClick={() => onAction("doctors", clinic)}>{clinic.doctors_preview.map(doctor => doctor.name).join("، ") || "لا يوجد أطباء"}{clinic.doctor_count > 3 ? ` +${clinic.doctor_count - 3}` : ""}</button>
         : key === "doctor_count" ? <button className={styles.countButton} aria-label={`أطباء ${clinic.name_ar}: ${clinic.doctor_count}`} onClick={() => onAction("doctors", clinic)}>{clinic.doctor_count}</button>
         : clinic.patient_count}</td>)}<td><div className={styles.rowActions}><Link href={`/clinics/${clinic.id}?${query}`} className={styles.iconButton} aria-label={`استعراض ${clinic.name_ar}`} title="استعراض"><LuEye aria-hidden="true" /></Link>{can("update") && <button className={styles.iconButton} onClick={() => onAction("edit", clinic)} aria-label={`تعديل ${clinic.name_ar}`} title="تعديل"><LuSquarePen aria-hidden="true" /></button>}{can("delete") && <button className={`${styles.iconButton} ${styles.dangerText}`} onClick={() => onAction("delete", clinic)} aria-label={`حذف ${clinic.name_ar}`} title="حذف"><LuTrash2 aria-hidden="true" /></button>}{can("update") && clinic.is_active && <button className={styles.textButton} onClick={() => onAction("deactivate", clinic)} aria-label={`تعطيل ${clinic.name_ar}`}>تعطيل</button>}</div></td></tr>)}
       {!data.length && <tr><td colSpan={visible.length + 1}><div className={styles.status}>لا توجد عيادات مطابقة. عدّل البحث والفلاتر أو أضف عيادة جديدة إن كانت لديك الصلاحية.</div></td></tr>}
-    </tbody></table></div><div className={styles.pagination}><label>عدد الصفوف<select value={meta.per_page} onChange={e => onPageSize(e.target.value)}>{[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}</select></label><span>صفحة {meta.page} من {meta.last_page}</span><button disabled={meta.page <= 1} onClick={() => onPage(meta.page - 1)}>السابق</button><button disabled={meta.page >= meta.last_page} onClick={() => onPage(meta.page + 1)}>التالي</button></div>
+    </tbody></table></div><Pagination meta={meta} onPage={onPage} onPageSize={onPageSize} />
   </>;
 }
 

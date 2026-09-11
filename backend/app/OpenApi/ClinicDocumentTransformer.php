@@ -19,7 +19,7 @@ use Dedoc\Scramble\Support\Generator\Types\Type;
 
 class ClinicDocumentTransformer
 {
-    private function object(array $fields): ObjectType
+    protected function object(array $fields): ObjectType
     {
         $type = new ObjectType;
         foreach ($fields as $key => $value) {
@@ -29,9 +29,31 @@ class ClinicDocumentTransformer
         return $type->setRequired(array_keys($fields));
     }
 
-    private function list(Type $item): ArrayType
+    protected function list(Type $item): ArrayType
     {
         return (new ArrayType)->setItems($item);
+    }
+
+    protected function unavailableChoices(): ArrayType
+    {
+        return $this->list($this->object(['id' => new IntegerType, 'reason' => (new StringType)->enum(['INACTIVE', 'UNAVAILABLE'])]));
+    }
+
+    protected function lookupDescription(): string
+    {
+        return '\nOptional ids[] performs a complete stable-ID lookup: 1–100 positive safe integers per request, duplicates coalesced. Do not combine with search/page/per_page. Split up to 200 additions + 200 removals into four batches. data contains current eligible identities/linkage; unavailable contains only requested id and reason. INACTIVE means an in-scope inactive record/type; UNAVAILABLE deliberately conflates missing, out-of-scope and ineligible records. Clinic results and all link state are limited to the authorized facility; staff choices retain the existing global eligible professional directory boundary. Re-check parent lock_version after all batches; explicitly review and save, never automatically rebase.';
+    }
+
+    protected function configureLookup($operation): void
+    {
+        $operation->description .= $this->lookupDescription();
+        foreach ($operation->parameters as $parameter) {
+            if ($parameter->name === 'ids[]') {
+                $parameter->required(false)->setStyle('form')->setExplode(true)
+                    ->description('Optional complete batch. Repeated ids[] keys; 1–100 entries, deduplicated by the server. Incompatible with search/page/per_page.')
+                    ->setSchema(Schema::fromType($this->list((new IntegerType)->setMin(1)->setMax(9007199254740991))->setMin(1)->setMax(100)));
+            }
+        }
     }
 
     public function __invoke(OpenApi $document): void
@@ -77,7 +99,7 @@ class ClinicDocumentTransformer
                         $parameter->setSchema(Schema::fromType((new StringType)->enum(['xlsx', 'pdf'])));
                     }
                 }
-                $operation->description .= "\nRequires auth:sanctum → active account → api ability, then clinics.view and the operation permission in the SAME active facility. Deactivated accounts lose all tokens (403 ACCOUNT_INACTIVE). Every response is private, no-store. Staff is a global directory; eligible doctors have active staff/type and an explicitly configured staff_types.code. Current intervals are [starts_on, ends_on) in the facility timezone. Edits use lock_version plus doctor_add_ids/doctor_remove_ids, never replacement sync. Doctor/patient counts are distinct. Exports include ALL filtered rows, selected columns, server issuer/number/timezone; caps 1000 clinics / 5000 current links, 422 instead of truncation. Oversized PDF list cells return PDF_LAYOUT_LIMIT_EXCEEDED (description >1800 or doctor names >600 characters); hide those columns or use Excel/detail PDF. Report bytes are never public.";
+                $operation->description .= "\nRequires auth:sanctum → active account → api ability, then clinics.view and the operation permission in the SAME active facility. Deactivated accounts lose all tokens (403 ACCOUNT_INACTIVE). Every response is private, no-store. Staff is a global directory; eligible doctors have active staff/type and an explicitly configured staff_types.code. Current intervals are [starts_on, ends_on) in the facility timezone. Edits use lock_version plus doctor_add_ids/doctor_remove_ids, never replacement sync. Doctor/patient counts are distinct. Exports include ALL filtered rows, selected columns, server issuer/number/timezone; caps 1000 clinics / 5000 current links, 422 instead of truncation. Long texts continue in explicit appendices; Cairo is embedded in PDF and named in XLSX. Relationship writes also increment staff.lock_version and lock staff before clinics. Report bytes are never public.";
                 if ($operation->method === 'delete') {
                     $operation->addResponse(Response::make(204)->setDescription('Unreferenced clinic deleted and audited. No content.'));
                 } elseif (str_contains($route, '/export/') || str_ends_with($route, '/report')) {
@@ -98,6 +120,8 @@ class ClinicDocumentTransformer
                     }
                     if ($options) {
                         $fields['doctor_types_configured'] = new BooleanType;
+                        $fields['unavailable'] = $this->unavailableChoices();
+                        $this->configureLookup($operation);
                     }
                     $operation->addResponse(Response::make($route === 'clinics' && $operation->method === 'post' ? 201 : 200)
                         ->setDescription('Clinic response; fields are limited to this operation.')->setContent('application/json', Schema::fromType($this->object($fields))));
@@ -118,7 +142,7 @@ class ClinicDocumentTransformer
                     $validationErrors = new ObjectType;
                     $validationErrors->additionalProperties = $this->list(new StringType);
                     $validation = $this->object(['message' => new StringType, 'errors' => $validationErrors]);
-                    $limit = $this->object(['error' => $this->object(['code' => (new StringType)->enum(['EXPORT_LIMIT_EXCEEDED', 'PDF_LAYOUT_LIMIT_EXCEEDED']), 'message' => new StringType])]);
+                    $limit = $this->object(['error' => $this->object(['code' => (new StringType)->enum(['EXPORT_LIMIT_EXCEEDED']), 'message' => new StringType])]);
                     $operation->addResponse(Response::make(422)->setDescription('Invalid input, or export exceeds safe bounds (no truncation).')->setContent('application/json', Schema::fromType((new AnyOf)->setItems([$validation, $limit]))));
                 }
             }
