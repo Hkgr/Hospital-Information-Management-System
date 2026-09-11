@@ -20,6 +20,7 @@ async function setup({ width=1440, access=[{facility,permissions,roles:[]}], set
     if(!url.pathname.startsWith('/hospital-api/')) return route.continue();
     calls.push({url,method:request.method(),body:request.postDataJSON(),auth:request.headers().authorization});
     if(await override(route,url)) return;
+    if(url.pathname.endsWith('/deletion-preview')) return route.fulfill({json:{data:{action:'delete',organizational_links:0,has_other_references:false,lock_version:1,archived:false}}});
     if(url.pathname.endsWith('/user')) return route.fulfill({json:{data:{user,access}}});
     if(url.pathname.endsWith('/options')) return route.fulfill({json:{data:settings}});
     if(url.pathname.endsWith('/options/clinics')) {

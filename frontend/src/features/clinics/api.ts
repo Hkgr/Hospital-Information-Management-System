@@ -5,7 +5,7 @@ export type Specialty = { id: number; name_ar: string };
 export type Doctor = { id: number; code: string; name: string; starts_on: string | null; is_linked: boolean; specialties: Specialty[] };
 export type Clinic = {
   id: number; facility_id: number; code: string; name_ar: string; description: string | null;
-  is_active: boolean; lock_version: number; specialty: Specialty | null;
+  is_active: boolean; archived_at: string | null; lock_version: number; specialty: Specialty | null;
   doctor_count: number; patient_count: number; doctors_preview: { id: number; name: string }[]; patient_count_definition: string;
 };
 export type Page<T> = { data: T[]; meta: { page: number; per_page: number; total: number; last_page: number }; doctor_types_configured?: boolean };

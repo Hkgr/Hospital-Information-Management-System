@@ -12,7 +12,7 @@ class ClinicQueries
 {
     public function __construct(private ClinicCounts $counts) {}
 
-    public function query(array $facility, array $filters): Builder
+    public function query(array $facility, array $filters, bool $includeArchived = false): Builder
     {
         $doctors = $this->counts->currentDoctors($facility)->whereColumn('cs.clinic_id', 'clinics.id')
             ->selectRaw('COUNT(DISTINCT s.id)');
@@ -26,7 +26,13 @@ class ClinicQueries
             $query->where(fn (Builder $q) => $q->whereLike('clinics.code', '%'.$search.'%')
                 ->orWhereLike('clinics.name_ar', '%'.$search.'%')->orWhereLike('clinics.description', '%'.$search.'%')->orWhereExists($linked));
         }
-        if ($status = $filters['status'] ?? null) {
+        $status = $filters['status'] ?? null;
+        if ($status === 'archived') {
+            $query->whereNotNull('clinics.archived_at');
+        } elseif (! $includeArchived) {
+            $query->whereNull('clinics.archived_at');
+        }
+        if (in_array($status, ['active', 'inactive'], true)) {
             $query->where('clinics.is_active', $status === 'active');
         }
         if ($specialty = $filters['specialty_id'] ?? null) {
@@ -50,7 +56,7 @@ class ClinicQueries
 
     public function find(array $facility, int $id): array
     {
-        $row = $this->query($facility, [])->where('clinics.id', $id)->first();
+        $row = $this->query($facility, [], true)->where('clinics.id', $id)->first();
         if (! $row) {
             throw new ClinicException('CLINIC_NOT_FOUND', 'العيادة غير موجودة في المنشأة المحددة.', 404);
         }
@@ -68,7 +74,7 @@ class ClinicQueries
             'id' => (int) $row->id, 'facility_id' => (int) $row->facility_id,
             'code' => $row->code, 'name_ar' => $row->name_ar, 'description' => $row->description,
             'specialty' => $row->specialty_id ? ['id' => (int) $row->specialty_id, 'name_ar' => $row->specialty_name] : null,
-            'is_active' => (bool) $row->is_active, 'lock_version' => (int) $row->lock_version,
+            'archived_at' => $row->archived_at, 'is_active' => (bool) $row->is_active, 'lock_version' => (int) $row->lock_version,
             'doctor_count' => (int) $row->doctor_count, 'patient_count' => (int) $row->patient_count,
             'doctors_preview' => ($doctors->get($row->id) ?? collect())->take(3)
                 ->map(fn ($doctor) => ['id' => (int) $doctor->id, 'name' => $doctor->full_name])->values()->all(),

@@ -25,6 +25,9 @@ class ClinicStaffLinks
     public function change(int $clinicId, int $staffId, bool $add, array $facility): bool
     {
         $today = $facility['today'];
+        if ($add && ! DB::table('clinics')->where('id', $clinicId)->where('facility_id', $facility['id'])->where('is_active', true)->whereNull('archived_at')->exists()) {
+            throw ValidationException::withMessages(['doctor_add_ids' => 'الإضافة تحتاج عيادة فعالة غير مؤرشفة في المنشأة المحددة.']);
+        }
         if ($add && ! app(ClinicCounts::class)->eligibleDoctors()->where('s.id', $staffId)->exists()) {
             throw ValidationException::withMessages(['doctor_add_ids' => 'اختر أطباء فعالين من الأنواع المعتمدة فقط.']);
         }
@@ -34,7 +37,9 @@ class ClinicStaffLinks
                 ->where('starts_on', '<=', $today)->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>', $today))
                 ->update(['ends_on' => $today, 'updated_at' => now()]) > 0;
         }
-        $overlap = $periods->filter(fn ($p) => $p->ends_on === null || $p->ends_on > $today);
+        // A future zero-length period cancelled by archive reserves no time.
+        // Keep its history, but allow a new explicit assignment after restore.
+        $overlap = $periods->filter(fn ($p) => $p->ends_on === null || ($p->ends_on > $today && $p->ends_on > $p->starts_on));
         if ($overlap->contains(fn ($p) => $p->starts_on > $today) || $overlap->count() > 1) {
             throw new ClinicException('CLINIC_PERIOD_CONFLICT', 'يوجد ارتباط مجدول أو فترات متداخلة؛ راجع السجل قبل التعديل.');
         }

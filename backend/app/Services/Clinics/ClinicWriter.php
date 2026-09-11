@@ -4,6 +4,7 @@ namespace App\Services\Clinics;
 
 use App\Exceptions\ClinicException;
 use App\Services\Directory\ClinicStaffLinks;
+use App\Services\Directory\DirectoryLifecycle;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -20,6 +21,9 @@ class ClinicWriter
             return DB::transaction(function () use ($request, $facility, $input, $id) {
                 $this->links->lockStaff(array_merge($input['doctor_add_ids'] ?? [], $input['doctor_remove_ids'] ?? []));
                 $old = $id === null ? null : $this->locked($facility['id'], $id, $input['lock_version']);
+                if ($old && $old['archived_at'] !== null) {
+                    throw new ClinicException('CLINIC_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله أو إدارة ارتباطاته.');
+                }
                 $fields = Arr::only($input, ['code', 'name_ar', 'description', 'specialty_id', 'is_active']);
                 if (! empty($fields['specialty_id']) && $fields['specialty_id'] != ($old['specialty_id'] ?? null) && ! DB::table('specialties')->where('id', $fields['specialty_id'])->where('is_active', true)->exists()) {
                     throw ValidationException::withMessages(['specialty_id' => 'اختر تخصصًا فعالًا.']);
@@ -57,32 +61,12 @@ class ClinicWriter
 
     public function delete(Request $request, array $facility, int $id, int $version): void
     {
-        try {
-            DB::transaction(function () use ($request, $facility, $id, $version) {
-                $old = $this->locked($facility['id'], $id, $version);
-                foreach (['clinic_staff', 'visits', 'staff_work_days'] as $table) {
-                    if (DB::table($table)->where('clinic_id', $id)->exists()) {
-                        $this->referenced();
-                    }
-                }
-                DB::table('clinics')->where('id', $id)->delete();
-                $this->audit->record($request, $facility['id'], $id, 'deleted', $old, null);
-            }, 3);
-        } catch (QueryException $e) {
-            if (($e->errorInfo[1] ?? null) === 1451) {
-                $this->referenced();
-            }
-            throw $e;
-        }
+        app(DirectoryLifecycle::class)->apply($request, $facility, false, $id, $version, 'delete');
     }
 
     public function deactivate(Request $request, array $facility, int $id, int $version): void
     {
-        DB::transaction(function () use ($request, $facility, $id, $version) {
-            $old = $this->locked($facility['id'], $id, $version);
-            DB::table('clinics')->where('id', $id)->update(['is_active' => false, 'lock_version' => $version + 1, 'updated_at' => now()]);
-            $this->audit->record($request, $facility['id'], $id, 'deactivated', $old, (array) DB::table('clinics')->find($id));
-        }, 3);
+        app(DirectoryLifecycle::class)->apply($request, $facility, false, $id, $version, 'deactivate');
     }
 
     private function locked(int $facilityId, int $id, int $version): array
@@ -120,10 +104,5 @@ class ClinicWriter
     private function periods(int $id): array
     {
         return DB::table('clinic_staff')->where('clinic_id', $id)->orderBy('id')->get(['staff_id', 'starts_on', 'ends_on'])->map(fn ($p) => (array) $p)->all();
-    }
-
-    private function referenced(): never
-    {
-        throw new ClinicException('CLINIC_REFERENCED', 'لا يمكن حذف عيادة مرتبطة بسجلات أو بتاريخ أطباء. يمكنك تعطيلها بإجراء منفصل.');
     }
 }

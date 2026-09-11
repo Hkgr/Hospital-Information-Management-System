@@ -12,7 +12,7 @@ class ClinicCounts
     public function eligibleDoctors(): Builder
     {
         return DB::table('staff as s')->join('staff_types as st', 'st.id', '=', 's.staff_type_id')
-            ->where('s.is_active', true)->where('st.is_active', true)
+            ->whereNull('s.archived_at')->where('s.is_active', true)->where('st.is_active', true)
             ->whereIn('st.code', config('clinics.doctor_staff_types', []));
     }
 
@@ -21,7 +21,7 @@ class ClinicCounts
         $today = $facility['today'] ?? now($facility['timezone'])->toDateString();
 
         return $this->eligibleDoctors()->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')
-            ->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('c.facility_id', $facility['id'])
+            ->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('c.facility_id', $facility['id'])->where('c.is_active', true)->whereNull('c.archived_at')
             ->where('cs.starts_on', '<=', $today)
             ->where(fn (Builder $query) => $query->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $today));
     }

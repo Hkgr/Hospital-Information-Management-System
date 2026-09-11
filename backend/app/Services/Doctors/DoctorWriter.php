@@ -5,6 +5,7 @@ namespace App\Services\Doctors;
 use App\Exceptions\DoctorException;
 use App\Services\Clinics\ClinicAudit;
 use App\Services\Directory\ClinicStaffLinks;
+use App\Services\Directory\DirectoryLifecycle;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -32,6 +33,9 @@ class DoctorWriter
             return DB::transaction(function () use ($request, $facility, $input, $id, $linksOnly, $add, $remove) {
                 // Both writers acquire staff, then clinics, then period rows. Never reverse this order.
                 $old = $id === null ? null : $this->locked($id, $input['lock_version']);
+                if ($old && $old['archived_at'] !== null) {
+                    throw new DoctorException('DOCTOR_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله أو إدارة ارتباطاته.');
+                }
                 if (! $linksOnly) {
                     $this->validateFields($input, $old);
                     $fields = Arr::only($input, ['description', 'staff_type_id', 'license_no', 'phone', 'is_active']);
@@ -85,6 +89,9 @@ class DoctorWriter
 
     private function validateFields(array $input, ?array $old): void
     {
+        if (($input['is_active'] ?? false) && ! ($old['is_active'] ?? false)) {
+            app(DirectoryLifecycle::class)->requireActiveType((int) $input['staff_type_id']);
+        }
         $type = DB::table('staff_types')->whereIn('code', config('clinics.doctor_staff_types'))->where('id', $input['staff_type_id'])->first();
         if (! $type || (! $type->is_active && $input['staff_type_id'] != ($old['staff_type_id'] ?? null))) {
             throw ValidationException::withMessages(['staff_type_id' => 'اختر نوع طبيب فعالًا من الأنواع المعتمدة.']);
@@ -115,46 +122,11 @@ class DoctorWriter
 
     public function deactivate(Request $request, array $facility, int $id, int $version): void
     {
-        $this->access->directory($request->user(), 'update');
-        DB::transaction(function () use ($request, $facility, $id, $version) {
-            $old = $this->locked($id, $version);
-            DB::table('staff')->where('id', $id)->update(['is_active' => false, 'lock_version' => $version + 1, 'updated_at' => now()]);
-            $this->audit->record($request, $facility['id'], $id, 'deactivated', ['is_active' => (bool) $old['is_active']], ['is_active' => false], 'doctor');
-        }, 3);
+        app(DirectoryLifecycle::class)->apply($request, $facility, true, $id, $version, 'deactivate');
     }
 
     public function delete(Request $request, array $facility, int $id, int $version): void
     {
-        $this->access->directory($request->user(), 'delete');
-        try {
-            DB::transaction(function () use ($request, $facility, $id, $version) {
-                $old = $this->locked($id, $version);
-                foreach (['clinic_staff' => ['staff_id'], 'users' => ['staff_id'], 'staff_aliases' => ['staff_id'], 'staff_work_days' => ['staff_id'],
-                    'visits' => ['attending_staff_id', 'resident_staff_id'], 'visit_diagnoses' => ['diagnosing_staff_id'],
-                    'visit_services' => ['performed_by'], 'visit_procedures' => ['specialist_id', 'nurse_id'],
-                    'dose_sessions' => ['supervising_staff_id', 'administered_by'], 'visit_medications' => ['prescribing_staff_id'],
-                    'visit_outcomes' => ['decided_by'], 'case_reviews' => ['decided_by'], 'blood_recipient_procedures' => ['specialist_id'],
-                    'cancer_case_diagnoses' => ['decided_by'], 'report_metric_catalog_items' => ['staff_id']] as $table => $columns) {
-                    foreach ($columns as $column) {
-                        if (DB::table($table)->where($column, $id)->exists()) {
-                            $this->referenced();
-                        }
-                    }
-                }
-                DB::table('staff_specialties')->where('staff_id', $id)->delete();
-                DB::table('staff')->where('id', $id)->delete();
-                $this->audit->record($request, $facility['id'], $id, 'deleted', $old, null, 'doctor');
-            }, 3);
-        } catch (QueryException $e) {
-            if (($e->errorInfo[1] ?? null) === 1451) {
-                $this->referenced();
-            }
-            throw $e;
-        }
-    }
-
-    private function referenced(): never
-    {
-        throw new DoctorException('DOCTOR_REFERENCED', 'لا يمكن حذف طبيب له مراجع أو تاريخ محفوظ. التعطيل العالمي إجراء منفصل للمخوّل به.');
+        app(DirectoryLifecycle::class)->apply($request, $facility, true, $id, $version, 'delete');
     }
 }

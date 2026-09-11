@@ -18,7 +18,7 @@ class ClinicReports
     public function export(Request $request, array $facility, array $filters, string $format, ?int $id = null): Response
     {
         $rows = DB::transaction(function () use ($facility, $filters, $id) {
-            $query = $this->queries->query($facility, $filters);
+            $query = $this->queries->query($facility, $filters, $id !== null);
             if ($id !== null) {
                 $query->where('clinics.id', $id);
             }
@@ -41,7 +41,7 @@ class ClinicReports
                 $links = $byClinic->get($row->id, collect())->map(fn ($d) => ['code' => $d->staff_code, 'name' => $d->full_name, 'starts_on' => $d->starts_on])->all();
 
                 return (array) $row + ['doctors' => implode('، ', array_map(fn ($d) => $d['name'].' ('.$d['code'].')', $links)), 'links' => $links,
-                    'details' => ['الحالة' => $row->is_active ? 'فعالة' : 'غير فعالة', 'التخصص' => $row->specialty_name ?? 'غير محدد', 'عدد الأطباء' => $row->doctor_count, 'عدد المرضى' => $row->patient_count]];
+                    'details' => ['الحالة' => $row->archived_at ? 'مؤرشفة' : ($row->is_active ? 'فعالة' : 'غير فعالة'), 'التخصص' => $row->specialty_name ?? 'غير محدد', 'عدد الأطباء' => $row->doctor_count, 'عدد المرضى' => $row->patient_count]];
             })->all();
         });
         $columns = $id === null ? ($filters['columns'] ?? array_keys(self::COLUMNS)) : array_keys(self::COLUMNS);

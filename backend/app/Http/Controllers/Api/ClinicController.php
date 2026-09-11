@@ -11,6 +11,7 @@ use App\Services\Clinics\ClinicAccess;
 use App\Services\Clinics\ClinicQueries;
 use App\Services\Clinics\ClinicReports;
 use App\Services\Clinics\ClinicWriter;
+use App\Services\Directory\DirectoryLifecycle;
 use Dedoc\Scramble\Attributes\Group;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,49 @@ use Symfony\Component\HttpFoundation\Response;
 class ClinicController extends Controller
 {
     public function __construct(private ClinicAccess $access, private ClinicQueries $queries, private ClinicWriter $writer) {}
+
+    /** Historical organizational periods in the authorized facility, including archived/inactive names. */
+    public function linkHistory(ClinicQueryRequest $request, int $clinic, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'));
+
+        return response()->json($lifecycle->history($facility, false, $clinic, $request->validated()));
+    }
+
+    /** Deletion eligibility only; no patient or unauthorized facility details. Rechecked during the write. */
+    public function deletionPreview(ClinicQueryRequest $request, int $clinic, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'delete');
+
+        return response()->json(['data' => $lifecycle->preview($request, $facility, false, $clinic)]);
+    }
+
+    /** Archive and close current/cancel future periods without deleting history. Requires delete permission. */
+    public function archive(ClinicVersionRequest $request, int $clinic, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'delete');
+        $lifecycle->apply($request, $facility, false, $clinic, $request->integer('lock_version'), 'archive');
+
+        return response()->json(['data' => $this->queries->find($facility, $clinic)]);
+    }
+
+    /** Restore as inactive; never reopen periods. Requires update permission. */
+    public function restore(ClinicVersionRequest $request, int $clinic, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'update');
+        $lifecycle->apply($request, $facility, false, $clinic, $request->integer('lock_version'), 'restore');
+
+        return response()->json(['data' => $this->queries->find($facility, $clinic)]);
+    }
+
+    /** Reactivate an inactive, unarchived record. Requires update permission. */
+    public function reactivate(ClinicVersionRequest $request, int $clinic, DirectoryLifecycle $lifecycle): JsonResponse
+    {
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'update');
+        $lifecycle->apply($request, $facility, false, $clinic, $request->integer('lock_version'), 'reactivate');
+
+        return response()->json(['data' => $this->queries->find($facility, $clinic)]);
+    }
 
     /** List clinics. Requires clinics.view in the requested facility. */
     public function index(ClinicQueryRequest $request): JsonResponse
