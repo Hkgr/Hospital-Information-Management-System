@@ -26,6 +26,6 @@ class DoctorCounts
     public function patients(int $facilityId): Builder
     {
         return DB::table('visits')->where('facility_id', $facilityId)->where('status', 'complete')->whereNull('voided_at')
-            ->whereNotNull('attending_staff_id')->select('attending_staff_id')->selectRaw('COUNT(DISTINCT patient_id) as patient_count')->groupBy('attending_staff_id');
+            ->whereColumn('attending_staff_id', 's.id')->selectRaw('COUNT(DISTINCT patient_id)');
     }
 }

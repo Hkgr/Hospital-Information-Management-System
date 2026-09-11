@@ -255,9 +255,54 @@ class DoctorApiTest extends TestCase
         $visit = DB::table('visits')->where('facility_id', $this->facility)->first();
         DB::table('visit_procedures')->insert(['visit_id' => $visit->id, 'facility_id' => $this->facility, 'reporting_period_id' => $periods[$this->facility], 'performed_on' => '2026-09-11', 'procedure_id' => $procedure, 'specialist_id' => $procedureDoctor['id'], 'client_request_id' => (string) Str::uuid(), 'entered_by' => $this->user->id]);
         $this->callApi('GET', '/'.$procedureDoctor['id'])->assertJsonPath('data.patient_count', 0);
+        $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'desc', 'per_page' => 1])->assertJsonPath('meta.total', 4)->assertJsonPath('data.0.patient_count', 1);
+        $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'asc', 'per_page' => 1])->assertJsonPath('meta.total', 4)->assertJsonPath('data.0.patient_count', 0);
+        $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'desc', 'per_page' => 1, 'page' => 3])->assertJsonPath('data.0.patient_count', 0);
         $this->callApi('DELETE', '/'.$procedureDoctor['id'], ['lock_version' => 1])->assertConflict()->assertJsonPath('error.code', 'DOCTOR_REFERENCED');
         $this->assertDatabaseCount('visit_procedures', 1);
         $this->assertDatabaseCount('visits', 6);
+    }
+
+    public function test_search_matches_only_current_scoped_clinics_without_duplicate_doctors(): void
+    {
+        $clinic = $this->clinic('LINK-CODE');
+        DB::table('clinics')->where('id', $clinic)->update(['name_ar' => 'جراحة مشتركة']);
+        $doctor = $this->create(['clinic_add_ids' => [$clinic]]);
+        $second = $this->create(['code' => '0002', 'clinic_add_ids' => [$clinic]]);
+        DB::table('clinic_staff')->insert(['staff_id' => $doctor['id'], 'clinic_id' => $clinic, 'starts_on' => '2020-01-01']);
+        foreach (['LINK-CODE', 'جراحة مشتركة'] as $search) {
+            $this->callApi('GET', '', ['search' => $search, 'per_page' => 1, 'page' => 2])
+                ->assertOk()->assertJsonPath('meta.total', 2)->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $second['id']);
+        }
+        foreach (['expired', 'future', 'inactive', 'foreign'] as $case) {
+            $excluded = $this->clinic('EXCLUDED-'.$case, $case === 'foreign' ? $this->other : null, $case !== 'inactive');
+            DB::table('clinic_staff')->insert(['staff_id' => $doctor['id'], 'clinic_id' => $excluded,
+                'starts_on' => $case === 'future' ? now('Asia/Damascus')->addDay()->toDateString() : '2020-01-01',
+                'ends_on' => $case === 'expired' ? now('Asia/Damascus')->toDateString() : null]);
+            $this->callApi('GET', '', ['search' => 'EXCLUDED-'.$case])->assertOk()->assertJsonPath('meta.total', 0);
+        }
+    }
+
+    public function test_paginated_link_options_do_not_load_patient_counts_and_reject_mixed_batch_mode(): void
+    {
+        $doctor = $this->create();
+        $clinic = $this->clinic();
+        foreach ([['/api/doctors/options/clinics', ['doctor_id' => $doctor['id']], $clinic], ['/api/clinics/options/doctors', ['clinic_id' => $clinic], $doctor['id']]] as [$path, $parent, $id]) {
+            $headers = ['Authorization' => 'Bearer '.$this->token];
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->json('GET', $path, $parent + ['facility_id' => $this->facility, 'search' => '', 'page' => 1, 'per_page' => 20], $headers)
+                ->assertOk()->assertJsonPath('meta.total', 1);
+            $queries = collect(DB::getQueryLog())->pluck('query')->implode("\n");
+            DB::disableQueryLog();
+            $this->assertStringNotContainsString('`visits`', $queries);
+            foreach (['search' => '', 'page' => 1, 'per_page' => 20] as $key => $value) {
+                $this->json('GET', $path, $parent + ['facility_id' => $this->facility, 'ids' => [$id], $key => $value], $headers)
+                    ->assertUnprocessable()->assertJsonValidationErrors($key);
+            }
+        }
+        config(['clinics.doctor_staff_types' => ['DOES_NOT_EXIST']]);
+        $this->callApi('GET', '/options')->assertOk()->assertJsonPath('data.doctor_types_configured', false);
     }
 
     public function test_search_filters_pagination_and_bounded_queries(): void

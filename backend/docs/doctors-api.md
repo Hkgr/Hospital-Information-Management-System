@@ -65,7 +65,7 @@
 
 `capabilities` هي create/update/delete/link/export/view_clinics الحالية، وتستخدم الواجهة هذه النتيجة لإظهار الإجراءات. ليست صلاحيات مخزنة داخل التوكن، ولا تعفي الخادم من التحقق.
 
-القائمة تدعم search≤200 (الكود/الاسم/التوصيف)، status=active|inactive، specialty_id، clinic_id، sort=code|name|clinic_count|patient_count|is_active، direction=asc|desc، page≥1، per_page=1..100 (افتراضي20). الترتيب الثانوي id ثابت. تستخدم LIKE؛ الرمزان `%` و`_` نمطا بحث وليسا SQL. القيمة `0` بحث صالح. لا يقتصر التصدير على الصفحة المعروضة، والأعمدة التسعة المسموحة هي number/code/name/specialties/description/clinics/clinic_count/patient_count/is_active.
+القائمة تدعم search≤200 (الكود/الاسم/التوصيف أو اسم العيادة الحالية الفعالة وكودها ضمن المنشأة)، status=active|inactive، specialty_id، clinic_id، sort=code|name|clinic_count|patient_count|is_active، direction=asc|desc، page≥1، per_page=1..100 (افتراضي20). الترتيب الثانوي id ثابت. تستخدم LIKE؛ الرمزان `%` و`_` نمطا بحث وليسا SQL. القيمة `0` بحث صالح. لا يقتصر التصدير على الصفحة المعروضة، والأعمدة التسعة المسموحة هي number/code/name/specialties/description/clinics/clinic_count/patient_count/is_active.
 
 ## الأنواع والأعداد والتزامن
 
@@ -99,3 +99,6 @@ XLSX يحدد **اسم Cairo ولا يضمّن الخط**؛ يلزم تثبيت�
 استخدم MySQL اختبارية فقط وبعد `php artisan test-db:check --connect --env=testing`. اختبارات Feature تغطي نطاقين لمنشأتين، فصل التفويض العالمي، CRUD والأنواع والتخصصات، حفظ الحقول الأخرى، الاتجاهين والتاريخ والتعارض، الزيارات المكررة والمسودة والملغاة وطبيب آخر، المراجع، N+1، الخصوصية والحقن والتقارير وOpenAPI.
 
 نتائج التنفيذ الفعلية، المسار HTTP الحي، الصور والعينات وحدود التحقق في [توثيق الواجهة](../../frontend/docs/doctors.md). إدارة المرضى والحسابات والتخصصات والأنواع ومنح الصلاحيات عبر واجهة، والتصدير المؤجل، خارج النطاق.
+
+
+تحسين الأداء والربط: راجع [قياسات الدليل والتحقق](directory-performance.md). يصبح doctor_types_configured=false عند غياب أي كود نوع فعال مطابق للإعداد؛ لا تكفي قائمة أكواد غير موجودة أو غير فعالة. البحث المتبادل يستخدم الارتباطات الحالية فقط ولا يكرر سجلات القائمة.

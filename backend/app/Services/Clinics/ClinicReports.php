@@ -20,10 +20,12 @@ class ClinicReports
         $rows = DB::transaction(function () use ($facility, $filters, $id) {
             $query = $this->queries->query($facility, $filters);
             if ($id !== null) {
-                $this->queries->find($facility, $id);
                 $query->where('clinics.id', $id);
             }
             $rows = $query->limit(config('clinics.export_limit') + 1)->get();
+            if ($id !== null && $rows->isEmpty()) {
+                throw new ClinicException('CLINIC_NOT_FOUND', 'العيادة غير موجودة في المنشأة المحددة.', 404);
+            }
             if ($rows->count() > config('clinics.export_limit')) {
                 throw new ClinicException('EXPORT_LIMIT_EXCEEDED', 'نتائج التقرير أكبر من الحد الآمن. ضيّق نطاق الفلاتر ثم أعد المحاولة.', 422);
             }

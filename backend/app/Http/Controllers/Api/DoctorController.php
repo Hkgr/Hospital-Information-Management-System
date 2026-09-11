@@ -102,11 +102,12 @@ class DoctorController extends Controller
     public function options(DoctorQueryRequest $request): JsonResponse
     {
         $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+        $types = DB::table('staff_types')->whereIn('code', config('clinics.doctor_staff_types'))->where('is_active', true)->orderBy('name_ar')->orderBy('id')->get(['id', 'code', 'name_ar']);
 
         return response()->json(['data' => [
-            'staff_types' => DB::table('staff_types')->whereIn('code', config('clinics.doctor_staff_types'))->where('is_active', true)->orderBy('name_ar')->orderBy('id')->get(['id', 'code', 'name_ar']),
+            'staff_types' => $types,
             'specialties' => DB::table('specialties')->where('is_active', true)->orderBy('display_order')->orderBy('id')->get(['id', 'name_ar']),
-            'doctor_types_configured' => count(config('clinics.doctor_staff_types')) > 0,
+            'doctor_types_configured' => $types->isNotEmpty(),
             'capabilities' => $this->access->capabilities($request->user(), $facility),
         ]]);
     }

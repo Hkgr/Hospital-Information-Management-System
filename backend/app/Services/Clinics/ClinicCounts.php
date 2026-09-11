@@ -30,7 +30,7 @@ class ClinicCounts
     {
         // A visit belongs to one clinic in today's schema. Do not infer from staff.
         return DB::table('visits')->where('facility_id', $facilityId)
-            ->where('status', 'complete')->whereNull('voided_at')->whereNotNull('clinic_id')
-            ->select('clinic_id')->selectRaw('COUNT(DISTINCT patient_id) as patient_count')->groupBy('clinic_id');
+            ->where('status', 'complete')->whereNull('voided_at')->whereColumn('clinic_id', 'clinics.id')
+            ->selectRaw('COUNT(DISTINCT patient_id)');
     }
 }

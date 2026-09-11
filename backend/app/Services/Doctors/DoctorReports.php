@@ -21,10 +21,12 @@ class DoctorReports
         $rows = DB::transaction(function () use ($facility, $filters, $id) {
             $query = $this->queries->query($facility, $filters);
             if ($id !== null) {
-                $this->queries->find($facility, $id);
                 $query->where('s.id', $id);
             }
             $raw = $query->limit(config('clinics.export_limit') + 1)->get();
+            if ($id !== null && $raw->isEmpty()) {
+                throw new DoctorException('DOCTOR_NOT_FOUND', 'الطبيب غير موجود في الدليل المتاح.', 404);
+            }
             if ($raw->count() > config('clinics.export_limit')) {
                 throw new DoctorException('EXPORT_LIMIT_EXCEEDED', 'نتائج التقرير أكبر من الحد الآمن. ضيّق الفلاتر.', 422);
             }

@@ -14,17 +14,17 @@ class ClinicQueries
 
     public function query(array $facility, array $filters): Builder
     {
-        $doctors = $this->counts->currentDoctors($facility)->select('cs.clinic_id')
-            ->selectRaw('COUNT(DISTINCT s.id) as doctor_count')->groupBy('cs.clinic_id');
+        $doctors = $this->counts->currentDoctors($facility)->whereColumn('cs.clinic_id', 'clinics.id')
+            ->selectRaw('COUNT(DISTINCT s.id)');
         $query = DB::table('clinics as clinics')->where('clinics.facility_id', $facility['id'])
             ->leftJoin('specialties as specialty', 'specialty.id', '=', 'clinics.specialty_id')
-            ->leftJoinSub($doctors, 'dc', 'dc.clinic_id', '=', 'clinics.id')
-            ->leftJoinSub($this->counts->patients($facility['id']), 'pc', 'pc.clinic_id', '=', 'clinics.id')
             ->select('clinics.*', 'specialty.name_ar as specialty_name')
-            ->selectRaw('COALESCE(dc.doctor_count, 0) as doctor_count, COALESCE(pc.patient_count, 0) as patient_count');
+            ->selectSub($doctors, 'doctor_count')->selectSub($this->counts->patients($facility['id']), 'patient_count');
         if (($search = $filters['search'] ?? null) !== null && $search !== '') {
+            $linked = $this->counts->currentDoctors($facility)->whereColumn('cs.clinic_id', 'clinics.id')
+                ->where(fn ($q) => $q->whereLike('s.staff_code', '%'.$search.'%')->orWhereLike('s.full_name', '%'.$search.'%'))->selectRaw('1');
             $query->where(fn (Builder $q) => $q->whereLike('clinics.code', '%'.$search.'%')
-                ->orWhereLike('clinics.name_ar', '%'.$search.'%')->orWhereLike('clinics.description', '%'.$search.'%'));
+                ->orWhereLike('clinics.name_ar', '%'.$search.'%')->orWhereLike('clinics.description', '%'.$search.'%')->orWhereExists($linked));
         }
         if ($status = $filters['status'] ?? null) {
             $query->where('clinics.is_active', $status === 'active');
@@ -80,7 +80,7 @@ class ClinicQueries
     {
         $ids = $clinicId === null && isset($filters['ids']) ? array_values(array_unique(array_map('intval', $filters['ids']))) : null;
         if ($clinicId !== null) {
-            $this->find($facility, $clinicId);
+            $this->requireClinic($facility, $clinicId);
             $query = $this->counts->currentDoctors($facility)->where('cs.clinic_id', $clinicId)
                 ->select('s.id', 's.staff_code', 's.full_name')->selectRaw('MIN(cs.starts_on) as starts_on')
                 ->groupBy('s.id', 's.staff_code', 's.full_name');
@@ -96,7 +96,7 @@ class ClinicQueries
         $page = $query->orderBy('s.full_name')->orderBy('s.id')->paginate($ids !== null ? 100 : ($filters['per_page'] ?? 20), ['*'], 'page', $ids !== null ? 1 : ($filters['page'] ?? 1));
         $linked = [];
         if ($clinicId === null && ! empty($filters['clinic_id'])) {
-            $this->find($facility, (int) $filters['clinic_id']);
+            $this->requireClinic($facility, (int) $filters['clinic_id']);
             $linked = $this->counts->currentDoctors($facility)->where('cs.clinic_id', $filters['clinic_id'])
                 ->whereIn('s.id', $page->getCollection()->pluck('id'))->pluck('s.id')->all();
         }
@@ -119,6 +119,13 @@ class ClinicQueries
             'is_linked' => $clinicId !== null || in_array($doctor->id, $linked),
             'specialties' => ($specialties->get($doctor->id) ?? collect())->map(fn ($s) => ['id' => (int) $s->id, 'name_ar' => $s->name_ar])->all(),
         ])->all(), 'meta' => $this->meta($page)] + ($clinicId === null ? ['unavailable' => $unavailable] : []);
+    }
+
+    private function requireClinic(array $facility, int $id): void
+    {
+        if (! DB::table('clinics')->where('facility_id', $facility['id'])->where('id', $id)->exists()) {
+            throw new ClinicException('CLINIC_NOT_FOUND', 'العيادة غير موجودة في المنشأة المحددة.', 404);
+        }
     }
 
     private function meta(LengthAwarePaginator $page): array

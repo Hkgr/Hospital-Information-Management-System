@@ -13,9 +13,9 @@ class LinkOptionsRequest extends ClinicQueryRequest
             // A batch is a complete lookup, never a search or a paginated subset.
             'ids' => ['sometimes', 'array', 'min:1', 'max:100'],
             'ids.*' => ['required', 'integer', 'min:1', 'max:9007199254740991'],
-            'search' => ['prohibited_with:ids', 'nullable', 'string', 'max:200'],
-            'page' => ['prohibited_with:ids', 'sometimes', 'integer', 'min:1', 'max:1000000'],
-            'per_page' => ['prohibited_with:ids', 'sometimes', 'integer', 'min:1', 'max:100'],
+            'search' => ['missing_with:ids', 'nullable', 'string', 'max:200'],
+            'page' => ['missing_with:ids', 'sometimes', 'integer', 'min:1', 'max:1000000'],
+            'per_page' => ['missing_with:ids', 'sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

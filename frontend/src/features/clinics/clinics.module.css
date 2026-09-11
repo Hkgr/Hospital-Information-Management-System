@@ -29,7 +29,10 @@
 .columnMenu legend { float: inline-start; margin-block-end: 10px; font-weight: 600; }
 .columnMenu label { display: flex; align-items: center; gap: 9px; padding-block: 6px; clear: both; }
 .screen input[type="checkbox"], .modal input[type="checkbox"] { inline-size: 17px; block-size: 17px; min-block-size: 17px; accent-color: var(--mbz-action); flex-shrink: 0; }
-.doctorFilter ul { list-style: none; padding: 0; max-block-size: 200px; overflow: auto; }
+.doctorFilter { max-inline-size: min(100%, 280px); }
+.doctorFilter summary { overflow-wrap: anywhere; line-height: 1.7; }
+.doctorFilter > div { max-block-size: min(480px, 65dvh); overflow: auto; overscroll-behavior: contain; }
+.doctorFilter ul { list-style: none; padding: 0; max-block-size: 220px; overflow: auto; }
 .doctorFilter button { background: transparent; border: 0; color: var(--mbz-action); padding: 8px 4px; text-align: start; cursor: pointer; }
 .doctorFilter button[aria-pressed="true"] { font-weight: 700; background: #e7f3f4; }
 .resultSummary { display: flex; justify-content: space-between; gap: 12px; padding: 15px 24px; background: white; border-block: 1px solid #e7eef1; font-size: 11px; color: #73868d; }
@@ -37,7 +40,9 @@
 .tableScroll { overflow-x: auto; min-inline-size: 0; max-inline-size: 100%; overscroll-behavior-inline: contain; }
 .tableScroll table { inline-size: 100%; min-inline-size: 740px; border-collapse: collapse; font-size: 12px; text-align: start; }
 .tableScroll th { text-align: start; font-weight: 700; background: #eaf3f4; color: #295d66; padding: 16px 14px; white-space: nowrap; border-block: 1px solid #dbe9ec; }
-.tableScroll td { padding: 20px 14px; border-block-end: 1px solid #ecf0f3; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.tableScroll td { padding: 16px 14px; border-block-end: 1px solid #ecf0f3; vertical-align: middle; font-variant-numeric: tabular-nums; max-inline-size: 260px; overflow-wrap: anywhere; }
+.tableScroll td bdi { unicode-bidi: isolate; }
+.tableScroll[aria-busy="true"] { box-shadow: inset 0 2px #8dc9cd; }
 .tableScroll tbody tr:last-child td { border-block-end: 0; } .tableScroll tbody tr:hover { background: #f7fbfb; }
 .code { color: var(--mbz-action); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; overflow-wrap: anywhere; }
 .clinicName { display: grid; gap: 7px; min-inline-size: 105px; max-inline-size: 200px; overflow-wrap: anywhere; }
@@ -63,9 +68,13 @@
 .status { padding: 38px 22px; text-align: center; color: #657b83; font-size: 14px; line-height: 2; }
 .status h2 { font-size: 21px; color: #29454e; font-weight: 700; }
 .status a { display: inline-block; margin: 12px; color: var(--mbz-action); text-decoration: underline; }
-.modal { position: fixed; inset: 0; margin: auto; padding: 0; inline-size: min(800px, calc(100vw - 40px)); max-block-size: calc(100dvh - 48px); border: 1px solid #dce8ec; border-radius: 20px; background: white; color: #29454e; box-shadow: 0 24px 80px #123a5740; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scroll-padding-block: 90px; }
+.modal { position: fixed; inset: 0; margin: auto; padding: 0; inline-size: min(800px, calc(100vw - 40px)); max-block-size: calc(100dvh - 48px); border: 1px solid #dce8ec; border-radius: 16px; background: white; color: #29454e; box-shadow: 0 24px 80px #123a5740; overflow: hidden; }
+.modal[open] { display: flex; flex-direction: column; }
+.modalWide { inline-size: min(920px, calc(100vw - 40px)); }
+.modalCompact { inline-size: min(520px, calc(100vw - 40px)); }
+.modalBody { overflow: auto; min-block-size: 0; overscroll-behavior: contain; scrollbar-gutter: stable; scroll-padding-block: 18px 90px; }
 .modal::backdrop { background: #112f4d73; backdrop-filter: blur(3px); }
-.modalHeading { display: flex; align-items: center; justify-content: space-between; padding: 22px 28px; border-block-end: 1px solid #dce8ec; background: #f5f9fa; position: sticky; inset-block-start: 0; z-index: 20; }
+.modalHeading { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 28px; border-block-end: 1px solid #dce8ec; background: #f5f9fa; z-index: 20; }
 .modalHeading h2 { font-size: 18px; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
 .form, .confirm { display: grid; gap: 22px; padding: 24px 28px 0; }
 .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; border: 0; padding: 0; min-inline-size: 0; }
@@ -85,10 +94,11 @@
 .picker legend { font-size: 13px; font-weight: 600; padding-inline: 6px; }
 .picker .hint { margin-block-end: 12px; }
 .picker .pagination { padding: 12px 0 0; }
-.choices { max-block-size: 180px; overflow: auto; padding-block: 8px; }
+.choices { max-block-size: 220px; overflow: auto; padding-block: 8px; overscroll-behavior: contain; }
 .doctorChoice { display: flex; gap: 10px; align-items: center; padding: 9px; cursor: pointer; border-radius: 6px; }
 .doctorChoice:hover { background: #f3f8f9; }
-.doctorChoice span { display: grid; gap: 3px; }
+.doctorChoice span { display: grid; gap: 3px; min-inline-size: 0; overflow-wrap: anywhere; }
+.doctorChoice:has(input:checked) { background: #eaf5f6; box-shadow: inset -3px 0 #25839b; }
 .doctorChoice strong { font-size: 12px; font-weight: 600; } .doctorChoice small { color: #74858c; font-size: 11px; }
 .doctorList { min-inline-size: 0; padding: 20px; display: grid; gap: 18px; }
 .doctorList table { min-inline-size: 560px; }
@@ -124,4 +134,5 @@
   .modal { inline-size: calc(100vw - 20px); max-block-size: calc(100dvh - 24px); border-radius: 12px; } .modalHeading { padding: 16px; } .form, .confirm { padding: 16px 16px 0; } .modalActions { margin-inline: -16px; padding: 14px 16px; }
   .fields { grid-template-columns: 1fr; } .doctorList { padding: 15px; } .detailPanel { padding: 18px; } .metrics { gap: 10px; } .metrics > div { min-inline-size: 0; flex: 1; padding: 12px; }
   .doctorFilter > div { inset-inline-start: 0; inset-inline-end: auto; }
+  .rowActions .iconButton { inline-size: 42px; block-size: 42px; }
 }

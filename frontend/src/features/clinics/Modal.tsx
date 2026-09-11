@@ -4,7 +4,7 @@ import { useEffect, useId, useRef } from "react";
 import { LuX } from "react-icons/lu";
 import styles from "./clinics.module.css";
 
-export default function Modal({ title, children, onClose, busy = false }: { title: string; children: React.ReactNode; onClose: () => void; busy?: boolean }) {
+export default function Modal({ title, children, onClose, busy = false, size = "regular" }: { title: string; children: React.ReactNode; onClose: () => void; busy?: boolean; size?: "compact" | "regular" | "wide" }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -14,7 +14,7 @@ export default function Modal({ title, children, onClose, busy = false }: { titl
     dialog?.showModal(); document.body.style.overflow = "hidden";
     return () => { dialog?.close(); document.body.style.overflow = overflow; if (opener?.isConnected) opener.focus(); };
   }, []);
-  return <dialog ref={ref} className={styles.modal} aria-labelledby={titleId} aria-busy={busy}
+  return <dialog ref={ref} className={`${styles.modal} ${size === "wide" ? styles.modalWide : size === "compact" ? styles.modalCompact : ""}`} aria-labelledby={titleId} aria-busy={busy}
     onCancel={event => { event.preventDefault(); if (!busy) onClose(); }}
     onKeyDown={event => {
       if (event.key !== "Tab") return;
@@ -24,6 +24,6 @@ export default function Modal({ title, children, onClose, busy = false }: { titl
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }}>
     <div className={styles.modalHeading}><h2 id={titleId}>{title}</h2><button type="button" className={styles.iconButton} aria-label="إغلاق النافذة" disabled={busy} onClick={onClose}><LuX aria-hidden="true" /></button></div>
-    {children}
+    <div className={styles.modalBody}>{children}</div>
   </dialog>;
 }

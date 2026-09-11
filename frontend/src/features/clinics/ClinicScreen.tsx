@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { LuArrowRight, LuDownload, LuEye, LuFileText, LuHospital, LuPlus, LuSearch, LuSquarePen, LuTrash2 } from "react-icons/lu";
 import { useIdentity } from "@/features/auth/AuthenticatedLayout";
 import { apiRequest, AuthError } from "@/features/auth/api";
-import { columns, columnKeys, downloadReport, useClinicRequest, useDebounced, type Clinic, type Column, type Doctor, type Page, type Specialty } from "./api";
-import ClinicEditor from "./ClinicEditor";
+import { columns, columnKeys, downloadReport, useClinicRequest, type Clinic, type Column, type Page, type Specialty } from "./api";
+import RelationFilter from "../directory/RelationFilter";
 import ClinicDoctors, { DoctorList } from "./ClinicDoctors";
 import useClinicSearch from "./useClinicSearch";
 import Modal from "./Modal";
 import { ColumnMenu, LongText, Pagination } from "../directory/Controls";
 import styles from "./clinics.module.css";
+
+const ClinicEditor = dynamic(() => import("./ClinicEditor"), { loading: () => <p role="status">جارٍ فتح النموذج…</p> });
 
 export default function ClinicScreen({ clinicId }: { clinicId?: string }) {
   const { access } = useIdentity();
@@ -51,6 +54,10 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
   query.set("facility_id", String(facilityId));
   if (committed) query.set("search", committed);
   const encoded = query.toString();
+  // Share the keyed request snapshot with the table instead of accepting a
+  // delayed readiness notification from a previous query or save revision.
+  const list = useClinicRequest<Page<Clinic>>(clinicId ? null : `clinics?${encoded}`, true, true, revision);
+  const exportReady = !searching && (!!clinicId || (!!list.data && !list.loading && !list.error));
   // Only allowlisted same-origin query values survive the return link.
   const returnPath = `/clinics?${encoded}`;
   const updateFilter = (key: string, value: string) => {
@@ -64,7 +71,7 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
   const can = (action: string) => permissions.includes(`clinics.${action}`);
   const saved = () => { setModal(null); setRevision(value => value + 1); };
   async function exportFile(format: "xlsx" | "pdf") {
-    if (exportPending.current || searching) return;
+    if (exportPending.current || !exportReady || !visible.length || !can("export")) return;
     exportPending.current = true; setExporting(true); setExportError("");
     const controller = new AbortController(); exportController.current = controller;
     const exportQuery = new URLSearchParams(encoded);
@@ -74,24 +81,24 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
     finally { if (!controller.signal.aborted) { exportPending.current = false; setExporting(false); } }
   }
   const exports = can("export") && <div className={styles.actions}>
-    {!clinicId && <button className={styles.secondary} disabled={exporting || !visible.length || searching} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}
-    <button className={styles.secondary} disabled={exporting || !visible.length || searching} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{clinicId ? "تصدير تقرير العيادة PDF" : "PDF"}</button>
+    {!clinicId && <button className={styles.secondary} disabled={exporting || !visible.length || !exportReady} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}
+    <button className={styles.secondary} disabled={exporting || !visible.length || !exportReady} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{clinicId ? "تصدير تقرير العيادة PDF" : "PDF"}</button>
     {exporting && <span role="status">جارٍ إعداد التقرير…</span>}
   </div>;
   return <>
     {clinicId ? <ClinicDetail key={revision} id={clinicId} facilityId={facilityId} canEdit={can("update")} onEdit={clinic => setModal({ type: "edit", clinic })} returnPath={returnPath} exports={exports} /> : <>
       <div className={styles.heading}><div><p className={styles.eyebrow}>الدليل الطبي</p><h2>إدارة العيادات</h2><p>بيانات العيادات، الأطباء المرتبطون، وإحصاءات المرضى.</p></div>{can("create") && <button className={styles.primary} onClick={() => setModal({ type: "edit" })}><LuPlus aria-hidden="true" />إضافة عيادة جديدة</button>}</div>
       <section className={styles.panel} aria-label="قائمة العيادات">
-        <div className={styles.toolbar}><label className={styles.search}><span><LuSearch aria-hidden="true" /> البحث في العيادات</span><input type="search" placeholder="ابحث بالكود أو الاسم أو التوصيف…" value={search} onChange={event => setSearch(event.target.value)} /></label>{exports}</div>
+        <div className={styles.toolbar}><label className={styles.search}><span><LuSearch aria-hidden="true" /> البحث في العيادات</span><input type="search" placeholder="اسم العيادة أو كودها أو توصيفها أو طبيبها…" value={search} onChange={event => setSearch(event.target.value)} /></label>{exports}</div>
         <div className={styles.filters}>
           <label>الحالة<select value={query.get("status") ?? ""} onChange={e => updateFilter("status", e.target.value)}><option value="">كل الحالات</option><option value="active">فعالة</option><option value="inactive">غير فعالة</option></select></label>
           <SpecialtyFilter facilityId={facilityId} value={query.get("specialty_id") ?? ""} onChange={value => updateFilter("specialty_id", value)} />
-          <DoctorFilter facilityId={facilityId} value={query.get("doctor_id") ?? ""} onChange={value => updateFilter("doctor_id", value)} />
+          <RelationFilter kind="doctor" facilityId={facilityId} value={query.get("doctor_id") ?? ""} onChange={value => updateFilter("doctor_id", value)} />
           <label>الترتيب<select value={query.get("sort") ?? "code"} onChange={e => updateFilter("sort", e.target.value)}><option value="code">كود العيادة</option><option value="name_ar">اسم العيادة</option><option value="doctor_count">عدد الأطباء</option><option value="patient_count">عدد المرضى</option><option value="is_active">الحالة</option></select></label>
           <label>الاتجاه<select value={query.get("direction") ?? "asc"} onChange={e => updateFilter("direction", e.target.value)}><option value="asc">تصاعدي</option><option value="desc">تنازلي</option></select></label>
           <ColumnMenu labels={columns} visible={visible} onChange={setVisible} />
         </div>
-        <ClinicTable key={revision} query={encoded} searching={searching} visible={visible} can={can} onAction={(type, clinic) => setModal({ type, clinic })} onPage={value => updateFilter("page", String(value))} onPageSize={value => updateFilter("per_page", value)} />
+        <ClinicTable result={list} query={encoded} searching={searching} visible={visible} can={can} onAction={(type, clinic) => setModal({ type, clinic })} onPage={value => updateFilter("page", String(value))} onPageSize={value => updateFilter("per_page", value)} />
       </section>
       <p className={styles.hint}>عدد المرضى: المرضى المختلفون في الزيارات المكتملة وغير الملغاة المرتبطة مباشرة بالعيادة. لا يزيد العدد بتكرار الزيارة.</p>
     </>}
@@ -102,13 +109,13 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSe
   </>;
 }
 
-function ClinicTable({ query, searching, visible, can, onAction, onPage, onPageSize }: { query: string; searching: boolean; visible: Column[]; can: (action: string) => boolean; onAction: (type: "edit" | "doctors" | "delete" | "deactivate", clinic: Clinic) => void; onPage: (page: number) => void; onPageSize: (value: string) => void }) {
-  const result = useClinicRequest<Page<Clinic>>(`clinics?${query}`, true);
-  if (result.error) return <div className={styles.status}><p role="alert">{result.error}</p><button onClick={result.retry} className={styles.secondary}>إعادة المحاولة</button></div>;
-  if (!result.data || searching) return <div className={styles.status} role="status">جارٍ تحميل العيادات…</div>;
+function ClinicTable({ query, searching, visible, can, onAction, onPage, onPageSize, result }: { query: string; searching: boolean; visible: Column[]; can: (action: string) => boolean; onAction: (type: "edit" | "doctors" | "delete" | "deactivate", clinic: Clinic) => void; onPage: (page: number) => void; onPageSize: (value: string) => void; result: ReturnType<typeof useClinicRequest<Page<Clinic>>> }) {
+
+  if (result.error && !result.data) return <div className={styles.status}><p role="alert">{result.error}</p><button onClick={result.retry} className={styles.secondary}>إعادة المحاولة</button></div>;
+  if (!result.data) return <div className={styles.status} role="status">جارٍ تحميل العيادات…</div>;
   const { data, meta } = result.data;
-  return <><div className={styles.resultSummary}><strong>{meta.total} عيادة</strong><span>التصدير يشمل جميع النتائج المطابقة</span></div>
-    <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="جدول العيادات"><table><thead><tr>{visible.map(key => <th key={key} scope="col">{columns[key]}</th>)}<th scope="col">الإجراءات</th></tr></thead><tbody>
+  return <>{result.error && <p role="alert" className={styles.error}>{result.error} المعروض نتائج سابقة؛ يلزم نجاح إعادة التحميل لإتاحة التصدير. <button onClick={result.retry}>إعادة المحاولة</button></p>}<div className={styles.resultSummary}><strong>{meta.total} عيادة</strong><span role={searching || result.loading ? "status" : undefined}>{searching || result.loading ? "جارٍ تحديث النتائج…" : "التصدير يشمل جميع النتائج المطابقة"}</span></div>
+    <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="جدول العيادات" aria-busy={searching || result.loading}><table><thead><tr>{visible.map(key => <th key={key} scope="col">{columns[key]}</th>)}<th scope="col">الإجراءات</th></tr></thead><tbody>
       {data.map((clinic, index) => <tr key={clinic.id}>{visible.map(key => <td key={key}>{key === "number" ? (meta.page - 1) * meta.per_page + index + 1
         : key === "code" ? <Link className={styles.code} href={`/clinics/${clinic.id}?${query}`}>{clinic.code}</Link>
         : key === "name_ar" ? <div className={styles.clinicName}><strong>{clinic.name_ar}</strong><span className={clinic.is_active ? styles.active : styles.inactive}>{clinic.is_active ? "فعالة" : "غير فعالة"}</span></div>
@@ -133,16 +140,9 @@ function ClinicDetail({ id, facilityId, canEdit, onEdit, returnPath, exports }: 
 }
 
 function SpecialtyFilter({ facilityId, value, onChange }: { facilityId: number; value: string; onChange: (value: string) => void }) {
-  const result = useClinicRequest<Specialty[]>(`clinics/options/specialties?facility_id=${facilityId}`);
-  return <label>التخصص<select value={value} onChange={e => onChange(e.target.value)}><option value="">كل التخصصات</option>{result.data?.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}</select>{result.error && <button type="button" onClick={result.retry}>إعادة تحميل التخصصات</button>}</label>;
-}
-
-function DoctorFilter({ facilityId, value, onChange }: { facilityId: number; value: string; onChange: (value: string) => void }) {
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const debounced = useDebounced(search);
-  const result = useClinicRequest<Page<Doctor>>(`clinics/options/doctors?${new URLSearchParams({ facility_id: String(facilityId), search: debounced, page: String(page) })}`, true);
-  return <details className={styles.doctorFilter}><summary>الطبيب: {value ? `محدد (${value})` : "الكل"}</summary><div><label>ابحث عن طبيب<input type="search" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></label><button type="button" onClick={() => onChange("")}>كل الأطباء</button>{result.error ? <button onClick={result.retry}>تعذّر التحميل؛ أعد المحاولة</button> : !result.data || search !== debounced ? <p role="status">جارٍ البحث…</p> : <><ul>{result.data.data.map(doctor => <li key={doctor.id}><button type="button" aria-pressed={value === String(doctor.id)} onClick={event => { onChange(String(doctor.id)); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{doctor.name} · {doctor.code}</button></li>)}</ul>{!result.data.data.length && <p>لا توجد نتائج</p>}<div className={styles.pagination}><button disabled={page <= 1} onClick={() => setPage(page - 1)}>السابق</button><button disabled={page >= result.data.meta.last_page} onClick={() => setPage(page + 1)}>التالي</button></div></>}</div></details>;
+  const [needed, setNeeded] = useState(false);
+  const result = useClinicRequest<Specialty[]>(needed || value ? `clinics/options/specialties?facility_id=${facilityId}` : null);
+  return <label>التخصص<select value={value} onFocus={() => setNeeded(true)} onPointerDown={() => setNeeded(true)} onChange={e => onChange(e.target.value)}><option value="">كل التخصصات</option>{value && !result.data?.some(s => String(s.id) === value) && <option value={value}>{result.loading ? "جارٍ تحميل التخصص…" : "التخصص غير متاح"}</option>}{result.data?.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}</select>{result.error && <button type="button" onClick={result.retry}>إعادة تحميل التخصصات</button>}</label>;
 }
 
 function ConfirmClinic({ clinic, kind, onClose, onSaved }: { clinic: Clinic; kind: "delete" | "deactivate"; onClose: () => void; onSaved: () => void }) {
@@ -160,5 +160,5 @@ function ConfirmClinic({ clinic, kind, onClose, onSaved }: { clinic: Clinic; kin
     } catch (reason) { if (!active.signal.aborted) setError(reason instanceof AuthError ? reason.message : "تعذّر إتمام العملية."); }
     finally { if (!active.signal.aborted) { pending.current = false; setBusy(false); } }
   }
-  return <Modal title={kind === "delete" ? "تأكيد حذف العيادة" : "تأكيد تعطيل العيادة"} busy={busy} onClose={onClose}><div className={styles.confirm}><p><strong>{clinic.name_ar}</strong> · <bdi>{clinic.code}</bdi></p><p>{kind === "delete" ? "الحذف نهائي ومتاح فقط إذا لم ترتبط العيادة بسجلات أو بتاريخ أطباء." : "سيتم تعطيل العيادة مع الاحتفاظ ببياناتها وتاريخها الطبي."}</p>{error && <p role="alert" className={styles.error}>{error}</p>}<div className={styles.modalActions}><button className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button><button className={kind === "delete" ? styles.danger : styles.primary} disabled={busy} onClick={() => void confirm()}>{busy ? "جارٍ التنفيذ…" : kind === "delete" ? "حذف نهائي" : "تعطيل العيادة"}</button></div></div></Modal>;
+  return <Modal size="compact" title={kind === "delete" ? "تأكيد حذف العيادة" : "تأكيد تعطيل العيادة"} busy={busy} onClose={onClose}><div className={styles.confirm}><p><strong>{clinic.name_ar}</strong> · <bdi>{clinic.code}</bdi></p><p>{kind === "delete" ? "الحذف نهائي ومتاح فقط إذا لم ترتبط العيادة بسجلات أو بتاريخ أطباء." : "سيتم تعطيل العيادة مع الاحتفاظ ببياناتها وتاريخها الطبي."}</p>{error && <p role="alert" className={styles.error}>{error}</p>}<div className={styles.modalActions}><button className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button><button className={kind === "delete" ? styles.danger : styles.primary} disabled={busy} onClick={() => void confirm()}>{busy ? "جارٍ التنفيذ…" : kind === "delete" ? "حذف نهائي" : "تعطيل العيادة"}</button></div></div></Modal>;
 }
