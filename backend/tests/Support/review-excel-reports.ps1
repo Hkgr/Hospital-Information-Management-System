@@ -23,9 +23,12 @@ try {
                 $excelReview.ActivePrinter = 'Microsoft Print to PDF on ' + ($printerMapping -split ',')[-1]
                 foreach ($worksheetReview in $workbookReview.Worksheets) {
                     if ($worksheetReview.UsedRange.Font.Name -ne 'Cairo') { throw "Unexpected font in $($report.Name)" }
-                    Write-Output "$module/$($report.Name): $($worksheetReview.Name), Cairo, $($worksheetReview.UsedRange.Rows.Count) rows, opened by Microsoft Excel $($excelReview.Version)"
-                    if ($MeasureRows -and $worksheetReview.Index -eq 1) {
-                        foreach ($rowNumber in 9..12) {
+                    Write-Output "$module/$($report.Name): $($worksheetReview.Name), Cairo, $($worksheetReview.UsedRange.Rows.Count) rows, opened by Microsoft Excel $($excelReview.Version) build $($excelReview.Build)"
+                    if ($MeasureRows -and $worksheetReview.Visible -eq -1) {
+                        $firstDataRow = if ($worksheetReview.Index -eq 1) { 9 } else { 3 }
+                        $lastDataRow = $worksheetReview.UsedRange.Rows.Count
+                        if ($worksheetReview.Index -eq 1) { $lastDataRow = [Math]::Min(12, $lastDataRow) }
+                        foreach ($rowNumber in $firstDataRow..$lastDataRow) {
                             $rowReview = $worksheetReview.Rows.Item($rowNumber)
                             $originalHeight = $rowReview.RowHeight
                             [void]$rowReview.AutoFit()

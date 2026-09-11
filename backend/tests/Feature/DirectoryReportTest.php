@@ -6,12 +6,111 @@ use App\Services\Directory\DirectoryReport;
 use App\Services\Directory\ReportLayout;
 use DOMDocument;
 use DOMXPath;
+use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class DirectoryReportTest extends TestCase
 {
+    public static function printTexts(): array
+    {
+        return [
+            '800 connected W' => [str_repeat('W', 800)],
+            'much longer connected text' => [str_repeat('W', 12800)],
+            'Arabic marks and supplementary Unicode' => [str_repeat('مُتَابَعَةٌ🙂𐍈', 350)],
+            'spaces tabs and newlines' => ["  \t".str_repeat("نَصٌّ  W🙂\r\n\nمتابعة\t", 90)." \n"],
+            'long whitespace run' => [str_repeat(" \r\n", 80)],
+            'short' => ['نَصّ🙂 قصير'],
+            'empty' => [''],
+        ];
+    }
+
+    #[DataProvider('printTexts')]
+    public function test_print_parts_preserve_exact_text_and_always_fit_the_line_budget(string $text): void
+    {
+        $parts = ReportLayout::printParts($text, 101);
+        $this->assertSame($text, implode('', $parts));
+        if ($text === '') {
+            $this->assertSame([], $parts);
+        } else {
+            $this->assertNotEmpty($parts);
+        }
+        foreach ($parts as $part) {
+            $this->assertNotSame('', $part);
+            $this->assertTrue(mb_check_encoding($part, 'UTF-8'));
+            $this->assertLessThanOrEqual(14, ReportLayout::lines($part, 101));
+        }
+    }
+
+    public function test_print_parts_handle_the_exact_measured_boundary_and_one_character_beyond(): void
+    {
+        $length = 1;
+        while (ReportLayout::lines(str_repeat('W', $length + 1), 101) <= 14) {
+            $length++;
+        }
+        $boundary = str_repeat('W', $length);
+        $this->assertSame(14, ReportLayout::lines($boundary, 101));
+        $this->assertSame([$boundary], ReportLayout::printParts($boundary, 101));
+        $parts = ReportLayout::printParts($boundary.'W', 101);
+        $this->assertGreaterThan(1, count($parts));
+        $this->assertSame($boundary.'W', implode('', $parts));
+        foreach ($parts as $part) {
+            $this->assertNotSame('', $part);
+            $this->assertLessThanOrEqual(14, ReportLayout::lines($part, 101));
+        }
+    }
+
+    public static function printWorkbooks(): array
+    {
+        return [
+            '800 W' => [str_repeat('W', 800), 'عيادة اختبارية'],
+            '12800 W' => [str_repeat('W', 12800), 'عيادة اختبارية'],
+            'Arabic Unicode' => [str_repeat('مُتَابَعَةٌ🙂𐍈', 350), 'عيادة اختبارية'],
+            'mixed whitespace' => ["  \t".str_repeat("نَصٌّ  W🙂\r\n\nمتابعة\t", 90)." \n", 'عيادة اختبارية'],
+            'long record identity' => [str_repeat('W', 800), str_repeat('W', 200)],
+        ];
+    }
+
+    #[DataProvider('printWorkbooks')]
+    public function test_connected_text_xlsx_preserves_values_and_print_rows_fit_without_clamping(string $text, string $name): void
+    {
+        $document = $this->document($text);
+        $document['rows'][0]['name_ar'] = $name;
+        $book = $this->workbook($document);
+        try {
+            $data = $book->getSheet(0);
+            $this->assertSame($text, $data->getCell('C9')->getValue());
+            $this->assertSame('s', $data->getCell('C9')->getDataType());
+            $this->assertSame($name, $data->getCell('B9')->getValue());
+            $this->assertSame('0001', $data->getCell('A9')->getValue());
+            $this->assertSame('s', $data->getCell('A9')->getDataType());
+            $this->assertSame(0, $data->getCell('D9')->getValue());
+            $this->assertSame('n', $data->getCell('D9')->getDataType());
+            $printed = $book->getSheetByName('النصوص للطباعة');
+            $this->assertNotNull($printed);
+            $this->assertSame($text, implode('', array_column(array_slice($printed->toArray(formatData: false), 2), 3)));
+            if (ReportLayout::lines($name."\nالتوصيف", 39) > 14) {
+                $this->assertSame($name."\nالتوصيف", implode('', array_column(array_slice($printed->toArray(formatData: false), 2), 2)));
+            }
+            foreach (range(3, $printed->getHighestDataRow()) as $row) {
+                $height = $printed->getRowDimension($row)->getRowHeight();
+                $this->assertLessThanOrEqual(409, $height);
+                foreach (['A' => 11, 'B' => 23, 'C' => 39, 'D' => 101] as $column => $width) {
+                    $cell = $printed->getCell($column.$row);
+                    $lines = ReportLayout::lines((string) $cell->getValue(), $width);
+                    $this->assertLessThanOrEqual(14, $lines);
+                    $this->assertGreaterThanOrEqual(5 + $lines * 23.25, $height);
+                    $this->assertSame('s', $cell->getDataType());
+                    $this->assertSame(10.5, $cell->getStyle()->getFont()->getSize());
+                }
+            }
+        } finally {
+            $book->disconnectWorksheets();
+        }
+    }
+
     private function document(string $description): array
     {
         return [
@@ -87,7 +186,7 @@ class DirectoryReportTest extends TestCase
 
     public function test_excel_actual_cell_limit_preserves_unicode_and_full_ordered_storage(): void
     {
-        $long = str_repeat('نص🙂 ', 7000).'آخر النص';
+        $long = " \r\n".str_repeat('نص🙂 ', 7000)."آخر النص\r\n ";
         $parts = ReportLayout::cellParts($long);
         $this->assertGreaterThan(1, count($parts));
         $this->assertSame($long, implode('', $parts));
@@ -117,7 +216,10 @@ class DirectoryReportTest extends TestCase
         try {
             file_put_contents($path, app(DirectoryReport::class)->response($document, 'xlsx')->getContent());
 
-            return IOFactory::load($path);
+            // The reader otherwise normalizes CRLF too, hiding literal storage fidelity.
+            return IOFactory::createReader('Xlsx')
+                ->setValueBinder((new DefaultValueBinder)->setPreserveCr(true))
+                ->load($path);
         } finally {
             unlink($path);
         }

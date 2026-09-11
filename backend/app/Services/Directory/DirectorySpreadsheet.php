@@ -4,6 +4,7 @@ namespace App\Services\Directory;
 
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -14,6 +15,7 @@ class DirectorySpreadsheet
     public function render(array $document): string
     {
         $book = new Spreadsheet;
+        $book->setValueBinder((new DefaultValueBinder)->setPreserveCr(true));
         $meta = $document['metadata'];
         $book->getDefaultStyle()->getFont()->setName('Cairo')->setSize(10.5)->getColor()->setARGB('FF233F3C');
         $book->getProperties()->setCreator($meta['issuer'])->setTitle($meta['title'])->setSubject($meta['number']);
@@ -43,7 +45,12 @@ class DirectorySpreadsheet
                     if ($lines > 16 || count($parts) > 1) {
                         $reference = count($longTexts) + 1;
                         $longTexts[] = ['id' => $row['id'], 'code' => $row['code'], 'name' => $row['name'] ?? $row['name_ar'], 'field' => $document['labels'][$key], 'text' => $value];
-                        $display = mb_substr($value, 0, 85).'… [النص الكامل '.$reference.']';
+                        $excerpt = mb_substr($value, 0, 85);
+                        $referenceLabel = '… [النص الكامل '.$reference.']';
+                        $display = $excerpt.$referenceLabel;
+                        // Excel's literal number-format preview can wrap the reference
+                        // onto its own line even when raw-value AutoFit reports less.
+                        $height = max($height, 4 + (ReportLayout::lines($excerpt, $widths[$key] - 3) + ReportLayout::lines($referenceLabel, $widths[$key] - 3)) * 23.25);
                         if (count($parts) === 1) {
                             // Full sortable/editable value stays in this cell. The explicit
                             // display excerpt avoids Excel's hard 409-point printed row cap.
@@ -201,11 +208,23 @@ class DirectorySpreadsheet
         }
         $line = 3;
         foreach ($texts as $index => $item) {
-            foreach (ReportLayout::printParts($item['text'], 101) as $part => $text) {
-                foreach ([(string) ($index + 1).' / '.($part + 1), $item['id']."\n".$item['code'], $item['name']."\n".$item['field'], $text] as $col => $value) {
+            $identities = ReportLayout::printParts($item['id']."\n".$item['code'], 23);
+            $labels = ReportLayout::printParts($item['name']."\n".$item['field'], 39);
+            $contents = ReportLayout::printParts($item['text'], 101);
+            $rows = max(count($identities), count($labels), count($contents));
+            for ($part = 0; $part < $rows; $part++) {
+                // Repeat short references as before; continue oversized labels too.
+                $values = [(string) ($index + 1).' / '.($part + 1),
+                    $identities[$part] ?? (count($identities) === 1 ? $identities[0] : ''),
+                    $labels[$part] ?? (count($labels) === 1 ? $labels[0] : ''),
+                    $contents[$part] ?? '',
+                ];
+                $height = 0;
+                foreach ($values as $col => $value) {
                     $this->text($sheet, $col + 1, $line, $value);
+                    $height = max($height, ReportLayout::lines($value, [11, 23, 39, 101][$col]));
                 }
-                $sheet->getRowDimension($line)->setRowHeight(5 + max(ReportLayout::lines($text, 101), ReportLayout::lines($item['name']."\n".$item['field'], 39)) * 23.25);
+                $sheet->getRowDimension($line)->setRowHeight(5 + $height * 23.25);
                 $line++;
             }
         }

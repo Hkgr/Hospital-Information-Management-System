@@ -131,12 +131,36 @@ class ReportLayout
         $parts = [];
         $part = '';
         foreach (preg_split('/(\s+)/u', $text, -1, PREG_SPLIT_DELIM_CAPTURE) as $word) {
-            foreach (mb_str_split($word, 800) as $piece) {
-                if ($part !== '' && self::lines($part.$piece, $widthMm) > 14) {
+            if ($word === '') {
+                continue;
+            }
+            if (self::lines($part.$word, $widthMm) <= 14) {
+                $part .= $word;
+
+                continue;
+            }
+            if ($part !== '') {
+                $parts[] = $part;
+                $part = '';
+            }
+            // Keep ordinary words, combining marks and CRLF together when possible.
+            // A connected word (or whitespace run) must fit even in an empty row.
+            preg_match_all('/\X/u', $word, $matches);
+            $characters = $matches[0];
+            $offset = 0;
+            while ($offset < count($characters)) {
+                if (self::lines($characters[$offset], $widthMm) > 14) {
+                    // An unusually long grapheme can itself exceed the budget.
+                    // Fall back to Unicode code points, never partial UTF-8 bytes.
+                    array_splice($characters, $offset, 1, mb_str_split($characters[$offset]));
+                }
+                $length = self::fittingPrefix($characters, $offset, $widthMm);
+                $part = implode('', array_slice($characters, $offset, $length));
+                $offset += $length;
+                if ($offset < count($characters)) {
                     $parts[] = $part;
                     $part = '';
                 }
-                $part .= $piece;
             }
         }
         if ($part !== '') {
@@ -144,6 +168,35 @@ class ReportLayout
         }
 
         return $parts;
+    }
+
+    /** Probe only near one row's budget, not the entire remaining suffix per row. */
+    private static function fittingPrefix(array $characters, int $offset, float $widthMm): int
+    {
+        $remaining = count($characters) - $offset;
+        $fits = fn (int $length) => self::lines(implode('', array_slice($characters, $offset, $length)), $widthMm) <= 14;
+        $low = 0;
+        $high = 1;
+        while ($fits($high)) {
+            $low = $high;
+            if ($high === $remaining) {
+                return $high;
+            }
+            $high = min($remaining, $high * 2);
+        }
+        while ($low + 1 < $high) {
+            $middle = intdiv($low + $high, 2);
+            if ($fits($middle)) {
+                $low = $middle;
+            } else {
+                $high = $middle;
+            }
+        }
+        if ($low === 0) {
+            throw new \LogicException('A single Unicode character exceeds the print line budget.');
+        }
+
+        return $low;
     }
 
     /** Excel's 32767 UTF-16 units, without splitting supplementary characters. */
