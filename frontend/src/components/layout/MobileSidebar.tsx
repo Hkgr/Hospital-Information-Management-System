@@ -3,7 +3,7 @@ import { SidebarContent } from "./Sidebar";
 import FrameOrnaments from "./FrameOrnaments";
 import styles from "./shell.module.css";
 
-export default function MobileSidebar({ open, onClose, pathname }: { open: boolean; onClose: () => void; pathname: string }) {
+export default function MobileSidebar({ open, onClose, pathname, canViewClinics }: { open: boolean; onClose: () => void; pathname: string; canViewClinics: boolean }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -32,6 +32,6 @@ export default function MobileSidebar({ open, onClose, pathname }: { open: boole
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }}
     onClick={event => { if (event.target === event.currentTarget) dialogRef.current?.close(); }}>
-    <div className={styles.mobileSidebarContent}><SidebarContent pathname={pathname} onNavigate={onClose} mobile /><FrameOrnaments /></div>
+    <div className={styles.mobileSidebarContent}><SidebarContent pathname={pathname} canViewClinics={canViewClinics} onNavigate={onClose} mobile /><FrameOrnaments /></div>
   </dialog>;
 }

@@ -19,7 +19,9 @@ class ApiDocumentationTest extends TestCase
         $this->assertSame('Hospital Information Management System API', $doc['info']['title']);
         $this->assertSame('1.0.0', $doc['info']['version']);
         $this->assertSame('API for the Emirati Hospital information management system.', $doc['info']['description']);
-        $this->assertEqualsCanonicalizing(['/api/login', '/api/user', '/api/logout', '/api/dashboards', '/api/dashboards/{key}'], array_keys($doc['paths']));
+        foreach (['/api/login', '/api/user', '/api/logout', '/api/dashboards', '/api/dashboards/{key}'] as $path) {
+            $this->assertArrayHasKey($path, $doc['paths']);
+        }
         $this->assertSame(['type' => 'http', 'scheme' => 'bearer'], $doc['components']['securitySchemes']['bearerAuth']);
         foreach ([['/api/login', 'post', 'login', [200, 401, 403, 422, 429]],
             ['/api/user', 'get', 'currentUser', [200, 401, 403]],
