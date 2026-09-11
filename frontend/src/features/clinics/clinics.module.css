@@ -69,6 +69,13 @@
 .fields > label { display: grid; gap: 7px; font-size: 12px; font-weight: 600; }
 .full { grid-column: 1 / -1; min-inline-size: 0; }
 .fieldError { color: #a23443; font-size: 12px; font-weight: 400; }
+.conflictReview { display: grid; gap: 14px; border: 1px solid #dce7eb; border-radius: 9px; padding: 14px; min-inline-size: 0; }
+.conflictReview h3 { font-size: 16px; font-weight: 700; }
+.reviewField { border-block-end: 1px solid #e7edef; padding-block-end: 12px; font-size: 12px; overflow-wrap: anywhere; }
+.reviewField dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-block: 10px; }
+.reviewField dt { color: #61777d; margin-block-end: 5px; }
+.reviewField dd { margin: 0; white-space: pre-wrap; max-block-size: 160px; overflow: auto; }
+.reviewField label { display: flex; gap: 8px; align-items: center; }
 .modal [aria-invalid="true"] { border-color: #b24655; }
 .modalActions { display: flex; justify-content: end; gap: 10px; border-block-start: 1px solid #e7edef; padding-block-start: 16px; }
 .picker { margin: 0; padding: 14px; border: 1px solid #dce7eb; border-radius: 9px; min-inline-size: 0; }

@@ -9,6 +9,7 @@ import { apiRequest, AuthError } from "@/features/auth/api";
 import { columns, columnKeys, downloadReport, useClinicRequest, useDebounced, type Clinic, type Column, type Doctor, type Page, type Specialty } from "./api";
 import ClinicEditor from "./ClinicEditor";
 import ClinicDoctors, { DoctorList } from "./ClinicDoctors";
+import useClinicSearch from "./useClinicSearch";
 import Modal from "./Modal";
 import styles from "./clinics.module.css";
 
@@ -17,24 +18,25 @@ export default function ClinicScreen({ clinicId }: { clinicId?: string }) {
   const query = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const cancelSearchRef = useRef<(() => void) | null>(null);
   const allowed = access.filter(entry => entry.permissions.includes("clinics.view"));
   const requested = query.get("facility_id");
   const facilityId = requested ? Number(requested) : allowed[0]?.facility.id;
   const entry = allowed.find(item => item.facility.id === facilityId);
   if (!entry || (clinicId && !/^[1-9]\d*$/.test(clinicId))) return <section className={styles.status}><h2>العيادات غير متاحة</h2><p role="alert">ليس لديك وصول إلى العيادات في المنشأة المطلوبة.</p><Link href="/">العودة إلى لوحة التحكم</Link></section>;
   return <div className={styles.screen}>
-    <div className={styles.context}><LuHospital aria-hidden="true" /><span>المنشأة</span>{allowed.length === 1 ? <strong>{entry.facility.name_ar}</strong> : <select aria-label="المنشأة" value={facilityId} onChange={event => { const next = new URLSearchParams(); next.set("facility_id", event.target.value); router.push(`/clinics?${next}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select>}</div>
-    <ClinicWorkspace key={`${facilityId}:${clinicId ?? "list"}`} facilityId={entry.facility.id} permissions={entry.permissions} clinicId={clinicId} pathname={pathname} />
+    <div className={styles.context}><LuHospital aria-hidden="true" /><span>المنشأة</span>{allowed.length === 1 ? <strong>{entry.facility.name_ar}</strong> : <select aria-label="المنشأة" value={facilityId} onChange={event => { cancelSearchRef.current?.(); const next = new URLSearchParams(); next.set("facility_id", event.target.value); router.push(`/clinics?${next}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select>}</div>
+    <ClinicWorkspace key={`${facilityId}:${clinicId ?? "list"}`} facilityId={entry.facility.id} permissions={entry.permissions} clinicId={clinicId} pathname={pathname} cancelSearchRef={cancelSearchRef} />
   </div>;
 }
 
-function ClinicWorkspace({ facilityId, permissions, clinicId, pathname }: { facilityId: number; permissions: string[]; clinicId?: string; pathname: string }) {
+function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSearchRef }: { facilityId: number; permissions: string[]; clinicId?: string; pathname: string; cancelSearchRef: React.RefObject<(() => void) | null> }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [modal, setModal] = useState<{ type: "edit" | "doctors" | "delete" | "deactivate"; clinic?: Clinic } | null>(null);
   const [revision, setRevision] = useState(0);
-  const [search, setSearch] = useState(searchParams.get("search") ?? "");
-  const debounced = useDebounced(search);
+  const { search, committed, change: setSearch, cancel, searching } = useClinicSearch(pathname, searchParams.toString(), facilityId);
+  useEffect(() => { cancelSearchRef.current = cancel; return () => { cancelSearchRef.current = null; }; }, [cancel, cancelSearchRef]);
   const [visible, setVisible] = useState<Column[]>(columnKeys);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -46,27 +48,22 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname }: { faci
     const value = searchParams.get(key); if (value) query.set(key, value);
   }
   query.set("facility_id", String(facilityId));
-  if (debounced) query.set("search", debounced);
+  if (committed) query.set("search", committed);
   const encoded = query.toString();
   // Only allowlisted same-origin query values survive the return link.
   const returnPath = `/clinics?${encoded}`;
   const updateFilter = (key: string, value: string) => {
     const next = new URLSearchParams(encoded);
+    cancel();
+    if (search) next.set("search", search); else next.delete("search");
     if (value) next.set(key, value); else next.delete(key);
     if (key !== "page") next.delete("page");
     router.replace(`${pathname}?${next}`, { scroll: false });
   };
-  useEffect(() => {
-    if (clinicId || debounced === (searchParams.get("search") ?? "")) return;
-    const next = new URLSearchParams(searchParams.toString());
-    next.set("facility_id", String(facilityId)); next.delete("page");
-    if (debounced) next.set("search", debounced); else next.delete("search");
-    router.replace(`${pathname}?${next}`, { scroll: false });
-  }, [debounced, clinicId, facilityId, pathname, router, searchParams]);
   const can = (action: string) => permissions.includes(`clinics.${action}`);
   const saved = () => { setModal(null); setRevision(value => value + 1); };
   async function exportFile(format: "xlsx" | "pdf") {
-    if (exportPending.current) return;
+    if (exportPending.current || searching) return;
     exportPending.current = true; setExporting(true); setExportError("");
     const controller = new AbortController(); exportController.current = controller;
     const exportQuery = new URLSearchParams(encoded);
@@ -76,8 +73,8 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname }: { faci
     finally { if (!controller.signal.aborted) { exportPending.current = false; setExporting(false); } }
   }
   const exports = can("export") && <div className={styles.actions}>
-    {!clinicId && <button className={styles.secondary} disabled={exporting || !visible.length || search !== debounced} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}
-    <button className={styles.secondary} disabled={exporting || !visible.length || search !== debounced} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{clinicId ? "تصدير تقرير العيادة PDF" : "PDF"}</button>
+    {!clinicId && <button className={styles.secondary} disabled={exporting || !visible.length || searching} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}
+    <button className={styles.secondary} disabled={exporting || !visible.length || searching} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{clinicId ? "تصدير تقرير العيادة PDF" : "PDF"}</button>
     {exporting && <span role="status">جارٍ إعداد التقرير…</span>}
   </div>;
   return <>
@@ -93,12 +90,12 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname }: { faci
           <label>الاتجاه<select value={query.get("direction") ?? "asc"} onChange={e => updateFilter("direction", e.target.value)}><option value="asc">تصاعدي</option><option value="desc">تنازلي</option></select></label>
           <details className={styles.columnMenu}><summary><LuColumns3 aria-hidden="true" />الأعمدة</summary><fieldset><legend>الأعمدة الظاهرة في الجدول والتصدير</legend>{columnKeys.map(key => <label key={key}><input type="checkbox" checked={visible.includes(key)} disabled={visible.length === 1 && visible.includes(key)} onChange={() => setVisible(current => columnKeys.filter(column => column === key ? !current.includes(key) : current.includes(column)))} />{columns[key]}</label>)}</fieldset></details>
         </div>
-        <ClinicTable key={revision} query={encoded} searching={search !== debounced} visible={visible} can={can} onAction={(type, clinic) => setModal({ type, clinic })} onPage={value => updateFilter("page", String(value))} onPageSize={value => updateFilter("per_page", value)} />
+        <ClinicTable key={revision} query={encoded} searching={searching} visible={visible} can={can} onAction={(type, clinic) => setModal({ type, clinic })} onPage={value => updateFilter("page", String(value))} onPageSize={value => updateFilter("per_page", value)} />
       </section>
       <p className={styles.hint}>عدد المرضى: المرضى المختلفون في الزيارات المكتملة وغير الملغاة المرتبطة مباشرة بالعيادة. لا يزيد العدد بتكرار الزيارة.</p>
     </>}
     {exportError && <p role="alert" className={styles.error}>{exportError}</p>}
-    {modal?.type === "edit" && <ClinicEditor clinic={modal.clinic} facilityId={facilityId} onClose={() => setModal(null)} onSaved={saved} />}
+    {modal?.type === "edit" && <ClinicEditor clinic={modal.clinic} facilityId={facilityId} onClose={() => setModal(null)} onSaved={saved} onReloaded={() => setRevision(value => value + 1)} />}
     {modal?.type === "doctors" && modal.clinic && <ClinicDoctors clinic={modal.clinic} onClose={() => setModal(null)} />}
     {(modal?.type === "delete" || modal?.type === "deactivate") && modal.clinic && <ConfirmClinic clinic={modal.clinic} kind={modal.type} onClose={() => setModal(null)} onSaved={saved} />}
   </>;
