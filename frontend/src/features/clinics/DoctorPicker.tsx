@@ -18,8 +18,7 @@ export default function DoctorPicker({ facilityId, clinicId, changes, onChange }
     {result.error ? <p role="alert">{result.error} <button type="button" onClick={result.retry}>إعادة المحاولة</button></p>
       : !result.data || search !== debounced ? <p role="status">جارٍ البحث عن الأطباء…</p>
       : <>
-        {result.data.doctor_types_configured === false && <p role="status">اختيار الأطباء غير متاح حتى ضبط أنواع الأطباء المعتمدة من مسؤول النظام.</p>}
-        {!result.data.data.length && <p className={styles.hint}>لا يوجد أطباء مطابقون.</p>}
+        {result.data.doctor_types_configured === false ? <p role="status">اختيار الأطباء غير متاح: لا يوجد نوع طبي فعال مطابق للإعداد المعتمد؛ راجع مسؤول النظام.</p> : !result.data.data.length && <p className={styles.hint}>لا يوجد أطباء فعالون مطابقون من الأنواع المعتمدة للاختيار.</p>}
         <div className={styles.choices}>{result.data.data.map(doctor => <label key={doctor.id} className={styles.doctorChoice}>
           <input type="checkbox" checked={changes[doctor.id] ?? doctor.is_linked} onChange={event => onChange(doctor.id, event.target.checked, doctor.is_linked, doctor)} />
           <span><strong>{doctor.name}</strong><small>{doctor.code} · {doctor.specialties.map(s => s.name_ar).join("، ") || "دون تخصص مسجل"}</small></span>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiRequest, AuthError } from "@/features/auth/api";
+import { apiRequest, AuthError, getToken } from "@/features/auth/api";
 
 export type Specialty = { id: number; name_ar: string };
 export type Doctor = { id: number; code: string; name: string; starts_on: string | null; is_linked: boolean; specialties: Specialty[] };
@@ -13,19 +13,32 @@ export const columns = { number: "م", code: "كود العيادة", name_ar: "
 export type Column = keyof typeof columns;
 export const columnKeys = Object.keys(columns) as Column[];
 
-export function useClinicRequest<T>(path: string, envelope = false) {
-  const [state, setState] = useState<{ key: string; data?: T; error?: string }>({ key: "" });
+export function useClinicRequest<T>(path: string | null, envelope = false, retainPrevious = false, revision = 0) {
+  const [state, setState] = useState<{ key: string; scope: string; token: string | null; data?: T; error?: string }>({ key: "", scope: "", token: null });
   const [attempt, setAttempt] = useState(0);
-  const key = `${path}:${attempt}`;
+  const key = `${path}:${attempt}:${revision}`;
+  const token = getToken();
+  const url = path ? new URL(path, "http://directory.local/") : null;
+  const scope = url ? `${url.pathname}:${url.searchParams.get("facility_id") ?? ""}` : "";
   useEffect(() => {
+    if (!path) return;
     const controller = new AbortController();
     apiRequest<T>(path, { signal: controller.signal }, envelope ? "envelope" : "data")
-      .then(data => { if (!controller.signal.aborted) setState({ key, data }); })
-      .catch(error => { if (!controller.signal.aborted) setState({ key, error: error instanceof AuthError ? error.message : "تعذّر تحميل البيانات. حاول مجددًا." }); });
+      .then(data => { if (!controller.signal.aborted) setState({ key, scope, token, data }); })
+      .catch(error => {
+        if (!controller.signal.aborted) setState(previous => ({ key, scope, token,
+          ...(retainPrevious && previous.scope === scope && previous.token === token && !(error instanceof AuthError && [401, 403].includes(error.status)) ? { data: previous.data } : {}),
+          error: error instanceof AuthError ? error.message : "تعذّر تحميل البيانات. حاول مجددًا.",
+        }));
+      });
     return () => controller.abort();
-  }, [path, envelope, key]);
-  // Never show a previous facility/query while the new request is starting.
-  return { ...(state.key === key ? state : {}), retry: () => setAttempt(value => value + 1) };
+  }, [path, envelope, key, scope, token, retainPrevious]);
+  const sameContext = !!path && state.scope === scope && state.token === token;
+  const current = sameContext && state.key === key;
+  // Retention is component-local and never crosses a record, facility or session.
+  return { data: sameContext && (current || retainPrevious) ? state.data : undefined,
+    error: current ? state.error : undefined, loading: !!path && !current,
+    retry: () => setAttempt(value => value + 1) };
 }
 
 export function useDebounced(value: string) {

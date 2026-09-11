@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { LuArrowRight, LuDownload, LuEye, LuFileText, LuHospital, LuLink, LuPlus, LuSearch, LuSquarePen, LuTrash2 } from "react-icons/lu";
@@ -8,11 +9,13 @@ import { useIdentity } from "@/features/auth/AuthenticatedLayout";
 import { AuthError } from "@/features/auth/api";
 import useClinicSearch from "../clinics/useClinicSearch";
 import { ColumnMenu, LongText, Pagination } from "../directory/Controls";
-import DoctorEditor from "./DoctorEditor";
+import RelationFilter from "../directory/RelationFilter";
 import DoctorClinics, { ClinicList } from "./DoctorClinics";
-import DoctorConfirm from "./DoctorConfirm";
-import { columns, columnKeys, downloadReport, useDirectoryRequest, useDebounced, type Capabilities, type ClinicLink, type Column, type Doctor, type Options, type Page } from "./api";
+import { columns, columnKeys, downloadReport, useDirectoryRequest, type Capabilities, type Column, type Doctor, type Options, type Page } from "./api";
 import styles from "../clinics/clinics.module.css";
+
+const DoctorEditor = dynamic(() => import("./DoctorEditor"), { loading: () => <p role="status">جارٍ فتح النموذج…</p> });
+const DoctorConfirm = dynamic(() => import("./DoctorConfirm"));
 
 export default function DoctorScreen({ doctorId }: { doctorId?: string }) {
   const { access } = useIdentity(); const query = useSearchParams(); const router = useRouter(); const cancelRef = useRef<(() => void) | null>(null);
@@ -51,38 +54,37 @@ function DoctorWorkspace({ facilityId, doctorId, cancelRef }: { facilityId: numb
     catch (reason) { if (!active.signal.aborted) setExportError(reason instanceof AuthError ? reason.message : "تعذّر تنزيل التقرير."); }
     finally { if (!active.signal.aborted) { pending.current = false; setExporting(false); } }
   }
-  if (options.error) return <section className={styles.status}><p role="alert">{options.error}</p><button className={styles.secondary} onClick={options.retry}>إعادة المحاولة</button></section>;
-  if (!options.data) return <p className={styles.status} role="status">جارٍ تحميل دليل الأطباء…</p>;
-  const settings = options.data, cap = settings.capabilities;
+  const settings = options.data, cap = settings?.capabilities ?? { create: false, update: false, delete: false, link: false, export: false, view_clinics: false };
   const saved = () => { setModal(null); setRevision(n => n + 1); };
   const exports = cap.export && <div className={styles.actions}>{!doctorId && <button className={styles.secondary} disabled={exporting || searching || !visible.length} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}<button className={styles.secondary} disabled={exporting || searching || !visible.length} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{doctorId ? "تصدير تقرير الطبيب PDF" : "PDF"}</button>{exporting && <span role="status">جارٍ إعداد التقرير…</span>}</div>;
   return <>
-    {!settings.doctor_types_configured && <p role="status" className={styles.scopeNote}>دليل الأطباء غير متاح حتى يضبط مسؤول النظام أنواع الأطباء المعتمدة. لا تُستنتج الأنواع من أسمائها أو أرقامها.</p>}
-    {settings.doctor_types_configured && !settings.staff_types.length && <p role="status" className={styles.scopeNote}>لا توجد أنواع أطباء فعالة ضمن الإعداد الحالي. راجع مسؤول النظام قبل الإضافة.</p>}
+    {options.error && <p role="alert" className={styles.error}>{options.error} <button type="button" onClick={options.retry}>إعادة تحميل خيارات الدليل</button></p>}
+    {settings && !settings.doctor_types_configured && <p role="status" className={styles.scopeNote}>لا يوجد نوع طبي فعال مطابق للإعداد المعتمد. راجع مسؤول النظام؛ لا تُستنتج الأنواع من أسمائها أو أرقامها.</p>}
+    {settings?.doctor_types_configured && !settings.staff_types.length && <p role="status" className={styles.scopeNote}>لا توجد أنواع أطباء فعالة ضمن الإعداد الحالي. راجع مسؤول النظام قبل الإضافة.</p>}
     {doctorId ? <DoctorDetail key={revision} id={doctorId} facilityId={facilityId} cap={cap} onAction={(type, doctor) => setModal({ type, doctor })} exports={exports} returnPath={`/doctors?${encoded}`} /> : <>
-      <div className={styles.heading}><div><p className={styles.eyebrow}>الدليل الطبي / الأطباء</p><h2>إدارة الأطباء</h2><p>البيانات المهنية، التخصصات، والعيادات الحالية في مكان واحد.</p></div>{cap.create && <button className={styles.primary} disabled={!settings.staff_types.length} onClick={() => setModal({ type: "edit" })}><LuPlus aria-hidden="true" />إضافة طبيب جديد</button>}</div>
-      <section className={styles.panel} aria-label="قائمة الأطباء"><div className={styles.toolbar}><label className={styles.search}><span><LuSearch aria-hidden="true" />البحث في الأطباء</span><input type="search" value={search} placeholder="ابحث بالكود أو الاسم أو التوصيف…" onChange={e => change(e.target.value)} /></label>{exports}</div>
+      <div className={styles.heading}><div><p className={styles.eyebrow}>الدليل الطبي / الأطباء</p><h2>إدارة الأطباء</h2><p>البيانات المهنية، التخصصات، والعيادات الحالية في مكان واحد.</p></div>{cap.create && <button className={styles.primary} disabled={!settings?.staff_types.length} onClick={() => setModal({ type: "edit" })}><LuPlus aria-hidden="true" />إضافة طبيب جديد</button>}</div>
+      <section className={styles.panel} aria-label="قائمة الأطباء"><div className={styles.toolbar}><label className={styles.search}><span><LuSearch aria-hidden="true" />البحث في الأطباء</span><input type="search" value={search} placeholder="اسم الطبيب أو كوده أو توصيفه أو عيادته…" onChange={e => change(e.target.value)} /></label>{exports}</div>
         <div className={styles.filters}><label>الحالة<select value={query.get("status") ?? ""} onChange={e => filter("status", e.target.value)}><option value="">كل الحالات</option><option value="active">فعال</option><option value="inactive">غير فعال</option></select></label>
-          <label>التخصص<select value={query.get("specialty_id") ?? ""} onChange={e => filter("specialty_id", e.target.value)}><option value="">كل التخصصات</option>{settings.specialties.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}</select></label>
-          <ClinicFilter facilityId={facilityId} value={query.get("clinic_id") ?? ""} onChange={value => filter("clinic_id", value)} />
+          <label>التخصص<select value={query.get("specialty_id") ?? ""} onChange={e => filter("specialty_id", e.target.value)}><option value="">كل التخصصات</option>{settings?.specialties.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}</select></label>
+          <RelationFilter kind="clinic" facilityId={facilityId} value={query.get("clinic_id") ?? ""} onChange={value => filter("clinic_id", value)} />
           <label>الترتيب<select value={query.get("sort") ?? "code"} onChange={e => filter("sort", e.target.value)}>{["code", "name", "clinic_count", "patient_count", "is_active"].map(key => <option key={key} value={key}>{columns[key as Column]}</option>)}</select></label>
           <label>الاتجاه<select value={query.get("direction") ?? "asc"} onChange={e => filter("direction", e.target.value)}><option value="asc">تصاعدي</option><option value="desc">تنازلي</option></select></label><ColumnMenu labels={columns} visible={visible} onChange={setVisible} />
-        </div><DoctorTable key={revision} query={encoded} visible={visible} searching={searching} cap={cap} onAction={(type, doctor) => setModal({ type, doctor })} onPage={page => filter("page", String(page))} onPageSize={size => filter("per_page", size)} />
+        </div><DoctorTable revision={revision} query={encoded} visible={visible} searching={searching} cap={cap} onAction={(type, doctor) => setModal({ type, doctor })} onPage={page => filter("page", String(page))} onPageSize={size => filter("per_page", size)} />
       </section><p className={styles.hint}>عدد المرضى: المرضى المختلفون في الزيارات المكتملة وغير الملغاة التي يكون الطبيب فيها الطبيب المعالج داخل المنشأة. لا يجمع مرضى عياداته أو الوصفات والإجراءات.</p>
     </>}
     {exportError && <p role="alert" className={styles.error}>{exportError}</p>}
-    {(modal?.type === "edit" || modal?.type === "links") && <DoctorEditor doctor={modal.doctor} facilityId={facilityId} options={settings} linksOnly={modal.type === "links"} onClose={() => setModal(null)} onSaved={saved} onReloaded={() => setRevision(n => n + 1)} />}
+    {settings && (modal?.type === "edit" || modal?.type === "links") && <DoctorEditor doctor={modal.doctor} facilityId={facilityId} options={settings} linksOnly={modal.type === "links"} onClose={() => setModal(null)} onSaved={saved} onReloaded={() => setRevision(n => n + 1)} />}
     {modal?.type === "clinics" && modal.doctor && <DoctorClinics doctor={modal.doctor} facilityId={facilityId} onClose={() => setModal(null)} />}
     {(modal?.type === "delete" || modal?.type === "deactivate") && modal.doctor && <DoctorConfirm doctor={modal.doctor} facilityId={facilityId} kind={modal.type} onClose={() => setModal(null)} onSaved={saved} />}
   </>;
 }
 
-function DoctorTable({ query, visible, searching, cap, onAction, onPage, onPageSize }: { query: string; visible: Column[]; searching: boolean; cap: Capabilities; onAction: (action: Action, doctor: Doctor) => void; onPage: (n: number) => void; onPageSize: (value: string) => void }) {
-  const result = useDirectoryRequest<Page<Doctor>>(`doctors?${query}`, true);
-  if (result.error) return <div className={styles.status}><p role="alert">{result.error}</p><button className={styles.secondary} onClick={result.retry}>إعادة المحاولة</button></div>;
-  if (!result.data || searching) return <p role="status" className={styles.status}>جارٍ تحميل الأطباء…</p>;
+function DoctorTable({ query, visible, searching, cap, onAction, onPage, onPageSize, revision }: { query: string; visible: Column[]; searching: boolean; cap: Capabilities; onAction: (action: Action, doctor: Doctor) => void; onPage: (n: number) => void; onPageSize: (value: string) => void; revision: number }) {
+  const result = useDirectoryRequest<Page<Doctor>>(`doctors?${query}`, true, true, revision);
+  if (result.error && !result.data) return <div className={styles.status}><p role="alert">{result.error}</p><button className={styles.secondary} onClick={result.retry}>إعادة المحاولة</button></div>;
+  if (!result.data) return <p role="status" className={styles.status}>جارٍ تحميل الأطباء…</p>;
   const { data, meta } = result.data;
-  return <><div className={styles.resultSummary}><strong>{meta.total} طبيب</strong><span>التصدير يشمل جميع النتائج المطابقة</span></div><div className={styles.tableScroll} tabIndex={0} role="region" aria-label="جدول الأطباء"><table><thead><tr>{visible.map(key => <th key={key}>{columns[key]}</th>)}<th>الإجراءات</th></tr></thead><tbody>
+  return <>{result.error && <p role="alert" className={styles.error}>{result.error} <button onClick={result.retry}>إعادة المحاولة</button></p>}<div className={styles.resultSummary}><strong>{meta.total} طبيب</strong><span role={searching || result.loading ? "status" : undefined}>{searching || result.loading ? "جارٍ تحديث النتائج…" : "التصدير يشمل جميع النتائج المطابقة"}</span></div><div className={styles.tableScroll} tabIndex={0} role="region" aria-label="جدول الأطباء" aria-busy={searching || result.loading}><table><thead><tr>{visible.map(key => <th key={key} scope="col">{columns[key]}</th>)}<th scope="col">الإجراءات</th></tr></thead><tbody>
     {data.map((doctor, index) => <tr key={doctor.id}>{visible.map(key => <td key={key}>{key === "number" ? (meta.page - 1) * meta.per_page + index + 1 : key === "code" ? <Link className={styles.code} href={`/doctors/${doctor.id}?${query}`}><bdi>{doctor.code}</bdi></Link>
       : key === "name" ? <div className={styles.clinicName}><strong>{doctor.name}</strong><small>{doctor.staff_type.name_ar}</small></div>
       : key === "specialties" ? <div className={styles.badges}>{doctor.specialties.map(s => <span className={styles.badge} key={s.id}>{s.name_ar}</span>)}</div>
@@ -103,10 +105,4 @@ function DoctorDetail({ id, facilityId, cap, onAction, exports, returnPath }: { 
   return <><Link href={returnPath} className={styles.back}><LuArrowRight aria-hidden="true" />العودة إلى قائمة الأطباء</Link><div className={styles.heading}><div><p className={styles.eyebrow}>بطاقة الطبيب · <bdi>{doctor.code}</bdi></p><h2>{doctor.name}</h2><p>{doctor.staff_type.name_ar} · {doctor.is_active ? "فعال" : "غير فعال"}</p></div><div className={styles.actions}>{cap.update && <button className={styles.primary} onClick={() => onAction("edit", doctor)}><LuSquarePen aria-hidden="true" />تعديل الطبيب</button>}{cap.link && !cap.update && <button className={styles.primary} onClick={() => onAction("links", doctor)}><LuLink aria-hidden="true" />إدارة العيادات</button>}{exports}</div></div>
     <section className={styles.detailPanel}><h3>الملف المهني</h3><div className={styles.badges}>{doctor.specialties.map(s => <span className={styles.badge} key={s.id}>{s.name_ar}</span>)}</div><p className={styles.description}>{doctor.description || "لا يوجد توصيف مسجل."}</p><dl className={styles.facts}><div><dt>رقم الترخيص</dt><dd><bdi>{doctor.license_no || "—"}</bdi></dd></div><div><dt>الهاتف</dt><dd><bdi>{doctor.phone || "—"}</bdi></dd></div><div><dt>العيادات الحالية</dt><dd>{doctor.clinic_count}</dd></div><div><dt>المرضى المختلفون</dt><dd>{doctor.patient_count}</dd></div></dl><p className={styles.hint}>{doctor.patient_count_definition}</p></section>
     <section className={styles.detailPanel}><h3>العيادات الحالية</h3><ClinicList doctor={doctor} facilityId={facilityId} /></section></>;
-}
-
-function ClinicFilter({ facilityId, value, onChange }: { facilityId: number; value: string; onChange: (value: string) => void }) {
-  const [search, setSearch] = useState(""); const [page, setPage] = useState(1); const debounced = useDebounced(search);
-  const result = useDirectoryRequest<Page<ClinicLink>>(`doctors/options/clinics?${new URLSearchParams({ facility_id: String(facilityId), search: debounced, page: String(page) })}`, true);
-  return <details className={styles.doctorFilter}><summary>العيادة: {value ? "محددة" : "الكل"}</summary><div><label>ابحث عن عيادة<input type="search" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></label><button type="button" onClick={() => onChange("")}>كل العيادات</button>{result.error ? <button onClick={result.retry}>تعذّر التحميل؛ أعد المحاولة</button> : !result.data || search !== debounced ? <p role="status">جارٍ البحث…</p> : <><ul>{result.data.data.map(c => <li key={c.id}><button type="button" aria-pressed={value === String(c.id)} onClick={e => { onChange(String(c.id)); e.currentTarget.closest("details")?.removeAttribute("open"); }}>{c.name_ar} · <bdi>{c.code}</bdi></button></li>)}</ul><Pagination meta={result.data.meta} onPage={setPage} /></>}</div></details>;
 }

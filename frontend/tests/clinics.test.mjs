@@ -34,6 +34,40 @@ async function setup({ width = 1440, access = [{ facility, permissions, roles: [
   return { page, context, calls, errors };
 }
 
+test("filters load on demand, restore the selected name from URL and expose permitted doctor navigation", async () => {
+  const {page,context,calls}=await setup({access:[{facility,permissions:[...permissions,'doctors.view'],roles:[]}]});
+  try {
+    await page.getByRole('link',{name:'001',exact:true}).waitFor();
+    assert.equal(calls.filter(c=>c.url.pathname.includes('/options/')).length,0);
+    await page.evaluate(()=>history.pushState(null,'','/clinics?facility_id=1&doctor_id=1'));
+    const filter=page.locator('summary').filter({hasText:'الطبيب:'});
+    await page.waitForFunction(()=>[...document.querySelectorAll('summary')].some(el=>el.textContent.includes('أحمد')));
+    assert.match(await filter.innerText(),/أحمد/);
+    assert.equal(calls.filter(c=>c.url.pathname.endsWith('/options/doctors')&&c.url.searchParams.has('ids[]')).length,1);
+    await page.getByRole('link',{name:'001',exact:true}).click();
+    const table=page.getByRole('region',{name:'جدول أطباء العيادة',exact:true});
+    const link=table.getByRole('link',{name:'D001',exact:true});await link.waitFor();
+    assert.equal(await link.getAttribute('href'),'/doctors/1?facility_id=1');
+  }finally{await context.close();}
+});
+
+test("failed background search keeps rows and retry replaces them without duplicate requests",async()=>{
+  let attempts=0;
+  const {page,context}=await setup({override:async(route,url)=>{
+    if(url.pathname==='/hospital-api/clinics'&&url.searchParams.get('search')==='جديد'){
+      attempts++;if(attempts===1)await route.abort();else await route.fulfill({json:paginated([{...clinics[0],code:'NEW'}])});return true;
+    }return false;
+  }});
+  try{
+    await page.getByRole('link',{name:'001',exact:true}).waitFor();
+    await page.getByLabel('البحث في العيادات').fill('جديد');
+    await page.locator('main').getByRole('alert').waitFor();
+    assert.equal(await page.getByRole('link',{name:'001',exact:true}).isVisible(),true);
+    await page.getByRole('button',{name:'إعادة المحاولة',exact:true}).click();await page.getByRole('link',{name:'NEW',exact:true}).waitFor();
+    assert.equal(attempts,2);
+  }finally{await context.close();}
+});
+
 test("navigation, columns, direct detail and back preserve list context", async () => {
   const { page, context, calls, errors } = await setup();
   try {
@@ -487,9 +521,9 @@ for (const width of [390, 768, 1440]) test(`responsive list, editor, doctors and
   const { page, context, errors } = await setup({ width });
   const capture = async name => {
     if (process.env.CLINIC_CAPTURE !== "1") return;
-    await mkdir("docs/screenshots/clinics", { recursive: true });
+    await mkdir(".superdesign/directory-review/clinics", { recursive: true });
     await page.evaluate(() => document.fonts.ready);
-    await writeFile(`docs/screenshots/clinics/${name}-${width}.png`, await page.screenshot({ fullPage: await page.getByRole("dialog").count() === 0 }));
+    await writeFile(`.superdesign/directory-review/clinics/${name}-${width}.png`, await page.screenshot({ fullPage: await page.getByRole("dialog").count() === 0 }));
   };
   const contained = async () => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   try {

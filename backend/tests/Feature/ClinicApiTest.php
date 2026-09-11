@@ -186,9 +186,42 @@ class ClinicApiTest extends TestCase
             DB::table('visits')->insert(['visit_no' => (string) Str::uuid(), 'facility_id' => $this->facility, 'patient_id' => $patient, 'reporting_period_id' => $period, 'visit_date' => '2026-09-11', 'visit_type_id' => $visitType, 'clinic_id' => $clinic['id'], 'attending_staff_id' => $this->doctor, 'status' => $status, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $this->user->id, 'voided_at' => $status === 'void' ? now() : null, 'voided_by' => $status === 'void' ? $this->user->id : null, 'void_reason' => $status === 'void' ? 'اختبار' : null]);
         }
         $this->callApi('GET', '/'.$clinic['id'])->assertJsonPath('data.patient_count', 1)->assertDontSee('P-SECRET')->assertDontSee('اسم سري');
+        $this->create(['code' => 'EMPTY']);
+        $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'desc', 'per_page' => 1])->assertJsonPath('meta.total', 2)->assertJsonPath('data.0.id', $clinic['id'])->assertJsonPath('data.0.patient_count', 1);
+        $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'asc', 'per_page' => 1])->assertJsonPath('data.0.patient_count', 0);
+        $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'desc', 'per_page' => 1, 'page' => 2])->assertJsonPath('data.0.patient_count', 0);
         $this->callApi('DELETE', '/'.$clinic['id'], ['lock_version' => 1])->assertConflict();
         $this->callApi('POST', '/'.$clinic['id'].'/deactivate', ['lock_version' => 1])->assertOk()->assertJsonPath('data.is_active', false);
         $this->assertDatabaseCount('visits', 4);
+    }
+
+    public function test_search_matches_current_eligible_doctors_without_duplicate_clinics(): void
+    {
+        $clinic = $this->create(['doctor_add_ids' => [$this->doctor]]);
+        $second = $this->create(['code' => '002', 'doctor_add_ids' => [$this->doctor]]);
+        DB::table('clinic_staff')->insert(['clinic_id' => $clinic['id'], 'staff_id' => $this->doctor, 'starts_on' => '2020-01-01']);
+        DB::table('staff')->where('id', $this->doctor)->update(['full_name' => 'اسم طبيب مرتبط']);
+        foreach (['D001', 'اسم طبيب مرتبط'] as $search) {
+            $this->callApi('GET', '', ['search' => $search, 'per_page' => 1, 'page' => 2])
+                ->assertOk()->assertJsonPath('meta.total', 2)->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $second['id']);
+        }
+        foreach (['expired', 'future', 'inactive', 'wrong-type'] as $case) {
+            $doctor = $this->staff('EXCLUDED-'.$case, ['is_active' => $case !== 'inactive']);
+            if ($case === 'wrong-type') {
+                $type = DB::table('staff_types')->insertGetId(['code' => 'OTHER', 'name_ar' => 'طبيب']);
+                DB::table('staff')->where('id', $doctor)->update(['staff_type_id' => $type]);
+            }
+            DB::table('clinic_staff')->insert(['clinic_id' => $clinic['id'], 'staff_id' => $doctor,
+                'starts_on' => $case === 'future' ? now('Asia/Damascus')->addDay()->toDateString() : '2020-01-01',
+                'ends_on' => $case === 'expired' ? now('Asia/Damascus')->toDateString() : null]);
+            $this->callApi('GET', '', ['search' => 'EXCLUDED-'.$case])->assertOk()->assertJsonPath('meta.total', 0);
+        }
+        $foreign = $this->assign('OTHER', ['view', 'create']);
+        $this->create(['facility_id' => $foreign, 'doctor_add_ids' => [$this->doctor]]);
+        $this->callApi('GET', '', ['search' => 'D001'])->assertJsonPath('meta.total', 2);
+        DB::table('staff_types')->where('id', $this->type)->update(['is_active' => false]);
+        $this->callApi('GET', '', ['search' => 'D001'])->assertJsonPath('meta.total', 0);
+        $this->callApi('GET', '/options/doctors')->assertOk()->assertJsonPath('doctor_types_configured', false);
     }
 
     public function test_search_sort_pagination_and_bounded_queries(): void

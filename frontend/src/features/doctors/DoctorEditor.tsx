@@ -36,7 +36,7 @@ export default function DoctorEditor({ doctor, facilityId, options, linksOnly = 
   }
   const specialties = [...options.specialties, ...(base?.specialties.filter(s => !options.specialties.some(o => o.id === s.id)) ?? [])];
   const input = (key: "code" | "name" | "license_no" | "phone", label: string, max: number, required = false) => <label>{label}{required ? " *" : ""}<input autoFocus={key === "code"} required={required} maxLength={max} dir={key === "name" ? "auto" : "ltr"} value={fields[key]} onChange={e => setFields({ ...fields, [key]: e.target.value })} aria-invalid={!!error?.fields[key]} aria-describedby={error?.fields[key] ? `doctor-error-${key}` : undefined} />{fieldError(key)}</label>;
-  return <Modal title={linksOnly ? "إدارة عيادات الطبيب" : doctor ? "تعديل الطبيب" : "إضافة طبيب جديد"} onClose={onClose} busy={busy}>
+  return <Modal title={linksOnly ? "إدارة عيادات الطبيب" : doctor ? "تعديل الطبيب" : "إضافة طبيب جديد"} onClose={onClose} busy={busy} size={linksOnly ? "regular" : "wide"}>
     <form onSubmit={save} className={styles.form}>
       <p className={styles.scopeNote}>{linksOnly ? "تعدّل ارتباطات هذه المنشأة فقط. إزالة ارتباط لا تعطل الطبيب." : "بيانات الطبيب مشتركة بين المنشآت. تعديلها أو تعطيل الطبيب يسري عالميًا؛ اختيارات العيادات تخص المنشأة الحالية فقط."}</p>
       {error && <p role="alert" className={styles.error}>{conflict ? "تغيّرت بيانات الطبيب أو ارتباطاته. مسودتك واختيارات العيادات محفوظة. اجلب أحدث نسخة للمراجعة." : error.message}</p>}

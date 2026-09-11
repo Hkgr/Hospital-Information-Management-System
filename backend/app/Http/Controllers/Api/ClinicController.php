@@ -86,7 +86,9 @@ class ClinicController extends Controller
     {
         $facility = $this->access->authorize($request->user(), $request->integer('facility_id'));
 
-        return response()->json($this->queries->doctors($facility, $request->validated()) + ['doctor_types_configured' => count(config('clinics.doctor_staff_types')) > 0]);
+        return response()->json($this->queries->doctors($facility, $request->validated()) + [
+            'doctor_types_configured' => DB::table('staff_types')->whereIn('code', config('clinics.doctor_staff_types'))->where('is_active', true)->exists(),
+        ]);
     }
 
     /** Active specialty choices, gated by facility clinics.view. */

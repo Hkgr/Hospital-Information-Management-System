@@ -13,13 +13,16 @@ class DoctorQueries
 
     public function query(array $facility, array $filters): Builder
     {
-        $clinics = $this->counts->currentClinics($facility)->select('cs.staff_id')->selectRaw('COUNT(DISTINCT c.id) as clinic_count')->groupBy('cs.staff_id');
-        $query = $this->counts->directory()->leftJoinSub($clinics, 'cc', 'cc.staff_id', '=', 's.id')
-            ->leftJoinSub($this->counts->patients($facility['id']), 'pc', 'pc.attending_staff_id', '=', 's.id')
+        $clinics = $this->counts->currentClinics($facility)->whereColumn('cs.staff_id', 's.id')->selectRaw('COUNT(DISTINCT c.id)');
+        // paginate's COUNT omits these projections; keep scoped indexed counts
+        // in SQL so count ordering and pagination remain exact.
+        $query = $this->counts->directory()
             ->select('s.*', 'st.code as type_code', 'st.name_ar as type_name')
-            ->selectRaw('COALESCE(cc.clinic_count, 0) as clinic_count, COALESCE(pc.patient_count, 0) as patient_count');
+            ->selectSub($clinics, 'clinic_count')->selectSub($this->counts->patients($facility['id']), 'patient_count');
         if (($search = $filters['search'] ?? '') !== '' && $search !== null) {
-            $query->where(fn ($q) => $q->whereLike('s.staff_code', '%'.$search.'%')->orWhereLike('s.full_name', '%'.$search.'%')->orWhereLike('s.description', '%'.$search.'%'));
+            $linked = $this->counts->currentClinics($facility)->whereColumn('cs.staff_id', 's.id')
+                ->where(fn ($q) => $q->whereLike('c.code', '%'.$search.'%')->orWhereLike('c.name_ar', '%'.$search.'%'))->selectRaw('1');
+            $query->where(fn ($q) => $q->whereLike('s.staff_code', '%'.$search.'%')->orWhereLike('s.full_name', '%'.$search.'%')->orWhereLike('s.description', '%'.$search.'%')->orWhereExists($linked));
         }
         if ($status = $filters['status'] ?? null) {
             $query->where('s.is_active', $status === 'active');
@@ -55,6 +58,9 @@ class DoctorQueries
 
     public function present(Collection $rows, array $facility): array
     {
+        if ($rows->isEmpty()) {
+            return [];
+        }
         $ids = $rows->pluck('id');
         $specialties = DB::table('staff_specialties as ss')->join('specialties as sp', 'sp.id', '=', 'ss.specialty_id')
             ->whereIn('ss.staff_id', $ids)->orderBy('sp.name_ar')->orderBy('sp.id')->get(['ss.staff_id', 'sp.id', 'sp.name_ar', 'sp.is_active'])->groupBy('staff_id');
@@ -75,7 +81,7 @@ class DoctorQueries
     {
         $ids = $doctorId === null && isset($filters['ids']) ? array_values(array_unique(array_map('intval', $filters['ids']))) : null;
         if ($doctorId !== null) {
-            $this->find($facility, $doctorId);
+            $this->requireDoctor($doctorId);
             $query = $this->counts->currentClinics($facility)->where('cs.staff_id', $doctorId)->select('c.id', 'c.code', 'c.name_ar')
                 ->selectRaw('MIN(cs.starts_on) as starts_on')->groupBy('c.id', 'c.code', 'c.name_ar');
         } else {
@@ -90,7 +96,7 @@ class DoctorQueries
         $page = $query->orderBy('c.code')->orderBy('c.id')->paginate($ids !== null ? 100 : ($filters['per_page'] ?? 20), ['*'], 'page', $ids !== null ? 1 : ($filters['page'] ?? 1));
         $linked = [];
         if ($doctorId === null && ! empty($filters['doctor_id'])) {
-            $this->find($facility, (int) $filters['doctor_id']);
+            $this->requireDoctor((int) $filters['doctor_id']);
             $linked = $this->counts->currentClinics($facility)->where('cs.staff_id', $filters['doctor_id'])->whereIn('c.id', $page->getCollection()->pluck('id'))->pluck('c.id')->all();
         }
 
@@ -105,6 +111,13 @@ class DoctorQueries
         return ['data' => $page->getCollection()->map(fn ($c) => ['id' => (int) $c->id, 'code' => $c->code, 'name_ar' => $c->name_ar,
             'starts_on' => $c->starts_on ?? null, 'is_linked' => $doctorId !== null || in_array($c->id, $linked),
             'can_view' => in_array('clinics.view', $facility['permissions'], true)])->all(), 'meta' => $this->meta($page)] + ($doctorId === null ? ['unavailable' => $unavailable] : []);
+    }
+
+    private function requireDoctor(int $id): void
+    {
+        if (! $this->counts->directory()->where('s.id', $id)->exists()) {
+            throw new DoctorException('DOCTOR_NOT_FOUND', 'الطبيب غير موجود في الدليل المتاح.', 404);
+        }
     }
 
     private function meta($page): array

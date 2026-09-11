@@ -35,6 +35,45 @@ async function setup({ width=1440, access=[{facility,permissions,roles:[]}], set
   return {page,context,calls,errors};
 }
 
+test('list loads independently of delayed capabilities and relation choices stay lazy until opened',async()=>{
+  let release;const gate=new Promise(resolve=>{release=resolve;});
+  const {page,context,calls}=await setup({override:async(route,url)=>{
+    if(url.pathname==='/hospital-api/doctors/options'){await gate;try{await route.fulfill({json:{data:options}});}catch{}return true;}return false;
+  }});
+  try{
+    await page.getByRole('link',{name:'D001',exact:true}).waitFor({timeout:3000});
+    assert.equal(await page.getByRole('button',{name:'إضافة طبيب جديد',exact:true}).count(),0);
+    assert.equal(calls.filter(c=>c.url.pathname.endsWith('/options/clinics')).length,0);
+    release();await page.getByRole('button',{name:'إضافة طبيب جديد',exact:true}).waitFor();
+    await page.locator('summary').filter({hasText:'العيادة: الكل'}).click();
+    await page.getByRole('button',{name:/العيادة الداخلية ·/}).click();
+    await page.waitForURL(/clinic_id=1/);
+    assert.match(await page.locator('summary').filter({hasText:'العيادة:'}).innerText(),/العيادة الداخلية/);
+    assert.equal(calls.filter(c=>c.url.pathname.endsWith('/options/clinics')).length,1);
+  }finally{release();await context.close();}
+});
+
+test('refresh keeps current rows, ignores obsolete search responses and clears rows on facility change',async()=>{
+  let release,started;const gate=new Promise(r=>{release=r;});const requested=new Promise(r=>{started=r;});
+  const access=[1,2].map(id=>({facility:{...facility,id},permissions,roles:[]}));
+  const {page,context}=await setup({access,override:async(route,url)=>{
+    if(url.pathname!=='/hospital-api/doctors')return false;
+    if(url.searchParams.get('search')==='قديم'){started();await gate;try{await route.fulfill({json:paginated([{...doctors[0],code:'STALE',name:'استجابة قديمة'}])});}catch{}return true;}
+    if(url.searchParams.get('facility_id')==='2'){await route.fulfill({json:paginated([])});return true;}
+    if(url.searchParams.get('search')==='أحدث'){await route.fulfill({json:paginated([{...doctors[0],code:'LATEST'}])});return true;}return false;
+  }});
+  try{
+    await page.getByRole('link',{name:'D001',exact:true}).waitFor();
+    await page.getByLabel('البحث في الأطباء').fill('قديم');await requested;
+    assert.equal(await page.getByRole('link',{name:'D001',exact:true}).isVisible(),true);
+    await page.getByText('جارٍ تحديث النتائج…',{exact:true}).waitFor();
+    await page.getByLabel('البحث في الأطباء').fill('أحدث');await page.getByRole('link',{name:'LATEST',exact:true}).waitFor();
+    release();await page.waitForTimeout(150);assert.equal(await page.getByRole('link',{name:'STALE',exact:true}).count(),0);
+    await page.getByRole('combobox',{name:'المنشأة',exact:true}).selectOption('2');
+    await page.getByRole('link',{name:'LATEST',exact:true}).waitFor({state:'detached'});
+  }finally{release();await context.close();}
+});
+
 test('permissions gate navigation and global actions while link-only editing sends no directory fields',async()=>{
   const limited={...options,capabilities:{...options.capabilities,create:false,update:false,delete:false}};
   const {page,context,calls}=await setup({settings:limited});
@@ -253,14 +292,18 @@ test('export uses displayed filters and columns; referenced deletion remains a s
 for(const width of [390,768,1440])test(`doctor list/editor/links/detail responsive and keyboard accessible at ${width}px`,async()=>{
   const {page,context,errors}=await setup({width});
   try{
-    await page.getByRole('link',{name:'D001',exact:true}).waitFor();await page.evaluate(()=>document.fonts.ready);await mkdir('docs/screenshots/doctors',{recursive:true});
+    await page.getByRole('link',{name:'D001',exact:true}).waitFor();await page.evaluate(()=>document.fonts.ready);await mkdir('.superdesign/directory-review/doctors',{recursive:true});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-    await page.screenshot({path:`docs/screenshots/doctors/list-${width}.png`,fullPage:true});
+    await page.screenshot({path:`.superdesign/directory-review/doctors/list-${width}.png`,fullPage:true});
     await page.getByRole('button',{name:'إضافة طبيب جديد',exact:true}).click();const dialog=page.getByRole('dialog');await dialog.getByRole('checkbox',{name:/العيادة الداخلية/}).waitFor();
-    await page.screenshot({path:`docs/screenshots/doctors/editor-${width}.png`,fullPage:false});
+    await page.screenshot({path:`.superdesign/directory-review/doctors/editor-${width}.png`,fullPage:false});
     const save=dialog.getByRole('button',{name:'حفظ الطبيب',exact:true});const box=await save.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=900);
+    const lastChoice=dialog.getByRole('checkbox').last();await lastChoice.scrollIntoViewIfNeeded();await lastChoice.focus();
+    const headingBox=await dialog.getByRole('heading',{name:'إضافة طبيب جديد',exact:true}).boundingBox(),saveBox=await save.boundingBox(),choiceBox=await lastChoice.boundingBox();
+    assert.ok(headingBox.y>=0&&choiceBox.y>=headingBox.y+headingBox.height&&choiceBox.y+choiceBox.height<=saveBox.y);
+    await page.screenshot({path:`.superdesign/directory-review/doctors/editor-bottom-${width}.png`,fullPage:false});
     await dialog.getByRole('button',{name:'إلغاء',exact:true}).focus();await page.keyboard.press('Tab');assert.ok(await dialog.evaluate(el=>el.contains(document.activeElement)));await page.keyboard.press('Escape');
-    await page.getByRole('button',{name:'عيادات أحمد الاختباري: 2',exact:true}).click();await page.getByRole('dialog').getByText('2 عيادة مطابقة',{exact:true}).waitFor();await page.screenshot({path:`docs/screenshots/doctors/clinics-${width}.png`,fullPage:false});await page.keyboard.press('Escape');
-    await page.getByRole('link',{name:'D001',exact:true}).click();await page.getByRole('heading',{name:'أحمد الاختباري',exact:true}).waitFor();await page.getByText('2 عيادة مطابقة',{exact:true}).waitFor();await page.screenshot({path:`docs/screenshots/doctors/detail-${width}.png`,fullPage:true});assert.deepEqual(errors,[]);
+    await page.getByRole('button',{name:'عيادات أحمد الاختباري: 2',exact:true}).click();await page.getByRole('dialog').getByText('2 عيادة مطابقة',{exact:true}).waitFor();await page.screenshot({path:`.superdesign/directory-review/doctors/clinics-${width}.png`,fullPage:false});await page.keyboard.press('Escape');
+    await page.getByRole('link',{name:'D001',exact:true}).click();await page.getByRole('heading',{name:'أحمد الاختباري',exact:true}).waitFor();await page.getByText('2 عيادة مطابقة',{exact:true}).waitFor();await page.screenshot({path:`.superdesign/directory-review/doctors/detail-${width}.png`,fullPage:true});assert.deepEqual(errors,[]);
   }finally{await context.close();}
 });
