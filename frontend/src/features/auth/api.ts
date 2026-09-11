@@ -43,17 +43,17 @@ export function subscribeSession(listener: () => void) {
 
 export class AuthError extends Error {
   constructor(public status: number, public code: string, message: string,
-    public fields: Partial<Record<"username" | "password", string>> = {}) {
+    public fields: Partial<Record<string, string>> = {}) {
     super(message);
   }
 }
 
-export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(endpoint: string, options: RequestInit = {}, mode: "data" | "envelope" | "blob" = "data"): Promise<T> {
   const token = getToken();
   let response: Response;
   try {
     response = await fetch(`/hospital-api/${endpoint}`, {
-      ...options, cache: "no-store", credentials: "omit", signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+      ...options, cache: "no-store", credentials: "omit", signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(mode === "blob" ? 60000 : 15000)]) : AbortSignal.timeout(mode === "blob" ? 60000 : 15000),
       headers: {
         Accept: "application/json", "Content-Type": "application/json",
         ...(token && endpoint !== "login" ? { Authorization: `Bearer ${token}` } : {}),
@@ -65,6 +65,11 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
   }
   if (getToken() !== token) throw new AuthError(0, "STALE_SESSION", "تغيرت جلسة المستخدم.");
   if (response.status === 204) return undefined as T;
+  if (response.ok && mode === "blob") {
+    const blob = await response.blob();
+    if (getToken() !== token || options.signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
+    return { blob, filename: response.headers.get("Content-Disposition")?.match(/filename="([A-Za-z0-9.-]+)"/)?.[1] } as T;
+  }
   const body = await response.json().catch(() => null);
   if (getToken() !== token) throw new AuthError(0, "STALE_SESSION", "تغيرت جلسة المستخدم.");
   if (!response.ok) {
@@ -72,19 +77,30 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {})
     if (endpoint !== "login" && (response.status === 401 || code === "ACCOUNT_INACTIVE")) saveToken(null);
     const fields: AuthError["fields"] = {};
     if (response.status === 422) {
+      for (const [key, errors] of Object.entries(body?.errors ?? {})) {
+        if (Array.isArray(errors) && typeof errors[0] === "string") fields[key] = errors[0];
+      }
       if (body?.errors?.username) fields.username = "أدخل اسم مستخدم صحيحًا لا يتجاوز 60 محرفًا.";
       if (body?.errors?.password) fields.password = "أدخل كلمة المرور.";
     }
-    const message = response.status === 429 ? "تجاوزت عدد محاولات الدخول. انتظر دقيقة ثم حاول مجددًا."
+    const clinicMessages: Record<string, string> = {
+      CLINIC_VERSION_CONFLICT: "عدّل مستخدم آخر هذه العيادة. أغلق النافذة وأعد تحميل البيانات قبل التعديل.",
+      CLINIC_PERIOD_CONFLICT: "يوجد ارتباط مجدول أو فترات متداخلة لهذا الطبيب. راجع السجل قبل التعديل.",
+      CLINIC_REFERENCED: "لا يمكن حذف عيادة مرتبطة بسجلات. يمكنك تعطيلها بإجراء منفصل.",
+      CLINIC_NOT_FOUND: "العيادة غير موجودة في المنشأة المحددة.",
+      EXPORT_LIMIT_EXCEEDED: "نتائج التقرير أكبر من الحد الآمن. ضيّق نطاق الفلاتر ثم أعد المحاولة.",
+      PDF_LAYOUT_LIMIT_EXCEEDED: "النص في إحدى الخلايا طويل جدًا لتقرير القائمة. أخفِ عمود التوصيف أو الأطباء، أو استخدم Excel أو تقرير العيادة المفردة.",
+    };
+    const message = clinicMessages[code] ?? (response.status === 429 ? "تجاوزت عدد محاولات الدخول. انتظر دقيقة ثم حاول مجددًا."
       : code === "ACCOUNT_INACTIVE" ? "هذا الحساب غير فعال. راجع مسؤول النظام."
       : response.status === 401 ? (endpoint === "login" ? "اسم المستخدم أو كلمة المرور غير صحيحة." : "انتهت صلاحية الدخول. سجّل الدخول مجددًا.")
       : response.status === 403 ? "لا يملك هذا الدخول صلاحية الوصول المطلوبة. راجع مسؤول النظام."
       : response.status === 422 ? "تحقق من بيانات الحقول ثم حاول مجددًا."
-      : "تعذّر إتمام الطلب الآن. حاول مجددًا بعد قليل.";
+      : "تعذّر إتمام الطلب الآن. حاول مجددًا بعد قليل.");
     throw new AuthError(response.status, code, message, fields);
   }
   if (!body?.data) throw new AuthError(502, "INVALID_RESPONSE", "تعذّر قراءة استجابة الخادم. حاول مجددًا.");
-  return body.data as T;
+  return (mode === "envelope" ? body : body.data) as T;
 }
 
 export async function login(username: string, password: string) {

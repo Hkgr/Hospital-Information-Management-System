@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EnsureActiveAccount;
+use App\Http\Middleware\PrivateClinicResponse;
 use App\Http\Middleware\PrivateDashboardResponse;
 use App\Http\Responses\AuthError;
 use Illuminate\Auth\AuthenticationException;
@@ -21,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(PrivateDashboardResponse::class);
+        $middleware->append(PrivateClinicResponse::class);
         $middleware->alias([
             'account.active' => EnsureActiveAccount::class,
             'abilities' => CheckAbilities::class,
