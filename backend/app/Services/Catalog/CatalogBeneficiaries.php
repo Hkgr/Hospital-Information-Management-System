@@ -49,10 +49,12 @@ class CatalogBeneficiaries
     public function presentations(array $facility, string $kind, int $id, array $filters): array
     {
         $query = $this->events($facility, true)->join('patients as p', 'p.id', '=', 'benefit.patient_id')->where('kind', $kind)->where('item_id', $id);
-        $search = $filters['search'] ?? '';
+        $search = trim(preg_replace('/\s+/u', ' ', $filters['search'] ?? ''));
         if ($search !== '') {
             $like = '%'.addcslashes($search, '%_\\').'%';
-            $query->where(fn ($q) => $q->where('p.patient_code', 'like', $like)->orWhere('p.first_name', 'like', $like)->orWhere('p.family_name', 'like', $like));
+            $query->where(fn ($q) => $q->where('p.patient_code', 'like', $like)->orWhere('p.first_name', 'like', $like)->orWhere('p.family_name', 'like', $like)
+                // Match the displayed full name, including legacy whitespace, with a bound literal LIKE value.
+                ->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', p.first_name, p.family_name), '[[:space:]]+', ' ') LIKE ?", [$like]));
         }
         if (! empty($filters['from'])) {
             $query->where('performed_on', '>=', $filters['from']);

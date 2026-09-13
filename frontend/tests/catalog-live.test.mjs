@@ -29,6 +29,36 @@ async function api(method, path, expected, body, token = f.token) {
   assert.match(response.headers.get("content-type"), /application\/json/); return response.json();
 }
 
+for (const kind of ["service", "procedure"]) test(`${kind}: full beneficiary name is searchable through the real browser and Next proxy`, async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(token => sessionStorage.setItem("hospital.bearer", token), f.token);
+  const page = await context.newPage(); page.setDefaultTimeout(12000);
+  const path = `/${kind}/${f.items[kind][1]}`, fullName = "مستفيد اختبار 1", expected = kind === "service" ? 25 : 26;
+  try {
+    await page.goto(`${base}/services-procedures${path}`);
+    const table = page.getByRole("region", { name: "جدول المرضى المستفيدين وتواريخ التقديم", exact: true }); await table.waitFor();
+    const input = page.getByRole("searchbox", { name: "البحث عن مستفيد", exact: true });
+    for (const term of [fullName, "  مستفيد   اختبار  1  "]) {
+      const pending = page.waitForResponse(response => new URL(response.url()).pathname === `/hospital-api/service-catalog${path}/events` && new URL(response.url()).searchParams.get("search") === term);
+      await input.fill(term);
+      const response = await pending; assert.equal(response.status(), 200);
+      assert.equal((await response.json()).totals.presentations, expected);
+      await page.getByText(`عدد مرات التقديم: ${expected} · كامل النتائج المطابقة`, { exact: true }).waitFor();
+      const first = await api("GET", `${path}/events`, 200, { search: term, per_page: 10 });
+      const second = await api("GET", `${path}/events`, 200, { search: term, per_page: 10, page: 2 });
+      for (const result of [first, second]) {
+        assert.equal(result.totals.unique_patients, 1); assert.equal(result.totals.presentations, expected); assert.equal(result.meta.total, expected);
+        assert.equal(result.data.length, 10); assert.ok(result.data.every(row => row.patient_name === fullName && row.patient_code === `${f.tag}-P1`));
+      }
+      assert.equal(new Set([...first.data, ...second.data].map(row => row.key)).size, 20);
+      assert.equal(await table.getByText(`${f.tag}-P1`, { exact: true }).count(), 20);
+    }
+    await page.getByRole("button", { name: "التالي", exact: true }).click(); await page.getByText("صفحة 2 من 2", { exact: true }).waitFor();
+    assert.equal(await table.getByText(`${f.tag}-P1`, { exact: true }).count(), expected - 20);
+    await input.fill("اسم غير مطابق"); await page.getByText("عدد مرات التقديم: 0 · كامل النتائج المطابقة", { exact: true }).waitFor();
+  } finally { await context.close(); }
+});
+
 for (const kind of ["service", "procedure"]) test(`${kind}: actual standalone transport, count/list parity, CRUD, lifecycle, permissions and exports`, async () => {
   const id = f.items[kind][1], path = `/${kind}/${id}`, count = kind === "service" ? 2 : 3;
   const row = (await api("GET", path, 200)).data; assert.equal(row.patient_count, count);
