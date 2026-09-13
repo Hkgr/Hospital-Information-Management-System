@@ -3,8 +3,11 @@
 use App\Models\User;
 use App\Services\Catalog\CatalogQueries;
 use App\Support\TestDatabaseSafety;
+use Database\Seeders\ClinicPermissionsSeeder;
+use Database\Seeders\DoctorPermissionsSeeder;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\CatalogFixture;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
@@ -19,6 +22,26 @@ if (($argv[1] ?? '') === 'prepare') {
     }
     $fixture = DB::transaction(function () {
         $f = CatalogFixture::make();
+        $f['facility_code'] = 'CAT-'.$f['tag'];
+        // Readable synthetic comparison records; grants apply only to this test account.
+        app(ClinicPermissionsSeeder::class)->run();
+        app(DoctorPermissionsSeeder::class)->run();
+        $role = DB::table('global_user_roles')->where('user_id', $f['user']->id)->value('role_id');
+        foreach (DB::table('permissions')->where(fn ($q) => $q->whereLike('code', 'clinics.%')->orWhereLike('code', 'doctors.%'))->pluck('id') as $permission) {
+            DB::table('role_permissions')->insertOrIgnore(['role_id' => $role, 'permission_id' => $permission]);
+        }
+        $f['doctor'] = DB::table('staff')->where('staff_code', $f['facility_code'])->value('id');
+        $f['clinic'] = DB::table('clinics')->insertGetId(['facility_id' => $f['facility'], 'code' => 'CLINIC-'.$f['tag'], 'name_ar' => 'عيادة اختبار', 'description' => 'وصف اختباري']);
+        foreach (['service', 'procedure'] as $kind) {
+            $table = 'visit_'.$kind.'s';
+            $row = (array) DB::table($table)->where($kind.'_id', $f['items'][$kind][1])->orderBy('id')->first();
+            DB::table($table)->where('id', $row['id'])->update(['performed_on' => now('Asia/Damascus')->subDay()->toDateString()]);
+            unset($row['id']);
+            for ($n = 0; $n < 23; $n++) {
+                $row['client_request_id'] = (string) Str::uuid();
+                DB::table($table)->insert($row);
+            }
+        }
         $f['token'] = $f['user']->createToken('catalog-live', ['api'])->plainTextToken;
         $f['viewer_token'] = $f['viewer']->createToken('catalog-live', ['api'])->plainTextToken;
         $f['user_id'] = $f['user']->id;

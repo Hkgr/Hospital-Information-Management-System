@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Catalog\CatalogEventsRequest;
 use App\Http\Requests\Catalog\CatalogQueryRequest;
 use App\Http\Requests\Catalog\SaveCatalogRequest;
+use App\Http\Requests\Catalog\SaveCategoryRequest;
 use App\Http\Requests\Clinics\ClinicVersionRequest;
 use App\Services\Catalog\CatalogAccess;
 use App\Services\Catalog\CatalogBeneficiaries;
@@ -13,6 +15,7 @@ use App\Services\Catalog\CatalogReports;
 use App\Services\Catalog\CatalogWriter;
 use Dedoc\Scramble\Attributes\Group;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -20,6 +23,26 @@ use Symfony\Component\HttpFoundation\Response;
 class CatalogController extends Controller
 {
     public function __construct(private CatalogAccess $access, private CatalogQueries $queries, private CatalogWriter $writer) {}
+
+    public function context(Request $request): JsonResponse
+    {
+        return response()->json(['data' => ['facility' => $this->access->context($request->user())]]);
+    }
+
+    public function createCategory(SaveCategoryRequest $request): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+
+        return response()->json(['data' => $this->writer->createCategory($request, $facility, $request->validated())], 201);
+    }
+
+    public function events(CatalogEventsRequest $request, string $kind, int $item): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'), 'beneficiaries');
+        $this->queries->find($facility, $kind, $item);
+
+        return response()->json(app(CatalogBeneficiaries::class)->presentations($facility, $kind, $item, $request->validated()));
+    }
 
     /** Global definitions; counts only from the authorized facility. Requires catalog.view. */
     public function index(CatalogQueryRequest $request): JsonResponse

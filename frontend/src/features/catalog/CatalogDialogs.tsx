@@ -31,7 +31,7 @@ export function CatalogLifecycle({ item, action, facilityId, onClose, onSaved }:
     {actual === "delete" && <p>لا توجد مراجع حاليًا. الحذف نهائي ويُعاد فحص الموانع عند التنفيذ.</p>}
     {actual === "restore" && <p>ستتم الاستعادة كغير فعال. إعادة التفعيل قرار مستقل.</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}{conflict && <p>أغلق النافذة وأعد تحميل العنصر ثم راجع العملية؛ لن نكررها تلقائيًا.</p>}
-    <div className={styles.modalActions}><button className={styles.primary} disabled={busy || !actual || preview.loading || !!preview.error || conflict || (actual === "archive" && !!preview.data?.archived)} onClick={() => void confirm()}>{busy ? "جارٍ التنفيذ…" : `تأكيد ${actionNames[actual ?? action]}`}</button><button className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
+    <div className={styles.modalActions}><button className={styles.danger} disabled={busy || !actual || preview.loading || !!preview.error || conflict || (actual === "archive" && !!preview.data?.archived)} onClick={() => void confirm()}>{busy ? "جارٍ التنفيذ…" : `تأكيد ${actionNames[actual ?? action]}`}</button><button className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
   </div></Modal>;
 }
 

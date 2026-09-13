@@ -14,11 +14,11 @@ type Preview = { action: "delete" | "archive"; organizational_links: number; has
 const labels = { delete: "حذف نهائي", archive: "أرشفة وإزالة من الدليل", deactivate: "تعطيل مؤقت", reactivate: "إعادة تفعيل", restore: "استعادة كغير فعال" };
 const messages = { delete: "تم الحذف النهائي.", archive: "تمت الأرشفة وحفظ التاريخ.", deactivate: "تم التعطيل مع حفظ الارتباطات.", reactivate: "تمت إعادة التفعيل.", restore: "تمت الاستعادة كغير فعال دون إعادة فتح الارتباطات." };
 
-export function LifecycleActions({ record, name, canUpdate, onAction }: { record: RecordState; name: string; canUpdate: boolean; onAction: (action: LifecycleAction) => void }) {
+export function LifecycleActions({ record, name, canUpdate, onAction, disabled = false }: { record: RecordState; name: string; canUpdate: boolean; onAction: (action: LifecycleAction) => void; disabled?: boolean }) {
   if (!canUpdate) return null;
   const action = record.archived_at ? "restore" : record.is_active ? "deactivate" : "reactivate";
   const label = action === "restore" ? "استعادة" : action === "deactivate" ? "تعطيل" : "إعادة تفعيل";
-  return <button className={styles.textButton} onClick={() => onAction(action)} aria-label={`${label} ${name}`}>{label}</button>;
+  return <button className={styles.textButton} disabled={disabled || undefined} onClick={() => onAction(action)} aria-label={`${label} ${name}`}>{label}</button>;
 }
 
 export default function LifecycleDialog({ kind, record, name, facilityId, action, onClose, onSaved, onRefresh }: { kind: "doctors" | "clinics"; record: RecordState; name: string; facilityId: number; action: LifecycleAction; onClose: () => void; onSaved: (message: string, action: CompletedAction) => void; onRefresh: () => void }) {

@@ -3,24 +3,29 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { LuPlus, LuSearch, LuDownload, LuFileText, LuHospital } from "react-icons/lu";
+import { LuPlus, LuSearch, LuDownload, LuFileText, LuHospital, LuSquarePen } from "react-icons/lu";
 import { useIdentity } from "@/features/auth/AuthenticatedLayout";
 import { AuthError } from "@/features/auth/api";
 import { ColumnMenu, LongText, Pagination } from "../directory/Controls";
+import { DirectoryBack, DirectoryRowActions, DirectoryTable } from "../directory/DirectoryPrimitives";
+import { LifecycleActions } from "../directory/Lifecycle";
 import useClinicSearch from "../clinics/useClinicSearch";
 import CatalogEditor from "./CatalogEditor";
-import { CatalogLifecycle, CatalogRelated, actionNames, type Action } from "./CatalogDialogs";
+import { CatalogLifecycle, CatalogRelated, type Action } from "./CatalogDialogs";
+import CatalogEvents from "./CatalogEvents";
 import { type Capabilities, type Column, type Item, type Kind, type Page, columns, columnKeys, kindName, stateName, downloadReport, useCatalogRequest } from "./api";
 import styles from "../clinics/clinics.module.css";
 
 export default function CatalogScreen({ kind, itemId }: { kind?: string; itemId?: string }) {
-  const { access, user } = useIdentity(); const params = useSearchParams(); const router = useRouter();
+  const { access, user } = useIdentity(); const params = useSearchParams();
   const cancelSearchRef = useRef<(() => void) | null>(null);
-  const allowed = access.filter(entry => entry.permissions.includes("catalog.view"));
-  const facilityId = params.has("facility_id") ? Number(params.get("facility_id")) : allowed[0]?.facility.id;
-  const entry = allowed.find(entry => entry.facility.id === facilityId);
+  const context = useCatalogRequest<{ facility: { id: number; name_ar: string } }>("service-catalog/context");
+  if (context.loading) return <p role="status" className={styles.status}>جارٍ تحميل سياق المشفى…</p>;
+  if (context.error) return <section className={styles.status}><h2>الخدمات والإجراءات غير متاحة</h2><p role="alert">{context.error}</p><button className={styles.secondary} onClick={context.retry}>إعادة المحاولة</button></section>;
+  const facilityId = context.data?.facility.id;
+  const entry = access.find(entry => entry.facility.id === facilityId && entry.permissions.includes("catalog.view") && (!params.has("facility_id") || Number(params.get("facility_id")) === facilityId));
   if (!entry || (itemId && (!/^[1-9]\d*$/.test(itemId) || !["service", "procedure"].includes(kind ?? "")))) return <section className={styles.status}><h2>الخدمات والإجراءات غير متاحة</h2><p role="alert">ليس لديك وصول إلى الدليل في المنشأة المطلوبة، أو الرابط غير صالح.</p><Link href="/">العودة إلى لوحة التحكم</Link></section>;
-  return <div className={styles.screen}><div className={styles.context}><LuHospital aria-hidden="true" /><label>المنشأة<select aria-label="المنشأة" value={facilityId} onChange={event => { cancelSearchRef.current?.(); router.push(`/services-procedures?facility_id=${event.target.value}`); }}>{allowed.map(entry => <option key={entry.facility.id} value={entry.facility.id}>{entry.facility.name_ar}</option>)}</select></label></div>
+  return <div className={styles.screen}><div className={styles.context}><LuHospital aria-hidden="true" /><span>سياق المنشأة</span><strong>{entry.facility.name_ar}</strong><span className={styles.contextCaption}>الدليل مشترك · المؤشرات ضمن المنشأة</span></div>
     <Workspace key={`${facilityId}:${kind ?? ""}:${itemId ?? ""}:${user.id}`} facilityId={facilityId!} kind={kind as Kind | undefined} itemId={itemId} cancelSearchRef={cancelSearchRef} />
   </div>;
 }
@@ -61,31 +66,31 @@ function Workspace({ facilityId, kind, itemId, cancelSearchRef }: { facilityId: 
   }
   const exports = caps?.export && <div className={styles.actions}>{!detail && <button className={styles.secondary} disabled={!ready || exporting} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button>}<button className={styles.secondary} disabled={!ready || exporting} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />{detail ? "تقرير التفاصيل PDF" : "PDF"}</button></div>;
   const open = (mode: "edit" | "patients" | "history" | Action, item: Item) => setModal({ mode, kind: item.kind, item });
+  function lifecycle(item: Item) {
+    return <div className={styles.actions}><LifecycleActions disabled={!ready} record={item} name={item.name_ar} canUpdate={!!caps?.update} onAction={action => { if (ready) open(action, item); }} />{caps?.delete && !item.archived_at && <button className={styles.textButton} disabled={!ready} aria-label={`أرشفة ${item.name_ar}`} onClick={() => open("archive", item)}>أرشفة</button>}</div>;
+  }
   function actions(item: Item) {
-    const available: Action[] = item.archived_at ? ["restore"] : item.is_active ? ["deactivate"] : ["reactivate"];
-    return <div className={styles.rowActions}><details><summary>إجراءات {item.name_ar}</summary><div className={styles.actions}>
-      {!detail && <Link href={`/services-procedures/${item.kind}/${item.id}?${encoded}`}>التفاصيل</Link>}
-      {caps?.update && !item.archived_at && <button className={styles.textButton} disabled={!ready} onClick={() => open("edit", item)}>تعديل</button>}
-      {caps?.update && available.map(action => <button className={styles.textButton} key={action} disabled={!ready} onClick={() => open(action, item)}>{actionNames[action]}</button>)}
-      {caps?.delete && !item.archived_at && <button className={styles.textButton} disabled={!ready} onClick={() => open("archive", item)}>أرشفة</button>}
-      {caps?.delete && <button className={`${styles.textButton} ${styles.dangerText}`} disabled={!ready} onClick={() => open("delete", item)}>حذف</button>}
-    </div></details></div>;
+    return <DirectoryRowActions name={item.name_ar} href={`/services-procedures/${item.kind}/${item.id}?${encoded}`} disabled={!ready} onEdit={caps?.update && !item.archived_at ? () => open("edit", item) : undefined} onDelete={caps?.delete ? () => open("delete", item) : undefined}>{lifecycle(item)}</DirectoryRowActions>;
+  }
+  function detailActions(item: Item) {
+    return <div className={styles.actions}>{caps?.update && !item.archived_at && <button className={styles.primary} disabled={!ready} onClick={() => open("edit", item)}><LuSquarePen aria-hidden="true" />تعديل {kindName(item.kind)}</button>}{caps?.delete && <button className={styles.secondary} disabled={!ready} onClick={() => open("delete", item)} aria-label={`حذف ${item.name_ar}`}>حذف أو أرشفة</button>}{lifecycle(item)}{exports}</div>;
   }
   function count(item: Item) { return caps?.beneficiaries ? <button className={styles.countButton} disabled={!ready} aria-label={`المستفيدون من ${item.name_ar}: ${item.patient_count}`} onClick={() => open("patients", item)}>{item.patient_count}</button> : <span>{item.patient_count}</span>; }
   return <>
-    {detail && <Link className={styles.back} href={`/services-procedures?${encoded}`}>العودة إلى الخدمات والإجراءات</Link>}
-    <div className={styles.heading}><div><p className={styles.eyebrow}>الدليل الطبي</p><h2>{detail ? record.data?.data.name_ar ?? "تفاصيل التعريف" : "الخدمات والإجراءات"}</h2><p>تعريفات الدليل المشتركة، وإحصاءات المستفيدين ضمن المنشأة.</p></div>{!detail && caps?.create && <div className={styles.actions}>{(["service", "procedure"] as Kind[]).map(kind => <button key={kind} className={styles.primary} disabled={!ready} onClick={() => setModal({ mode: "edit", kind })}><LuPlus aria-hidden="true" />إضافة {kindName(kind)}</button>)}</div>}</div>
+    {detail && <DirectoryBack href={`/services-procedures?${encoded}`}>العودة إلى الخدمات والإجراءات</DirectoryBack>}
+    <div className={styles.heading}><div><p className={styles.eyebrow}>{detail && record.data ? <>بطاقة {kindName(record.data.data.kind)} · <bdi>{record.data.data.code}</bdi></> : "الدليل الطبي / الخدمات والإجراءات"}</p><h2>{detail ? record.data?.data.name_ar ?? "تفاصيل التعريف" : "الخدمات والإجراءات"}</h2><p>{detail && record.data ? <>{record.data.data.classification_name_ar || kindName(record.data.data.kind)} · {stateName(record.data.data)}</> : "تعريفات الدليل المشتركة، وإحصاءات المستفيدين ضمن المنشأة."}</p></div>{!detail && caps?.create && <div className={styles.actions}>{(["service", "procedure"] as Kind[]).map(kind => <button key={kind} className={styles.primary} disabled={!ready} onClick={() => setModal({ mode: "edit", kind })}><LuPlus aria-hidden="true" />إضافة {kindName(kind)}</button>)}</div>}{detail && record.data && detailActions(record.data.data)}</div>
     {exportError && <p role="alert" className={styles.error}>{exportError}</p>}
     {request.loading && <p role="status">{request.data ? "جارٍ تحديث النتائج؛ تظهر النتائج السابقة مؤقتًا والتصدير معطّل." : "جارٍ تحميل الخدمات والإجراءات…"}</p>}
     {request.error && <p role="alert" className={styles.error}>{request.error}{request.data && " المعروض نتائج سابقة؛ يتطلب التصدير نجاح إعادة التحميل."} <button onClick={request.retry}>إعادة التحميل</button></p>}
     {!detail && <section className={styles.panel} aria-label="قائمة الخدمات والإجراءات"><div className={styles.toolbar}><label className={styles.search}><span><LuSearch aria-hidden="true" />البحث بالاسم أو الكود</span><input type="search" value={search} onChange={e => change(e.target.value)} placeholder="ابحث عن خدمة أو إجراء…" /></label>{exports}</div>
       <div className={styles.filters}><label>النوع<select value={query.get("kind") ?? ""} onChange={e => filter("kind", e.target.value)}><option value="">الكل</option><option value="service">الخدمات</option><option value="procedure">الإجراءات</option></select></label><label>الحالة<select value={query.get("status") ?? ""} onChange={e => filter("status", e.target.value)}><option value="">الفعال والمعطل</option><option value="active">فعال</option><option value="inactive">غير فعال</option><option value="archived">مؤرشف</option></select></label><label>الترتيب<select value={query.get("sort") ?? "code"} onChange={e => filter("sort", e.target.value)}>{["code", "name_ar", "kind", "patient_count", "is_active"].map(key => <option key={key} value={key}>{columns[key as Column]}</option>)}</select></label><label>الاتجاه<select value={query.get("direction") ?? "asc"} onChange={e => filter("direction", e.target.value)}><option value="asc">تصاعدي</option><option value="desc">تنازلي</option></select></label><ColumnMenu labels={columns} visible={visible} onChange={setVisible} /></div>
       <div className={styles.resultSummary}><strong>{list.data?.meta.total ?? "—"} عنصر</strong><span>التصدير يشمل جميع النتائج المطابقة والأعمدة المختارة، حتى 1000 عنصر.</span></div>
-      <div className={styles.tableScroll} aria-busy={list.loading}><table><thead><tr>{visible.map(key => <th key={key}>{columns[key]}</th>)}<th>الإجراءات المتاحة</th></tr></thead><tbody>{list.data?.data.map((item, index) => <tr key={`${item.kind}:${item.id}`}>{visible.map(key => <td key={key}>{key === "number" ? (list.data!.meta.page - 1) * list.data!.meta.per_page + index + 1 : key === "code" ? <Link className={styles.code} href={`/services-procedures/${item.kind}/${item.id}?${encoded}`}><bdi>{item.code}</bdi></Link> : key === "kind" ? <span className={styles.badge}>{kindName(item.kind)}</span> : key === "patient_count" ? count(item) : key === "is_active" ? <span className={item.is_active && !item.archived_at ? styles.active : styles.inactive}>{stateName(item)}</span> : key === "description" ? <LongText text={item.description} /> : item.name_ar}</td>)}<td>{actions(item)}</td></tr>)}</tbody></table></div>
+      <DirectoryTable label="جدول الخدمات والإجراءات" busy={list.loading || searching} headers={[...visible.map(key => columns[key]), "الإجراءات"]}>{list.data?.data.map((item, index) => <tr key={`${item.kind}:${item.id}`}>{visible.map(key => <td key={key} className={key === "code" || key === "kind" ? styles.identifierCell : undefined}>{key === "number" ? (list.data!.meta.page - 1) * list.data!.meta.per_page + index + 1 : key === "code" ? <Link className={styles.code} href={`/services-procedures/${item.kind}/${item.id}?${encoded}`}><bdi>{item.code}</bdi></Link> : key === "kind" ? <span className={styles.badge}>{kindName(item.kind)}</span> : key === "patient_count" ? count(item) : key === "is_active" ? <span className={item.is_active && !item.archived_at ? styles.active : styles.inactive}>{stateName(item)}</span> : key === "description" ? <LongText text={item.description} /> : <div className={styles.clinicName}><strong>{item.name_ar}</strong>{item.classification_name_ar && <small>{item.classification_name_ar}</small>}</div>}</td>)}<td>{actions(item)}</td></tr>)}</DirectoryTable>
       {list.data && !list.data.data.length && <p className={styles.status}>لا توجد نتائج مطابقة. جرّب تغيير البحث أو الفلاتر.</p>}{list.data && <Pagination meta={list.data.meta} onPage={page => filter("page", String(page))} onPageSize={value => filter("per_page", value)} />}
     </section>}
-    {detail && record.data && <section className={styles.detailPanel}><div className={styles.actions}>{actions(record.data.data)}{exports}<button className={styles.secondary} onClick={refreshed}>إعادة تحميل البيانات</button></div><dl className={styles.facts}><div><dt>الكود</dt><dd><bdi>{record.data.data.code}</bdi></dd></div><div><dt>النوع</dt><dd>{kindName(record.data.data.kind)}</dd></div><div><dt>الحالة</dt><dd>{stateName(record.data.data)}</dd></div><div><dt>عدد المستفيدين</dt><dd>{count(record.data.data)}</dd></div></dl><h3>الوصف</h3><p className={styles.description}>{record.data.data.description || "لا يوجد وصف."}</p><p className={styles.hint}>{record.data.data.patient_count_definition}</p><h3>الارتباطات</h3><p className={styles.hint}>لا توجد ارتباطات تعريف مباشرة بالعيادات؛ تقديم الخدمة أو الإجراء يُسجّل كحدث علاجي مستقل، وتحفظ الأرشفة أحداثه السابقة.</p>{caps?.audit && <button className={styles.secondary} onClick={() => open("history", record.data!.data)}>سجل التغييرات</button>}</section>}
-    {modal?.mode === "edit" && <CatalogEditor kind={modal.kind} item={modal.item} facilityId={facilityId} onClose={() => setModal(null)} onSaved={saved} onRefresh={refreshed} />}
+    {detail && record.data && <><section className={styles.detailPanel}><h3>وصف {kindName(record.data.data.kind)}</h3><p className={styles.description}>{record.data.data.description || "لا يوجد وصف مسجل."}</p><dl className={styles.facts}><div><dt>الكود</dt><dd><bdi>{record.data.data.code}</bdi></dd></div><div><dt>{record.data.data.kind === "service" ? "فئة الخدمة" : "نوع الإجراء"}</dt><dd>{record.data.data.classification_name_ar || "غير محدد"}</dd></div><div><dt>الحالة</dt><dd><span className={record.data.data.is_active && !record.data.data.archived_at ? styles.active : styles.inactive}>{stateName(record.data.data)}</span></dd></div><div><dt>عدد المرضى الفريدين</dt><dd>{record.data.data.patient_count}</dd></div></dl><p className={styles.hint}>{record.data.data.patient_count_definition}</p></section>
+      <section className={styles.detailPanel}><h3>المرضى المستفيدون وتواريخ التقديم</h3>{caps?.beneficiaries ? <CatalogEvents item={record.data.data} facilityId={facilityId} revision={revision} /> : <p className={styles.hint}>لا تملك صلاحية استعراض المستفيدين في هذه المنشأة.</p>}</section></>}
+    {modal?.mode === "edit" && <CatalogEditor canCreateCategory={caps?.create} kind={modal.kind} item={modal.item} facilityId={facilityId} onClose={() => setModal(null)} onSaved={saved} onRefresh={refreshed} />}
     {modal?.item && (modal.mode === "patients" || modal.mode === "history") && <CatalogRelated item={modal.item} facilityId={facilityId} history={modal.mode === "history"} onClose={() => setModal(null)} />}
     {modal?.item && ["delete", "archive", "restore", "deactivate", "reactivate"].includes(modal.mode) && <CatalogLifecycle item={modal.item} action={modal.mode as Action} facilityId={facilityId} onClose={() => { setModal(null); refreshed(); }} onSaved={action => { if (detail && action === "delete") router.push(`/services-procedures?${encoded}`); saved(); }} />}
   </>;

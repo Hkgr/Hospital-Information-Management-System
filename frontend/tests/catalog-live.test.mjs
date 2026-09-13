@@ -68,8 +68,8 @@ for (const kind of ["service", "procedure"]) test(`${kind}: browser independentl
   const page = await context.newPage(); page.setDefaultTimeout(5000);
   try {
     await page.goto(`${base}/services-procedures${kind === "procedure" ? path : ""}?facility_id=${f.facility}&search=${row.code}`);
-    await page.getByText(`إجراءات ${row.name_ar}`, { exact: true }).click();
-    await page.getByRole("button", { name: "أرشفة", exact: true }).click();
+
+    await page.getByRole("button", { name: `أرشفة ${row.name_ar}`, exact: true }).click();
     const dialog = page.getByRole("dialog"); await dialog.getByText(/تغيير حالته يسري على جميع المنشآت/).waitFor();
     await dialog.getByRole("button", { name: /تأكيد أرشفة/ }).click(); await dialog.waitFor({ state: "hidden" });
     const archived = (await api("GET", path, 200)).data;
@@ -78,8 +78,8 @@ for (const kind of ["service", "procedure"]) test(`${kind}: browser independentl
     if (kind === "procedure") await page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click();
     await page.getByRole("combobox", { name: "الحالة", exact: true }).selectOption("archived");
     await page.getByRole("link", { name: row.code, exact: true }).waitFor();
-    await page.getByText(`إجراءات ${row.name_ar}`, { exact: true }).click(); assert.equal(await page.getByRole("button", { name: "أرشفة", exact: true }).count(), 0);
-    await page.getByRole("button", { name: "استعادة كغير فعال", exact: true }).click();
+     assert.equal(await page.getByRole("button", { name: `أرشفة ${row.name_ar}`, exact: true }).count(), 0);
+    await page.getByRole("button", { name: `استعادة ${row.name_ar}`, exact: true }).click();
     await dialog.getByRole("button", { name: "تأكيد استعادة كغير فعال", exact: true }).click(); await dialog.waitFor({ state: "hidden" });
     const restored = (await api("GET", path, 200)).data;
     assert.equal(restored.archived_at, null); assert.equal(restored.is_active, false); assert.equal(restored.lock_version, 3);
@@ -88,7 +88,7 @@ for (const kind of ["service", "procedure"]) test(`${kind}: browser independentl
   } finally { await context.close(); }
 });
 
-test("real browser creates both kinds, reads patient list/details/history and revisits filtered list", async () => {
+test("real browser creates both kinds, reads presentation dates/details and revisits filtered list", async () => {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.addInitScript(token => sessionStorage.setItem("hospital.bearer", token), f.token);
   const page = await context.newPage(); page.setDefaultTimeout(15000);
@@ -109,10 +109,85 @@ test("real browser creates both kinds, reads patient list/details/history and re
     await page.locator('a[href^="/services-procedures/service/"]').first().waitFor({ state: "hidden" });
     const detailLink = page.getByRole("link", { name: `${f.tag}-001`, exact: true }); await detailLink.waitFor(); await detailLink.click();
     await page.getByRole("heading", { name: "إجراء اختبار 1", exact: true }).waitFor();
-    await page.getByRole("button", { name: "المستفيدون من إجراء اختبار 1: 3", exact: true }).click(); await page.getByText(`${f.tag}-P8`, { exact: true }).waitFor();
+    await page.getByRole("region", { name: "جدول المرضى المستفيدين وتواريخ التقديم", exact: true }).getByText(`${f.tag}-P8`, { exact: true }).waitFor();
     await mkdir(".superdesign/catalog-review", { recursive: true }); await page.screenshot({ path: ".superdesign/catalog-review/live-beneficiaries.png", fullPage: true });
-    await page.keyboard.press("Escape"); await page.getByRole("button", { name: "سجل التغييرات", exact: true }).click(); await page.getByRole("dialog").getByText("6 حدث مطابق", { exact: true }).waitFor(); await page.keyboard.press("Escape");
+    assert.equal(await page.getByRole("button", { name: "سجل التغييرات", exact: true }).count(), 0);
     await page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click(); assert.equal(await page.getByRole("searchbox").inputValue(), f.tag);
     await page.screenshot({ path: ".superdesign/catalog-review/live-list.png", fullPage: true }); assert.deepEqual(errors, []);
   } finally { await context.close(); }
+});
+
+test("real default hospital, inline category, repeated presentations, filters and full pagination totals", async () => {
+  const context = await browser.newContext(); await context.addInitScript(token => sessionStorage.setItem("hospital.bearer", token), f.token);
+  const page = await context.newPage(); page.setDefaultTimeout(12000);
+  try {
+    await page.goto(base + "/services-procedures"); await page.getByRole("heading", { name: "الخدمات والإجراءات", exact: true, level: 2 }).waitFor();
+    assert.equal(await page.getByRole("combobox", { name: "المنشأة", exact: true }).count(), 0);
+    assert.equal((await api("GET", "/context", 200)).data.facility.id, f.facility);
+    await page.getByRole("button", { name: "إضافة خدمة", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "إضافة خدمة", exact: true });
+    await editor.getByLabel("الكود *", { exact: true }).fill("INLINE-" + f.tag); await editor.getByLabel("الاسم *", { exact: true }).fill("خدمة الفئة الجديدة");
+    await editor.getByRole("button", { name: "إضافة فئة", exact: true }).click();
+    const category = page.getByRole("dialog", { name: "إضافة فئة", exact: true });
+    await category.getByLabel("رمز الفئة", { exact: true }).fill(f.facility_code); await category.getByLabel("اسم الفئة", { exact: true }).fill("فئة أُنشئت من الخدمة");
+    await category.getByRole("button", { name: "حفظ الفئة", exact: true }).click(); await category.getByText(/رمز الفئة مستخدم بالفعل/).waitFor();
+    await category.getByLabel("رمز الفئة", { exact: true }).fill("INLINE-" + f.tag); await category.getByRole("button", { name: "حفظ الفئة", exact: true }).click(); await category.waitFor({ state: "hidden" });
+    const categoryId = Number(await editor.getByRole("combobox", { name: /فئة الخدمة/ }).inputValue()); assert.ok(categoryId > 0 && categoryId !== f.category);
+    assert.equal(await editor.getByLabel("الاسم *", { exact: true }).inputValue(), "خدمة الفئة الجديدة");
+    await editor.getByRole("button", { name: "حفظ التعريف", exact: true }).click(); await editor.waitFor({ state: "hidden" });
+    assert.equal((await api("GET", "", 200, { search: "INLINE-" + f.tag, kind: "service" })).data[0].category_id, categoryId);
+    await api("POST", "/categories", 403, { code: "DENIED", name_ar: "مرفوض", is_active: true }, f.viewer_token);
+    for (const kind of ["service", "procedure"]) {
+      const path = "/" + kind + "/" + f.items[kind][1];
+      const events = await api("GET", path + "/events", 200, { per_page: 10 });
+      assert.equal(events.meta.total, kind === "service" ? 26 : 28); assert.equal(events.totals.unique_patients, kind === "service" ? 2 : 3); assert.equal(events.data.length, 10);
+      await api("GET", path + "/events", 403, undefined, f.viewer_token);
+      await page.goto(base + "/services-procedures" + path);
+      const table = page.getByRole("region", { name: "جدول المرضى المستفيدين وتواريخ التقديم", exact: true }); await table.waitFor();
+      await page.getByText("عدد مرات التقديم: " + events.meta.total + " · كامل النتائج المطابقة", { exact: true }).waitFor();
+      await page.getByRole("searchbox", { name: "البحث عن مستفيد", exact: true }).fill(f.tag + "-P2");
+      await page.getByText("عدد مرات التقديم: 1 · كامل النتائج المطابقة", { exact: true }).waitFor(); assert.equal(await table.locator("tbody tr").count(), 1);
+      await page.getByRole("searchbox").fill("");
+      const yesterday = new Date(f.today + "T12:00:00Z"); yesterday.setUTCDate(yesterday.getUTCDate()-1); const day = yesterday.toISOString().slice(0,10);
+      await page.getByLabel("من تاريخ", { exact: true }).fill(day); await page.getByLabel("إلى تاريخ", { exact: true }).fill(day);
+      await page.getByText("عدد مرات التقديم: 1 · كامل النتائج المطابقة", { exact: true }).waitFor(); await table.getByText(day, { exact: true }).waitFor();
+      await page.getByLabel("من تاريخ", { exact: true }).fill(""); await page.getByLabel("إلى تاريخ", { exact: true }).fill("");
+      await page.getByText("عدد مرات التقديم: " + events.meta.total + " · كامل النتائج المطابقة", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "التالي", exact: true }).click();
+      await page.getByText(/2 من 2/).waitFor(); assert.equal(await table.locator("tbody tr").count(), events.meta.total-20);
+      assert.equal(await page.getByRole("button", { name: "سجل التغييرات", exact: true }).count(), 0);
+    }
+    await page.goto(base + "/services-procedures?facility_id=" + f.other); await page.getByRole("heading", { name: "الخدمات والإجراءات غير متاحة", exact: true }).waitFor();
+  } finally { await context.close(); }
+});
+
+test("actual desktop and mobile comparisons: doctor, clinic, service and procedure lists and details", async () => {
+  const dir = ".superdesign/catalog-consistency-review"; await mkdir(dir, { recursive: true });
+  const contexts = [];
+  try {
+    for (const width of [390, 1440]) {
+      const context = await browser.newContext({ viewport: { width, height: 1000 } }); contexts.push(context);
+      await context.addInitScript(token => sessionStorage.setItem("hospital.bearer", token), f.token);
+      const page = await context.newPage(); page.setDefaultTimeout(12000);
+      const cases = [
+        ["doctors-list", "/doctors?facility_id=" + f.facility, "إدارة الأطباء"],
+        ["clinics-list", "/clinics?facility_id=" + f.facility, "إدارة العيادات"],
+        ["services-list", "/services-procedures?kind=service&search=" + f.tag, "الخدمات والإجراءات"],
+        ["procedures-list", "/services-procedures?kind=procedure&search=" + f.tag, "الخدمات والإجراءات"],
+        ["doctor-detail", "/doctors/" + f.doctor + "?facility_id=" + f.facility, "طبيب اختبار"],
+        ["clinic-detail", "/clinics/" + f.clinic + "?facility_id=" + f.facility, "عيادة اختبار"],
+        ["service-detail", "/services-procedures/service/" + f.items.service[1], "خدمة اختبار 1"],
+        ["procedure-detail", "/services-procedures/procedure/" + f.items.procedure[1], "إجراء اختبار 1"],
+      ];
+      for (const [name, path, heading] of cases) {
+        await page.goto(base + path); await page.getByRole("heading", { name: heading, exact: true, level: 2 }).waitFor();
+        await page.waitForLoadState("networkidle"); await page.evaluate(async () => { await document.fonts.ready; await Promise.all(document.getAnimations().map(a => a.finished.catch(() => {}))); });
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, name + width);
+        const frame = await page.evaluate(() => ({ main: document.querySelector('main').getBoundingClientRect().toJSON(), heading: document.querySelector('main h2').getBoundingClientRect().toJSON(), sidebar: document.querySelector('aside').getBoundingClientRect().toJSON() }));
+        assert.ok(frame.heading.right <= frame.main.right, name + width + JSON.stringify(frame));
+        if (width === 1440) assert.ok(frame.main.right <= frame.sidebar.left + 1, name + JSON.stringify(frame));
+        await page.screenshot({ path: dir + "/" + name + "-" + width + ".png", fullPage: true, animations: "disabled" });
+      }
+    }
+  } finally { await Promise.all(contexts.map(context => context.close())); }
 });

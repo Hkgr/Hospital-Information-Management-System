@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
     return [
       "login", "user", "logout", "dashboards", "dashboards/:key",
       "service-catalog", "service-catalog/options", "service-catalog/classifications", "service-catalog/export/:format(xlsx|pdf)",
+      "service-catalog/context", "service-catalog/categories", "service-catalog/:kind(service|procedure)/:item(\\d+)/events",
       "service-catalog/:kind(service|procedure)/:item(\\d+)", "service-catalog/:kind(service|procedure)/:item(\\d+)/deletion-preview",
       "service-catalog/:kind(service|procedure)/:item(\\d+)/beneficiaries", "service-catalog/:kind(service|procedure)/:item(\\d+)/history",
       "service-catalog/:kind(service|procedure)/:item(\\d+)/report", "service-catalog/:kind(service|procedure)/:item(\\d+)/archive",

@@ -42,6 +42,7 @@
 .tableScroll th { text-align: start; font-weight: 700; background: #eaf3f4; color: #295d66; padding: 16px 14px; white-space: nowrap; border-block: 1px solid #dbe9ec; }
 .tableScroll td { padding: 16px 14px; border-block-end: 1px solid #ecf0f3; vertical-align: middle; font-variant-numeric: tabular-nums; max-inline-size: 260px; overflow-wrap: anywhere; }
 .tableScroll td bdi { unicode-bidi: isolate; }
+.tableScroll .identifierCell { white-space: nowrap; }
 .tableScroll[aria-busy="true"] { box-shadow: inset 0 2px #8dc9cd; }
 .tableScroll tbody tr:last-child td { border-block-end: 0; } .tableScroll tbody tr:hover { background: #f7fbfb; }
 .code { color: var(--mbz-action); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; overflow-wrap: anywhere; }

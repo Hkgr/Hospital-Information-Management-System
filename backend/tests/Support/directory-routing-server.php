@@ -16,6 +16,12 @@ $kernel = $app->make(Kernel::class);
 $kernel->bootstrap();
 TestDatabaseSafety::assertAvailable($app);
 config(['clinics.doctor_staff_types' => ['ROUTING_DOCTOR']]);
+// Only this loopback test entry point reads the guarded synthetic catalog fixture.
+$catalogFixture = storage_path('framework/testing/catalog-live.json');
+if (is_file($catalogFixture)) {
+    $catalog = json_decode(file_get_contents($catalogFixture), true, 512, JSON_THROW_ON_ERROR);
+    config(['catalog.facility_code' => $catalog['facility_code'], 'clinics.doctor_staff_types' => ['ROUTING_DOCTOR', $catalog['facility_code']]]);
+}
 $response = $kernel->handle($request = Request::capture());
 $response->headers->set('X-Test-Laravel', 'directory-routing');
 $response->send();
