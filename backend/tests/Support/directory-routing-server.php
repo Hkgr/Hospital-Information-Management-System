@@ -20,7 +20,7 @@ config(['clinics.doctor_staff_types' => ['ROUTING_DOCTOR']]);
 $catalogFixture = storage_path('framework/testing/catalog-live.json');
 if (is_file($catalogFixture)) {
     $catalog = json_decode(file_get_contents($catalogFixture), true, 512, JSON_THROW_ON_ERROR);
-    config(['catalog.facility_code' => $catalog['facility_code'], 'clinics.doctor_staff_types' => ['ROUTING_DOCTOR', $catalog['facility_code']]]);
+    config(['clinics.doctor_staff_types' => ['ROUTING_DOCTOR', $catalog['facility_code']]]);
 }
 $response = $kernel->handle($request = Request::capture());
 $response->headers->set('X-Test-Laravel', 'directory-routing');

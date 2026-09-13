@@ -12,12 +12,12 @@ after(async () => { await browser?.close(); });
 const rowOf = kind => ({ id: 1, kind, code: kind === "service" ? "S001" : "P001", name_ar: kind === "service" ? "خدمة اختبار" : "إجراء اختبار", description: "الوصف الأصلي", category_id: kind === "service" ? 1 : null, procedure_type_id: null, is_active: true, archived_at: null, lock_version: 1, patient_count: 2, patient_count_definition: "مرضى فريدون ضمن المنشأة، دون الملغى والمسودة." });
 const capabilities = { create: true, update: true, delete: true, export: true, beneficiaries: true, audit: true };
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { resolve, promise }; };
-async function setup({ limited = false, width = 1440, capOverrides = {} } = {}) {
+async function setup({ limited = false, width = 1440, capOverrides = {}, access, initial = "/services-procedures?facility_id=1" } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 960 } });
   await context.addInitScript(() => sessionStorage.setItem("hospital.bearer", "synthetic-ui-token"));
   const page = await context.newPage(); page.setDefaultTimeout(8000);
   const rows = [rowOf("service"), rowOf("procedure")]; const calls = []; let conflict = false, reloadFail = false, failSearch = false, gate = null, detailGate = null;
-  let eventsGate = null;
+  let eventsGate = null, contextGate = null;
   const categories = [{ id: 1, code: "EXISTING", name_ar: "فئة اختبار", is_active: true }];
   const caps = { ...(limited ? { ...capabilities, create: false, update: false, delete: false, beneficiaries: false, audit: false } : capabilities), ...capOverrides };
   await page.route("**/*", async route => {
@@ -25,8 +25,11 @@ async function setup({ limited = false, width = 1440, capOverrides = {} } = {}) 
     if (url.origin !== new URL(base).origin) return route.abort();
     if (!path.startsWith("/hospital-api/")) return route.continue();
     const body = req.postDataJSON(); calls.push({ path, method: req.method(), url, body });
-    if (path.endsWith("/user")) return route.fulfill({ json: { data: { user, access: [1, 2].map(id => ({ facility: { ...facility, id }, roles: [], permissions: ["catalog.view", "catalog.export", ...limited ? [] : ["catalog.beneficiaries", "catalog.audit"]] })) } } });
-    if (path.endsWith("/context")) return route.fulfill({ json: { data: { facility } } });
+    if (path.endsWith("/user")) return route.fulfill({ json: { data: { user, access: access ?? [1, 2].map(id => ({ facility: { ...facility, id }, roles: [], permissions: ["catalog.view", "catalog.export", ...limited ? [] : ["catalog.beneficiaries", "catalog.audit"]] })) } } });
+    if (path.endsWith("/context")) {
+      if (contextGate) { const held = contextGate; contextGate = null; held.started.resolve(); await held.promise; }
+      try { return await route.fulfill({ json: { data: { facility: { ...facility, id: Number(url.searchParams.get("facility_id")) } } } }); } catch { return; }
+    }
     if (path.endsWith("/events")) {
       if (eventsGate) { const held = eventsGate; eventsGate = null; held.started.resolve(); await held.promise; }
       const code = url.searchParams.get("search") || "PAT01";
@@ -61,10 +64,55 @@ async function setup({ limited = false, width = 1440, capOverrides = {} } = {}) 
     }
     return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND", message: "غير موجود" } } });
   });
-  await page.goto(`${base}/services-procedures?facility_id=1`); await page.getByRole("link", { name: "S001", exact: true }).waitFor();
+  await page.goto(base + initial); await page.getByRole("link", { name: "S001", exact: true }).waitFor();
   await page.evaluate(async () => { await document.fonts.ready; await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))); });
-  return { page, rows, calls, setConflict: value => { conflict = value; }, reloadFail: value => { reloadFail = value; }, failSearch: value => { failSearch = value; }, hold: () => { gate = { ...deferred(), started: deferred() }; return gate; }, holdDetail: () => { detailGate = { ...deferred(), started: deferred() }; return detailGate; }, holdEvents: () => { eventsGate = { ...deferred(), started: deferred() }; return eventsGate; }, close: () => context.close() };
+  return { page, rows, calls, setConflict: value => { conflict = value; }, reloadFail: value => { reloadFail = value; }, failSearch: value => { failSearch = value; }, hold: () => { gate = { ...deferred(), started: deferred() }; return gate; }, holdContext: () => { contextGate = { ...deferred(), started: deferred() }; return contextGate; }, holdDetail: () => { detailGate = { ...deferred(), started: deferred() }; return detailGate; }, holdEvents: () => { eventsGate = { ...deferred(), started: deferred() }; return eventsGate; }, close: () => context.close() };
 }
+
+test("facility selection follows identity order and catalog.view, preserves explicit URLs and never falls back", async () => {
+  for (const ids of [[2], [2, 1]]) {
+    const access = [ { facility: { ...facility, id: 9 }, roles: [], permissions: ["doctors.view", "clinics.view"] }, ...ids.map(id => ({ facility: { ...facility, id }, roles: [], permissions: ["catalog.view"] })) ];
+    const s = await setup({ access, initial: "/services-procedures" });
+    try {
+      assert.equal(s.calls.find(call => call.path.endsWith("/context")).url.searchParams.get("facility_id"), "2");
+      assert.equal(s.calls.find(call => call.path === "/hospital-api/service-catalog").url.searchParams.get("facility_id"), "2");
+      assert.equal(await s.page.getByRole("combobox", { name: "المنشأة", exact: true }).count(), 0);
+      for (const invalid of ["9", "999", "", "invalid"]) {
+        const before = s.calls.filter(call => call.path.includes("service-catalog")).length;
+        await s.page.evaluate(value => history.pushState(null, "", `/services-procedures?facility_id=${value}`), invalid);
+        await s.page.getByRole("alert").filter({ hasText: "تعذّر تحديد مشفى" }).waitFor();
+        assert.equal(await s.page.getByRole("link", { name: "S001", exact: true }).count(), 0);
+        assert.equal(s.calls.filter(call => call.path.includes("service-catalog")).length, before);
+      }
+      await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=2&kind=service&search=خدمة&status=active"));
+      await s.page.getByRole("link", { name: "S001", exact: true }).click();
+      await s.page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click();
+      await s.page.getByRole("link", { name: "S001", exact: true }).waitFor();
+      assert.equal(await s.page.getByRole("searchbox").inputValue(), "خدمة");
+      assert.equal(new URL(s.page.url()).searchParams.get("facility_id"), "2");
+      assert.equal(await s.page.getByRole("combobox", { name: "الحالة", exact: true }).inputValue(), "active");
+      access.splice(0); await s.page.reload(); await s.page.getByRole("alert").filter({ hasText: "تعذّر تحديد مشفى" }).waitFor();
+      assert.equal(await s.page.getByRole("link", { name: "S001", exact: true }).count(), 0);
+    } finally { await s.close(); }
+  }
+});
+
+test("late context cannot revive a previous facility and context failure gives a page-level message", async () => {
+  const s = await setup();
+  try {
+    const held = s.holdContext();
+    await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=2")); await held.started.promise;
+    await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=1&search=إجراء"));
+    await s.page.getByRole("link", { name: "P001", exact: true }).waitFor(); held.resolve(); await s.page.waitForTimeout(400);
+    assert.equal(await s.page.getByRole("link", { name: "S001", exact: true }).count(), 0);
+    assert.equal(s.calls.filter(call => call.path === "/hospital-api/service-catalog").at(-1).url.searchParams.get("facility_id"), "1");
+    await s.page.route("**/hospital-api/service-catalog/context?*", route => route.fulfill({ status: 403, json: { error: { code: "CATALOG_ACCESS_DENIED", message: "رفض الوصول" } } }));
+    await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=2"));
+    await s.page.getByRole("alert").filter({ hasText: "تعذّر التحقق من إتاحة المشفى" }).waitFor();
+    assert.equal(await s.page.getByText("تحقق من بيانات الحقول", { exact: false }).count(), 0);
+    assert.equal(await s.page.getByRole("link", { name: "P001", exact: true }).count(), 0);
+  } finally { await s.close(); }
+});
 
 for (const kind of ["service", "procedure"]) test(`${kind}: independent archive requires delete, not update, in list and details`, async () => {
   const s = await setup({ capOverrides: { update: false } }); try {
@@ -155,10 +203,14 @@ test("late search cannot replace a newer result, and facility changes cancel pen
     await Promise.all([s.page.waitForRequest(r => r.url().includes("/export/pdf")), s.page.getByRole("button", { name: "PDF", exact: true }).click()]);
     assert.equal(s.calls.filter(c => c.path.includes("/export/")).at(-1).url.searchParams.get("search"), "إجراء");
     const old = s.hold(); await s.page.getByRole("searchbox").fill("خدمة"); await old.started.promise;
-    await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=2"));
-    await s.page.getByRole("heading", { name: "الخدمات والإجراءات غير متاحة", exact: true }).waitFor(); old.resolve(); await s.page.waitForTimeout(400);
+    const verifying = s.holdContext();
+    await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=2")); await verifying.started.promise;
+    assert.equal(await s.page.getByRole("link", { name: "P001", exact: true }).count(), 0);
+    old.resolve(); await s.page.waitForTimeout(400);
     assert.equal(await s.page.getByRole("button", { name: "Excel", exact: true }).count(), 0);
-    assert.equal(await s.page.getByRole("searchbox").count(), 0);
+    verifying.resolve(); await s.page.getByRole("link", { name: "S001", exact: true }).waitFor();
+    assert.equal(s.calls.filter(call => call.path === "/hospital-api/service-catalog").at(-1).url.searchParams.get("facility_id"), "2");
+    assert.equal(await s.page.getByRole("searchbox").inputValue(), "");
     assert.equal(await s.page.getByRole("combobox", { name: "المنشأة", exact: true }).count(), 0);
   } finally { await s.close(); }
 });

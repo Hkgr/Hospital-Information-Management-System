@@ -14,6 +14,7 @@ import ClinicDoctors, { DoctorList } from "./ClinicDoctors";
 import useClinicSearch from "./useClinicSearch";
 import { ColumnMenu, LongText, Pagination } from "../directory/Controls";
 import { DirectoryTable, DirectoryRowActions, DirectoryBack } from "../directory/DirectoryPrimitives";
+import { directoryFacility } from "../directory/facilityContext";
 import styles from "./clinics.module.css";
 
 const ClinicEditor = dynamic(() => import("./ClinicEditor"), { loading: () => <p role="status">جارٍ فتح النموذج…</p> });
@@ -24,10 +25,8 @@ export default function ClinicScreen({ clinicId }: { clinicId?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const cancelSearchRef = useRef<(() => void) | null>(null);
-  const allowed = access.filter(entry => entry.permissions.includes("clinics.view"));
-  const requested = query.get("facility_id");
-  const facilityId = requested ? Number(requested) : allowed[0]?.facility.id;
-  const entry = allowed.find(item => item.facility.id === facilityId);
+  // Keep the clinic screen's existing empty-parameter behavior.
+  const { allowed, facilityId, entry } = directoryFacility(access, "clinics.view", query.get("facility_id") || null);
   if (!entry || (clinicId && !/^[1-9]\d*$/.test(clinicId))) return <section className={styles.status}><h2>العيادات غير متاحة</h2><p role="alert">ليس لديك وصول إلى العيادات في المنشأة المطلوبة.</p><Link href="/">العودة إلى لوحة التحكم</Link></section>;
   return <div className={styles.screen}>
     <div className={styles.context}><LuHospital aria-hidden="true" /><span>المنشأة</span>{allowed.length === 1 ? <strong>{entry.facility.name_ar}</strong> : <select aria-label="المنشأة" value={facilityId} onChange={event => { cancelSearchRef.current?.(); const next = new URLSearchParams(); next.set("facility_id", event.target.value); router.push(`/clinics?${next}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select>}</div>

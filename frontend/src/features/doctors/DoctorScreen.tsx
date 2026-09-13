@@ -14,15 +14,14 @@ import RelationFilter from "../directory/RelationFilter";
 import DoctorClinics, { ClinicList } from "./DoctorClinics";
 import { columns, columnKeys, downloadReport, useDirectoryRequest, type Capabilities, type Column, type Doctor, type Options, type Page } from "./api";
 import { DirectoryTable, DirectoryRowActions, DirectoryBack } from "../directory/DirectoryPrimitives";
+import { directoryFacility } from "../directory/facilityContext";
 import styles from "../clinics/clinics.module.css";
 
 const DoctorEditor = dynamic(() => import("./DoctorEditor"), { loading: () => <p role="status">جارٍ فتح النموذج…</p> });
 
 export default function DoctorScreen({ doctorId }: { doctorId?: string }) {
   const { access } = useIdentity(); const query = useSearchParams(); const router = useRouter(); const cancelRef = useRef<(() => void) | null>(null);
-  const allowed = access.filter(entry => entry.permissions.includes("doctors.view"));
-  const facilityId = query.has("facility_id") ? Number(query.get("facility_id")) : allowed[0]?.facility.id;
-  const entry = allowed.find(item => item.facility.id === facilityId);
+  const { allowed, facilityId, entry } = directoryFacility(access, "doctors.view", query.get("facility_id"));
   if (!entry || (doctorId && !/^[1-9]\d*$/.test(doctorId))) return <section className={styles.status}><h2>الأطباء غير متاحين</h2><p role="alert">ليس لديك وصول إلى دليل الأطباء في المنشأة المطلوبة.</p><Link href="/">العودة إلى لوحة التحكم</Link></section>;
   return <div className={styles.screen}><div className={styles.context}><LuHospital aria-hidden="true" /><span>سياق المنشأة</span>{allowed.length === 1 ? <strong>{entry.facility.name_ar}</strong> : <select aria-label="المنشأة" value={facilityId} onChange={e => { cancelRef.current?.(); router.push(`/doctors?facility_id=${e.target.value}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select>}<span className={styles.contextCaption}>الدليل مشترك · المؤشرات ضمن المنشأة</span></div>
     <DoctorWorkspace key={`${facilityId}:${doctorId ?? "list"}`} facilityId={entry.facility.id} doctorId={doctorId} cancelRef={cancelRef} />

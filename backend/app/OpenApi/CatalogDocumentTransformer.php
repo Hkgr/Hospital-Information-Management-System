@@ -75,7 +75,7 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
                     }
                     if (str_ends_with($route, '/context')) {
                         $fields = ['data' => $this->object(['facility' => $this->object(['id' => new IntegerType, 'code' => new StringType, 'name_ar' => new StringType, 'timezone' => new StringType])])];
-                        $operation->description .= '\nResolves CATALOG_FACILITY_CODE, validates active facility and catalog.view. No first-facility fallback; missing configuration returns CATALOG_FACILITY_UNCONFIGURED (422).';
+                        $operation->description .= '\nRequires explicit facility_id selected from the authenticated identity, as in doctors/clinics: URL facility_id takes precedence; when absent the UI uses the first entry with catalog.view in identity order. Validates current active facility and catalog.view; no fallback for an inaccessible ID, no catalog-specific environment configuration. Missing/invalid facility_id returns field validation 422; inaccessible/inactive facility returns 403 without facility data.';
                     }
                     if (str_ends_with($route, '/categories')) {
                         $fields = ['data' => $this->object(['id' => new IntegerType, 'code' => new StringType, 'name_ar' => new StringType, 'is_active' => new BooleanType])];
@@ -102,7 +102,7 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
                 $errors = new ObjectType;
                 $errors->additionalProperties = $this->list(new StringType);
                 $operation->addResponse(Response::make(422)->setDescription('Invalid fields, duplicate code or export limit.')->setContent('application/json', Schema::fromType((new AnyOf)->setItems([
-                    $this->object(['message' => new StringType, 'errors' => $errors]), $this->object(['error' => $this->object(['code' => (new StringType)->enum(['EXPORT_LIMIT_EXCEEDED', 'CATALOG_FACILITY_UNCONFIGURED']), 'message' => new StringType])]),
+                    $this->object(['message' => new StringType, 'errors' => $errors]), $this->object(['error' => $this->object(['code' => (new StringType)->enum(['EXPORT_LIMIT_EXCEEDED']), 'message' => new StringType])]),
                 ]))));
             }
         }

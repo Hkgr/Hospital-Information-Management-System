@@ -22,7 +22,6 @@ class CatalogWorkflowTest extends TestCase
         parent::setUp();
         $this->f = CatalogFixture::make();
         $this->token = $this->f['user']->createToken('workflow', ['api'])->plainTextToken;
-        config(['catalog.facility_code' => 'CAT-'.$this->f['tag']]);
     }
 
     private function api(string $method, string $path, array $data = [], ?string $token = null)
@@ -32,16 +31,28 @@ class CatalogWorkflowTest extends TestCase
         return $this->json($method, '/api/service-catalog'.$path, $data + ['facility_id' => $this->f['facility']], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
     }
 
-    public function test_designated_facility_fails_closed_without_any_fallback(): void
+    public function test_selected_facility_needs_no_catalog_configuration_and_never_falls_back(): void
     {
-        $this->api('GET', '/context')->assertOk()->assertJsonPath('data.facility.id', $this->f['facility'])->assertHeader('Cache-Control', 'no-store, private');
-        config(['catalog.facility_code' => null]);
-        $this->api('GET', '/context')->assertUnprocessable()->assertJsonPath('error.code', 'CATALOG_FACILITY_UNCONFIGURED');
-        config(['catalog.facility_code' => 'OTHER-'.$this->f['tag']]);
-        $this->api('GET', '/context')->assertForbidden();
-        config(['catalog.facility_code' => 'CAT-'.$this->f['tag']]);
+        foreach ([null, 'OLD-NONEXISTENT-CODE'] as $obsoleteSetting) {
+            config(['catalog.facility_code' => $obsoleteSetting]);
+            $this->api('GET', '/context')->assertOk()->assertJsonPath('data.facility.id', $this->f['facility'])->assertHeader('Cache-Control', 'no-store, private');
+        }
+        $viewer = $this->f['viewer']->createToken('context-only', ['api'])->plainTextToken;
+        $role = DB::table('facility_user_roles')->where('user_id', $this->f['viewer']->id)->value('role_id');
+        DB::table('role_permissions')->where('role_id', $role)->where('permission_id', '!=', DB::table('permissions')->where('code', 'catalog.view')->value('id'))->delete();
+        $this->api('GET', '/context', [], $viewer)->assertOk()->assertJsonPath('data.facility.id', $this->f['facility']);
+        $this->api('GET', '', [], $viewer)->assertOk()->assertJsonPath('capabilities.beneficiaries', false)->assertJsonPath('capabilities.create', false);
+        $this->api('GET', '/context', ['facility_id' => $this->f['other']], $viewer)->assertForbidden()->assertJsonMissingPath('data');
+        DB::table('facility_user_roles')->insert(['user_id' => $this->f['viewer']->id, 'facility_id' => $this->f['other'], 'role_id' => $role]);
+        $this->api('GET', '/context', ['facility_id' => $this->f['other']], $viewer)->assertOk()->assertJsonPath('data.facility.id', $this->f['other']);
+        foreach ([null, '', 'invalid', 0] as $invalid) {
+            $this->api('GET', '/context', ['facility_id' => $invalid])->assertUnprocessable()->assertJsonValidationErrors('facility_id');
+        }
         DB::table('facilities')->where('id', $this->f['facility'])->update(['is_active' => false]);
-        $this->api('GET', '/context')->assertForbidden();
+        $this->api('GET', '/context', [], $viewer)->assertForbidden()->assertJsonMissingPath('data');
+        $this->api('GET', '', [], $viewer)->assertForbidden()->assertJsonMissingPath('data');
+        DB::table('role_permissions')->where('role_id', $role)->delete();
+        $this->api('GET', '/context', ['facility_id' => $this->f['other']], $viewer)->assertForbidden()->assertJsonMissingPath('data');
     }
 
     public function test_category_creation_requires_global_authority_and_validates_unique_code(): void

@@ -30,6 +30,14 @@ if (($argv[1] ?? '') === 'prepare') {
         foreach (DB::table('permissions')->where(fn ($q) => $q->whereLike('code', 'clinics.%')->orWhereLike('code', 'doctors.%'))->pluck('id') as $permission) {
             DB::table('role_permissions')->insertOrIgnore(['role_id' => $role, 'permission_id' => $permission]);
         }
+        $f['second'] = DB::table('facilities')->insertGetId(['code' => 'ZZZ-'.$f['tag'], 'name_ar' => 'منشأة ثانية للاختبار', 'timezone' => 'Asia/Damascus']);
+        $f['inactive'] = DB::table('facilities')->insertGetId(['code' => 'INACTIVE-'.$f['tag'], 'name_ar' => 'منشأة اختبار غير فعالة', 'is_active' => false, 'timezone' => 'Asia/Damascus']);
+        foreach ([$f['second'], $f['inactive']] as $facility) {
+            DB::table('facility_user_roles')->insert(['user_id' => $f['user']->id, 'role_id' => $role, 'facility_id' => $facility]);
+        }
+        // This single-facility account has catalog.view only, with no directory or medical authority.
+        $viewerRole = DB::table('facility_user_roles')->where('user_id', $f['viewer']->id)->value('role_id');
+        DB::table('role_permissions')->where('role_id', $viewerRole)->where('permission_id', '!=', DB::table('permissions')->where('code', 'catalog.view')->value('id'))->delete();
         $f['doctor'] = DB::table('staff')->where('staff_code', $f['facility_code'])->value('id');
         $f['clinic'] = DB::table('clinics')->insertGetId(['facility_id' => $f['facility'], 'code' => 'CLINIC-'.$f['tag'], 'name_ar' => 'عيادة اختبار', 'description' => 'وصف اختباري']);
         foreach (['service', 'procedure'] as $kind) {
