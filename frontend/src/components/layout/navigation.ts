@@ -9,7 +9,7 @@ export const primaryNavigation: NavigationItem[] = [
   { label: "المرضى", icon: LuUsersRound },
   { label: "الأطباء", icon: LuStethoscope, href: "/doctors", permission: "doctors.view" },
   { label: "العيادات", icon: LuHospital, href: "/clinics", permission: "clinics.view" },
-  { label: "الخدمات والإجراءات", icon: LuClipboardPlus },
+  { label: "الخدمات والإجراءات", icon: LuClipboardPlus, href: "/services-procedures", permission: "catalog.view" },
   { label: "الأدوية", icon: LuPill },
   { label: "تقارير", icon: LuChartNoAxesCombined },
   { label: "السجل", icon: LuHistory },

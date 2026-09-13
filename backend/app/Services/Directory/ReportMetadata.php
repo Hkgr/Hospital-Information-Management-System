@@ -16,7 +16,9 @@ class ReportMetadata
             $sequence = DB::table('number_sequences')->where($key)->lockForUpdate()->first();
             DB::table('number_sequences')->where('id', $sequence->id)->update(['current_value' => $sequence->current_value + 1, 'updated_at' => now()]);
 
-            return ($entity === 'clinic' ? 'CL' : 'DR').'-'.$facility['id'].'-'.$issued->format('Y').'-'.str_pad((string) ($sequence->current_value + 1), 6, '0', STR_PAD_LEFT);
+            return match ($entity) {
+                'clinic' => 'CL', 'catalog' => 'SP', default => 'DR'
+            }.'-'.$facility['id'].'-'.$issued->format('Y').'-'.str_pad((string) ($sequence->current_value + 1), 6, '0', STR_PAD_LEFT);
         }, 3);
         $parts = [];
         if (isset($filters['search'])) {
@@ -36,7 +38,7 @@ class ReportMetadata
         }
         $parts[] = 'الترتيب: '.($labels[$filters['sort'] ?? 'code'] ?? 'الحالة').' '.(($filters['direction'] ?? 'asc') === 'desc' ? 'تنازليًا' : 'تصاعديًا');
 
-        return ['title' => $entity === 'clinic' ? ($detail ? 'تفاصيل عيادة' : 'قائمة العيادات') : ($detail ? 'تفاصيل طبيب' : 'قائمة الأطباء'),
+        return ['title' => $entity === 'catalog' ? ($detail ? 'تفاصيل خدمة أو إجراء' : 'الخدمات والإجراءات') : ($entity === 'clinic' ? ($detail ? 'تفاصيل عيادة' : 'قائمة العيادات') : ($detail ? 'تفاصيل طبيب' : 'قائمة الأطباء')),
             'number' => $number, 'issued_at' => $issued->format('Y-m-d H:i:s'), 'timezone' => $facility['timezone'],
             'issuer' => $request->user()->name, 'facility' => $facility['name_ar'], 'filters' => $detail ? 'تقرير تفاصيل مستقل ضمن المنشأة المحددة' : implode(' | ', $parts), 'definition' => $definition];
     }

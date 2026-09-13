@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
     const api = (process.env.LARAVEL_API_URL || "http://127.0.0.1:8000/api").replace(/\/$/, "");
     return [
       "login", "user", "logout", "dashboards", "dashboards/:key",
+      "service-catalog", "service-catalog/options", "service-catalog/classifications", "service-catalog/export/:format(xlsx|pdf)",
+      "service-catalog/:kind(service|procedure)/:item(\\d+)", "service-catalog/:kind(service|procedure)/:item(\\d+)/deletion-preview",
+      "service-catalog/:kind(service|procedure)/:item(\\d+)/beneficiaries", "service-catalog/:kind(service|procedure)/:item(\\d+)/history",
+      "service-catalog/:kind(service|procedure)/:item(\\d+)/report", "service-catalog/:kind(service|procedure)/:item(\\d+)/archive",
+      "service-catalog/:kind(service|procedure)/:item(\\d+)/restore", "service-catalog/:kind(service|procedure)/:item(\\d+)/deactivate",
+      "service-catalog/:kind(service|procedure)/:item(\\d+)/reactivate",
       "clinics", "clinics/options/doctors", "clinics/options/specialties", "clinics/export/:format(xlsx|pdf)",
       "clinics/:clinic(\\d+)", "clinics/:clinic(\\d+)/doctors", "clinics/:clinic(\\d+)/deactivate", "clinics/:clinic(\\d+)/report",
       "clinics/:clinic(\\d+)/deletion-preview", "clinics/:clinic(\\d+)/link-history",
