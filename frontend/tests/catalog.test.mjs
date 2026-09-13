@@ -12,12 +12,12 @@ after(async () => { await browser?.close(); });
 const rowOf = kind => ({ id: 1, kind, code: kind === "service" ? "S001" : "P001", name_ar: kind === "service" ? "خدمة اختبار" : "إجراء اختبار", description: "الوصف الأصلي", category_id: kind === "service" ? 1 : null, procedure_type_id: null, is_active: true, archived_at: null, lock_version: 1, patient_count: 2, patient_count_definition: "مرضى فريدون ضمن المنشأة، دون الملغى والمسودة." });
 const capabilities = { create: true, update: true, delete: true, export: true, beneficiaries: true, audit: true };
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { resolve, promise }; };
-async function setup({ limited = false, width = 1440 } = {}) {
+async function setup({ limited = false, width = 1440, capOverrides = {} } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 960 } });
   await context.addInitScript(() => sessionStorage.setItem("hospital.bearer", "synthetic-ui-token"));
   const page = await context.newPage(); page.setDefaultTimeout(8000);
   const rows = [rowOf("service"), rowOf("procedure")]; const calls = []; let conflict = false, reloadFail = false, failSearch = false, gate = null, detailGate = null;
-  const caps = limited ? { ...capabilities, create: false, update: false, delete: false, beneficiaries: false, audit: false } : capabilities;
+  const caps = { ...(limited ? { ...capabilities, create: false, update: false, delete: false, beneficiaries: false, audit: false } : capabilities), ...capOverrides };
   await page.route("**/*", async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname;
     if (url.origin !== new URL(base).origin) return route.abort();
@@ -53,6 +53,30 @@ async function setup({ limited = false, width = 1440 } = {}) {
   await page.evaluate(async () => { await document.fonts.ready; await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))); });
   return { page, rows, calls, setConflict: value => { conflict = value; }, reloadFail: value => { reloadFail = value; }, failSearch: value => { failSearch = value; }, hold: () => { gate = { ...deferred(), started: deferred() }; return gate; }, holdDetail: () => { detailGate = { ...deferred(), started: deferred() }; return detailGate; }, close: () => context.close() };
 }
+
+for (const kind of ["service", "procedure"]) test(`${kind}: independent archive requires delete, not update, in list and details`, async () => {
+  const s = await setup({ capOverrides: { update: false } }); try {
+    const row = s.rows.find(row => row.kind === kind);
+    await s.page.getByText(`إجراءات ${row.name_ar}`, { exact: true }).click();
+    assert.equal(await s.page.getByRole("button", { name: "تعديل", exact: true }).count(), 0);
+    await s.page.getByRole("button", { name: "أرشفة", exact: true }).waitFor();
+    await s.page.getByRole("link", { name: row.code, exact: true }).click();
+    await s.page.getByText(`إجراءات ${row.name_ar}`, { exact: true }).click();
+    await s.page.getByRole("button", { name: "أرشفة", exact: true }).click();
+    const dialog = s.page.getByRole("dialog"); await dialog.getByText(/تغيير حالته يسري على جميع المنشآت/).waitFor();
+    await dialog.getByRole("button", { name: /تأكيد أرشفة/ }).click(); await dialog.waitFor({ state: "hidden" });
+    await s.page.getByText("مؤرشف", { exact: true }).waitFor();
+    assert.equal(s.calls.filter(call => call.path.endsWith("/archive")).length, 1);
+    assert.equal(s.calls.find(call => call.path.endsWith("/archive")).body.lock_version, 1);
+    assert.equal(s.calls.filter(call => call.path.endsWith("/deletion-preview")).length, 0);
+    assert.equal(await s.page.getByRole("button", { name: "أرشفة", exact: true }).count(), 0);
+  } finally { await s.close(); }
+  const denied = await setup({ capOverrides: { delete: false, update: true } }); try {
+    await denied.page.getByText(`إجراءات ${rowOf(kind).name_ar}`, { exact: true }).click();
+    assert.equal(await denied.page.getByRole("button", { name: "أرشفة", exact: true }).count(), 0);
+    await denied.page.getByRole("button", { name: "تعديل", exact: true }).waitFor();
+  } finally { await denied.close(); }
+});
 
 test("typed directory uses distinct identities, filters, and explicit create kinds; validation preserves draft", async () => {
   const s = await setup(); try {

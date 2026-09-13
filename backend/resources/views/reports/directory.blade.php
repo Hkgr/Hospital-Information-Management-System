@@ -35,7 +35,7 @@ th { background: #155c56; color: #fff; font-weight: bold; font-size: 10pt; }
     @php($facts = array_filter($row['details'], fn($label) => !str_starts_with($label, 'عدد '), ARRAY_FILTER_USE_KEY))
     @php($metrics = array_filter($row['details'], fn($label) => str_starts_with($label, 'عدد '), ARRAY_FILTER_USE_KEY))
     <table class="facts">@foreach (array_merge(array_chunk($facts, 2, true), array_chunk($metrics, 2, true)) as $pair)<tr>@foreach ($pair as $label => $value)<td><strong class="label">{{ $label }}</strong><br><span class="{{ str_starts_with($label, 'عدد ') ? 'metric' : '' }}" dir="auto">{{ $value === null || $value === '' ? '—' : $value }}</span></td>@endforeach @if(count($pair) === 1)<td></td>@endif</tr>@endforeach</table>
-    <h2>{{ array_key_exists('name_ar', $row) ? 'توصيف العيادة' : 'التوصيف المهني' }}</h2><div class="fulltext">{{ $row['description'] ?: 'لا يوجد توصيف مسجل.' }}</div>
+    <h2>{{ $descriptionTitle ?? 'التوصيف المهني' }}</h2><div class="fulltext">{{ $row['description'] ?: 'لا يوجد توصيف مسجل.' }}</div>
     <h2>{{ $linkTitle }}</h2><table class="data" autosize="1"><thead><tr><th width="23%">الكود</th><th width="52%">الاسم</th><th width="25%">بداية الارتباط</th></tr></thead><tbody>
     @forelse ($row['links'] as $i => $link)<tr class="{{ $i % 2 ? 'stripe' : '' }}"><td class="ltr">{{ $link['code'] }}</td><td>{{ $link['name'] }}</td><td class="ltr">{{ $link['starts_on'] }}</td></tr>
     @empty<tr><td colspan="3">لا توجد ارتباطات حالية في المنشأة المحددة.</td></tr>@endforelse

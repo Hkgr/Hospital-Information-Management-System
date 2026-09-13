@@ -60,6 +60,34 @@ for (const kind of ["service", "procedure"]) test(`${kind}: actual standalone tr
   await api("GET", "/export/xlsx", 200, { kind, search: row.code, page: 9 }); await api("GET", `${path}/report`, 200);
 });
 
+for (const kind of ["service", "procedure"]) test(`${kind}: browser independently archives an unused definition and restores it inactive`, async () => {
+  const row = (await api("POST", "", 201, { kind, code: `ARCHIVE-${kind}-${f.tag}`, name_ar: `تعريف للأرشفة ${kind}`, is_active: true, ...(kind === "service" ? { category_id: f.category } : {}) })).data;
+  const path = `/${kind}/${row.id}`;
+  assert.equal((await api("GET", `${path}/deletion-preview`, 200)).data.action, "delete");
+  const context = await browser.newContext(); await context.addInitScript(token => sessionStorage.setItem("hospital.bearer", token), f.token);
+  const page = await context.newPage(); page.setDefaultTimeout(5000);
+  try {
+    await page.goto(`${base}/services-procedures${kind === "procedure" ? path : ""}?facility_id=${f.facility}&search=${row.code}`);
+    await page.getByText(`إجراءات ${row.name_ar}`, { exact: true }).click();
+    await page.getByRole("button", { name: "أرشفة", exact: true }).click();
+    const dialog = page.getByRole("dialog"); await dialog.getByText(/تغيير حالته يسري على جميع المنشآت/).waitFor();
+    await dialog.getByRole("button", { name: /تأكيد أرشفة/ }).click(); await dialog.waitFor({ state: "hidden" });
+    const archived = (await api("GET", path, 200)).data;
+    assert.equal(archived.id, row.id); assert.equal(archived.code, row.code); assert.equal(archived.is_active, false); assert.ok(archived.archived_at); assert.equal(archived.lock_version, 2);
+    assert.equal((await api("GET", "/options", 200, { kind, search: row.code })).meta.total, 0);
+    if (kind === "procedure") await page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click();
+    await page.getByRole("combobox", { name: "الحالة", exact: true }).selectOption("archived");
+    await page.getByRole("link", { name: row.code, exact: true }).waitFor();
+    await page.getByText(`إجراءات ${row.name_ar}`, { exact: true }).click(); assert.equal(await page.getByRole("button", { name: "أرشفة", exact: true }).count(), 0);
+    await page.getByRole("button", { name: "استعادة كغير فعال", exact: true }).click();
+    await dialog.getByRole("button", { name: "تأكيد استعادة كغير فعال", exact: true }).click(); await dialog.waitFor({ state: "hidden" });
+    const restored = (await api("GET", path, 200)).data;
+    assert.equal(restored.archived_at, null); assert.equal(restored.is_active, false); assert.equal(restored.lock_version, 3);
+    assert.equal((await api("GET", "/options", 200, { kind, search: row.code })).meta.total, 0);
+    assert.equal((await api("GET", `${path}/history`, 200)).meta.total, 3);
+  } finally { await context.close(); }
+});
+
 test("real browser creates both kinds, reads patient list/details/history and revisits filtered list", async () => {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   await context.addInitScript(token => sessionStorage.setItem("hospital.bearer", token), f.token);

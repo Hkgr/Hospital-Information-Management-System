@@ -67,6 +67,7 @@ function Workspace({ facilityId, kind, itemId, cancelSearchRef }: { facilityId: 
       {!detail && <Link href={`/services-procedures/${item.kind}/${item.id}?${encoded}`}>التفاصيل</Link>}
       {caps?.update && !item.archived_at && <button className={styles.textButton} disabled={!ready} onClick={() => open("edit", item)}>تعديل</button>}
       {caps?.update && available.map(action => <button className={styles.textButton} key={action} disabled={!ready} onClick={() => open(action, item)}>{actionNames[action]}</button>)}
+      {caps?.delete && !item.archived_at && <button className={styles.textButton} disabled={!ready} onClick={() => open("archive", item)}>أرشفة</button>}
       {caps?.delete && <button className={`${styles.textButton} ${styles.dangerText}`} disabled={!ready} onClick={() => open("delete", item)}>حذف</button>}
     </div></details></div>;
   }

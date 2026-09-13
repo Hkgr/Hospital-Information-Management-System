@@ -115,7 +115,7 @@ class DirectoryReportTest extends TestCase
     {
         return [
             'metadata' => ['title' => 'قائمة العيادات', 'facility' => 'منشأة اختبارية', 'number' => 'CL-TEST', 'issuer' => 'اختبار', 'issued_at' => '2026-09-11', 'timezone' => 'Asia/Damascus', 'filters' => 'الحالة: فعال', 'definition' => 'تعريف المؤشر'],
-            'detail' => false, 'linkTitle' => 'الأطباء الحاليون',
+            'detail' => false, 'descriptionTitle' => 'توصيف العيادة', 'linkTitle' => 'الأطباء الحاليون',
             'columns' => ['code', 'name_ar', 'description', 'patient_count'],
             'labels' => ['code' => 'كود العيادة', 'name_ar' => 'اسم العيادة', 'description' => 'التوصيف', 'patient_count' => 'عدد المرضى'],
             'rows' => [['id' => 42, 'name_ar' => '=HYPERLINK("bad")', 'code' => '0001', 'description' => $description, 'patient_count' => 0, 'details' => ['عدد المرضى' => 0], 'links' => []]],

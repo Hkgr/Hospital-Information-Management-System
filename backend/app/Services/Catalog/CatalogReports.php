@@ -41,7 +41,7 @@ class CatalogReports
         }
         unset($row);
         $response = app(DirectoryReport::class)->response(['rows' => $rows, 'columns' => $filters['columns'] ?? array_keys($labels), 'labels' => $labels,
-            'metadata' => $metadata, 'detail' => $id !== null, 'linkTitle' => 'لا توجد ارتباطات تعريف مباشرة بالعيادات في المخطط الحالي'], $format);
+            'metadata' => $metadata, 'detail' => $id !== null, 'descriptionTitle' => $kind === 'service' ? 'وصف الخدمة' : 'وصف الإجراء', 'linkTitle' => 'لا توجد ارتباطات تعريف مباشرة بالعيادات في المخطط الحالي'], $format);
         app(ClinicAudit::class)->record($request, $facility['id'], $id ?? 0, 'exported', null, ['report_number' => $metadata['number'], 'format' => $format, 'row_count' => count($rows)], $kind ?? 'catalog');
 
         return $response;
