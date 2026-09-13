@@ -24,8 +24,10 @@ class CatalogQueries
 
     public function query(array $facility, array $filters, bool $detail = false): Builder
     {
-        $branch = fn ($kind) => DB::table(self::table($kind))->select('id', 'code', 'name_ar', 'description', 'is_active', 'archived_at', 'lock_version')
-            ->selectRaw('? as kind', [$kind])->selectRaw($kind === 'service' ? 'category_id, NULL as procedure_type_id' : 'NULL as category_id, procedure_type_id');
+        $branch = fn ($kind) => DB::table(self::table($kind).' as d')
+            ->leftJoin(($kind === 'service' ? 'service_categories' : 'procedure_types').' as c', 'c.id', '=', $kind === 'service' ? 'd.category_id' : 'd.procedure_type_id')
+            ->select('d.id', 'd.code', 'd.name_ar', 'd.description', 'd.is_active', 'd.archived_at', 'd.lock_version', 'c.name_ar as classification_name_ar')
+            ->selectRaw('? as kind', [$kind])->selectRaw($kind === 'service' ? 'd.category_id, NULL as procedure_type_id' : 'NULL as category_id, d.procedure_type_id');
         $counts = app(CatalogBeneficiaries::class)->facts($facility)->select('kind', 'item_id')->selectRaw('COUNT(DISTINCT patient_id) as patient_count')->groupBy('kind', 'item_id');
         $query = DB::query()->fromSub($branch('service')->unionAll($branch('procedure')), 'catalog')
             ->leftJoinSub($counts, 'counts', fn ($join) => $join->on('counts.kind', '=', 'catalog.kind')->on('counts.item_id', '=', 'catalog.id'))
@@ -58,6 +60,7 @@ class CatalogQueries
         return ['id' => (int) $row->id, 'kind' => $row->kind, 'code' => $row->code, 'name_ar' => $row->name_ar, 'description' => $row->description,
             'is_active' => (bool) $row->is_active, 'archived_at' => $row->archived_at, 'lock_version' => (int) $row->lock_version,
             'category_id' => $row->category_id === null ? null : (int) $row->category_id, 'procedure_type_id' => $row->procedure_type_id === null ? null : (int) $row->procedure_type_id,
+            'classification_name_ar' => $row->classification_name_ar,
             'patient_count' => (int) $row->patient_count, 'patient_count_definition' => CatalogBeneficiaries::DEFINITION];
     }
 

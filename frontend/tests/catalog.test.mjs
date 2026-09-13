@@ -17,6 +17,8 @@ async function setup({ limited = false, width = 1440, capOverrides = {} } = {}) 
   await context.addInitScript(() => sessionStorage.setItem("hospital.bearer", "synthetic-ui-token"));
   const page = await context.newPage(); page.setDefaultTimeout(8000);
   const rows = [rowOf("service"), rowOf("procedure")]; const calls = []; let conflict = false, reloadFail = false, failSearch = false, gate = null, detailGate = null;
+  let eventsGate = null;
+  const categories = [{ id: 1, code: "EXISTING", name_ar: "فئة اختبار", is_active: true }];
   const caps = { ...(limited ? { ...capabilities, create: false, update: false, delete: false, beneficiaries: false, audit: false } : capabilities), ...capOverrides };
   await page.route("**/*", async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname;
@@ -24,7 +26,17 @@ async function setup({ limited = false, width = 1440, capOverrides = {} } = {}) 
     if (!path.startsWith("/hospital-api/")) return route.continue();
     const body = req.postDataJSON(); calls.push({ path, method: req.method(), url, body });
     if (path.endsWith("/user")) return route.fulfill({ json: { data: { user, access: [1, 2].map(id => ({ facility: { ...facility, id }, roles: [], permissions: ["catalog.view", "catalog.export", ...limited ? [] : ["catalog.beneficiaries", "catalog.audit"]] })) } } });
-    if (path.endsWith("/classifications")) return route.fulfill({ json: { data: { categories: [{ id: 1, name_ar: "فئة اختبار" }], procedure_types: [] } } });
+    if (path.endsWith("/context")) return route.fulfill({ json: { data: { facility } } });
+    if (path.endsWith("/events")) {
+      if (eventsGate) { const held = eventsGate; eventsGate = null; held.started.resolve(); await held.promise; }
+      const code = url.searchParams.get("search") || "PAT01";
+      try { return await route.fulfill({ json: { ...paginated([{ key: "visit_service:1", patient_code: code, patient_name: "مريض اختبار", performed_on: "2026-09-12", visit_no: "V01" }]), totals: { unique_patients: 1, presentations: 1 } } }); } catch { return; }
+    }
+    if (path.endsWith("/classifications")) return route.fulfill({ json: { data: { categories: categories.filter(category => category.is_active), procedure_types: [] } } });
+    if (path.endsWith("/categories")) {
+      if (categories.some(category => category.code === body.code)) return route.fulfill({ status: 422, json: { message: "تحقق", errors: { code: ["رمز الفئة مستخدم بالفعل"] } } });
+      const category = { ...body, id: categories.length + 1 }; categories.push(category); return route.fulfill({ status: 201, json: { data: category } });
+    }
     if (path.includes("/export/")) return route.fulfill({ body: "synthetic report", contentType: "application/pdf", headers: { "Content-Disposition": 'attachment; filename="test.pdf"' } });
     const kind = path.includes("/procedure/") ? "procedure" : "service", row = rows.find(row => row.kind === kind);
     if (path.endsWith("/beneficiaries")) return route.fulfill({ json: paginated([{ id: 1, patient_code: "PAT01", first_name: "مريض", family_name: "اختبار" }]) });
@@ -51,30 +63,31 @@ async function setup({ limited = false, width = 1440, capOverrides = {} } = {}) 
   });
   await page.goto(`${base}/services-procedures?facility_id=1`); await page.getByRole("link", { name: "S001", exact: true }).waitFor();
   await page.evaluate(async () => { await document.fonts.ready; await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))); });
-  return { page, rows, calls, setConflict: value => { conflict = value; }, reloadFail: value => { reloadFail = value; }, failSearch: value => { failSearch = value; }, hold: () => { gate = { ...deferred(), started: deferred() }; return gate; }, holdDetail: () => { detailGate = { ...deferred(), started: deferred() }; return detailGate; }, close: () => context.close() };
+  return { page, rows, calls, setConflict: value => { conflict = value; }, reloadFail: value => { reloadFail = value; }, failSearch: value => { failSearch = value; }, hold: () => { gate = { ...deferred(), started: deferred() }; return gate; }, holdDetail: () => { detailGate = { ...deferred(), started: deferred() }; return detailGate; }, holdEvents: () => { eventsGate = { ...deferred(), started: deferred() }; return eventsGate; }, close: () => context.close() };
 }
 
 for (const kind of ["service", "procedure"]) test(`${kind}: independent archive requires delete, not update, in list and details`, async () => {
   const s = await setup({ capOverrides: { update: false } }); try {
     const row = s.rows.find(row => row.kind === kind);
-    await s.page.getByText(`إجراءات ${row.name_ar}`, { exact: true }).click();
-    assert.equal(await s.page.getByRole("button", { name: "تعديل", exact: true }).count(), 0);
-    await s.page.getByRole("button", { name: "أرشفة", exact: true }).waitFor();
+
+    assert.equal(await s.page.getByRole("button", { name: /^تعديل / }).first().count(), 0);
+    await s.page.getByRole("button", { name: `أرشفة ${row.name_ar}`, exact: true }).waitFor();
     await s.page.getByRole("link", { name: row.code, exact: true }).click();
-    await s.page.getByText(`إجراءات ${row.name_ar}`, { exact: true }).click();
-    await s.page.getByRole("button", { name: "أرشفة", exact: true }).click();
+    await s.page.getByRole("heading", { name: row.name_ar, exact: true, level: 2 }).waitFor();
+
+    await s.page.getByRole("button", { name: `أرشفة ${row.name_ar}`, exact: true }).click();
     const dialog = s.page.getByRole("dialog"); await dialog.getByText(/تغيير حالته يسري على جميع المنشآت/).waitFor();
     await dialog.getByRole("button", { name: /تأكيد أرشفة/ }).click(); await dialog.waitFor({ state: "hidden" });
-    await s.page.getByText("مؤرشف", { exact: true }).waitFor();
+    await s.page.getByText("مؤرشف", { exact: true }).first().waitFor();
     assert.equal(s.calls.filter(call => call.path.endsWith("/archive")).length, 1);
     assert.equal(s.calls.find(call => call.path.endsWith("/archive")).body.lock_version, 1);
     assert.equal(s.calls.filter(call => call.path.endsWith("/deletion-preview")).length, 0);
-    assert.equal(await s.page.getByRole("button", { name: "أرشفة", exact: true }).count(), 0);
+    assert.equal(await s.page.getByRole("button", { name: `أرشفة ${row.name_ar}`, exact: true }).count(), 0);
   } finally { await s.close(); }
   const denied = await setup({ capOverrides: { delete: false, update: true } }); try {
-    await denied.page.getByText(`إجراءات ${rowOf(kind).name_ar}`, { exact: true }).click();
-    assert.equal(await denied.page.getByRole("button", { name: "أرشفة", exact: true }).count(), 0);
-    await denied.page.getByRole("button", { name: "تعديل", exact: true }).waitFor();
+
+    assert.equal(await denied.page.getByRole("button", { name: `أرشفة ${rowOf(kind).name_ar}`, exact: true }).count(), 0);
+    await denied.page.getByRole("button", { name: `تعديل ${rowOf(kind).name_ar}`, exact: true }).waitFor();
   } finally { await denied.close(); }
 });
 
@@ -95,7 +108,7 @@ test("typed directory uses distinct identities, filters, and explicit create kin
 
 test("two-user conflict reload failure, explicit field review, repeated conflict and reopening preserve current data", async () => {
   const s = await setup(); try {
-    await s.page.getByText("إجراءات خدمة اختبار", { exact: true }).click(); await s.page.getByRole("button", { name: "تعديل", exact: true }).click();
+    await s.page.getByRole("button", { name: /^تعديل / }).first().click();
     const dialog = s.page.getByRole("dialog"); await dialog.getByRole("textbox", { name: "الوصف", exact: true }).fill("مسودتي المهمة");
     s.rows[0].name_ar = "اسم المستخدم الآخر"; s.rows[0].lock_version = 2; s.setConflict(true);
     await dialog.getByRole("button", { name: "حفظ التعريف" }).click(); await dialog.getByRole("button", { name: "جلب أحدث نسخة" }).waitFor();
@@ -106,8 +119,8 @@ test("two-user conflict reload failure, explicit field review, repeated conflict
     s.setConflict(true); s.rows[0].lock_version = 3; await dialog.getByRole("button", { name: "حفظ التعريف" }).click(); await dialog.getByRole("button", { name: "جلب أحدث نسخة" }).click();
     await dialog.getByLabel("تطبيق مسودتي: الوصف", { exact: true }).check(); await dialog.getByRole("button", { name: "اعتماد الاختيارات للمراجعة" }).click(); await dialog.getByRole("button", { name: "حفظ التعريف" }).click(); await dialog.waitFor({ state: "hidden" });
     const body = s.calls.filter(c => c.method === "PUT").at(-1).body; assert.equal(body.name_ar, "اسم المستخدم الآخر"); assert.equal(body.description, "مسودتي المهمة"); assert.equal(body.lock_version, 3); assert.equal(body.kind, undefined);
-    if (!await s.page.getByRole("button", { name: "تعديل", exact: true }).isVisible()) await s.page.getByText("إجراءات اسم المستخدم الآخر", { exact: true }).click();
-    await s.page.getByRole("button", { name: "تعديل", exact: true }).click(); assert.equal(await s.page.getByRole("dialog").getByRole("textbox", { name: "الوصف", exact: true }).inputValue(), "مسودتي المهمة");
+
+    await s.page.getByRole("button", { name: /^تعديل / }).first().click(); assert.equal(await s.page.getByRole("dialog").getByRole("textbox", { name: "الوصف", exact: true }).inputValue(), "مسودتي المهمة");
   } finally { await s.close(); }
 });
 
@@ -127,7 +140,7 @@ test("beneficiary identities require capability; detail navigation and actual hi
   const s = await setup(); try {
     await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=1&search=خدمة&kind=service")); await s.page.getByRole("link", { name: "P001", exact: true }).waitFor({ state: "hidden" });
     await s.page.getByRole("link", { name: "S001", exact: true }).click(); await s.page.getByRole("heading", { name: "خدمة اختبار", exact: true }).waitFor();
-    await s.page.getByRole("button", { name: "المستفيدون من خدمة اختبار: 2", exact: true }).click(); await s.page.getByText("PAT01", { exact: true }).waitFor(); await s.page.keyboard.press("Escape");
+    await s.page.getByText("PAT01", { exact: true }).waitFor(); await s.page.getByText("2026-09-12", { exact: true }).waitFor(); assert.equal(await s.page.getByRole("button", { name: "سجل التغييرات", exact: true }).count(), 0);
     await s.page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click(); assert.equal(await s.page.getByRole("searchbox").inputValue(), "خدمة");
     await s.page.getByRole("searchbox").fill("قيمة معلقة"); await s.page.goBack(); await s.page.waitForTimeout(500); assert.ok(!s.page.url().includes(encodeURIComponent("قيمة معلقة")));
   } finally { await s.close(); }
@@ -142,19 +155,20 @@ test("late search cannot replace a newer result, and facility changes cancel pen
     await Promise.all([s.page.waitForRequest(r => r.url().includes("/export/pdf")), s.page.getByRole("button", { name: "PDF", exact: true }).click()]);
     assert.equal(s.calls.filter(c => c.path.includes("/export/")).at(-1).url.searchParams.get("search"), "إجراء");
     const old = s.hold(); await s.page.getByRole("searchbox").fill("خدمة"); await old.started.promise;
-    await s.page.getByRole("combobox", { name: "المنشأة", exact: true }).selectOption("2");
-    await s.page.getByRole("link", { name: "S001", exact: true }).waitFor(); old.resolve(); await s.page.waitForTimeout(400);
-    assert.equal(await s.page.getByRole("searchbox").inputValue(), ""); assert.equal(new URL(s.page.url()).searchParams.get("facility_id"), "2");
-    await s.page.getByRole("link", { name: "P001", exact: true }).waitFor();
+    await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=2"));
+    await s.page.getByRole("heading", { name: "الخدمات والإجراءات غير متاحة", exact: true }).waitFor(); old.resolve(); await s.page.waitForTimeout(400);
+    assert.equal(await s.page.getByRole("button", { name: "Excel", exact: true }).count(), 0);
+    assert.equal(await s.page.getByRole("searchbox").count(), 0);
+    assert.equal(await s.page.getByRole("combobox", { name: "المنشأة", exact: true }).count(), 0);
   } finally { await s.close(); }
 });
 
 test("closed conflict reload cannot update a reopened editor; save revision blocks export", async () => {
   const s = await setup(); try {
-    await s.page.getByText("إجراءات خدمة اختبار", { exact: true }).click(); await s.page.getByRole("button", { name: "تعديل", exact: true }).click();
+    await s.page.getByRole("button", { name: /^تعديل / }).first().click();
     s.setConflict(true); await s.page.getByRole("dialog").getByRole("button", { name: "حفظ التعريف" }).click();
     const held = s.holdDetail(); await s.page.getByRole("button", { name: "جلب أحدث نسخة" }).click(); await held.started.promise;
-    await s.page.keyboard.press("Escape"); await s.page.getByRole("button", { name: "تعديل", exact: true }).click();
+    await s.page.keyboard.press("Escape"); await s.page.getByRole("button", { name: /^تعديل / }).first().click();
     const dialog = s.page.getByRole("dialog"); await dialog.getByRole("textbox", { name: "الاسم *", exact: true }).fill("مسودة النافذة الجديدة");
     held.resolve(); await s.page.waitForTimeout(100); assert.equal(await dialog.getByRole("textbox", { name: "الاسم *", exact: true }).inputValue(), "مسودة النافذة الجديدة");
     assert.equal(await dialog.getByRole("button", { name: "جلب أحدث نسخة" }).count(), 0);
@@ -174,5 +188,56 @@ for (const width of [390, 768, 1440]) test(`catalog list/editor are readable and
     assert.equal(await s.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     await s.page.getByRole("button", { name: "إضافة خدمة", exact: true }).click(); await s.page.getByRole("dialog").getByLabel("الكود *", { exact: true }).waitFor(); await s.page.screenshot({ path: `.superdesign/catalog-review/editor-${width}.png`, fullPage: true });
     await s.page.keyboard.press("Escape"); await s.page.getByRole("dialog").waitFor({ state: "hidden" }); assert.equal(await s.page.getByRole("button", { name: "إضافة خدمة", exact: true }).evaluate(el => el === document.activeElement), true);
+  } finally { await s.close(); }
+});
+
+test("inline category cancel, duplicate error and successful selection preserve the service draft", async () => {
+  const s = await setup(); try {
+    assert.equal(await s.page.getByRole("combobox", { name: "المنشأة", exact: true }).count(), 0);
+    await s.page.getByRole("button", { name: "إضافة خدمة", exact: true }).click();
+    const editor = s.page.getByRole("dialog", { name: "إضافة خدمة", exact: true });
+    await editor.getByLabel("الاسم *", { exact: true }).fill("مسودة الخدمة باقية");
+    await editor.getByRole("button", { name: "إضافة فئة", exact: true }).click();
+    let category = s.page.getByRole("dialog", { name: "إضافة فئة", exact: true });
+    await category.getByRole("button", { name: "إلغاء", exact: true }).click();
+    assert.equal(await editor.getByLabel("الاسم *", { exact: true }).inputValue(), "مسودة الخدمة باقية");
+    assert.equal(await editor.getByRole("button", { name: "إضافة فئة", exact: true }).evaluate(el => el === document.activeElement), true);
+    await editor.getByRole("button", { name: "إضافة فئة", exact: true }).click();
+    category = s.page.getByRole("dialog", { name: "إضافة فئة", exact: true });
+    await category.getByLabel("رمز الفئة", { exact: true }).fill("EXISTING"); await category.getByLabel("اسم الفئة", { exact: true }).fill("فئة جديدة");
+    await category.getByRole("button", { name: "حفظ الفئة", exact: true }).click(); await category.getByText("رمز الفئة مستخدم بالفعل", { exact: true }).waitFor();
+    assert.equal(await category.getByLabel("اسم الفئة", { exact: true }).inputValue(), "فئة جديدة");
+    await category.getByLabel("رمز الفئة", { exact: true }).fill("NEW"); await category.getByRole("button", { name: "حفظ الفئة", exact: true }).click(); await category.waitFor({ state: "hidden" });
+    await editor.getByText(/أضيفت الفئة.*واختيرت للخدمة/).waitFor();
+    assert.equal(await editor.getByRole("combobox", { name: /فئة الخدمة/ }).inputValue(), "2");
+    assert.equal(await editor.getByLabel("الاسم *", { exact: true }).inputValue(), "مسودة الخدمة باقية");
+  } finally { await s.close(); }
+  const denied = await setup({ capOverrides: { create: false, update: true } }); try {
+    await denied.page.getByRole("button", { name: "تعديل خدمة اختبار", exact: true }).click();
+    assert.equal(await denied.page.getByRole("button", { name: "إضافة فئة", exact: true }).count(), 0);
+  } finally { await denied.close(); }
+});
+
+test("detail without beneficiary permission never requests presentation identities", async () => {
+  const s = await setup({ limited: true }); try {
+    await s.page.getByRole("link", { name: "S001", exact: true }).click();
+    await s.page.getByText("لا تملك صلاحية استعراض المستفيدين في هذه المنشأة.", { exact: true }).waitFor();
+    assert.equal(s.calls.filter(call => /\/(events|beneficiaries)$/.test(call.path)).length, 0);
+    assert.equal(await s.page.getByRole("region", { name: "جدول المرضى المستفيدين وتواريخ التقديم", exact: true }).count(), 0);
+  } finally { await s.close(); }
+});
+
+test("late presentations never replace a newer filter or a closed record context", async () => {
+  const s = await setup(); try {
+    await s.page.getByRole("link", { name: "S001", exact: true }).click();
+    const table = s.page.getByRole("region", { name: "جدول المرضى المستفيدين وتواريخ التقديم", exact: true });
+    await table.getByText("PAT01", { exact: true }).waitFor();
+    const old = s.holdEvents(); await s.page.getByRole("searchbox").fill("PAT02"); await old.started.promise;
+    await table.getByText("PAT01", { exact: true }).waitFor();
+    await s.page.getByRole("searchbox").fill("PAT03"); await table.getByText("PAT03", { exact: true }).waitFor();
+    old.resolve(); await s.page.waitForTimeout(350); assert.equal(await table.getByText("PAT02", { exact: true }).count(), 0);
+    const closed = s.holdEvents(); await s.page.getByLabel("من تاريخ", { exact: true }).fill("2026-09-12"); await closed.started.promise;
+    await s.page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click(); await s.page.getByRole("link", { name: "S001", exact: true }).waitFor();
+    closed.resolve(); await s.page.waitForTimeout(100); assert.equal(await table.count(), 0);
   } finally { await s.close(); }
 });

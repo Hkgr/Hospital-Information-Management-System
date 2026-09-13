@@ -19,7 +19,7 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
     public function __invoke(OpenApi $document): void
     {
         $item = $this->object(['id' => new IntegerType, 'kind' => (new StringType)->enum(['service', 'procedure']), 'code' => new StringType, 'name_ar' => new StringType,
-            'description' => (new StringType)->nullable(true), 'category_id' => (new IntegerType)->nullable(true), 'procedure_type_id' => (new IntegerType)->nullable(true),
+            'description' => (new StringType)->nullable(true), 'category_id' => (new IntegerType)->nullable(true), 'procedure_type_id' => (new IntegerType)->nullable(true), 'classification_name_ar' => (new StringType)->nullable(true),
             'is_active' => new BooleanType, 'archived_at' => (new StringType)->nullable(true), 'lock_version' => new IntegerType, 'patient_count' => new IntegerType,
             'patient_count_definition' => (new StringType)->example(CatalogBeneficiaries::DEFINITION)]);
         $meta = $this->object(['page' => new IntegerType, 'per_page' => new IntegerType, 'total' => new IntegerType, 'last_page' => new IntegerType]);
@@ -73,6 +73,18 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
                     if (str_ends_with($route, '/classifications')) {
                         $fields = ['data' => $this->object(['categories' => $this->list($choice), 'procedure_types' => $this->list($choice)])];
                     }
+                    if (str_ends_with($route, '/context')) {
+                        $fields = ['data' => $this->object(['facility' => $this->object(['id' => new IntegerType, 'code' => new StringType, 'name_ar' => new StringType, 'timezone' => new StringType])])];
+                        $operation->description .= '\nResolves CATALOG_FACILITY_CODE, validates active facility and catalog.view. No first-facility fallback; missing configuration returns CATALOG_FACILITY_UNCONFIGURED (422).';
+                    }
+                    if (str_ends_with($route, '/categories')) {
+                        $fields = ['data' => $this->object(['id' => new IntegerType, 'code' => new StringType, 'name_ar' => new StringType, 'is_active' => new BooleanType])];
+                        $operation->description .= '\nCategory creation requires GLOBAL catalog.directory.create plus selected-facility catalog.view; facility-only create is insufficient. Duplicate code is a field validation error. No grants are assigned automatically.';
+                    }
+                    if (str_ends_with($route, '/events')) {
+                        $fields = ['data' => $this->list($this->object(['key' => new StringType, 'source' => (new StringType)->enum(['visit_service', 'visit_procedure', 'blood_procedure']), 'event_id' => new IntegerType, 'patient_code' => new StringType, 'patient_name' => new StringType, 'performed_on' => (new StringType)->nullable(true), 'visit_no' => (new StringType)->nullable(true)])), 'meta' => $meta, 'totals' => $this->object(['unique_patients' => new IntegerType, 'presentations' => new IntegerType])];
+                        $operation->description .= '\nRequires catalog.beneficiaries. One row per eligible source + event id, preserving repeated presentations; performed_on comes from the event, never visit_date or created_at. Search and inclusive from/to date filters, stable server sorting/pagination. Both totals cover ALL matching rows, not the current page. No patient detail links are available.';
+                    }
                     if (str_ends_with($route, '/deletion-preview')) {
                         $fields = ['data' => $this->object(['action' => (new StringType)->enum(['delete', 'archive']), 'has_references' => new BooleanType, 'lock_version' => new IntegerType, 'archived' => new BooleanType])];
                     }
@@ -82,7 +94,7 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
                     if (str_ends_with($route, '/history')) {
                         $fields = ['data' => $this->list($this->object(['id' => new IntegerType, 'event' => new StringType, 'occurred_at' => new StringType, 'old_values' => (new StringType)->nullable(true), 'new_values' => (new StringType)->nullable(true)])), 'meta' => $meta];
                     }
-                    $operation->addResponse(Response::make($route === 'service-catalog' && $operation->method === 'post' ? 201 : 200)->setDescription('Catalog response; no patient identities outside the authorized beneficiaries endpoint.')->setContent('application/json', Schema::fromType($this->object($fields))));
+                    $operation->addResponse(Response::make(in_array($route, ['service-catalog', 'service-catalog/categories'], true) && $operation->method === 'post' ? 201 : 200)->setDescription('Catalog response; patient identities require the authorized beneficiaries/events endpoints.')->setContent('application/json', Schema::fromType($this->object($fields))));
                 }
                 foreach ([401 => ['UNAUTHENTICATED'], 403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'CATALOG_ACCESS_DENIED', 'CATALOG_DIRECTORY_ACCESS_DENIED'], 404 => ['CATALOG_NOT_FOUND'], 409 => ['CATALOG_VERSION_CONFLICT', 'CATALOG_STATE_CONFLICT', 'CATALOG_REFERENCED'], 500 => ['CATALOG_UNAVAILABLE']] as $status => $codes) {
                     $operation->addResponse(Response::make($status)->setDescription(implode(' / ', $codes))->setContent('application/json', Schema::fromType($this->object(['error' => $this->object(['code' => (new StringType)->enum($codes), 'message' => new StringType])]))));
@@ -90,7 +102,7 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
                 $errors = new ObjectType;
                 $errors->additionalProperties = $this->list(new StringType);
                 $operation->addResponse(Response::make(422)->setDescription('Invalid fields, duplicate code or export limit.')->setContent('application/json', Schema::fromType((new AnyOf)->setItems([
-                    $this->object(['message' => new StringType, 'errors' => $errors]), $this->object(['error' => $this->object(['code' => (new StringType)->enum(['EXPORT_LIMIT_EXCEEDED']), 'message' => new StringType])]),
+                    $this->object(['message' => new StringType, 'errors' => $errors]), $this->object(['error' => $this->object(['code' => (new StringType)->enum(['EXPORT_LIMIT_EXCEEDED', 'CATALOG_FACILITY_UNCONFIGURED']), 'message' => new StringType])]),
                 ]))));
             }
         }

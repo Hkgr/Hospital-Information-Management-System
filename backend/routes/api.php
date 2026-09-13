@@ -11,6 +11,8 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
     Route::prefix('service-catalog')->name('catalog.')->group(function () {
+        Route::get('/context', [CatalogController::class, 'context'])->name('context');
+        Route::post('/categories', [CatalogController::class, 'createCategory'])->name('categories.store');
         Route::get('/', [CatalogController::class, 'index'])->name('index');
         Route::post('/', [CatalogController::class, 'store'])->name('store');
         Route::get('/options', [CatalogController::class, 'options'])->name('options');
@@ -22,6 +24,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
             Route::delete('/', [CatalogController::class, 'lifecycle'])->name('delete');
             Route::get('/deletion-preview', [CatalogController::class, 'deletionPreview'])->name('deletionPreview');
             Route::get('/beneficiaries', [CatalogController::class, 'beneficiaries'])->name('beneficiaries');
+            Route::get('/events', [CatalogController::class, 'events'])->name('events');
             Route::get('/history', [CatalogController::class, 'history'])->name('history');
             Route::get('/report', [CatalogController::class, 'report'])->name('report');
             foreach (['archive', 'restore', 'deactivate', 'reactivate'] as $action) {

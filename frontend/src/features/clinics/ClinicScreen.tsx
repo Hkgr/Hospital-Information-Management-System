@@ -4,7 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { LuArrowRight, LuDownload, LuEye, LuFileText, LuHospital, LuPlus, LuSearch, LuSquarePen, LuTrash2 } from "react-icons/lu";
+import { LuDownload, LuFileText, LuHospital, LuPlus, LuSearch, LuSquarePen } from "react-icons/lu";
 import { useIdentity } from "@/features/auth/AuthenticatedLayout";
 import { AuthError } from "@/features/auth/api";
 import { columns, columnKeys, downloadReport, useClinicRequest, type Clinic, type Column, type Page, type Specialty } from "./api";
@@ -13,6 +13,7 @@ import RelationFilter from "../directory/RelationFilter";
 import ClinicDoctors, { DoctorList } from "./ClinicDoctors";
 import useClinicSearch from "./useClinicSearch";
 import { ColumnMenu, LongText, Pagination } from "../directory/Controls";
+import { DirectoryTable, DirectoryRowActions, DirectoryBack } from "../directory/DirectoryPrimitives";
 import styles from "./clinics.module.css";
 
 const ClinicEditor = dynamic(() => import("./ClinicEditor"), { loading: () => <p role="status">جارٍ فتح النموذج…</p> });
@@ -117,16 +118,16 @@ function ClinicTable({ query, searching, visible, can, onAction, onPage, onPageS
   if (!result.data) return <div className={styles.status} role="status">جارٍ تحميل العيادات…</div>;
   const { data, meta } = result.data;
   return <>{result.error && <p role="alert" className={styles.error}>{result.error} المعروض نتائج سابقة؛ يلزم نجاح إعادة التحميل لإتاحة التصدير. <button onClick={result.retry}>إعادة المحاولة</button></p>}<div className={styles.resultSummary}><strong>{meta.total} عيادة</strong><span role={searching || result.loading ? "status" : undefined}>{searching || result.loading ? "جارٍ تحديث النتائج…" : "التصدير يشمل جميع النتائج المطابقة"}</span></div>
-    <div className={styles.tableScroll} tabIndex={0} role="region" aria-label="جدول العيادات" aria-busy={searching || result.loading}><table><thead><tr>{visible.map(key => <th key={key} scope="col">{columns[key]}</th>)}<th scope="col">الإجراءات</th></tr></thead><tbody>
+    <DirectoryTable label="جدول العيادات" busy={searching || result.loading} headers={[...visible.map(key => columns[key]), "الإجراءات"]}>
       {data.map((clinic, index) => <tr key={clinic.id}>{visible.map(key => <td key={key}>{key === "number" ? (meta.page - 1) * meta.per_page + index + 1
         : key === "code" ? <Link className={styles.code} href={`/clinics/${clinic.id}?${query}`}>{clinic.code}</Link>
         : key === "name_ar" ? <div className={styles.clinicName}><strong>{clinic.name_ar}</strong><span className={clinic.is_active ? styles.active : styles.inactive}>{clinic.archived_at ? "مؤرشفة" : clinic.is_active ? "فعالة" : "غير فعالة"}</span></div>
         : key === "description" ? <LongText text={clinic.description} />
         : key === "doctors" ? <button className={styles.textButton} onClick={() => onAction("doctors", clinic)}>{clinic.doctors_preview.map(doctor => doctor.name).join("، ") || "لا يوجد أطباء"}{clinic.doctor_count > 3 ? ` +${clinic.doctor_count - 3}` : ""}</button>
         : key === "doctor_count" ? <button className={styles.countButton} aria-label={`أطباء ${clinic.name_ar}: ${clinic.doctor_count}`} onClick={() => onAction("doctors", clinic)}>{clinic.doctor_count}</button>
-        : clinic.patient_count}</td>)}<td><div className={styles.rowActions}><Link href={`/clinics/${clinic.id}?${query}`} className={styles.iconButton} aria-label={`استعراض ${clinic.name_ar}`} title="استعراض"><LuEye aria-hidden="true" /></Link>{can("update") && !clinic.archived_at && <button className={styles.iconButton} onClick={() => onAction("edit", clinic)} aria-label={`تعديل ${clinic.name_ar}`} title="تعديل"><LuSquarePen aria-hidden="true" /></button>}{can("delete") && <button className={`${styles.iconButton} ${styles.dangerText}`} onClick={() => onAction("delete", clinic)} aria-label={`حذف ${clinic.name_ar}`} title="حذف"><LuTrash2 aria-hidden="true" /></button>}<LifecycleActions record={clinic} name={clinic.name_ar} canUpdate={can("update")} onAction={action => onAction(action, clinic)} /></div></td></tr>)}
+        : clinic.patient_count}</td>)}<td><DirectoryRowActions name={clinic.name_ar} href={`/clinics/${clinic.id}?${query}`} onEdit={can("update") && !clinic.archived_at ? () => onAction("edit", clinic) : undefined} onDelete={can("delete") ? () => onAction("delete", clinic) : undefined}><LifecycleActions record={clinic} name={clinic.name_ar} canUpdate={can("update")} onAction={action => onAction(action, clinic)} /></DirectoryRowActions></td></tr>)}
       {!data.length && <tr><td colSpan={visible.length + 1}><div className={styles.status}>لا توجد عيادات مطابقة. عدّل البحث والفلاتر أو أضف عيادة جديدة إن كانت لديك الصلاحية.</div></td></tr>}
-    </tbody></table></div><Pagination meta={meta} onPage={onPage} onPageSize={onPageSize} />
+    </DirectoryTable><Pagination meta={meta} onPage={onPage} onPageSize={onPageSize} />
   </>;
 }
 
@@ -135,7 +136,7 @@ function ClinicDetail({ id, facilityId, can, onAction, returnPath, exports }: { 
   if (result.error) return <div className={styles.status}><p role="alert">{result.error}</p><button className={styles.secondary} onClick={result.retry}>إعادة المحاولة</button><Link href={returnPath}>العودة إلى القائمة</Link></div>;
   if (!result.data) return <p role="status" className={styles.status}>جارٍ تحميل العيادة…</p>;
   const clinic = result.data;
-  return <><Link href={returnPath} className={styles.back}><LuArrowRight aria-hidden="true" />العودة إلى قائمة العيادات</Link><div className={styles.heading}><div><p className={styles.eyebrow}>بطاقة العيادة · <bdi>{clinic.code}</bdi></p><h2>{clinic.name_ar}</h2><p>{clinic.specialty?.name_ar || "دون تخصص محدد"} · {clinic.archived_at ? "مؤرشفة" : clinic.is_active ? "فعالة" : "غير فعالة"}</p></div><div className={styles.actions}>{can("update") && !clinic.archived_at && <button className={styles.primary} onClick={() => onAction("edit", clinic)}><LuSquarePen aria-hidden="true" />تعديل العيادة</button>}{can("delete") && <button className={styles.secondary} onClick={() => onAction("delete", clinic)} aria-label={`حذف ${clinic.name_ar}`}>حذف أو أرشفة</button>}<LifecycleActions record={clinic} name={clinic.name_ar} canUpdate={can("update")} onAction={action => onAction(action, clinic)} />{exports}</div></div>
+  return <><DirectoryBack href={returnPath}>العودة إلى قائمة العيادات</DirectoryBack><div className={styles.heading}><div><p className={styles.eyebrow}>بطاقة العيادة · <bdi>{clinic.code}</bdi></p><h2>{clinic.name_ar}</h2><p>{clinic.specialty?.name_ar || "دون تخصص محدد"} · {clinic.archived_at ? "مؤرشفة" : clinic.is_active ? "فعالة" : "غير فعالة"}</p></div><div className={styles.actions}>{can("update") && !clinic.archived_at && <button className={styles.primary} onClick={() => onAction("edit", clinic)}><LuSquarePen aria-hidden="true" />تعديل العيادة</button>}{can("delete") && <button className={styles.secondary} onClick={() => onAction("delete", clinic)} aria-label={`حذف ${clinic.name_ar}`}>حذف أو أرشفة</button>}<LifecycleActions record={clinic} name={clinic.name_ar} canUpdate={can("update")} onAction={action => onAction(action, clinic)} />{exports}</div></div>
     <section className={styles.detailPanel}><h3>توصيف العيادة</h3><p className={styles.description}>{clinic.description || "لا يوجد توصيف مسجل لهذه العيادة."}</p><div className={styles.metrics}><div><span>الأطباء الحاليون</span><strong>{clinic.doctor_count}</strong></div><div><span>المرضى المختلفون</span><strong>{clinic.patient_count}</strong></div></div><p className={styles.hint}>{clinic.patient_count_definition}</p></section>
     <LinkHistory kind="clinics" id={clinic.id} facilityId={facilityId} />
     <section className={styles.detailPanel}><h3>أطباء العيادة الحاليون</h3><DoctorList clinic={clinic} /></section>

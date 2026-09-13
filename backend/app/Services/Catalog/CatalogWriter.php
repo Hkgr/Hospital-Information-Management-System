@@ -11,6 +11,27 @@ use Illuminate\Validation\ValidationException;
 
 class CatalogWriter
 {
+    public function createCategory(Request $request, array $facility, array $data): object
+    {
+        app(CatalogAccess::class)->directory($request->user(), $facility, 'create');
+        try {
+            return DB::transaction(function () use ($request, $facility, $data) {
+                $fields = array_intersect_key($data, array_flip(['code', 'name_ar', 'is_active']));
+                $id = DB::table('service_categories')->insertGetId($fields + ['created_at' => now(), 'updated_at' => now()]);
+                app(ClinicAudit::class)->record($request, $facility['id'], $id, 'created', null, $fields, 'service_category');
+                $row = DB::table('service_categories')->find($id, ['id', 'code', 'name_ar', 'is_active']);
+                $row->is_active = (bool) $row->is_active;
+
+                return $row;
+            });
+        } catch (QueryException $exception) {
+            if (($exception->errorInfo[1] ?? null) === 1062) {
+                throw ValidationException::withMessages(['code' => 'رمز الفئة مستخدم بالفعل؛ اختر رمزًا آخر.']);
+            }
+            throw $exception;
+        }
+    }
+
     public function references(string $kind, int $id): bool
     {
         $tables = $kind === 'service' ? ['visit_services', 'report_metric_catalog_items'] : ['visit_procedures', 'blood_recipient_procedures', 'report_metric_catalog_items'];
