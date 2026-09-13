@@ -15,7 +15,6 @@ use App\Services\Catalog\CatalogReports;
 use App\Services\Catalog\CatalogWriter;
 use Dedoc\Scramble\Attributes\Group;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -24,9 +23,10 @@ class CatalogController extends Controller
 {
     public function __construct(private CatalogAccess $access, private CatalogQueries $queries, private CatalogWriter $writer) {}
 
-    public function context(Request $request): JsonResponse
+    /** Validate the directory's selected facility; no catalog-specific environment setting. */
+    public function context(CatalogQueryRequest $request): JsonResponse
     {
-        return response()->json(['data' => ['facility' => $this->access->context($request->user())]]);
+        return response()->json(['data' => ['facility' => $this->access->context($request->user(), $request->integer('facility_id'))]]);
     }
 
     public function createCategory(SaveCategoryRequest $request): JsonResponse

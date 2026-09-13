@@ -9,17 +9,9 @@ use Illuminate\Support\Facades\DB;
 
 class CatalogAccess
 {
-    public function context(User $user): array
+    public function context(User $user, int $id): array
     {
-        $code = config('catalog.facility_code');
-        if (! is_string($code) || $code === '') {
-            throw new CatalogException('CATALOG_FACILITY_UNCONFIGURED', 'لم يُحدد مشفى بن زايد لهذا القسم. راجع مسؤول النظام.', 422);
-        }
-        $id = DB::table('facilities')->where('code', $code)->where('is_active', true)->value('id');
-        if (! $id) {
-            throw new CatalogException('CATALOG_ACCESS_DENIED', 'المشفى المحدد غير متاح أو غير فعال.', 403);
-        }
-        $facility = $this->facility($user, (int) $id);
+        $facility = $this->facility($user, $id);
 
         return array_intersect_key($facility, array_flip(['id', 'code', 'name_ar', 'timezone']));
     }

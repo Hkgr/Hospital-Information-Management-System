@@ -29,6 +29,62 @@ async function api(method, path, expected, body, token = f.token) {
   assert.match(response.headers.get("content-type"), /application\/json/); return response.json();
 }
 
+test("catalog uses the directory facility without a catalog environment setting", async () => {
+  const context = await browser.newContext();
+  await context.addInitScript(token => sessionStorage.setItem("hospital.bearer", token), f.token);
+  const page = await context.newPage(); page.setDefaultTimeout(8000);
+  try {
+    for (const [path, endpoint] of [["/doctors", "/doctors"], ["/clinics", "/clinics"], ["/services-procedures", "/service-catalog"]]) {
+      const pending = page.waitForResponse(response => new URL(response.url()).pathname === `/hospital-api${endpoint}`);
+      await page.goto(base + path);
+      const response = await pending;
+      assert.equal(response.status(), 200); assert.equal(new URL(response.url()).searchParams.get("facility_id"), String(f.facility));
+      assert.ok((await response.json()).data.length > 0);
+    }
+    assert.equal(await page.getByRole("combobox", { name: "المنشأة", exact: true }).count(), 0);
+    await page.getByRole("link", { name: `${f.tag}-001`, exact: true }).first().waitFor();
+  } finally { await context.close(); }
+});
+
+test("real single and multiple facility identities, catalog-only access and forbidden contexts", async () => {
+  for (const token of [f.token, f.viewer_token]) {
+    const context = await browser.newContext(); await context.addInitScript(value => sessionStorage.setItem("hospital.bearer", value), token);
+    const page = await context.newPage(); page.setDefaultTimeout(8000);
+    try {
+      await page.goto(base + "/services-procedures"); await page.getByRole("link", { name: `${f.tag}-001`, exact: true }).first().waitFor();
+      assert.equal(await page.getByRole("combobox", { name: "المنشأة", exact: true }).count(), 0);
+      assert.equal((await api("GET", "/context", 200, {}, token)).data.facility.id, f.facility);
+      if (token === f.viewer_token) {
+        assert.equal(await page.getByRole("link", { name: "الأطباء", exact: true }).count(), 0);
+        assert.equal(await page.getByRole("link", { name: "العيادات", exact: true }).count(), 0);
+        assert.equal(await page.getByRole("button", { name: "Excel", exact: true }).count(), 0);
+      } else {
+        for (const [path, endpoint] of [["/doctors", "/doctors"], ["/clinics", "/clinics"], ["/services-procedures", "/service-catalog"]]) {
+          const pending = page.waitForResponse(response => new URL(response.url()).pathname === `/hospital-api${endpoint}` && new URL(response.url()).searchParams.get("facility_id") === String(f.second));
+          await page.goto(`${base}${path}?facility_id=${f.second}`); assert.equal((await pending).status(), 200);
+        }
+        assert.equal((await api("GET", "/context", 200, { facility_id: f.second })).data.facility.id, f.second);
+        const scoped = await api("GET", `/service/${f.items.service[1]}`, 200, { facility_id: f.second }); assert.equal(scoped.data.patient_count, 0);
+        const events = await api("GET", `/service/${f.items.service[1]}/events`, 200, { facility_id: f.second }); assert.equal(events.totals.presentations, 0); assert.deepEqual(events.data, []);
+      }
+      for (const denied of [f.other, f.inactive, ...(token === f.viewer_token ? [f.second] : [])]) {
+        for (const endpoint of ["/context", "", `/service/${f.items.service[1]}`]) {
+          const response = await api("GET", endpoint, 403, { facility_id: denied }, token);
+          assert.equal(response.error.code, "CATALOG_ACCESS_DENIED"); assert.equal(response.data, undefined);
+        }
+        await page.goto(`${base}/services-procedures?facility_id=${denied}`); await page.getByRole("alert").filter({ hasText: "تعذّر تحديد مشفى" }).waitFor();
+        assert.equal(await page.getByRole("link", { name: `${f.tag}-001`, exact: true }).count(), 0);
+      }
+      await page.goto(`${base}/services-procedures?facility_id=${f.facility}&kind=service&search=${f.tag}&status=active`);
+      await page.getByRole("link", { name: `${f.tag}-001`, exact: true }).click();
+      await page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click();
+      await page.getByRole("link", { name: `${f.tag}-001`, exact: true }).waitFor();
+      assert.equal(await page.getByRole("searchbox").inputValue(), f.tag); assert.equal(new URL(page.url()).searchParams.get("facility_id"), String(f.facility));
+      assert.equal(await page.getByRole("combobox", { name: "الحالة", exact: true }).inputValue(), "active");
+    } finally { await context.close(); }
+  }
+});
+
 for (const kind of ["service", "procedure"]) test(`${kind}: full beneficiary name is searchable through the real browser and Next proxy`, async () => {
   const context = await browser.newContext();
   await context.addInitScript(token => sessionStorage.setItem("hospital.bearer", token), f.token);

@@ -8,6 +8,7 @@ import { useIdentity } from "@/features/auth/AuthenticatedLayout";
 import { AuthError } from "@/features/auth/api";
 import { ColumnMenu, LongText, Pagination } from "../directory/Controls";
 import { DirectoryBack, DirectoryRowActions, DirectoryTable } from "../directory/DirectoryPrimitives";
+import { directoryFacility } from "../directory/facilityContext";
 import { LifecycleActions } from "../directory/Lifecycle";
 import useClinicSearch from "../clinics/useClinicSearch";
 import CatalogEditor from "./CatalogEditor";
@@ -19,12 +20,11 @@ import styles from "../clinics/clinics.module.css";
 export default function CatalogScreen({ kind, itemId }: { kind?: string; itemId?: string }) {
   const { access, user } = useIdentity(); const params = useSearchParams();
   const cancelSearchRef = useRef<(() => void) | null>(null);
-  const context = useCatalogRequest<{ facility: { id: number; name_ar: string } }>("service-catalog/context");
+  const { entry, facilityId } = directoryFacility(access, "catalog.view", params.get("facility_id"));
+  const context = useCatalogRequest<{ facility: { id: number; name_ar: string } }>(entry ? `service-catalog/context?facility_id=${entry.facility.id}` : null);
+  if (!entry || (itemId && (!/^[1-9]\d*$/.test(itemId) || !["service", "procedure"].includes(kind ?? "")))) return <section className={styles.status}><h2>الخدمات والإجراءات غير متاحة</h2><p role="alert">تعذّر تحديد مشفى متاح لك في الخدمات والإجراءات. تحقق من الرابط أو راجع مسؤول الصلاحيات.</p><Link href="/">العودة إلى لوحة التحكم</Link></section>;
   if (context.loading) return <p role="status" className={styles.status}>جارٍ تحميل سياق المشفى…</p>;
-  if (context.error) return <section className={styles.status}><h2>الخدمات والإجراءات غير متاحة</h2><p role="alert">{context.error}</p><button className={styles.secondary} onClick={context.retry}>إعادة المحاولة</button></section>;
-  const facilityId = context.data?.facility.id;
-  const entry = access.find(entry => entry.facility.id === facilityId && entry.permissions.includes("catalog.view") && (!params.has("facility_id") || Number(params.get("facility_id")) === facilityId));
-  if (!entry || (itemId && (!/^[1-9]\d*$/.test(itemId) || !["service", "procedure"].includes(kind ?? "")))) return <section className={styles.status}><h2>الخدمات والإجراءات غير متاحة</h2><p role="alert">ليس لديك وصول إلى الدليل في المنشأة المطلوبة، أو الرابط غير صالح.</p><Link href="/">العودة إلى لوحة التحكم</Link></section>;
+  if (context.error || context.data?.facility.id !== facilityId) return <section className={styles.status}><h2>الخدمات والإجراءات غير متاحة</h2><p role="alert">تعذّر التحقق من إتاحة المشفى وصلاحية الوصول إليه. أعد المحاولة، أو راجع مسؤول النظام إذا استمرت المشكلة.</p><button className={styles.secondary} onClick={context.retry}>إعادة المحاولة</button></section>;
   return <div className={styles.screen}><div className={styles.context}><LuHospital aria-hidden="true" /><span>سياق المنشأة</span><strong>{entry.facility.name_ar}</strong><span className={styles.contextCaption}>الدليل مشترك · المؤشرات ضمن المنشأة</span></div>
     <Workspace key={`${facilityId}:${kind ?? ""}:${itemId ?? ""}:${user.id}`} facilityId={facilityId!} kind={kind as Kind | undefined} itemId={itemId} cancelSearchRef={cancelSearchRef} />
   </div>;
