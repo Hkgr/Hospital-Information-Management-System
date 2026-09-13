@@ -46,7 +46,7 @@ class ClinicReports
         });
         $columns = $id === null ? ($filters['columns'] ?? array_keys(self::COLUMNS)) : array_keys(self::COLUMNS);
         $metadata = $this->metadata->make($request, $facility, $filters, self::COLUMNS, 'clinic', $id !== null, ClinicCounts::PATIENT_DEFINITION);
-        $response = $this->renderer->response(['rows' => $rows, 'columns' => $columns, 'labels' => self::COLUMNS, 'metadata' => $metadata, 'detail' => $id !== null, 'linkTitle' => 'الأطباء الحاليون'], $format);
+        $response = $this->renderer->response(['rows' => $rows, 'columns' => $columns, 'labels' => self::COLUMNS, 'metadata' => $metadata, 'detail' => $id !== null, 'descriptionTitle' => 'توصيف العيادة', 'linkTitle' => 'الأطباء الحاليون'], $format);
         $this->audit->record($request, $facility['id'], $id ?? 0, 'exported', null, ['report_number' => $metadata['number'], 'format' => $format, 'row_count' => count($rows), 'filters' => $filters, 'columns' => $columns]);
 
         return $response;

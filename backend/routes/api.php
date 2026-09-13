@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\ClinicController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DoctorController;
@@ -9,6 +10,25 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
+    Route::prefix('service-catalog')->name('catalog.')->group(function () {
+        Route::get('/', [CatalogController::class, 'index'])->name('index');
+        Route::post('/', [CatalogController::class, 'store'])->name('store');
+        Route::get('/options', [CatalogController::class, 'options'])->name('options');
+        Route::get('/classifications', [CatalogController::class, 'classifications'])->name('classifications');
+        Route::get('/export/{format}', [CatalogController::class, 'export'])->whereIn('format', ['xlsx', 'pdf'])->name('export');
+        Route::prefix('{kind}/{item}')->whereIn('kind', ['service', 'procedure'])->whereNumber('item')->group(function () {
+            Route::get('/', [CatalogController::class, 'show'])->name('show');
+            Route::put('/', [CatalogController::class, 'update'])->name('update');
+            Route::delete('/', [CatalogController::class, 'lifecycle'])->name('delete');
+            Route::get('/deletion-preview', [CatalogController::class, 'deletionPreview'])->name('deletionPreview');
+            Route::get('/beneficiaries', [CatalogController::class, 'beneficiaries'])->name('beneficiaries');
+            Route::get('/history', [CatalogController::class, 'history'])->name('history');
+            Route::get('/report', [CatalogController::class, 'report'])->name('report');
+            foreach (['archive', 'restore', 'deactivate', 'reactivate'] as $action) {
+                Route::post('/'.$action, [CatalogController::class, 'lifecycle'])->name($action);
+            }
+        });
+    });
     Route::prefix('doctors')->name('doctors.')->group(function () {
         Route::get('/', [DoctorController::class, 'index'])->name('index');
         Route::post('/', [DoctorController::class, 'store'])->name('store');

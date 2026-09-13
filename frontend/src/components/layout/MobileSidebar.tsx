@@ -3,7 +3,7 @@ import { SidebarContent } from "./Sidebar";
 import FrameOrnaments from "./FrameOrnaments";
 import styles from "./shell.module.css";
 
-export default function MobileSidebar({ open, onClose, pathname, canViewClinics, canViewDoctors }: { open: boolean; onClose: () => void; pathname: string; canViewClinics: boolean; canViewDoctors: boolean }) {
+export default function MobileSidebar({ open, onClose, pathname, canViewClinics, canViewDoctors, canViewCatalog }: { open: boolean; onClose: () => void; pathname: string; canViewClinics: boolean; canViewDoctors: boolean; canViewCatalog: boolean }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -32,6 +32,6 @@ export default function MobileSidebar({ open, onClose, pathname, canViewClinics,
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }}
     onClick={event => { if (event.target === event.currentTarget) dialogRef.current?.close(); }}>
-    <div className={styles.mobileSidebarContent}><SidebarContent pathname={pathname} canViewClinics={canViewClinics} canViewDoctors={canViewDoctors} onNavigate={onClose} mobile /><FrameOrnaments /></div>
+    <div className={styles.mobileSidebarContent}><SidebarContent pathname={pathname} canViewClinics={canViewClinics} canViewDoctors={canViewDoctors} canViewCatalog={canViewCatalog} onNavigate={onClose} mobile /><FrameOrnaments /></div>
   </dialog>;
 }
