@@ -92,8 +92,8 @@ class BloodBankTest extends TestCase
         $this->api('POST', '', ['clinic_id' => $foreign] + $input)->assertUnprocessable()->assertJsonValidationErrors('responsible_staff_id');
         $this->assertDatabaseCount('blood_donors', 0);
         $input['screenings'][1] = ['analyte' => 'HCV', 'screening_test_id' => $this->f['test'], 'status' => 'complete', 'result' => null];
-        $this->api('POST', '', $input)->assertUnprocessable()->assertJsonValidationErrors('screenings');
-        $this->assertDatabaseCount('blood_donors', 0);
+        $this->api('POST', '', $input)->assertCreated()->assertJsonPath('data.screenings.1.result', null);
+        $input['request_id'] = (string) Str::uuid();
         $input['screenings'][1]['result'] = 'indeterminate';
         $row = $this->api('POST', '', $input)->assertCreated()->assertJsonPath('data.screenings.1.result', 'indeterminate')->json('data');
         $this->api('GET', '/doctors', ['clinic_id' => $foreign])->assertOk()->assertJsonPath('data', []);

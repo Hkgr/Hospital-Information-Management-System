@@ -24,6 +24,160 @@ async function setup(path = "/blood-bank", token = f.token, width = 1440) { cons
 function updateProfile(p, overrides = {}) { return { ...f.profile, kind: undefined, ...p.person, blood_group: p.blood_group, rh: p.rh, clinic_id: p.clinic_id, responsible_staff_id: p.responsible_staff_id, blood_component_id: p.blood_component_id, screenings: p.screenings, lock_version: p.lock_version, request_id: randomUUID(), ...overrides }; }
 async function chooseResponsibility(page) { await page.getByRole("button", { name: /عيادة بنك الدم الاختبارية/ }).click(); await page.getByRole("button", { name: new RegExp(`CAT-${f.tag}`) }).click(); }
 
+test("doctor options match the clinic through real Next and remain scoped", async () => {
+  const clinicDoctors = await api("GET", `clinics/${f.clinic}/doctors`);
+  const bankDoctors = await api("GET", "blood-bank/doctors", 200, { clinic_id: f.clinic });
+  assert.deepEqual(bankDoctors.data.map(r => r.id), clinicDoctors.data.map(r => r.id));
+  assert.ok(bankDoctors.data.some(r => r.id === f.staff));
+  assert.equal((await api("GET", "blood-bank/doctors", 200, { clinic_id: f.clinic, facility_id: f.second })).data.length, 0);
+  const { context, page } = await setup();
+  try {
+    await page.getByRole("button", { name: "إضافة متبرع", exact: true }).click();
+    await chooseResponsibility(page);
+    await page.getByRole("button", { name: /CAT-/ , pressed: true }).waitFor();
+  } finally { await context.close(); }
+});
+
+test("real empty doctor-type configuration explains why all linked doctors disappear", async () => {
+  fixture("doctor-types-empty");
+  let context;
+  try {
+    const clinic = await api("GET", `clinics/${f.clinic}/doctors`);
+    const bank = await api("GET", "blood-bank/doctors", 200, { clinic_id: f.clinic });
+    assert.deepEqual(clinic.data, []); assert.deepEqual(bank.data, []); assert.equal(bank.doctor_types_configured, false);
+    const ui = await setup(); context = ui.context; const page = ui.page;
+    await page.getByRole("button", { name: "إضافة متبرع", exact: true }).click();
+    await page.getByRole("button", { name: /عيادة بنك الدم الاختبارية/ }).click();
+    await page.getByRole("alert").filter({ hasText: "دليل أنواع الأطباء غير مهيأ" }).waitFor();
+    assert.equal(await page.getByRole("button", { name: new RegExp(`CAT-${f.tag}`) }).count(), 0);
+  } finally { await context?.close(); fixture("doctor-types-reset"); }
+  assert.equal((await api("GET", "blood-bank/doctors", 200, { clinic_id: f.clinic })).data[0].id, f.staff);
+});
+
+test("new profile has optional screenings and manual address modes", async () => {
+  const { context, page } = await setup();
+  try {
+    await page.getByRole("button", { name: "إضافة متبرع", exact: true }).click();
+    await page.getByRole("button", { name: "إضافة فحص", exact: true }).waitFor();
+    assert.equal(await page.getByRole("combobox", { name: "حالة HCV", exact: true }).count(), 0);
+    await page.getByRole("radio", { name: "محافظة خارج سوريا", exact: true }).check();
+    await page.getByLabel("اسم المحافظة خارج سوريا", { exact: true }).fill("محافظة اختبار خارجية");
+    await page.getByLabel("اسم المدينة", { exact: true }).fill("مدينة اختبار");
+    await page.getByRole("radio", { name: "محافظة سورية", exact: true }).check();
+    await page.getByRole("radio", { name: "محافظة خارج سوريا", exact: true }).check();
+    assert.equal(await page.getByLabel("اسم المحافظة خارج سوريا", { exact: true }).inputValue(), "محافظة اختبار خارجية");
+    assert.equal(await page.getByLabel("اسم المدينة", { exact: true }).inputValue(), "مدينة اختبار");
+  } finally { await context.close(); }
+});
+
+test("address and screening workflows save through Next, Laravel and MySQL for both profile kinds", async () => {
+  const options = (await api("GET", "blood-bank/options")).data;
+  assert.deepEqual(options.blood_components.map(c => c.name_ar), ["كامل", "ركازة", "بلازما", "صفيحات"]);
+  for (const [index, kind] of ["donor", "recipient"].entries()) {
+    const label = kind === "donor" ? "متبرع" : "مستفيد";
+    const { context, page, errors } = await setup();
+    try {
+      await page.getByRole("button", { name: `إضافة ${label}`, exact: true }).click();
+      await page.getByLabel("الاسم الأول", { exact: true }).fill("اختبار العنوان"); await page.getByLabel("اسم العائلة", { exact: true }).fill(label);
+      const governors = page.getByRole("group", { name: "المحافظة السورية", exact: true });
+      await governors.getByRole("searchbox").fill("حلب"); await governors.getByRole("button", { name: "حلب", exact: true }).click();
+      const cities = page.getByRole("group", { name: "المدينة التابعة للمحافظة", exact: true });
+      await cities.getByRole("button", { name: "حلب", exact: true }).click();
+      assert.equal(await cities.getByRole("button", { name: "حماة", exact: true }).count(), 0);
+      await page.getByRole("radio", { name: "المدينة غير موجودة", exact: true }).check(); await page.getByLabel("اسم المدينة", { exact: true }).fill("مدينة غير مدرجة");
+      await page.getByRole("radio", { name: "مدينة من الدليل", exact: true }).check(); await cities.getByRole("button", { name: "حلب", exact: true, pressed: true }).waitFor();
+      await page.getByRole("radio", { name: "محافظة خارج سوريا", exact: true }).check(); await page.getByLabel("اسم المحافظة خارج سوريا", { exact: true }).fill("محافظة خارجية اصطناعية");
+      assert.equal(await page.getByLabel("اسم المدينة", { exact: true }).inputValue(), "مدينة غير مدرجة");
+      await page.getByRole("radio", { name: options.blood_components[index].name_ar, exact: true }).check();
+      await chooseResponsibility(page);
+      await page.getByRole("button", { name: "إضافة فحص", exact: true }).click(); await page.getByLabel("نوع الفحص الجديد", { exact: true }).selectOption("HCV");
+      await page.getByLabel("حالة HCV", { exact: true }).selectOption("complete");
+      await page.getByRole("button", { name: "إضافة فحص", exact: true }).click(); assert.equal(await page.getByLabel("نوع الفحص الجديد", { exact: true }).locator('option[value="HCV"]').count(), 0);
+      await page.getByLabel("نوع الفحص الجديد", { exact: true }).selectOption("HIV"); await page.getByRole("button", { name: "إزالة فحص HIV", exact: true }).click();
+      assert.equal(await page.getByLabel("نتيجة HCV", { exact: true }).count(), 0); assert.equal(await page.getByLabel("نوع HCV", { exact: true }).count(), 0);
+      const saving = page.waitForResponse(r => r.request().method() === "POST" && new URL(r.url()).pathname === "/hospital-api/blood-bank");
+      await page.getByRole("button", { name: "حفظ الملف", exact: true }).click(); const response = await saving; assert.equal(response.status(), 201);
+      const sent = response.request().postDataJSON(); assert.equal(sent.governorate_id, null); assert.equal(sent.city_id, null); assert.deepEqual(sent.screenings, [{ analyte: "HCV", status: "complete" }]);
+      const row = (await response.json()).data; await page.getByRole("heading", { name: `اختبار العنوان ${label}`, exact: true }).waitFor();
+      const persisted = (await api("GET", `blood-bank/${kind}/${row.id}`)).data;
+      assert.equal(persisted.person.governorate_text, "محافظة خارجية اصطناعية"); assert.equal(persisted.person.city_text, "مدينة غير مدرجة"); assert.equal(persisted.blood_component_id, options.blood_components[index].id);
+      assert.equal(persisted.screenings.length, 1); assert.equal(persisted.screenings[0].result, null);
+      await page.getByRole("button", { name: "تعديل الملف", exact: true }).click(); assert.equal(await page.getByLabel("اسم المدينة", { exact: true }).inputValue(), "مدينة غير مدرجة");
+      await page.getByRole("radio", { name: "محافظة سورية", exact: true }).check(); await governors.getByRole("button", { name: "حلب", exact: true }).click();
+      await page.getByRole("radio", { name: "المدينة غير موجودة", exact: true }).check();
+      const updated = page.waitForResponse(r => r.request().method() === "PUT" && new URL(r.url()).pathname.endsWith(`/${row.id}`)); await page.getByRole("button", { name: "حفظ الملف", exact: true }).click(); assert.equal((await updated).status(), 200); await page.getByRole("dialog").waitFor({ state: "hidden" });
+      const final = (await api("GET", `blood-bank/${kind}/${row.id}`)).data; assert.equal(final.person.governorate_id, f.governorate); assert.equal(final.person.governorate_text, null); assert.equal(final.person.city_text, "مدينة غير مدرجة");
+      assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  }
+});
+
+test("real city responses with injected delay cannot replace a newer governorate", async () => {
+  const { context, page } = await setup(); let release; let held;
+  const captured = new Promise(resolve => { held = resolve; });
+  try {
+    await page.getByRole("button", { name: "إضافة متبرع", exact: true }).click(); await page.getByLabel("الاسم الأول", { exact: true }).fill("مسودة محفوظة");
+    await page.route("**/hospital-api/blood-bank/cities?*", async route => {
+      const response = await route.fetch();
+      if (new URL(route.request().url()).searchParams.get("governorate_id") === String(f.governorate)) { await new Promise(resolve => { release = resolve; held(); }); }
+      await route.fulfill({ response }).catch(() => {});
+    });
+    const governors = page.getByRole("group", { name: "المحافظة السورية", exact: true });
+    await governors.getByRole("button", { name: "حلب", exact: true }).click(); await captured;
+    await governors.getByRole("button", { name: "حماة", exact: true }).click();
+    const cities = page.getByRole("group", { name: "المدينة التابعة للمحافظة", exact: true });
+    await cities.getByRole("button", { name: "حماة", exact: true }).waitFor(); release();
+    await cities.getByRole("button", { name: "حماة", exact: true }).click(); assert.equal(await cities.getByRole("button", { name: "حلب", exact: true }).count(), 0);
+    assert.equal(await page.getByLabel("الاسم الأول", { exact: true }).inputValue(), "مسودة محفوظة");
+  } finally { release?.(); await context.close(); }
+});
+
+test("legacy results, methods and component survive editing; linked patient address stays read-only", async () => {
+  const input = { ...f.profile, request_id: randomUUID(), first_name: "قديم", family_name: "اصطناعي", blood_component_id: f.component,
+    screenings: [{ analyte: "HCV", status: "complete", result: "indeterminate", screening_test_id: f.test }] };
+  const row = (await api("POST", "blood-bank", 201, input)).data;
+  const { context, page } = await setup(`/blood-bank/donor/${row.id}`);
+  try {
+    await page.getByRole("button", { name: "تعديل الملف", exact: true }).click();
+    assert.equal(await page.getByRole("radio", { name: /مكون اختبار.*قيمة سابقة/ }).isChecked(), true);
+    await page.getByLabel("حالة HCV", { exact: true }).selectOption("pending");
+    const saving = page.waitForResponse(r => r.request().method() === "PUT" && new URL(r.url()).pathname.endsWith(`/${row.id}`));
+    await page.getByRole("button", { name: "حفظ الملف", exact: true }).click(); assert.equal((await saving).status(), 200); await page.getByRole("dialog").waitFor({ state: "hidden" });
+    const saved = (await api("GET", `blood-bank/donor/${row.id}`)).data;
+    assert.equal(saved.blood_component_id, f.component); assert.deepEqual(saved.screenings, [{ analyte: "HCV", status: "pending", result: "indeterminate", screening_test_id: f.test }]);
+    const linked = (await api("POST", "blood-bank", 201, { kind: "recipient", person_mode: "patient", patient_id: f.patients[3], clinic_id: f.clinic, responsible_staff_id: f.staff, request_id: randomUUID(), screenings: [] })).data;
+    // Use the fixture patient with a directory address for the read-only preview.
+    await page.goto(`${base}/blood-bank`); await page.getByRole("button", { name: "إضافة مستفيد", exact: true }).click();
+    await page.getByLabel("هل المستفيد مريض مسجل في المشفى؟", { exact: false }).selectOption("yes");
+    await page.getByRole("searchbox", { name: "البحث: المريض المسجل", exact: true }).fill(`${f.tag}-P2`); await page.getByRole("button", { name: new RegExp(`${f.tag}-P2`) }).click();
+    await page.getByText("عنوان المريض المرجعي", { exact: true }).waitFor(); assert.equal(await page.getByLabel("عنوان السكن", { exact: true }).count(), 0);
+    assert.equal(await page.getByRole("radio", { name: "محافظة خارج سوريا", exact: true }).count(), 0);
+    await page.getByLabel("هل المستفيد مريض مسجل في المشفى؟", { exact: false }).selectOption("no"); assert.equal(await page.getByLabel("عنوان السكن", { exact: true }).inputValue(), "");
+    await api("PUT", `blood-bank/recipient/${linked.id}`, 422, { kind: undefined, person_mode: "patient", patient_id: linked.patient_id, clinic_id: f.clinic, responsible_staff_id: f.staff, lock_version: linked.lock_version, request_id: randomUUID(), governorate_text: "نسخة ممنوعة" });
+  } finally { await context.close(); }
+});
+
+test("actual grouped forms at 390 and 1440 pixels", async () => {
+  const output = fileURLToPath(new URL("../.superdesign/blood-bank-review/", import.meta.url));
+  await mkdir(output, { recursive: true });
+  for (const width of [390, 1440]) for (const kind of ["donor", "recipient"]) {
+    const { context, page, errors } = await setup("/blood-bank", f.token, width);
+    try {
+      await page.getByRole("button", { name: kind === "donor" ? "إضافة متبرع" : "إضافة مستفيد", exact: true }).click();
+      await page.screenshot({ path: `${output}/workflow-person-${kind}-${width}.png` });
+      const governors = page.getByRole("group", { name: "المحافظة السورية", exact: true });
+      await governors.getByRole("searchbox").fill("حلب"); await governors.getByRole("button", { name: "حلب", exact: true }).click();
+      await page.getByRole("radio", { name: "المدينة غير موجودة", exact: true }).check(); await page.getByLabel("اسم المدينة", { exact: true }).fill("مدينة اصطناعية");
+      await page.getByRole("heading", { name: "العنوان", exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: `${output}/workflow-address-${kind}-${width}.png` });
+      await chooseResponsibility(page); await page.getByRole("button", { name: "إضافة فحص", exact: true }).click(); await page.getByLabel("نوع الفحص الجديد", { exact: true }).selectOption("HCV"); await page.getByLabel("حالة HCV", { exact: true }).selectOption("complete");
+      await page.getByRole("heading", { name: "بيانات الدم", exact: true }).scrollIntoViewIfNeeded(); await page.screenshot({ path: `${output}/workflow-blood-${kind}-${width}.png` });
+      await page.getByRole("heading", { name: "الفحوصات", exact: true }).scrollIntoViewIfNeeded(); await page.screenshot({ path: `${output}/workflow-screenings-${kind}-${width}.png` });
+      assert.ok(await page.getByRole("dialog").evaluate(el => el.scrollWidth <= el.clientWidth + 1)); assert.deepEqual(errors, []);
+    } finally { await context.close(); }
+  }
+});
+
 test("real Next transport: profile codes, patient linking, literal search, isolation and permissions", async () => {
   donor = (await api("POST", "blood-bank", 201, f.profile)).data;
   assert.match(donor.code, /^BD-\d{8,}$/); assert.equal(donor.blood_group, null); assert.equal(donor.screenings[0].result, null);

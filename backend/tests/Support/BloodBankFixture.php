@@ -3,6 +3,7 @@
 namespace Tests\Support;
 
 use Database\Seeders\BloodBankPermissionsSeeder;
+use Database\Seeders\BloodBankReferenceSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -11,6 +12,7 @@ class BloodBankFixture
     public static function make(): array
     {
         $f = CatalogFixture::make();
+        app(BloodBankReferenceSeeder::class)->run();
         app(BloodBankPermissionsSeeder::class)->run();
         $role = DB::table('global_user_roles')->where('user_id', $f['user']->id)->value('role_id');
         foreach (DB::table('permissions')->whereIn('code', array_keys(BloodBankPermissionsSeeder::PERMISSIONS))->pluck('id') as $p) {

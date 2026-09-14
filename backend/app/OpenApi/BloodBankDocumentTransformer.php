@@ -23,9 +23,13 @@ class BloodBankDocumentTransformer extends ClinicDocumentTransformer
         $choice = $this->object(['id' => new IntegerType, 'code' => $text(), 'name_ar' => $text()]);
         $place = $this->object(['id' => new IntegerType, 'name_ar' => $text()]);
         $person = $this->object(array_combine(SaveBloodProfile::PERSON, array_map(fn ($k) => str_ends_with($k, '_id') ? (new IntegerType)->nullable(true) : $nullable(), SaveBloodProfile::PERSON)));
+        $patientPerson = $person->clone();
+        foreach (SaveBloodProfile::MANUAL_ADDRESS as $key) {
+            $person->addProperty($key, $nullable());
+        }
         $screen = $this->object(['analyte' => (new StringType)->enum(['HBsAg', 'HCV', 'HIV']), 'screening_test_id' => (new IntegerType)->nullable(true), 'status' => (new StringType)->enum(['not_requested', 'requested', 'pending', 'complete', 'cancelled']), 'result' => (new StringType)->enum(['negative', 'positive', 'indeterminate'])->nullable(true)]);
         $base = ['id' => new IntegerType, 'kind' => (new StringType)->enum(['donor', 'recipient']), 'code' => $text(), 'name' => $text(), 'blood_group' => $nullable(), 'rh' => $nullable(), 'clinic_name' => $nullable(), 'doctor_name' => $nullable(), 'updated_at' => $nullable()];
-        $profile = $this->object($base + ['facility_id' => new IntegerType, 'patient_id' => (new IntegerType)->nullable(true), 'patient_code' => $nullable(), 'person_mode' => (new StringType)->enum(['direct', 'patient']), 'person' => $person, 'beneficiary_entity' => $nullable(), 'clinic_id' => (new IntegerType)->nullable(true), 'responsible_staff_id' => (new IntegerType)->nullable(true), 'blood_component_id' => (new IntegerType)->nullable(true), 'screenings' => $this->list($screen), 'lock_version' => new IntegerType]);
+        $profile = $this->object($base + ['facility_id' => new IntegerType, 'patient_id' => (new IntegerType)->nullable(true), 'patient_code' => $nullable(), 'person_mode' => (new StringType)->enum(['direct', 'patient']), 'person' => $person, 'governorate_name' => $nullable(), 'city_name' => $nullable(), 'component_name' => $nullable(), 'beneficiary_entity' => $nullable(), 'clinic_id' => (new IntegerType)->nullable(true), 'responsible_staff_id' => (new IntegerType)->nullable(true), 'blood_component_id' => (new IntegerType)->nullable(true), 'screenings' => $this->list($screen), 'lock_version' => new IntegerType]);
         $donation = $this->object(['id' => new IntegerType, 'donation_code' => (new StringType)->example('DON-20260914-000123'), 'donated_on' => (new StringType)->format('date'), 'blood_group' => (new StringType)->enum(['A', 'B', 'AB', 'O']), 'rh' => (new StringType)->enum(['positive', 'negative']), 'units' => (new StringType)->example('1.0000'), 'status' => $text(), 'lock_version' => new IntegerType, 'voided_at' => $nullable()]);
         $meta = $this->object(array_fill_keys(['page', 'per_page', 'total', 'last_page'], new IntegerType));
         $caps = $this->object(array_fill_keys(['create', 'update', 'donations_create', 'donations_update', 'patients_search'], new BooleanType));
@@ -49,7 +53,7 @@ class BloodBankDocumentTransformer extends ClinicDocumentTransformer
                         $template->setRequired([...$required, 'donated_on', 'blood_group', 'rh', 'units']);
                         $operation->requestBodyObject->setContent('application/json', Schema::fromType($template));
                     } else {
-                        $required = [...$required, 'person_mode', 'clinic_id', 'responsible_staff_id', 'screenings'];
+                        $required = [...$required, 'person_mode', 'clinic_id', 'responsible_staff_id'];
                         if ($operation->method === 'post') {
                             $required[] = 'kind';
                         } else {
@@ -59,7 +63,7 @@ class BloodBankDocumentTransformer extends ClinicDocumentTransformer
                         unset($direct->properties['patient_id']);
                         $direct->addProperty('person_mode', (new StringType)->enum(['direct']))->setRequired([...$required, 'first_name', 'family_name', 'gender', 'birth_date_accuracy', 'displacement_status']);
                         $linked = $template->clone();
-                        foreach (SaveBloodProfile::PERSON as $key) {
+                        foreach ([...SaveBloodProfile::PERSON, ...SaveBloodProfile::MANUAL_ADDRESS] as $key) {
                             unset($linked->properties[$key]);
                         }
                         $linked->addProperty('person_mode', (new StringType)->enum(['patient']))->addProperty('patient_id', new IntegerType)->setRequired([...$required, 'patient_id']);
@@ -70,7 +74,7 @@ class BloodBankDocumentTransformer extends ClinicDocumentTransformer
                     }
                 }
                 $operation->security = [new SecurityRequirement(['bearerAuth' => []])];
-                $operation->description .= "\nSanctum Bearer api ability, active account and selected active facility blood_bank.view required; every response private, no-store. facility_id is explicit, selected by the same authenticated directoryFacility rule as doctors/clinics; unauthorized URL never falls back. Profiles need blood_bank.create/update; donation writes need blood_bank.donations.create/update. Global patient search/link additionally requires global_user_roles blood_bank.patients.search and facility create or update. No automatic grants. Direct recipient requires first/family names; linked recipient sends patient_id and NO personal fields, never copied. UUID request_id is durable per user/facility: identical replay returns the same entity, changed content returns 409. PUT requires lock_version; resolve conflicts by fetching latest and explicitly reviewing the draft. Codes BD/BR are stable, historical codes retained. Creating a profile creates no donation, transfusion, patient or visit. Screenings are profile-only: complete requires a result; all other statuses require null. Methods must be explicitly mapped to the analyte, unknown stays null. Clinic and current eligible doctor are validated on new/changed assignment; historical unchanged responsibility is retained.";
+                $operation->description .= "\nSanctum Bearer api ability, active account and selected active facility blood_bank.view required; every response private, no-store. facility_id is explicit, selected by the same authenticated directoryFacility rule as doctors/clinics; unauthorized URL never falls back. Profiles need blood_bank.create/update; donation writes need blood_bank.donations.create/update. Global patient search/link additionally requires global_user_roles blood_bank.patients.search and facility create or update. No automatic grants. Direct recipient requires first/family names; linked recipient sends patient_id and NO personal fields, never copied. UUID request_id is durable per user/facility: identical replay returns the same entity, changed content returns 409. PUT requires lock_version; resolve conflicts by fetching latest and explicitly reviewing the draft. Codes BD/BR are stable, historical codes retained. Creating a profile creates no donation, transfusion, patient or visit. Screenings are optional profile-only status records (0 to 3 distinct analytes). Complete does not require a result. Omitted rows, results and methods retain historical values; no deletion by omission. Only explicitly supplied result/method fields can update those values; methods must match the analyte. No eligibility or inventory effect. Syrian governorates use the country_code SY directory. Manual governorate_text (outside Syria) excludes directory governorate_id/city_id; city_text excludes city_id and requires a governorate. Linked recipients prohibit both manual fields. Historical unchanged directory IDs remain readable. Clinic and current eligible doctor are validated on new/changed assignment; historical unchanged responsibility is retained.";
                 if (str_contains($route, '/donations')) {
                     $operation->description .= "\nActual donation only; donated_on cannot exceed facility-local today and must have exactly one covering open reporting period. Correction also requires the original period open. New status is pending; no screening copying, inventory or acceptance. Positive decimal units (up to 4 decimal places). Code DON-YYYYMMDD-ID uses actual date and the untruncated global donation ID padded to at least 6 digits. Date correction atomically reserves the new code, preserves old aliases and audits the same event; search matches current or previous codes, scoped to donor/facility. Only pending, nonvoided donations can be corrected.";
                 }
@@ -83,11 +87,14 @@ class BloodBankDocumentTransformer extends ClinicDocumentTransformer
                     $fields = ['data' => $this->list($place)];
                 } elseif (preg_match('#/(clinics|doctors|patients)$#', $route)) {
                     $fields = ['data' => $this->list($choice), 'meta' => $meta];
+                    if (str_ends_with($route, '/doctors')) {
+                        $fields['doctor_types_configured'] = new BooleanType;
+                    }
                     if (str_ends_with($route, '/patients')) {
                         $fields['data'] = $this->list($this->object($choice->properties + ['patient_code' => $text(), 'first_name' => $text(), 'family_name' => $text(), 'birth_date' => $nullable()]));
                     }
                 } elseif (str_contains($route, '/patients/')) {
-                    $fields = ['data' => $this->object($person->properties + ['id' => new IntegerType, 'patient_code' => $text()])];
+                    $fields = ['data' => $this->object($patientPerson->properties + ['id' => new IntegerType, 'patient_code' => $text(), 'governorate_name' => $nullable(), 'city_name' => $nullable()])];
                 } elseif (str_contains($route, '/donations')) {
                     $fields = str_ends_with($route, '/donations') && $operation->method === 'get' ? ['data' => $this->list($donation), 'meta' => $meta] : ['data' => $this->object($donation->properties + ['donor_id' => new IntegerType, 'reporting_period_id' => new IntegerType])];
                 } elseif ($operation->method === 'get') {

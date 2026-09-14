@@ -12,6 +12,7 @@ use App\Services\BloodBank\BloodBankWriter;
 use App\Services\Catalog\CatalogQueries;
 use App\Services\Clinics\ClinicCounts;
 use App\Services\Doctors\DoctorAccess;
+use Database\Seeders\BloodBankReferenceSeeder;
 use Dedoc\Scramble\Attributes\Group;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -55,12 +56,17 @@ class BloodBankController extends Controller
     {
         $f = $this->access->facility($request->user(), $request->integer('facility_id'));
         $doctors = in_array('doctors.view', $f['permissions'], true) ? app(DoctorAccess::class)->capabilities($request->user(), $f) : [];
+        $components = DB::table('blood_components')->whereNotNull('registration_kind')->where('is_active', true)->get(['id', 'code', 'registration_kind'])->keyBy('registration_kind');
 
         return response()->json(['data' => ['facility' => array_intersect_key($f, array_flip(['id', 'code', 'name_ar', 'timezone'])), 'capabilities' => $this->access->capabilities($request->user(), $f),
             'can_add_doctor' => ($doctors['create'] ?? false) && ($doctors['link'] ?? false),
-            'blood_components' => DB::table('blood_components')->where('is_active', true)->orderBy('display_order')->orderBy('code')->get(['id', 'code', 'name_ar']),
+            'blood_components' => collect(BloodBankReferenceSeeder::COMPONENTS)->map(function ($definition, $kind) use ($components) {
+                $row = $components->get($kind);
+
+                return $row ? ['id' => $row->id, 'code' => $row->code, 'name_ar' => $definition[1]] : null;
+            })->filter()->values(),
             'screening_tests' => DB::table('screening_tests')->where('is_active', true)->whereNotNull('blood_bank_analyte')->orderBy('display_order')->orderBy('code')->get(['id', 'code', 'name_ar', 'blood_bank_analyte']),
-            'governorates' => DB::table('governorates')->orderBy('name_ar')->get(['id', 'name_ar'])]]);
+            'governorates' => DB::table('governorates')->where('country_code', 'SY')->orderBy('name_ar')->get(['id', 'name_ar'])]]);
     }
 
     public function cities(BloodBankQuery $request): JsonResponse
@@ -85,9 +91,14 @@ class BloodBankController extends Controller
         $f = $this->access->facility($request->user(), $request->integer('facility_id'));
         $q = app(ClinicCounts::class)->currentDoctors($f)->where('c.id', $request->integer('clinic_id'));
         $like = BloodBankQueries::like($request->input('search'));
-        $page = $q->where(fn ($q) => $q->where('s.full_name', 'like', $like)->orWhere('s.staff_code', 'like', $like))->distinct()->orderBy('s.staff_code')->orderBy('s.id')->paginate(20, ['s.id', 's.staff_code as code', 's.full_name as name_ar']);
+        // Match the clinic directory's grouping: overlapping historical links must
+        // not inflate the total or produce empty options pages.
+        $page = $q->where(fn ($q) => $q->where('s.full_name', 'like', $like)->orWhere('s.staff_code', 'like', $like))
+            ->select('s.id', 's.staff_code as code', 's.full_name as name_ar')->groupBy('s.id', 's.staff_code', 's.full_name')
+            ->orderBy('s.staff_code')->orderBy('s.id')->paginate(20);
 
-        return response()->json(['data' => $page->items(), 'meta' => CatalogQueries::meta($page)]);
+        return response()->json(['data' => $page->items(), 'meta' => CatalogQueries::meta($page),
+            'doctor_types_configured' => DB::table('staff_types')->whereIn('code', config('clinics.doctor_staff_types', []))->where('is_active', true)->exists()]);
     }
 
     public function patients(BloodBankQuery $request): JsonResponse
@@ -112,7 +123,7 @@ class BloodBankController extends Controller
         $row = DB::table('patients')->where('id', $patient)->where('status', 'active')->first(['id', 'patient_code', ...SaveBloodProfile::PERSON]);
         abort_unless($row, 404);
 
-        return response()->json(['data' => $row]);
+        return response()->json(['data' => (array) $row + ['governorate_name' => DB::table('governorates')->where('id', $row->governorate_id)->value('name_ar'), 'city_name' => DB::table('cities')->where('id', $row->city_id)->value('name_ar')]]);
     }
 
     public function donations(BloodBankQuery $request, int $donor): JsonResponse

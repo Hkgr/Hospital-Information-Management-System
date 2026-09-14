@@ -17,6 +17,8 @@ class BloodBankMigrationConcurrencyTest extends TestCase
     public function test_mysql_backfill_rollback_and_overlapping_date_corrections(): void
     {
         $f = BloodBankFixture::make();
+        $refinement = require database_path('migrations/2026_09_14_000002_refine_blood_bank_profiles.php');
+        $refinement->down();
         $migration = require database_path('migrations/2026_09_14_000001_add_blood_bank_registration.php');
         $migration->down();
         $this->assertFalse(Schema::hasTable('blood_recipients'));
@@ -24,6 +26,16 @@ class BloodBankMigrationConcurrencyTest extends TestCase
         $event = DB::table('blood_donations')->insertGetId(['facility_id' => $f['facility'], 'donor_id' => $id, 'reporting_period_id' => DB::table('reporting_periods')->where('facility_id', $f['facility'])->value('id'), 'donated_on' => $f['today'], 'blood_group' => 'O', 'rh' => 'positive', 'units' => '1.2500', 'entered_by' => $f['user']->id, 'updated_at' => '2020-01-01 00:00:00']);
         $before = (array) DB::table('blood_donations')->where('id', $event)->first();
         $migration->up();
+        $refinement->up();
+        // A historical result and method survive both application and rollback.
+        $screen = DB::table('blood_bank_screenings')->insertGetId(['donor_id' => $id, 'analyte' => 'HCV', 'status' => 'complete', 'result' => 'positive', 'screening_test_id' => $f['test']]);
+        $screenBefore = (array) DB::table('blood_bank_screenings')->where('id', $screen)->first();
+        $refinement->down();
+        $refinement->up();
+        $this->assertSame($screenBefore, (array) DB::table('blood_bank_screenings')->where('id', $screen)->first());
+        DB::table('blood_bank_screenings')->where('id', $screen)->update(['status' => 'pending']);
+        $this->assertDatabaseHas('blood_bank_screenings', ['id' => $screen, 'result' => 'positive', 'screening_test_id' => $f['test']]);
+        DB::table('blood_bank_screenings')->where('id', $screen)->update(['status' => 'complete']);
         $after = (array) DB::table('blood_donations')->where('id', $event)->first();
         $code = $after['donation_code'];
         unset($after['donation_code']);
