@@ -7,11 +7,18 @@ use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\ClinicController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DoctorController;
+use App\Http\Controllers\Api\DossierController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
+    Route::prefix('dossiers')->name('dossiers.')->group(function () {
+        Route::get('/', [DossierController::class, 'index'])->name('index');
+        Route::get('/{dossier}', [DossierController::class, 'show'])->whereNumber('dossier')->name('show');
+        Route::get('/{dossier}/visits', [DossierController::class, 'visits'])->whereNumber('dossier')->name('visits');
+        Route::get('/{dossier}/visits/{visit}', [DossierController::class, 'visit'])->whereNumber(['dossier', 'visit'])->name('visit');
+    });
     Route::prefix('blood-bank')->name('blood-bank.')->group(function () {
         Route::get('/events', [BloodEventController::class, 'index'])->name('events');
         Route::post('/events', [BloodEventController::class, 'store'])->name('events.store');

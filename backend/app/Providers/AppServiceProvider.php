@@ -10,6 +10,7 @@ use App\OpenApi\BloodEventDocumentTransformer;
 use App\OpenApi\CatalogDocumentTransformer;
 use App\OpenApi\ClinicDocumentTransformer;
 use App\OpenApi\DoctorDocumentTransformer;
+use App\OpenApi\DossierDocumentTransformer;
 use App\Support\TestDatabaseSafety;
 use Dedoc\Scramble\Scramble;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -58,7 +59,7 @@ class AppServiceProvider extends ServiceProvider
         // Register auth and directory contracts in the existing Scramble document.
         if (class_exists(Scramble::class)) {
             Scramble::configure()
-                ->withDocumentTransformers([AuthDocumentTransformer::class, ClinicDocumentTransformer::class, DoctorDocumentTransformer::class, CatalogDocumentTransformer::class, BloodBankDocumentTransformer::class, BloodEventDocumentTransformer::class]);
+                ->withDocumentTransformers([AuthDocumentTransformer::class, ClinicDocumentTransformer::class, DoctorDocumentTransformer::class, CatalogDocumentTransformer::class, BloodBankDocumentTransformer::class, BloodEventDocumentTransformer::class, DossierDocumentTransformer::class]);
         }
 
         Event::listen(CommandStarting::class, function (CommandStarting $event) {

@@ -50,7 +50,7 @@ function AuthenticatedSession({ children }: { children: React.ReactNode }) {
     } finally { setBusy(false); }
   }
 
-  if (identity) return <IdentityContext.Provider value={identity}><AppShell user={identity.user} canViewClinics={identity.access.some(entry => entry.permissions.includes("clinics.view"))} canViewDoctors={identity.access.some(entry => entry.permissions.includes("doctors.view"))} canViewCatalog={identity.access.some(entry => entry.permissions.includes("catalog.view"))} canViewBloodBank={identity.access.some(entry => entry.permissions.includes("blood_bank.view"))} onLogout={signOut} logoutPending={busy} logoutError={error}>
+  if (identity) return <IdentityContext.Provider value={identity}><AppShell user={identity.user} canViewDossiers={identity.access.some(entry => entry.permissions.includes("dossiers.view"))} canViewClinics={identity.access.some(entry => entry.permissions.includes("clinics.view"))} canViewDoctors={identity.access.some(entry => entry.permissions.includes("doctors.view"))} canViewCatalog={identity.access.some(entry => entry.permissions.includes("catalog.view"))} canViewBloodBank={identity.access.some(entry => entry.permissions.includes("blood_bank.view"))} onLogout={signOut} logoutPending={busy} logoutError={error}>
     {children}
   </AppShell></IdentityContext.Provider>;
 
