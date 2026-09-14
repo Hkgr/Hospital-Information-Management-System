@@ -27,6 +27,9 @@ if (($argv[1] ?? '') === 'prepare') {
             DB::table('role_permissions')->insertOrIgnore(['role_id' => $role, 'permission_id' => $p]);
         }
         $f['second'] = DB::table('facilities')->insertGetId(['code' => 'ZZZ-BB-SECOND-'.$f['tag'], 'name_ar' => 'منشأة بنك دم اختبارية ثانية', 'timezone' => 'Asia/Damascus']);
+        $f['governorate'] = DB::table('governorates')->where('code', 'SY-HL')->value('id');
+        $f['city'] = DB::table('cities')->where('governorate_id', $f['governorate'])->value('id');
+        DB::table('patients')->where('id', $f['patients'][2])->update(['governorate_id' => $f['governorate'], 'city_id' => $f['city'], 'address_line' => 'عنوان المريض المرجعي']);
         DB::table('facility_user_roles')->insert(['facility_id' => $f['second'], 'user_id' => $f['user']->id, 'role_id' => $role]);
         $f['token'] = $f['user']->createToken('blood-bank-live', ['api'])->plainTextToken;
         $f['viewer_token'] = $f['viewer']->createToken('blood-bank-live', ['api'])->plainTextToken;
@@ -43,6 +46,11 @@ if (($argv[1] ?? '') === 'prepare') {
     });
     file_put_contents($path, json_encode($f, JSON_THROW_ON_ERROR));
     echo "Prepared isolated blood-bank records; credentials remain in ignored local storage.\n";
+} elseif (in_array($argv[1] ?? '', ['doctor-types-empty', 'doctor-types-reset'], true)) {
+    $f = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+    $f['doctor_staff_types'] = $argv[1] === 'doctor-types-empty' ? [] : ['CAT-'.$f['tag']];
+    file_put_contents($path, json_encode($f, JSON_THROW_ON_ERROR), LOCK_EX);
+    echo "Updated only the isolated HTTP fixture's doctor-type configuration.\n";
 } elseif (($argv[1] ?? '') === 'verify') {
     $f = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
     foreach ($f['counts'] as $t => $count) {

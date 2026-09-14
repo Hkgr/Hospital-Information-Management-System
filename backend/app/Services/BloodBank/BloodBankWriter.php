@@ -67,6 +67,7 @@ class BloodBankWriter
                     throw ValidationException::withMessages(['blood_component_id' => 'اختر مكوّنًا فعالًا من الدليل.']);
                 }
                 $person = array_fill_keys(SaveBloodProfile::PERSON, null);
+                $manual = array_fill_keys(SaveBloodProfile::MANUAL_ADDRESS, null);
                 $patient = $input['person_mode'] === 'patient' ? (int) $input['patient_id'] : null;
                 if ($kind === 'donor' && ($patient && (! $old || $old['patient_id'] != $patient))) {
                     throw ValidationException::withMessages(['person_mode' => 'أدخل بيانات المتبرع مباشرة.']);
@@ -79,17 +80,27 @@ class BloodBankWriter
                 }
                 if (! $patient) {
                     $person = Arr::only($input, SaveBloodProfile::PERSON) + $person;
+                    // Omission is not an instruction to erase a historical manual address.
+                    foreach (SaveBloodProfile::MANUAL_ADDRESS as $key) {
+                        $manual[$key] = array_key_exists($key, $input) ? $input[$key] : ($old[$key] ?? null);
+                    }
+                    if ($manual['governorate_text'] && ($person['governorate_id'] || $person['city_id'])) {
+                        throw ValidationException::withMessages(['governorate_text' => 'اختر محافظة من الدليل أو أدخل محافظة خارج سوريا؛ لا تجمع المسارين.']);
+                    }
+                    if ($manual['city_text'] && ($person['city_id'] || (! $person['governorate_id'] && ! $manual['governorate_text']))) {
+                        throw ValidationException::withMessages(['city_text' => 'المدينة اليدوية تحتاج محافظة، ولا تُجمع مع مدينة من الدليل.']);
+                    }
                     if (! $person['birth_date'] && $person['birth_date_accuracy'] !== 'unknown') {
                         throw ValidationException::withMessages(['birth_date_accuracy' => 'اختر غير معروف عند غياب تاريخ الميلاد.']);
                     }
-                    if ($person['governorate_id'] && ! DB::table('governorates')->where('id', $person['governorate_id'])->exists()) {
+                    if ($person['governorate_id'] && ! DB::table('governorates')->where('id', $person['governorate_id'])->where(fn ($q) => $q->where('country_code', 'SY')->when($old && $old['governorate_id'] == $person['governorate_id'], fn ($q) => $q->orWhere('id', $old['governorate_id'])))->exists()) {
                         throw ValidationException::withMessages(['governorate_id' => 'المحافظة غير متاحة.']);
                     }
                     if ($person['city_id'] && ! DB::table('cities')->where('id', $person['city_id'])->where('governorate_id', $person['governorate_id'])->exists()) {
                         throw ValidationException::withMessages(['city_id' => 'اختر مدينة تابعة للمحافظة.']);
                     }
                 }
-                $fields = $person + ['patient_id' => $patient];
+                $fields = $person + $manual + ['patient_id' => $patient];
                 $fields += Arr::only($input, ['clinic_id', 'responsible_staff_id']);
                 foreach (['blood_group', 'rh', 'blood_component_id'] as $field) {
                     $fields[$field] = $input[$field] ?? null;
@@ -116,19 +127,17 @@ class BloodBankWriter
                     DB::table($table)->where('id', $id)->update([BloodBankQueries::codeColumn($kind) => ($kind === 'donor' ? 'BD-' : 'BR-').str_pad((string) $id, 8, '0', STR_PAD_LEFT)]);
                 }
                 $oldScreens = DB::table('blood_bank_screenings')->where($kind.'_id', $id)->get()->keyBy('analyte');
-                foreach ($input['screenings'] as $screen) {
-                    $result = $screen['result'] ?? null;
-                    if (($screen['status'] === 'complete') !== ($result !== null)) {
-                        throw ValidationException::withMessages(['screenings' => 'الفحص المكتمل يحتاج نتيجة؛ الحالات الأخرى تُحفظ دون نتيجة.']);
-                    }
-                    $test = $screen['screening_test_id'] ?? null;
+                foreach ($input['screenings'] ?? [] as $screen) {
+                    $previous = $oldScreens->get($screen['analyte']);
+                    $result = array_key_exists('result', $screen) ? $screen['result'] : $previous?->result;
+                    $test = array_key_exists('screening_test_id', $screen) ? $screen['screening_test_id'] : $previous?->screening_test_id;
                     if ($test && ($oldScreens->get($screen['analyte'])?->screening_test_id != $test) && ! DB::table('screening_tests')->where('id', $test)->where('blood_bank_analyte', $screen['analyte'])->where('is_active', true)->exists()) {
                         throw ValidationException::withMessages(['screenings' => 'طريقة الفحص غير معتمدة لهذا الفحص. يمكن إبقاؤها غير معروفة.']);
                     }
                     DB::table('blood_bank_screenings')->updateOrInsert([$kind.'_id' => $id, 'analyte' => $screen['analyte']], ['screening_test_id' => $test, 'status' => $screen['status'], 'result' => $result, 'updated_at' => now(), 'created_at' => $oldScreens->get($screen['analyte'])?->created_at ?? now()]);
                 }
                 $new = $this->queries->find($kind, $id, $facility['id']);
-                $this->audit->record($request, $facility['id'], $id, $old ? 'updated' : 'created', $old ? $old + ['screenings' => $oldScreens->values()->all()] : null, $new + ['screenings' => $input['screenings']], 'blood_'.$kind);
+                $this->audit->record($request, $facility['id'], $id, $old ? 'updated' : 'created', $old ? $old + ['screenings' => $oldScreens->values()->all()] : null, $new + ['screenings' => DB::table('blood_bank_screenings')->where($kind.'_id', $id)->get()->all()], 'blood_'.$kind);
 
                 return $id;
             });

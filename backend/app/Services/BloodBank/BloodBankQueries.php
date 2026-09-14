@@ -66,15 +66,15 @@ class BloodBankQueries
     public function profile(string $kind, int $id, int $facility): array
     {
         $row = $this->find($kind, $id, $facility);
-        $person = array_intersect_key($row, array_flip(SaveBloodProfile::PERSON));
+        $person = array_intersect_key($row, array_flip([...SaveBloodProfile::PERSON, ...SaveBloodProfile::MANUAL_ADDRESS]));
         $patient = null;
         if ($row['patient_id']) {
             $patient = DB::table('patients')->where('id', $row['patient_id'])->first(['id', 'patient_code', ...SaveBloodProfile::PERSON]);
-            $person = array_intersect_key((array) $patient, array_flip(SaveBloodProfile::PERSON));
+            $person = array_intersect_key((array) $patient, array_flip(SaveBloodProfile::PERSON)) + array_fill_keys(SaveBloodProfile::MANUAL_ADDRESS, null);
         }
         $name = $row['patient_id'] || $kind === 'recipient' ? ($person['first_name'] ?? '').' '.($person['family_name'] ?? '') : $row['full_name'];
         $screens = DB::table('blood_bank_screenings')->where($kind.'_id', $id)->orderBy('analyte')->get(['analyte', 'screening_test_id', 'status', 'result']);
-        $screenings = array_map(fn ($a) => (array) ($screens->firstWhere('analyte', $a) ?? ['analyte' => $a, 'screening_test_id' => null, 'status' => 'not_requested', 'result' => null]), ['HBsAg', 'HCV', 'HIV']);
+        $screenings = $screens->map(fn ($s) => (array) $s)->all();
 
         return ['id' => $id, 'kind' => $kind, 'facility_id' => $facility, 'code' => $row[self::codeColumn($kind)], 'name' => $name,
             'person_mode' => $row['patient_id'] ? 'patient' : 'direct', 'patient_id' => $row['patient_id'], 'patient_code' => $patient?->patient_code,
@@ -82,6 +82,9 @@ class BloodBankQueries
             'clinic_id' => $row['clinic_id'], 'responsible_staff_id' => $row['responsible_staff_id'], 'blood_component_id' => $row['blood_component_id'],
             'clinic_name' => DB::table('clinics')->where('id', $row['clinic_id'])->value('name_ar'),
             'doctor_name' => DB::table('staff')->where('id', $row['responsible_staff_id'])->value('full_name'),
+            'governorate_name' => $person['governorate_text'] ?: DB::table('governorates')->where('id', $person['governorate_id'])->value('name_ar'),
+            'city_name' => $person['city_text'] ?: DB::table('cities')->where('id', $person['city_id'])->value('name_ar'),
+            'component_name' => DB::table('blood_components')->where('id', $row['blood_component_id'])->value('name_ar'),
             'screenings' => $screenings, 'lock_version' => $row['lock_version'], 'updated_at' => $row['updated_at']];
     }
 

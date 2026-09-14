@@ -1,0 +1,20 @@
+/* Keep the directory form styles; constrain radio controls independently of text inputs. */
+form.profileForm input[type="radio"] {
+  inline-size: 16px;
+  block-size: 16px;
+  min-inline-size: 16px;
+  padding: 0;
+  flex: 0 0 16px;
+  accent-color: var(--mbz-action);
+}
+
+.profileForm label:has(> input[type="radio"]) {
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+
+.profileForm button[aria-pressed="true"] {
+  background: #eaf5f6;
+  border-color: #25839b;
+}

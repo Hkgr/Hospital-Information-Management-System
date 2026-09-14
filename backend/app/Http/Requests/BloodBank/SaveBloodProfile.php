@@ -9,6 +9,8 @@ class SaveBloodProfile extends FormRequest
 {
     public const PERSON = ['first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status'];
 
+    public const MANUAL_ADDRESS = ['governorate_text', 'city_text'];
+
     public function authorize(): bool
     {
         return true;
@@ -25,13 +27,16 @@ class SaveBloodProfile extends FormRequest
             'clinic_id' => ['required', 'integer', 'min:1'], 'responsible_staff_id' => ['required', 'integer', 'min:1'],
             'blood_component_id' => ['nullable', 'integer', 'min:1'], 'beneficiary_entity' => ['nullable', 'string', 'max:200'],
             'blood_group' => ['nullable', Rule::in(['A', 'B', 'AB', 'O'])], 'rh' => ['nullable', Rule::in(['positive', 'negative'])],
-            'screenings' => ['required', 'array', 'size:3'], 'screenings.*' => ['array:analyte,screening_test_id,status,result'],
+            'screenings' => ['sometimes', 'array', 'max:3'], 'screenings.*' => ['array:analyte,screening_test_id,status,result'],
             'screenings.*.analyte' => ['required', 'distinct', Rule::in(['HBsAg', 'HCV', 'HIV'])],
             'screenings.*.screening_test_id' => ['nullable', 'integer', 'min:1'],
             'screenings.*.status' => ['required', Rule::in(['not_requested', 'requested', 'pending', 'complete', 'cancelled'])],
             'screenings.*.result' => ['nullable', Rule::in(['negative', 'positive', 'indeterminate'])]];
         foreach (self::PERSON as $field) {
             $rules[$field] = $linked ? ['prohibited'] : ['nullable'];
+        }
+        foreach (self::MANUAL_ADDRESS as $field) {
+            $rules[$field] = $linked ? ['prohibited'] : ['nullable', 'string', 'max:120'];
         }
         if (! $linked) {
             foreach (['first_name' => 80, 'family_name' => 80, 'father_name' => 80, 'mother_name' => 120, 'phone' => 30, 'alt_phone' => 30, 'address_line' => 255] as $key => $max) {

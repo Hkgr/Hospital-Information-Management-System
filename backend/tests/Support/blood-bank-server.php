@@ -17,7 +17,7 @@ TestDatabaseSafety::assertAvailable($app);
 $fixture = storage_path('framework/testing/blood-bank-live.json');
 if (is_file($fixture)) {
     $f = json_decode(file_get_contents($fixture), true, 512, JSON_THROW_ON_ERROR);
-    config(['clinics.doctor_staff_types' => ['CAT-'.$f['tag']]]);
+    config(['clinics.doctor_staff_types' => $f['doctor_staff_types'] ?? ['CAT-'.$f['tag']]]);
 }
 $response = $kernel->handle($request = Request::capture());
 $response->headers->set('X-Test-Laravel', 'blood-bank');
