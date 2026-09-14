@@ -11,6 +11,7 @@ use App\Services\Dossiers\DossierMedicalWriter;
 use App\Services\Dossiers\DossierPersonalWriter;
 use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\DossierWizardQueries;
+use App\Services\Dossiers\DossierWorkflowActions;
 use App\Services\Dossiers\DossierWrites;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -66,15 +67,9 @@ class DossierWizardController extends Controller
     public function options(Request $r): JsonResponse
     {
         $f = $this->scope($r);
-        $caps = [];
-        foreach (['create', 'personal.update', 'medical.update', 'visits.create', 'visits.update'] as $code) {
-            $caps[str_replace('.', '_', $code)] = in_array('dossiers.'.$code, $f['permissions'], true);
-        }
-        foreach (['patients.search', 'patients.create', 'patients.update', 'diagnoses.create'] as $code) {
-            $caps[str_replace('.', '_', $code)] = $this->access->global($r->user(), $code, false);
-        }
+        $caps = $f['capabilities'];
 
-        return response()->json(['data' => ['capabilities' => $caps, 'today' => $f['today'], 'governorates' => DB::table('governorates')->where('country_code', 'SY')->orderBy('name_ar')->get(['id', 'name_ar']), 'visit_types' => DB::table('visit_types')->where('is_active', true)->orderBy('display_order')->orderBy('code')->get(['id', 'code', 'name_ar'])]]);
+        return response()->json(['data' => ['capabilities' => $caps, 'creation' => DossierWorkflowActions::creation($caps), 'today' => $f['today'], 'governorates' => DB::table('governorates')->where('country_code', 'SY')->orderBy('name_ar')->get(['id', 'name_ar']), 'visit_types' => DB::table('visit_types')->where('is_active', true)->orderBy('display_order')->orderBy('code')->get(['id', 'code', 'name_ar'])]]);
     }
 
     public function lookup(Request $r): JsonResponse

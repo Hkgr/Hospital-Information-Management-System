@@ -51,6 +51,84 @@ class DossierWorkflowTest extends TestCase
         return $overrides + ['diagnosis_id' => $this->f['diagnosis'], 'diagnosed_on' => null, 'clinic_id' => $this->f['clinics'][0], 'diagnosing_staff_id' => $this->f['workflow_doctors'][0]];
     }
 
+    public function test_review_procedure_counts_are_scoped_and_not_multiplied_by_diagnoses(): void
+    {
+        $d = $this->create();
+        $v = $this->callApi('POST', "/{$d['id']}/visits", $this->visit(['diagnoses' => [$this->diagnosis(), $this->diagnosis(['diagnosed_on' => '2000-01-01'])]]))->assertCreated()->json('data.visit');
+        $copy = (array) DB::table('visits')->where('id', $v['id'])->first();
+        unset($copy['id']);
+        $second = DB::table('visits')->insertGetId(array_replace($copy, ['visit_no' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid(), 'status' => 'complete', 'attending_staff_id' => $this->f['workflow_doctors'][0]]));
+        $procedure = (array) DB::table('visit_procedures')->where('facility_id', $this->f['facility'])->whereNull('voided_at')->first();
+        unset($procedure['id']);
+        foreach ([$v['id'], $v['id'], $second] as $visit) {
+            DB::table('visit_procedures')->insert(array_replace($procedure, ['visit_id' => $visit, 'performed_on' => '2001-03-02', 'client_request_id' => (string) Str::uuid()]));
+        }
+        $service = (array) DB::table('visit_services')->where('facility_id', $this->f['facility'])->whereNull('voided_at')->first();
+        unset($service['id']);
+        for ($n = 0; $n < 2; $n++) {
+            DB::table('visit_services')->insert(array_replace($service, ['visit_id' => $v['id'], 'performed_on' => '2001-03-02', 'client_request_id' => (string) Str::uuid()]));
+        }
+        DB::table('visit_procedures')->insert(array_replace($procedure, ['visit_id' => $second, 'client_request_id' => (string) Str::uuid(), 'voided_at' => now(), 'voided_by' => $this->f['user']->id, 'void_reason' => 'اختبار']));
+        DB::table('visit_procedures')->insert(array_replace($procedure, ['visit_id' => $second, 'client_request_id' => (string) Str::uuid(), 'performed_on' => '2099-01-01']));
+        $this->callApi('GET', '', ['search' => $d['code']])->assertOk()->assertJsonPath('data.0.visit_count', 2)->assertJsonPath('data.0.procedure_count', 3)->assertJsonPath('totals.dossiers', 1);
+        DB::table('visits')->where('id', $second)->update(['status' => 'void', 'voided_at' => now(), 'voided_by' => $this->f['user']->id, 'void_reason' => 'اختبار']);
+        $this->callApi('GET', '', ['search' => $d['code']])->assertJsonPath('data.0.procedure_count', 2);
+        DB::table('visits')->where('id', $v['id'])->update(['visit_date' => '2099-01-01']);
+        $this->callApi('GET', '', ['search' => $d['code']])->assertJsonPath('data.0.procedure_count', 0);
+        DB::table('visits')->where('id', $v['id'])->update(['visit_date' => '2001-03-02']);
+        DB::table('visits')->where('id', $v['id'])->update(['dossier_id' => null]);
+        $this->callApi('GET', '', ['search' => $d['code']])->assertJsonPath('data.0.procedure_count', 0);
+    }
+
+    public function test_review_date_changes_revalidate_retained_historical_contexts_atomically(): void
+    {
+        $d = $this->create();
+        $v = $this->callApi('POST', "/{$d['id']}/visits", $this->visit(['diagnoses' => [$this->diagnosis()]]))->assertCreated()->json('data.visit');
+        DB::table('clinic_staff')->where('clinic_id', $this->f['clinics'][0])->update(['starts_on' => '2000-01-01', 'ends_on' => '2002-01-01']);
+        DB::table('staff')->where('id', $this->f['workflow_doctors'][0])->update(['is_active' => false]);
+        DB::table('clinics')->where('id', $this->f['clinics'][0])->update(['is_active' => false]);
+        $row = $this->diagnosis(['id' => $v['diagnoses'][0]['id'], 'lock_version' => 1]);
+        $path = "/{$d['id']}/visits/{$v['id']}";
+        $this->callApi('PUT', $path, $this->visit(['lock_version' => 1, 'diagnoses' => [$row]]))->assertOk();
+        $row['lock_version'] = 2;
+        $this->callApi('PUT', $path, $this->visit(['lock_version' => 2, 'visit_date' => '2000-05-01', 'diagnoses' => [$row]]))->assertOk();
+        $row['lock_version'] = 3;
+        $before = [];
+        foreach (['visits', 'visit_diagnoses', 'dossier_section_progress', 'dossier_requests', 'audit_logs'] as $table) {
+            $before[$table] = DB::table($table)->orderBy('id')->get()->toJson();
+        }
+        foreach ([[$row], []] as $submitted) {
+            $this->callApi('PUT', $path, $this->visit(['lock_version' => 3, 'visit_date' => '2002-01-01', 'diagnoses' => $submitted, 'is_referred' => true, 'referring_hospital' => 'لن يحفظ', 'referral_date' => '2000-01-01', 'referral_reason' => 'لن يحفظ']))->assertUnprocessable()->assertJsonValidationErrors('diagnoses.0.diagnosing_staff_id');
+            foreach ($before as $table => $rows) {
+                $this->assertSame($rows, DB::table($table)->orderBy('id')->get()->toJson(), $table);
+            }
+        }
+    }
+
+    public function test_review_actions_require_identity_path_and_correct_visit_operation(): void
+    {
+        $this->callApi('GET', '/options')->assertOk()->assertJsonPath('data.creation.allowed', true);
+        DB::table('global_user_roles')->where('user_id', $this->f['user']->id)->delete();
+        $this->callApi('GET', '/options')->assertOk()->assertJsonPath('data.creation.allowed', false);
+        DB::table('global_user_roles')->insert(['user_id' => $this->f['user']->id, 'role_id' => $this->f['dossier_role']]);
+        $d = $this->create();
+        $this->callApi('GET', "/{$d['id']}/progress")->assertJsonPath('data.workflow.visit.action', 'create');
+        $v = $this->callApi('POST', "/{$d['id']}/visits", $this->visit())->assertCreated()->json('data.visit');
+        $this->callApi('GET', "/{$d['id']}/progress")->assertJsonPath('data.workflow.visit.action', 'update')->assertJsonPath('data.workflow.visit.id', $v['id']);
+        $permissions = DB::table('permissions')->whereIn('code', ['dossiers.personal.update', 'dossiers.medical.update', 'dossiers.visits.update'])->pluck('id');
+        DB::table('role_permissions')->where('role_id', $this->f['dossier_role'])->whereIn('permission_id', $permissions)->delete();
+        $this->callApi('GET', '', ['search' => $d['code']])->assertJsonPath('data.0.workflow.resume_section', null);
+        $this->callApi('GET', "/{$d['id']}")->assertJsonPath('data.workflow.visit.action', null);
+    }
+
+    public function test_review_existing_dossier_is_explicit_conflict_without_writes(): void
+    {
+        $d = $this->create();
+        $before = DB::table('patient_dossiers')->orderBy('id')->get()->toJson();
+        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'code' => 'MY-UNSAVED-CODE', 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.code', 'DOSSIER_ALREADY_EXISTS')->assertJsonPath('error.existing_dossier_id', $d['id']);
+        $this->assertSame($before, DB::table('patient_dossiers')->orderBy('id')->get()->toJson());
+    }
+
     public function test_atomic_personal_save_idempotency_discoverability_and_no_orphans(): void
     {
         $before = DB::table('patients')->count();
@@ -75,7 +153,7 @@ class DossierWorkflowTest extends TestCase
         }
         $this->callApi('GET', '/options/patients', ['search' => '%_'])->assertJsonCount(1, 'data');
         $this->callApi('GET', '/options/patients', ['search' => ''])->assertJsonCount(0, 'data');
-        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'code' => 'NOT-USED', 'opening_date' => '1990-01-01'])->assertCreated()->assertJsonPath('data.id', $d['id']);
+        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'code' => 'NOT-USED', 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.existing_dossier_id', $d['id']);
         $this->callApi('PUT', '/'.$d['id'].'/personal', ['patient_id' => $this->f['patients'][2]])->assertUnprocessable()->assertJsonValidationErrors('patient_id');
     }
 
@@ -107,7 +185,7 @@ class DossierWorkflowTest extends TestCase
         $this->assertTrue(DB::table('blood_transfusions')->where('patient_id', $patient)->exists());
         $input = ['facility_id' => $facility, 'request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $patient, 'code' => 'EXISTING-1990', 'opening_date' => '1990-01-02'];
         $d = $this->callApi('POST', '', $input)->assertCreated()->assertJsonPath('data.patient.id', $patient)->json('data');
-        $this->callApi('POST', '', array_replace($input, ['request_id' => (string) Str::uuid()]))->assertCreated()->assertJsonPath('data.id', $d['id']);
+        $this->callApi('POST', '', array_replace($input, ['request_id' => (string) Str::uuid()]))->assertConflict()->assertJsonPath('error.existing_dossier_id', $d['id']);
         $this->assertSame(1, DB::table('patient_dossiers')->where('facility_id', $facility)->where('patient_id', $patient)->count());
         $this->assertSame(2, DB::table('patient_dossiers')->where('patient_id', $patient)->count());
         $this->assertSame($beforePatients, DB::table('patients')->orderBy('id')->get()->toJson());

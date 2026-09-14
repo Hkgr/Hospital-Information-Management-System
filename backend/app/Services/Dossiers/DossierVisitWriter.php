@@ -16,10 +16,17 @@ class DossierVisitWriter
 
     public function save(Request $r, array $f, int $dossier, array $input, ?int $id): int
     {
-        return $this->writes->once($r, $f, $input, "visit:$dossier:".($id ?? 'new'), function () use ($r, $f, $dossier, $input, $id) {
+        // Read lock targets before entering the transaction, so it does not establish
+        // a repeatable-read snapshot before waiting for concurrent assignment writers.
+        // A changed visit/diagnosis context is rejected by the locked visit version.
+        $retained = $id ? DB::table('visit_diagnoses')->where('visit_id', $id)->where('facility_id', $f['id'])->whereNull('voided_at')->get()->all() : [];
+
+        return $this->writes->once($r, $f, $input, "visit:$dossier:".($id ?? 'new'), function () use ($r, $f, $dossier, $input, $id, $retained) {
             $links = app(ClinicStaffLinks::class);
-            $links->lockStaff(array_column($input['diagnoses'], 'diagnosing_staff_id'));
-            $links->lockClinics(array_column($input['diagnoses'], 'clinic_id'));
+            // Include omitted saved diagnoses in the existing staff-before-clinic lock order.
+            // A concurrent visit save is rejected by its locked version below.
+            $links->lockStaff([...array_column($input['diagnoses'], 'diagnosing_staff_id'), ...array_column($retained, 'diagnosing_staff_id')]);
+            $links->lockClinics([...array_column($input['diagnoses'], 'clinic_id'), ...array_column($retained, 'clinic_id')]);
             $d = $this->writes->dossier($f, $dossier);
             if ($id) {
                 $old = DB::table('visits')->where('id', $id)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->where('patient_id', $d['patient_id'])->lockForUpdate()->first();
@@ -51,6 +58,7 @@ class DossierVisitWriter
                 $id = DB::table('visits')->insertGetId($fields + ['facility_id' => $f['id'], 'patient_id' => $d['patient_id'], 'dossier_id' => $dossier, 'reporting_period_id' => null, 'visit_no' => 'V-'.Str::uuid(), 'client_request_id' => $input['request_id'], 'entered_by' => $r->user()->id, 'status' => 'draft', 'created_at' => now()]);
             }
             $rows = DB::table('visit_diagnoses')->where('visit_id', $id)->where('facility_id', $f['id'])->whereNull('voided_at')->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $dateChanged = $old && $old->visit_date !== $input['visit_date'];
             foreach ($input['diagnoses'] as $index => $row) {
                 $previous = ! empty($row['id']) ? $rows->get($row['id']) : null;
                 if (! empty($row['id'])) {
@@ -70,6 +78,9 @@ class DossierVisitWriter
                         throw ValidationException::withMessages(["diagnoses.$index.diagnosis_id" => 'اختر تشخيصًا فعالًا.']);
                     }
                     $unchanged = $previous && $previous->clinic_id == $row['clinic_id'] && $previous->diagnosing_staff_id == $row['diagnosing_staff_id'];
+                    if ($unchanged && $dateChanged) {
+                        $this->historicalContext($f, $row, $input['visit_date'], $index, $previous->id);
+                    }
                     if (! $unchanged && ! app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $input['visit_date']]))->where('c.id', $row['clinic_id'])->where('s.id', $row['diagnosing_staff_id'])->exists()) {
                         throw ValidationException::withMessages(["diagnoses.$index.diagnosing_staff_id" => 'اختر طبيبًا فعالًا من العيادة وله ارتباط يغطي تاريخ الزيارة.']);
                     }
@@ -83,6 +94,14 @@ class DossierVisitWriter
                 }
                 $this->writes->audit($r, $f, 'visit_diagnosis', $rowId, $previous ? (array) $previous : null, $values, ! empty($row['remove']) ? 'voided' : 'saved');
             }
+            if ($dateChanged) {
+                $submitted = array_column($input['diagnoses'], 'id');
+                foreach ($rows->values() as $index => $previous) {
+                    if (! in_array($previous->id, $submitted)) {
+                        $this->historicalContext($f, (array) $previous, $input['visit_date'], $index, $previous->id);
+                    }
+                }
+            }
             // Includes omitted saved rows: omission never deletes clinical history.
             $saved = DB::table('visit_diagnoses')->where('visit_id', $id)->whereNull('voided_at')->get();
             if ($saved->groupBy(fn ($row) => implode('|', [$row->diagnosis_id, $row->clinic_id, $row->diagnosing_staff_id, $row->diagnosed_on ?? '']))->contains(fn ($group) => $group->count() > 1)) {
@@ -93,5 +112,17 @@ class DossierVisitWriter
 
             return $id;
         });
+    }
+
+    private function historicalContext(array $f, array $row, string $date, int $index, int $id): void
+    {
+        // Inactive historical records may survive correction, but their same-facility
+        // assignment must actually cover the corrected date (end is exclusive).
+        $covered = DB::table('clinics as c')->join('clinic_staff as cs', 'cs.clinic_id', '=', 'c.id')->where('c.facility_id', $f['id'])
+            ->where('c.id', $row['clinic_id'])->where('cs.staff_id', $row['diagnosing_staff_id'])->where('cs.starts_on', '<=', $date)
+            ->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))->exists();
+        if (! $covered) {
+            throw ValidationException::withMessages(["diagnoses.$index.diagnosing_staff_id" => "ارتباط الطبيب بعيادة التشخيص المحفوظ رقم $id في هذا المشفى لا يغطي تاريخ الزيارة الجديد. صحح التاريخ أو راجع سياق التشخيص؛ لم تُحفظ أي تغييرات."]);
+        }
     }
 }

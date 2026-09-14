@@ -11,7 +11,7 @@ Differences requiring explicit handling:
 - `visits.visit_type_id` is required. The wizard explicitly selects an active existing visit type; it does not guess a type. There are no referral fields. Diagnoses already have nullable dates, actors, optimistic versions and a void triple; `is_primary` remains false for new entries.
 - Diagnosis category and ICD code are optional. No established medical-code seed convention exists. The explicit reference seeder uses internal `DOS-DX-01`…`DOS-DX-16`, no ICD/category inference.
 - Oncology scalar fields can remain populated while is_oncology=false. Add an active flag to selections so deselection retains relational history; scalar and selection changes are also recorded in audit_logs.
-- Clinic-staff periods prove membership on a recorded date, but staff/clinic activation history is not complete. New diagnosis contexts require currently active, eligible records **and** a membership period covering the visit date (inclusive start, exclusive end). Unchanged saved contexts are preserved, including inactive historical records. This does not claim historical activation.
+- Clinic-staff periods prove membership on a recorded date, but staff/clinic activation history is not complete. New diagnosis contexts require currently active, eligible records **and** a membership period covering the visit date (inclusive start, exclusive end). Unchanged saved contexts are preserved, including inactive historical records, when the visit date is unchanged. A corrected visit date revalidates every retained diagnosis (including omitted rows) against same-facility historical membership; inactive records remain allowed only for the unchanged saved context. This does not claim historical activation.
 - Reuse shared `directoryFacility`, `Picker`, directory controls, clinic form styles, blood-bank conflict comparison and abortable API client. No authentication/AppShell redesign.
 
 ## Permission boundary
@@ -30,13 +30,13 @@ All paths below are under `/api/dossiers`, reached through explicitly enumerated
 
 | Method/path | Contract |
 | --- | --- |
-| POST `/` | facility_id, request_id UUID, person_mode (existing/new), manual code, opening_date. Existing mode sends patient_id only; new mode sends supported personal fields. Returns 201 with saved snapshot; an existing same-facility dossier is returned without changing it. |
+| POST `/` | facility_id, request_id UUID, person_mode (existing/new), manual code, opening_date. Existing mode sends patient_id only; new mode sends supported personal fields. Returns 201 with a newly saved snapshot (or identical successful UUID replay). If the patient already has a same-facility dossier, returns 409 `DOSSIER_ALREADY_EXISTS` with `error.existing_dossier_id`; no submitted code/date is silently ignored. |
 | PUT `/{dossier}/personal` | code/date and current patient fields, dossier lock_version and patient_lock_version; patient replacement is prohibited. |
 | PUT `/{dossier}/medical` | dossier lock_version, disability_text, clinical_history, explicit is_oncology; history/treatment arrays, examinations and conditional medication source. Off confirmation retains saved oncology data. |
 | POST `/{dossier}/visits` | actual visit_date, explicit visit_type_id, is_referred, conditional referral fields and diagnoses array (may be empty). At most one initial draft is created. |
 | PUT `/{dossier}/visits/{visit}` | Same visit section plus lock_version; submitted saved diagnosis IDs need their own lock_version. No writes to other clinical sections. |
-| GET `/{dossier}/progress` | Authoritative section snapshot, current patient, saved initial draft and per-section progress. No write on read. |
-| GET `/options` | Explicit capabilities, facility-local today, Syrian governorates and active visit types. |
+| GET `/{dossier}/progress` | Authoritative section snapshot, current patient, saved initial draft, per-section progress and server-derived `workflow` actions. No write on read. |
+| GET `/options` | Explicit capabilities, `creation.allowed/reason`, facility-local today, Syrian governorates and active visit types. |
 | GET `/options/{patients,cities,clinics,doctors,diagnoses}` | Bounded server search/page; patient search starts only with a nonempty query. Doctor options require clinic_id and use visit_date; cities require governorate_id. |
 | POST `/diagnoses` | Global authorized directory create: code, name_ar, facility_id, request_id. Name comparison collapses repeated whitespace; duplicate names/codes return Arabic 422 errors. |
 
@@ -132,3 +132,33 @@ Isolated server: **MariaDB 10.11.18**, Laravel driver **mysql**, database **bloo
 The organization-name regression was first run before its validation fix: **1 failed** (expected 422, received 200). It passes in the final dossier run. Two obsolete Phase 1 assertions (POST absent/405) were updated to test authorized write documentation and denied reader writes (403); read chronology/eligibility assertions remain intact. Early browser runs exposed an ambiguous synthetic fixture name; fixtures now use unique names and exact patient codes, and the real suites passed after correction.
 
 No requested verification remains blocked in this environment. Browser evidence is from Chromium only; no cross-browser or production deployment is claimed. The role-assignment SQL is delivered for operator review and was not executed against `admin_his`.
+
+## PR #21 focused review corrections (2026-09-15)
+
+Built on reviewed head `7a463a0fd442dee2e13452756624cb91ab71d0c9`, on the same branch. This correction adds no migration, permission, assignment, activation/completion route or new clinical section.
+
+- The list now includes **عدد الإجراءات** beside visit count. A correlated aggregate counts nonvoided procedures performed up to facility today on explicitly linked, same-patient/facility eligible draft/complete visits. It does not join diagnoses or services, so multiple clinical rows cannot multiply the count. Filtering, pagination, ordering and dossier totals retain their contracts.
+- Changing a visit date revalidates all retained diagnosis contexts, including rows omitted from the request. Existing staff-before-clinic locks cover retained and submitted contexts; the locked visit/diagnosis versions reject concurrent edits. A failed historical interval check returns an Arabic diagnosis field error and rolls back visit, diagnosis, referral, progress, UUID reservation and audit changes. Unchanged dates keep historical inactive selections; newly selected contexts retain the active/eligible rules.
+- A shared read-only `DossierWorkflowActions` batch derives the initial visit and section actions for list, detail and wizard. `creation.allowed` requires facility view/create and a usable global patient search/create capability. Loading does not masquerade as denied access. `workflow.resume_section` selects an authorized unfinished section first; initial-visit actions require create when absent, update when a draft exists, and show the saved-state label. No GET materializes progress or grants permissions.
+- Selecting a patient with an existing dossier disables creation and offers explicit navigation or another selection. A stale creation race returns `DOSSIER_ALREADY_EXISTS` with the scoped existing ID; the browser retains the manual code/date and never silently replaces the draft with another dossier. The shared API client's only change is typed transport of this conflict ID; authentication remains unchanged.
+
+Before the fix, the four new Laravel regressions failed (missing aggregate, invalid date accepted, missing capability decision, and 201 instead of explicit conflict), and the four real browser regressions failed for their corresponding observable behavior. The first post-fix browser run exposed an incorrect fixture expectation: its base visit contains three procedures plus one on the latest visit, so the correct count is four, not two. The expectation was corrected after inspecting the fixture; no production query was changed to satisfy it.
+
+| Review verification | Actual result |
+| --- | --- |
+| MySQL safety guard and connection | PASS: MariaDB 10.11.18, `mysql`, `blood_bank_cities_testing`, `127.0.0.1:13416`. |
+| Before: Laravel `--filter=test_review_` | 4 failed, 14 assertions, 32.32s. |
+| Before: real `dossier-review-live.test.mjs` | 4 failed, 0 passed/skipped, 9.75s. |
+| After: focused Laravel regressions | 4 passed, 44 assertions, 32.74s. Additional service-join/future-visit assertions are included in the final run below. |
+| Dossier Phase 1/2 + doctors/clinics | 51 passed, 1,663 assertions, 51.16s. |
+| Final dossier Phase 1/2 after retained-lock refinement | 22 passed, 400 assertions, 42.05s. |
+| Migration upgrade/rollback | 2 passed, 21 assertions, 147.63s on MariaDB 10.11.18. |
+| Real review browser regressions | 4 passed, 0 failed/skipped, 78.72s; all four corrections at 390/768/1440px through rebuilt Next → Laravel → MariaDB. |
+| Full real Phase 2 browser suite | 4 passed, 0 failed/skipped, 93.09s; persisted section drafts, no writes on opening, repeated conflicts, late responses, unchanged blood/catalog/report domain rows. |
+| Full real Phase 1 browser suite | 4 passed, 0 failed/skipped, 86.49s; read-only requests, status/history, browser navigation, facility isolation and unchanged clinical rows. |
+| TypeScript / lint | Both PASS after the production changes. |
+| Production build | PASS, Next 16.3.4, build `obqumWR7d6wwqqZxclXd7`; actual standalone suites use this build and the isolated Laravel URL. |
+| Pint on changed/new PHP / `git diff --check` | Both PASS. |
+| Supplemental `auth-ui.test.mjs` | 7 passed, 0 failed, 1 skipped, 11.47s. This supplemental suite mocks authentication; its optional real-login test lacked login-fixture parameters. It is not a substitute for the real dossier transport suites. |
+
+The real review suite uses `tests/Support/dossier-review-live.php` with the same guard/environment and ports documented above. `DOSSIER_REVIEW_BEFORE=1` suppresses screenshots for red-test reproduction. `DOSSIER_GALLERY_FILTER=existing-patient-` refreshes only the affected original wizard screenshots while still executing its full behavioral suite. Synthetic review screenshots and their exact scope are in the [review-fix gallery](../../frontend/docs/reviews/dossiers-phase-two/review-fixes/README.md).

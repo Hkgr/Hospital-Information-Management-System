@@ -4,6 +4,7 @@ namespace App\Services\Dossiers;
 
 use App\Http\Requests\BloodBank\SaveBloodProfile;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +32,7 @@ class DossierPersonalWriter
                 if (! $id && $patient) {
                     $existing = DB::table('patient_dossiers')->where('patient_id', $patientId)->where('facility_id', $f['id'])->value('id');
                     if ($existing) {
-                        return (int) $existing;
+                        throw new HttpResponseException(response()->json(['error' => ['code' => 'DOSSIER_ALREADY_EXISTS', 'message' => 'للمريض إضبارة في هذا المشفى. افتح الإضبارة الموجودة أو اختر مريضًا آخر؛ لم تُحفظ بيانات المسودة الجديدة.', 'existing_dossier_id' => (int) $existing]], 409));
                     }
                 }
                 if ($id || ! $patient) {
