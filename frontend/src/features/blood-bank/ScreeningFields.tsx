@@ -5,12 +5,12 @@ import { type Profile, statuses } from "./api";
 import styles from "../clinics/clinics.module.css";
 
 const analytes = ["HBsAg", "HCV", "HIV"];
-export default function ScreeningFields({ draft, profile, change, fieldError }: { draft: Record<string, string>; profile?: Profile; change: (key: string, value: string) => void; fieldError: (key: string) => React.ReactNode }) {
+export default function ScreeningFields({ draft, profile, change, fieldError }: { draft: Record<string, string>; profile?: Pick<Profile, "screenings">; change: (key: string, value: string) => void; fieldError: (key: string) => React.ReactNode }) {
   const [adding, setAdding] = useState(false);
   const active = analytes.filter(a => draft[a]);
   return <div className={styles.full}>
     <p className={styles.hint}>أضف الفحوص عند الحاجة. الحالة فقط؛ لا تعني أهلية أو قبول تبرع. النتائج والطرق السابقة تبقى محفوظة.</p>
-    {active.length === 0 && !adding && <p className={styles.hint}>لم تُضف فحوص إلى الملف.</p>}
+    {active.length === 0 && !adding && <p className={styles.hint}>لم تُضف فحوص.</p>}
     {active.map((a, index) => {
       const saved = profile?.screenings.some(s => s.analyte === a);
       return <fieldset key={a} className={styles.picker}><legend>فحص {a}</legend><div className={styles.fields}>

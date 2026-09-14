@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
     return [
       "login", "user", "logout", "dashboards", "dashboards/:key",
       "blood-bank", "blood-bank/options", "blood-bank/cities", "blood-bank/clinics", "blood-bank/doctors", "blood-bank/patients",
+      "blood-bank/events", "blood-bank/events/export/:format(pdf|xlsx)", "blood-bank/events/:event(\\d+)",
+      "blood-bank/events/:event(\\d+)/report/:format(pdf|xlsx)", "blood-bank/people", "blood-bank/people/:person(\\d+)",
+      "blood-bank/people/:person(\\d+)/report/:format(pdf|xlsx)", "blood-bank/legacy/:kind(donor|recipient)/:item(\\d+)",
+      "blood-bank/legacy/donor/:item(\\d+)/donations/:donation(\\d+)",
       "blood-bank/export/:format(pdf|xlsx)", "blood-bank/:kind(donor|recipient)/:item(\\d+)/report/:format(pdf|xlsx)",
       "blood-bank/donor/:donor(\\d+)/donations/:donation(\\d+)/report/:format(pdf|xlsx)",
       "blood-bank/patients/:patient(\\d+)", "blood-bank/:kind(donor|recipient)/:item(\\d+)",

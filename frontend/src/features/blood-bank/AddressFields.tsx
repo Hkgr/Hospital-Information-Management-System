@@ -5,7 +5,7 @@ import { type Choice, type Options, type Profile } from "./api";
 import styles from "../clinics/clinics.module.css";
 
 export default function AddressFields({ draft, profile, options, cities, change, fieldError }: {
-  draft: Record<string, string>; profile?: Profile; options: Options;
+  draft: Record<string, string>; profile?: Pick<Profile, "person" | "governorate_name" | "city_name">; options: Options;
   cities: { data?: Choice[]; loading: boolean; error?: string; retry: () => void };
   change: (key: string, value: string) => void; fieldError: (key: string) => React.ReactNode;
 }) {

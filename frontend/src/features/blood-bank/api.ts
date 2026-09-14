@@ -3,7 +3,7 @@ export type { Page } from "../clinics/api";
 export type Kind = "donor" | "recipient";
 export type Choice = { id: number; name_ar: string; code?: string };
 export type Screen = { analyte: string; screening_test_id: number | null; status: string; result: string | null };
-export type Capabilities = { create: boolean; update: boolean; export: boolean; donations_create: boolean; donations_update: boolean; patients_search: boolean };
+export type Capabilities = { create: boolean; update: boolean; export: boolean; donations_create: boolean; donations_update: boolean; benefits_create: boolean; benefits_update: boolean; patients_search: boolean };
 export type Row = { id: number; kind: Kind; code: string; name: string; blood_group: string | null; rh: string | null; clinic_name: string | null; doctor_name: string | null; component_name?: string | null; updated_at: string | null };
 export type Profile = Row & { facility_id: number; person_mode: string; patient_id: number | null; patient_code: string | null; person: Record<string, string | number | null>; governorate_name: string | null; city_name: string | null; beneficiary_entity: string | null; clinic_id: number | null; responsible_staff_id: number | null; blood_component_id: number | null; screenings: Screen[]; lock_version: number };
 export type Donation = { id: number; donor_id: number; donation_code: string; donated_on: string; blood_group: string; rh: string; units: string; status: string; lock_version: number; voided_at: string | null };

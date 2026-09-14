@@ -26,10 +26,15 @@ if (! str_starts_with($user->username, 'catalog-')) {
 $request = Request::create('/api/blood-bank/test', 'PUT', $f['payload']);
 $request->setUserResolver(fn () => $user);
 $facility = app(BloodBankAccess::class)->facility($user, $f['payload']['facility_id'], 'donations.update');
-DB::transaction(function () use ($f, $request, $facility) {
-    DB::table('blood_donors')->where('id', $f['donor'])->where('facility_id', $facility['id'])->lockForUpdate()->firstOrFail();
-    echo "DONOR_LOCKED\n";
-    flush();
-    usleep(800000);
-    app(BloodBankWriter::class)->donation($request, $facility, $f['donor'], $f['payload'], $f['donation']);
+// Pause only after the real writer acquires its lock, preserving its lock order.
+// Prelocking the donor before the idempotency row introduces an artificial inversion.
+$paused = false;
+DB::listen(function ($query) use (&$paused) {
+    if (! $paused && str_contains($query->sql, '`blood_donors`') && str_contains($query->sql, 'for update')) {
+        $paused = true;
+        echo "DONOR_LOCKED\n";
+        flush();
+        usleep(800000);
+    }
 });
+app(BloodBankWriter::class)->donation($request, $facility, $f['donor'], $f['payload'], $f['donation']);

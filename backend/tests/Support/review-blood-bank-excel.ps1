@@ -1,6 +1,7 @@
 # Read-only synthetic workbook preview using the installed Microsoft Excel.
+param([string]$ArtifactDirectory, [string[]]$Names = @('list','donor','recipient','donation'))
 $ErrorActionPreference='Stop'
-$reviewRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../frontend/.superdesign/blood-bank-reports'))
+$reviewRoot=if ($ArtifactDirectory) { [IO.Path]::GetFullPath($ArtifactDirectory) } else { [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../../frontend/.superdesign/blood-bank-reports')) }
 $reviewExcel=New-Object -ComObject Excel.Application
 $reviewExcel.Visible=$false
 $reviewExcel.DisplayAlerts=$false
@@ -9,7 +10,7 @@ $reviewExcel.AutomationSecurity=3
 try {
     $printer=(Get-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Devices').'Microsoft Print to PDF'
     if (-not $printer) { throw 'Microsoft Print to PDF is required for preview.' }
-    foreach ($name in @('list','donor','recipient','donation')) {
+    foreach ($name in $Names) {
         $reviewBook=$null
         try {
             $reviewBook=$reviewExcel.Workbooks.Open((Join-Path $reviewRoot ($name+'.xlsx')),0,$true)

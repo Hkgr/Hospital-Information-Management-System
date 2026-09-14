@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\BloodBankException;
+use App\Services\BloodBank\BloodBankAccess;
+use App\Services\BloodBank\BloodBankWriter;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -16,6 +20,8 @@ class BloodBankMigrationConcurrencyTest extends TestCase
 
     public function test_mysql_backfill_rollback_and_overlapping_date_corrections(): void
     {
+        $unified = require database_path('migrations/2026_09_14_000003_unify_blood_bank_events.php');
+        $unified->down();
         $f = BloodBankFixture::make();
         $refinement = require database_path('migrations/2026_09_14_000002_refine_blood_bank_profiles.php');
         $refinement->down();
@@ -58,8 +64,16 @@ class BloodBankMigrationConcurrencyTest extends TestCase
             $process->start();
             $this->assertTrue($process->waitUntil(fn ($type, $out) => str_contains($out, 'DONOR_LOCKED')), $process->getErrorOutput());
             $start = microtime(true);
-            $token = $f['user']->createToken('blood-concurrency', ['api'])->plainTextToken;
-            $this->putJson("/api/blood-bank/donor/$id/donations/$event", ['request_id' => (string) Str::uuid(), 'donated_on' => $f['today']] + $payload, ['Authorization' => 'Bearer '.$token])->assertConflict()->assertJsonPath('error.code', 'BLOOD_BANK_VERSION_CONFLICT');
+            $input = ['request_id' => (string) Str::uuid(), 'donated_on' => $f['today']] + $payload;
+            $request = Request::create('/legacy-fixture', 'PUT', $input);
+            $request->setUserResolver(fn () => $f['user']);
+            $facility = app(BloodBankAccess::class)->facility($f['user'], $f['facility']);
+            try {
+                app(BloodBankWriter::class)->donation($request, $facility, $id, $input, $event);
+                $this->fail('Stale archived correction must fail');
+            } catch (BloodBankException $e) {
+                $this->assertStringContainsString('مسودتك', $e->getMessage());
+            }
             $this->assertGreaterThan(0.3, microtime(true) - $start, 'Correction overlaps the other transaction.');
             $this->assertSame(0, $process->wait(), $process->getErrorOutput());
             $this->assertDatabaseCount('blood_donations', 1);
@@ -70,6 +84,7 @@ class BloodBankMigrationConcurrencyTest extends TestCase
             if (is_file($file)) {
                 unlink($file);
             }
+            $unified->up();
         }
     }
 }

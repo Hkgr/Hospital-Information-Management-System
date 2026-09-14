@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Services\BloodBank\BloodBankReconcile;
 use App\Support\TestDatabaseSafety;
 use Database\Seeders\ClinicPermissionsSeeder;
 use Database\Seeders\DoctorPermissionsSeeder;
@@ -14,7 +15,7 @@ $app->loadEnvironmentFrom('.env.testing');
 $app->make(Kernel::class)->bootstrap();
 TestDatabaseSafety::assertAvailable($app);
 $path = storage_path('framework/testing/blood-bank-live.json');
-if (($argv[1] ?? '') === 'prepare') {
+if (in_array($argv[1] ?? '', ['prepare', 'prepare-unified'], true)) {
     if (is_file($path)) {
         throw new RuntimeException('Cleanup the previous synthetic run first.');
     }
@@ -42,6 +43,10 @@ if (($argv[1] ?? '') === 'prepare') {
         }
         unset($f['user'], $f['viewer']);
 
+        if (($GLOBALS['argv'][1] ?? '') === 'prepare-unified') {
+            app(BloodBankReconcile::class)->apply();
+        }
+
         return $f;
     });
     file_put_contents($path, json_encode($f, JSON_THROW_ON_ERROR));
@@ -51,6 +56,25 @@ if (($argv[1] ?? '') === 'prepare') {
     $f['doctor_staff_types'] = $argv[1] === 'doctor-types-empty' ? [] : ['CAT-'.$f['tag']];
     file_put_contents($path, json_encode($f, JSON_THROW_ON_ERROR), LOCK_EX);
     echo "Updated only the isolated HTTP fixture's doctor-type configuration.\n";
+} elseif (($argv[1] ?? '') === 'verify-unified') {
+    $f = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+    foreach ($f['counts'] as $table => $count) {
+        if (! in_array($table, ['blood_donations', 'blood_transfusions']) && DB::table($table)->count() !== $count) {
+            throw new RuntimeException('Unexpected clinical changes: '.$table);
+        }
+    }
+    if (DB::table('blood_bank_people')->where('facility_id', $f['facility'])->whereNotNull('patient_id')->whereNotNull('first_name')->exists()) {
+        throw new RuntimeException('Copied patient identity.');
+    }
+    foreach (DB::table('blood_bank_events')->where('facility_id', $f['facility'])->where('legacy', false)->get() as $event) {
+        if ($event->quantity_unit !== 'kg' || $event->quantity <= 0 || ! DB::table('blood_bank_event_codes')->where('event_id', $event->id)->where('code', $event->code)->exists()) {
+            throw new RuntimeException('Invalid event quantity/code.');
+        }
+        if ($event->benefit_kind === 'issue' && $event->blood_transfusion_id) {
+            throw new RuntimeException('Issue became a transfusion.');
+        }
+    }
+    echo "Verified persisted new kg events, patient non-copy, code aliases and unchanged unrelated clinical counts.\n";
 } elseif (($argv[1] ?? '') === 'verify') {
     $f = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
     foreach ($f['counts'] as $t => $count) {

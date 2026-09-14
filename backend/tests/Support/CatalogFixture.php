@@ -75,7 +75,7 @@ class CatalogFixture
         $event($visit($patients[7], $other), $other);
         foreach ([['p' => 1], ['p' => 8], ['p' => 9, 'void' => true], ['p' => null], ['p' => 3, 'visit' => $draft], ['p' => 10, 'future' => true]] as $spec) {
             $blood = DB::table('blood_transfusions')->insertGetId(['facility_id' => $facility, 'reporting_period_id' => $periods[$facility], 'patient_id' => $spec['p'] ? $patients[$spec['p']] : null,
-                'external_recipient_name' => $spec['p'] ? null : 'متلقٍ خارجي', 'visit_id' => $spec['visit'] ?? null, 'blood_component_id' => $component, 'transfused_on' => $today, 'entered_by' => $user->id, ...(! empty($spec['void']) ? $void : [])]);
+                'external_recipient_name' => $spec['p'] ? null : 'متلقٍ خارجي', 'visit_id' => $spec['visit'] ?? null, 'blood_component_id' => $component, 'units' => '1.0000', 'transfused_on' => $today, 'entered_by' => $user->id, ...(! empty($spec['void']) ? $void : [])]);
             DB::table('blood_recipient_procedures')->insert(['blood_transfusion_id' => $blood, 'procedure_id' => $items['procedure'][1], 'performed_on' => empty($spec['future']) ? $today : now()->addDays(3)->toDateString(), 'entered_by' => $user->id]);
         }
 
