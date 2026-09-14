@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
     const api = (process.env.LARAVEL_API_URL || "http://127.0.0.1:8000/api").replace(/\/$/, "");
     return [
       "login", "user", "logout", "dashboards", "dashboards/:key",
+      "blood-bank", "blood-bank/options", "blood-bank/cities", "blood-bank/clinics", "blood-bank/doctors", "blood-bank/patients",
+      "blood-bank/patients/:patient(\\d+)", "blood-bank/:kind(donor|recipient)/:item(\\d+)",
+      "blood-bank/donor/:donor(\\d+)/donations", "blood-bank/donor/:donor(\\d+)/donations/:donation(\\d+)",
       "service-catalog", "service-catalog/options", "service-catalog/classifications", "service-catalog/export/:format(xlsx|pdf)",
       "service-catalog/context", "service-catalog/categories", "service-catalog/:kind(service|procedure)/:item(\\d+)/events",
       "service-catalog/:kind(service|procedure)/:item(\\d+)", "service-catalog/:kind(service|procedure)/:item(\\d+)/deletion-preview",

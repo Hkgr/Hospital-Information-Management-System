@@ -8,9 +8,9 @@ import DoctorConflict, { doctorFields, loadDoctorSnapshot, type DoctorSnapshot }
 import type { ClinicLink, Doctor, Options } from "./api";
 import styles from "../clinics/clinics.module.css";
 
-export default function DoctorEditor({ doctor, facilityId, options, linksOnly = false, onClose, onSaved, onReloaded }: { doctor?: Doctor; facilityId: number; options: Options; linksOnly?: boolean; onClose: () => void; onSaved: () => void; onReloaded: () => void }) {
+export default function DoctorEditor({ doctor, facilityId, options, linksOnly = false, initialClinic, onUncertainCreate, onClose, onSaved, onReloaded }: { doctor?: Doctor; facilityId: number; options: Options; linksOnly?: boolean; initialClinic?: ClinicLink; onUncertainCreate?: (code: string) => void; onClose: () => void; onSaved: (doctor: Doctor) => void; onReloaded: () => void }) {
   const [base, setBase] = useState(doctor); const [fields, setFields] = useState(doctorFields(doctor));
-  const [changes, setChanges] = useState<Record<number, boolean>>({}); const [touched, setTouched] = useState<Record<number, ClinicLink>>({});
+  const [changes, setChanges] = useState<Record<number, boolean>>(() => initialClinic && !doctor ? { [initialClinic.id]: true } : {}); const [touched, setTouched] = useState<Record<number, ClinicLink>>(() => initialClinic && !doctor ? { [initialClinic.id]: initialClinic } : {});
   const [conflict, setConflict] = useState(false); const [snapshot, setSnapshot] = useState<DoctorSnapshot | null>(null);
   const [busy, setBusy] = useState(false); const [fetching, setFetching] = useState(false); const [error, setError] = useState<AuthError | null>(null); const [reloadError, setReloadError] = useState("");
   const pending = useRef(false); const controller = useRef<AbortController | null>(null);
@@ -28,9 +28,10 @@ export default function DoctorEditor({ doctor, facilityId, options, linksOnly = 
     const active = new AbortController(); controller.current = active;
     const deltas = { clinic_add_ids: Object.keys(changes).filter(id => changes[Number(id)]).map(Number), ...(base ? { lock_version: base.lock_version, clinic_remove_ids: Object.keys(changes).filter(id => !changes[Number(id)]).map(Number) } : {}) };
     try {
-      await apiRequest<Doctor>(`doctors${base ? `/${base.id}${linksOnly ? "/clinics" : ""}` : ""}`, { method: base ? "PUT" : "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, ...(!linksOnly ? { ...fields, staff_type_id: Number(fields.staff_type_id) } : {}), ...deltas }) });
-      if (!active.signal.aborted) onSaved();
+      const saved = await apiRequest<Doctor>(`doctors${base ? `/${base.id}${linksOnly ? "/clinics" : ""}` : ""}`, { method: base ? "PUT" : "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, ...(!linksOnly ? { ...fields, staff_type_id: Number(fields.staff_type_id) } : {}), ...deltas }) });
+      if (!active.signal.aborted) onSaved(saved);
     } catch (reason) {
+      if (!active.signal.aborted && !base && (!(reason instanceof AuthError) || reason.status === 0 || reason.status >= 500)) onUncertainCreate?.(fields.code);
       if (!active.signal.aborted) { setError(reason instanceof AuthError ? reason : new AuthError(0, "FAILED", "تعذّر الحفظ. حاول مجددًا.")); if (reason instanceof AuthError && reason.code === "DOCTOR_VERSION_CONFLICT") { setConflict(true); setSnapshot(null); setReloadError(""); } }
     } finally { if (!active.signal.aborted) { pending.current = false; setBusy(false); } }
   }
@@ -53,7 +54,7 @@ export default function DoctorEditor({ doctor, facilityId, options, linksOnly = 
           <fieldset className={`${styles.picker} ${styles.full}`}><legend>التخصصات {options.specialties.length ? "*" : ""}</legend>{specialties.length ? <div className={styles.specialtyChoices}>{specialties.map(s => <label key={s.id}><input type="checkbox" checked={fields.specialty_ids.includes(s.id)} onChange={e => setFields({ ...fields, specialty_ids: (e.target.checked ? [...fields.specialty_ids, s.id] : fields.specialty_ids.filter(id => id !== s.id)).sort((a,b) => a-b) })} />{s.name_ar}{s.is_active === false ? " · غير فعال" : ""}</label>)}</div> : <p className={styles.hint}>لا توجد تخصصات متاحة في الدليل الحالي.</p>}{fieldError("specialty_ids")}</fieldset>
           {input("license_no", "رقم الترخيص", 60)}{input("phone", "الهاتف", 30)}
         </>}
-        {options.capabilities.link && <div className={styles.full}><div className={styles.sectionHeading}><span>{linksOnly ? "01" : "02"}</span><div><h3>الارتباطات الحالية</h3><p>ضمن المنشأة المحددة، مع حفظ التاريخ.</p></div></div><ClinicPicker key={base?.lock_version ?? "new"} doctorId={base?.id} facilityId={facilityId} changes={changes} onChange={(clinic, desired) => {
+        {initialClinic && !base ? <p className={styles.scopeNote}>سيُربط الطبيب بالعيادة المختارة: {initialClinic.name_ar}. يُحفظ الإنشاء والربط في معاملة واحدة.</p> : options.capabilities.link && <div className={styles.full}><div className={styles.sectionHeading}><span>{linksOnly ? "01" : "02"}</span><div><h3>الارتباطات الحالية</h3><p>ضمن المنشأة المحددة، مع حفظ التاريخ.</p></div></div><ClinicPicker key={base?.lock_version ?? "new"} doctorId={base?.id} facilityId={facilityId} changes={changes} onChange={(clinic, desired) => {
           setChanges(previous => { const next = { ...previous }; if (desired === clinic.is_linked) delete next[clinic.id]; else next[clinic.id] = desired; return next; });
           setTouched(previous => { const next = { ...previous }; if (desired === clinic.is_linked) delete next[clinic.id]; else next[clinic.id] = clinic; return next; });
         }} />{fieldError("clinic_add_ids")}{fieldError("clinic_remove_ids")}</div>}

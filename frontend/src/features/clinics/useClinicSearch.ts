@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export default function useClinicSearch(pathname: string, params: string, facilityId: number) {
+export default function useClinicSearch(pathname: string, params: string, facilityId: number, prefix = "") {
   const url = `${pathname}?${params}`;
-  const committed = new URLSearchParams(params).get("search") ?? "";
+  const committed = new URLSearchParams(params).get(`${prefix}search`) ?? "";
   const [draft, setDraft] = useState<{ url: string; value: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // URL navigation invalidates a draft before rendering; an old draft must not
@@ -22,8 +22,8 @@ export default function useClinicSearch(pathname: string, params: string, facili
       // Guard the actual location too: popstate/Next rendering can be in flight.
       if (`${window.location.pathname}?${new URLSearchParams(window.location.search)}` !== url) return;
       const next = new URLSearchParams(params);
-      next.set("facility_id", String(facilityId)); next.delete("page");
-      if (value) next.set("search", value); else next.delete("search");
+      next.set("facility_id", String(facilityId)); next.delete(`${prefix}page`);
+      if (value) next.set(`${prefix}search`, value); else next.delete(`${prefix}search`);
       // Next integrates native history with useSearchParams. Keep replace semantics
       // and commit synchronously, so a delayed router transition cannot undo typing.
       window.history.replaceState(null, "", `${pathname}?${next}`);
