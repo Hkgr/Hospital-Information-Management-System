@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BloodBankController;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\ClinicController;
 use App\Http\Controllers\Api\DashboardController;
@@ -10,6 +11,20 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
+    Route::prefix('blood-bank')->name('blood-bank.')->group(function () {
+        Route::get('/', [BloodBankController::class, 'index'])->name('index');
+        Route::post('/', [BloodBankController::class, 'store'])->name('store');
+        foreach (['options', 'cities', 'clinics', 'doctors', 'patients'] as $action) {
+            Route::get('/'.$action, [BloodBankController::class, $action])->name($action);
+        }
+        Route::get('/patients/{patient}', [BloodBankController::class, 'patient'])->whereNumber('patient')->name('patient');
+        Route::get('/donor/{donor}/donations', [BloodBankController::class, 'donations'])->whereNumber('donor')->name('donations');
+        Route::post('/donor/{donor}/donations', [BloodBankController::class, 'storeDonation'])->whereNumber('donor')->name('donations.store');
+        Route::get('/donor/{donor}/donations/{donation}', [BloodBankController::class, 'donation'])->whereNumber(['donor', 'donation'])->name('donations.show');
+        Route::put('/donor/{donor}/donations/{donation}', [BloodBankController::class, 'updateDonation'])->whereNumber(['donor', 'donation'])->name('donations.update');
+        Route::get('/{kind}/{item}', [BloodBankController::class, 'show'])->whereIn('kind', ['donor', 'recipient'])->whereNumber('item')->name('show');
+        Route::put('/{kind}/{item}', [BloodBankController::class, 'update'])->whereIn('kind', ['donor', 'recipient'])->whereNumber('item')->name('update');
+    });
     Route::prefix('service-catalog')->name('catalog.')->group(function () {
         Route::get('/context', [CatalogController::class, 'context'])->name('context');
         Route::post('/categories', [CatalogController::class, 'createCategory'])->name('categories.store');
