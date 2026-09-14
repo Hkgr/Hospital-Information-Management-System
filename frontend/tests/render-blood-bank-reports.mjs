@@ -3,7 +3,7 @@ import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { createCanvas } from '../.superdesign/pdf-tools/node_modules/@napi-rs/canvas/index.js';
 import { getDocument } from '../.superdesign/pdf-tools/node_modules/pdfjs-dist/legacy/build/pdf.mjs';
-const root = fileURLToPath(new URL('../.superdesign/blood-bank-reports/', import.meta.url));
+const root = process.argv[2] || fileURLToPath(new URL('../.superdesign/blood-bank-reports/', import.meta.url));
 for (const name of (await readdir(root)).filter(n => n.endsWith('.pdf'))) {
   const bytes = await readFile(`${root}/${name}`);
   const task = getDocument({ data: new Uint8Array(bytes), useSystemFonts: false, isEvalSupported: false });

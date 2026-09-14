@@ -14,9 +14,9 @@ class DirectoryReferences
         'dose_sessions' => ['supervising_staff_id', 'administered_by'], 'visit_medications' => ['prescribing_staff_id'],
         'visit_outcomes' => ['decided_by'], 'case_reviews' => ['decided_by'], 'blood_recipient_procedures' => ['specialist_id'],
         'cancer_case_diagnoses' => ['decided_by'], 'report_metric_catalog_items' => ['staff_id'],
-        'blood_donors' => ['responsible_staff_id'], 'blood_recipients' => ['responsible_staff_id']];
+        'blood_donors' => ['responsible_staff_id'], 'blood_recipients' => ['responsible_staff_id'], 'blood_bank_events' => ['responsible_staff_id']];
 
-    public const CLINIC = ['visits' => ['clinic_id'], 'staff_work_days' => ['clinic_id'], 'report_metric_catalog_items' => ['clinic_id'], 'blood_donors' => ['clinic_id'], 'blood_recipients' => ['clinic_id']];
+    public const CLINIC = ['visits' => ['clinic_id'], 'staff_work_days' => ['clinic_id'], 'report_metric_catalog_items' => ['clinic_id'], 'blood_donors' => ['clinic_id'], 'blood_recipients' => ['clinic_id'], 'blood_bank_events' => ['clinic_id']];
 
     public function summary(bool $doctor, int $id, int $facilityId): array
     {

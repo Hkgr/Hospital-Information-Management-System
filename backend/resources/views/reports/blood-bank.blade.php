@@ -29,7 +29,7 @@ th { background: #155c56; color: white; font-size: 10pt; }
     @php($parts[$key] = \App\Services\Directory\ReportLayout::printParts((string) ($row[$key] ?? 'غير مسجل'), $widths[$key] * $scale - 3.2))
   @endforeach
   @for ($part = 0; $part < max(array_map('count', $parts)); $part++)
-  <tr class="{{ $index % 2 ? 'stripe' : '' }}">@foreach ($section['labels'] as $key => $label)<td class="fulltext {{ in_array($key, ['code','phone','blood','donated_on','units','analyte']) ? 'ltr' : '' }}">{{ $parts[$key][$part] ?? '' }}</td>@endforeach</tr>
+  <tr class="{{ $index % 2 ? 'stripe' : '' }}">@foreach ($section['labels'] as $key => $label)<td class="fulltext {{ in_array($key, ['code','phone','blood','donated_on','occurred_on','units','quantity','analyte']) ? 'ltr' : '' }}">{{ $parts[$key][$part] ?? '' }}</td>@endforeach</tr>
   @endfor
 @empty<tr><td colspan="{{ count($section['labels']) }}">{{ $section['empty'] }}</td></tr>@endforelse
 </tbody></table>

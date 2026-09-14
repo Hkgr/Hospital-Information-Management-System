@@ -18,13 +18,14 @@ class BloodBankReports
 
     public const COLUMNS = ['code' => 'كود الملف', 'name' => 'الاسم', 'kind' => 'النوع', 'phone' => 'الهاتف', 'governorate_name' => 'المحافظة', 'city_name' => 'المدينة', 'blood' => 'ABO / Rh', 'component_name' => 'المكوّن', 'clinic_name' => 'العيادة', 'doctor_name' => 'الطبيب المسؤول'];
 
-    public const DONATIONS = ['code' => 'كود التبرع', 'donated_on' => 'التاريخ الفعلي', 'blood' => 'ABO / Rh', 'units' => 'الكمية (وحدة)', 'status' => 'الحالة'];
+    public const DONATIONS = ['code' => 'كود التبرع', 'donated_on' => 'التاريخ الفعلي', 'blood' => 'ABO / Rh', 'units' => 'الكمية', 'quantity_unit' => 'وحدة القياس', 'status' => 'الحالة'];
 
     public static function widths(array $labels): array
     {
         return match (array_keys($labels)) {
             array_keys(self::COLUMNS) => ['code' => 31, 'name' => 45, 'kind' => 16, 'phone' => 28, 'governorate_name' => 26, 'city_name' => 24, 'blood' => 20, 'component_name' => 20, 'clinic_name' => 32, 'doctor_name' => 31],
-            array_keys(self::DONATIONS) => ['code' => 53, 'donated_on' => 30, 'blood' => 24, 'units' => 29, 'status' => 50],
+            array_keys(self::DONATIONS) => ['code' => 48, 'donated_on' => 27, 'blood' => 22, 'units' => 24, 'quantity_unit' => 26, 'status' => 39],
+            array_keys(BloodEventReports::COLUMNS) => ['code' => 35, 'type' => 27, 'occurred_on' => 23, 'name' => 40, 'blood' => 20, 'component_name' => 20, 'quantity' => 23, 'quantity_unit' => 23, 'clinic_name' => 30, 'doctor_name' => 32],
             ['field', 'value'] => ['field' => 52, 'value' => 134],
             default => ReportLayout::widths(array_keys($labels)),
         };
@@ -70,7 +71,7 @@ class BloodBankReports
                 $events = $donation !== null ? [$queries->donation($id, $donation, $facility['id'])] : DB::table('blood_donations')->where('facility_id', $facility['id'])->where('donor_id', $id)->orderByDesc('donated_on')->orderByDesc('id')->limit(self::LIMIT + 1)->get()->map(fn ($r) => (array) $r)->all();
                 $this->limit(count($events));
                 $voided = count(array_filter($events, fn ($d) => $d['voided_at'] !== null));
-                $sections[] = $this->section('التبرعات', self::DONATIONS, array_map(fn ($d) => ['id' => $d['id'], 'code' => $d['donation_code'], 'name' => $p['name'], 'donated_on' => $d['donated_on'], 'blood' => $this->blood($d), 'units' => $d['units'], 'status' => $d['voided_at'] ? 'ملغى' : (['pending' => 'بانتظار المراجعة', 'accepted' => 'مقبول', 'rejected' => 'مرفوض'][$d['status']] ?? $d['status'])], $events), 'عدد الوقائع: '.count($events).'؛ منها الملغى: '.$voided.'؛ غير الملغى: '.(count($events) - $voided).'. الكمية بوحدات التبرع المسجلة، دون تحويل الحجم أو جمع الكميات.', 'لا توجد تبرعات مسجلة', ['donated_on' => 'date', 'units' => 'decimal']);
+                $sections[] = $this->section('التبرعات', self::DONATIONS, array_map(fn ($d) => ['id' => $d['id'], 'code' => $d['donation_code'], 'name' => $p['name'], 'donated_on' => $d['donated_on'], 'blood' => $this->blood($d), 'units' => $d['units'], 'quantity_unit' => ($d['quantity_unit'] ?? 'unit') === 'kg' ? 'كغ' : 'وحدة (تاريخية)', 'status' => $d['voided_at'] ? 'ملغى' : (['pending' => 'بانتظار المراجعة', 'accepted' => 'مقبول', 'rejected' => 'مرفوض'][$d['status']] ?? $d['status'])], $events), 'عدد الوقائع: '.count($events).'؛ منها الملغى: '.$voided.'؛ غير الملغى: '.(count($events) - $voided).'. كل كمية بوحدتها المسجلة، دون تحويل أو جمع وحدات مختلفة.', 'لا توجد تبرعات مسجلة', ['donated_on' => 'date', 'units' => 'decimal']);
             }
 
             return $sections;
@@ -100,6 +101,11 @@ class BloodBankReports
         foreach ($document['sections'] as $index => $section) {
             $meta = array_replace($document['metadata'], ['title' => $section['title'], 'definition' => $section['note'].($section['rows'] ? '' : ' '.$section['empty'])]);
             $part = $renderer->workbook(['metadata' => $meta, 'columns' => array_keys($section['labels']), 'labels' => $section['labels'], 'rows' => $section['rows'], 'types' => $section['types'], 'widths' => self::widths($section['labels']), 'landscape' => ! $document['detail']]);
+            // Cairo headers may wrap (notably the explicit quantity unit). Excel does
+            // not auto-fit a fixed-height repeated header when printing the workbook.
+            $widths = self::widths($section['labels']);
+            $headerLines = max(array_map(fn ($key) => ReportLayout::lines($section['labels'][$key], $widths[$key] - 3), array_keys($section['labels'])));
+            $part->getSheet(0)->getRowDimension(8)->setRowHeight(max(29, 4 + $headerLines * 23.25));
             foreach ($part->getAllSheets() as $sheet) {
                 if ($sheet->getTitle() === 'النصوص للطباعة') {
                     $sheet->setTitle('نصوص '.($index + 1));

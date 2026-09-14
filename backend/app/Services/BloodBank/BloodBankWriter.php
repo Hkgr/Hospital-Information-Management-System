@@ -18,7 +18,7 @@ class BloodBankWriter
 {
     public function __construct(private BloodBankQueries $queries, private BloodBankAccess $access, private ClinicAudit $audit) {}
 
-    private function once(Request $request, array $facility, array $data, string $operation, callable $write): int
+    public function once(Request $request, array $facility, array $data, string $operation, callable $write): int
     {
         $canonical = function ($value) use (&$canonical) {
             if (! is_array($value)) {

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BloodBankController;
+use App\Http\Controllers\Api\BloodEventController;
 use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\ClinicController;
 use App\Http\Controllers\Api\DashboardController;
@@ -12,21 +13,33 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
     Route::prefix('blood-bank')->name('blood-bank.')->group(function () {
+        Route::get('/events', [BloodEventController::class, 'index'])->name('events');
+        Route::post('/events', [BloodEventController::class, 'store'])->name('events.store');
+        Route::get('/events/export/{format}', [BloodEventController::class, 'export'])->whereIn('format', ['pdf', 'xlsx'])->name('events.export');
+        Route::get('/events/{event}', [BloodEventController::class, 'event'])->whereNumber('event')->name('events.show');
+        Route::put('/events/{event}', [BloodEventController::class, 'update'])->whereNumber('event')->name('events.update');
+        Route::get('/events/{event}/report/{format}', [BloodEventController::class, 'eventReport'])->whereNumber('event')->whereIn('format', ['pdf', 'xlsx'])->name('events.report');
+        Route::get('/people', [BloodEventController::class, 'people'])->name('people');
+        Route::get('/people/{person}', [BloodEventController::class, 'person'])->whereNumber('person')->name('people.show');
+        Route::put('/people/{person}', [BloodEventController::class, 'updatePerson'])->whereNumber('person')->name('people.update');
+        Route::get('/people/{person}/report/{format}', [BloodEventController::class, 'personReport'])->whereNumber('person')->whereIn('format', ['pdf', 'xlsx'])->name('people.report');
+        Route::get('/legacy/{kind}/{item}', [BloodEventController::class, 'legacy'])->whereIn('kind', ['donor', 'recipient'])->whereNumber('item')->name('legacy');
+        Route::get('/legacy/donor/{item}/donations/{donation}', [BloodEventController::class, 'legacyDonation'])->whereNumber(['item', 'donation'])->name('legacy.donation');
         Route::get('/export/{format}', [BloodBankController::class, 'export'])->whereIn('format', ['pdf', 'xlsx'])->name('export');
         Route::get('/{kind}/{item}/report/{format}', [BloodBankController::class, 'report'])->whereIn('kind', ['donor', 'recipient'])->whereNumber('item')->whereIn('format', ['pdf', 'xlsx'])->name('report');
         Route::get('/donor/{donor}/donations/{donation}/report/{format}', [BloodBankController::class, 'donationReport'])->whereNumber(['donor', 'donation'])->whereIn('format', ['pdf', 'xlsx'])->name('donationReport');
         Route::get('/', [BloodBankController::class, 'index'])->name('index');
-        Route::post('/', [BloodBankController::class, 'store'])->name('store');
+        Route::post('/', [BloodEventController::class, 'retired'])->name('store.retired');
         foreach (['options', 'cities', 'clinics', 'doctors', 'patients'] as $action) {
             Route::get('/'.$action, [BloodBankController::class, $action])->name($action);
         }
         Route::get('/patients/{patient}', [BloodBankController::class, 'patient'])->whereNumber('patient')->name('patient');
         Route::get('/donor/{donor}/donations', [BloodBankController::class, 'donations'])->whereNumber('donor')->name('donations');
-        Route::post('/donor/{donor}/donations', [BloodBankController::class, 'storeDonation'])->whereNumber('donor')->name('donations.store');
+        Route::post('/donor/{donor}/donations', [BloodEventController::class, 'retired'])->whereNumber('donor')->name('donations.store.retired');
         Route::get('/donor/{donor}/donations/{donation}', [BloodBankController::class, 'donation'])->whereNumber(['donor', 'donation'])->name('donations.show');
-        Route::put('/donor/{donor}/donations/{donation}', [BloodBankController::class, 'updateDonation'])->whereNumber(['donor', 'donation'])->name('donations.update');
+        Route::put('/donor/{donor}/donations/{donation}', [BloodEventController::class, 'retired'])->whereNumber(['donor', 'donation'])->name('donations.update.retired');
         Route::get('/{kind}/{item}', [BloodBankController::class, 'show'])->whereIn('kind', ['donor', 'recipient'])->whereNumber('item')->name('show');
-        Route::put('/{kind}/{item}', [BloodBankController::class, 'update'])->whereIn('kind', ['donor', 'recipient'])->whereNumber('item')->name('update');
+        Route::put('/{kind}/{item}', [BloodEventController::class, 'retired'])->whereIn('kind', ['donor', 'recipient'])->whereNumber('item')->name('update.retired');
     });
     Route::prefix('service-catalog')->name('catalog.')->group(function () {
         Route::get('/context', [CatalogController::class, 'context'])->name('context');

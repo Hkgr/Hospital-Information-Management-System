@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Http\Requests\BloodBank\SaveBloodProfile;
 use App\Services\BloodBank\BloodBankAccess;
+use App\Services\BloodBank\BloodBankQueries;
 use App\Services\BloodBank\BloodBankReports;
+use App\Services\BloodBank\BloodBankWriter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -37,7 +39,14 @@ class BloodBankReportsTest extends TestCase
 
     private function profile(string $kind = 'donor', array $overrides = []): array
     {
-        return $this->api('POST', '', $overrides + BloodBankFixture::profile($this->f, $kind))->assertCreated()->json('data');
+        // Historical report fixtures use the archived writer, not the retired public API.
+        $input = $overrides + BloodBankFixture::profile($this->f, $kind);
+        $r = Request::create('/legacy-fixture', 'POST', $input);
+        $r->setUserResolver(fn () => $this->f['user']);
+        $f = app(BloodBankAccess::class)->facility($this->f['user'], $this->f['facility']);
+        $id = app(BloodBankWriter::class)->profile($r, $f, $kind, $input, null);
+
+        return app(BloodBankQueries::class)->profile($kind, $id, $f['id']);
     }
 
     private function document(?string $kind = null, ?int $id = null, ?int $donation = null, array $filters = []): array
@@ -92,7 +101,12 @@ class BloodBankReportsTest extends TestCase
         $this->assertSame('لا توجد تبرعات مسجلة', $empty['sections'][2]['empty']);
         $this->assertCount(0, $empty['sections'][2]['rows']);
         DB::table('blood_bank_screenings')->where('donor_id', $p['id'])->where('analyte', 'HCV')->update(['status' => 'complete', 'result' => 'positive']);
-        $d = $this->api('POST', '/donor/'.$p['id'].'/donations', ['request_id' => (string) Str::uuid(), 'donated_on' => $this->f['today'], 'blood_group' => 'AB', 'rh' => 'negative', 'units' => '1.2500'])->assertCreated()->json('data');
+        $input = ['request_id' => (string) Str::uuid(), 'donated_on' => $this->f['today'], 'blood_group' => 'AB', 'rh' => 'negative', 'units' => '1.2500'];
+        $r = Request::create('/legacy-fixture', 'POST', $input);
+        $r->setUserResolver(fn () => $this->f['user']);
+        $f = app(BloodBankAccess::class)->facility($this->f['user'], $this->f['facility']);
+        $id = app(BloodBankWriter::class)->donation($r, $f, $p['id'], $input, null);
+        $d = app(BloodBankQueries::class)->donation($p['id'], $id, $f['id']);
         $doc = $this->document('donor', $p['id']);
         $this->assertSame(['analyte' => 'HCV', 'status' => 'منجز'], $doc['sections'][1]['rows'][1]);
         $this->assertStringNotContainsString('positive', json_encode($doc));
@@ -117,7 +131,7 @@ class BloodBankReportsTest extends TestCase
         foreach (SaveBloodProfile::PERSON as $key) {
             unset($input[$key]);
         }
-        $p = $this->api('POST', '', ['person_mode' => 'patient', 'patient_id' => $this->f['patients'][2]] + $input)->assertCreated()->json('data');
+        $p = $this->profile('recipient', ['person_mode' => 'patient', 'patient_id' => $this->f['patients'][2]] + array_fill_keys(SaveBloodProfile::PERSON, null) + $input);
         DB::table('patients')->where('id', $p['patient_id'])->update(['address_line' => 'عنوان مرجعي حديث', 'phone' => '000123']);
         $doc = $this->document('recipient', $p['id']);
         $values = array_column($doc['sections'][0]['rows'], 'value', 'field');

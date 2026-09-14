@@ -1,5 +1,21 @@
 # مراجعة بنك الدم
 
+## سجل الشخص والوقائع الموحد
+
+التنفيذ الأحدث على `feature/blood-bank-unified-events`، انطلاقًا من develop بعد دمج PR #17. راجع [توزيع الحقول وخطة الترحيل](../../backend/docs/blood-bank-unified-events.md). `EventScreen` يعرض السجل افتراضيًا وصفحتي الشخص والواقعة، ويستخدم `DirectoryTable`, `DirectoryRowActions`, `DirectoryBack`, `Pagination`, `Modal` والحقول والـPicker وInlineDoctor الموجودة. أزيل النموذجان القديمان غير المستخدمين، دون تغيير AppShell أو تصميم الأطباء والعيادات.
+
+نموذج الواقعة يبدأ باختيار شخص أو إضافته، ثم بيانات الحدث، والعيادة والطبيب، والفحوص الاختيارية. الاستفادة تحدد الصرف أو النقل الفعلي؛ النقل يحدد الارتباط بالصرف صراحةً. الكمية فارغة ابتداءً ومطلوبة بالكيلوغرام؛ تعديل التاريخي يبقي وحدته. يراجع المستخدم أحدث نسخة ومسودته صراحةً بعد التعارض.
+
+الاختبارات الحية الجديدة في `tests/blood-bank-live.test.mjs` و`tests/blood-bank-reports-live.test.mjs` تستخدم Laravel وMariaDB الحقيقية عبر Next standalone. جهّز قاعدة اختبار معزولة ومتغيرات حاجز الأمان أولًا، ثم ابنِ Next مع `LARAVEL_API_URL` لخادم Laravel الاختباري. بعد **كل** build، أنشئ `.next/standalone/public` و`.next/standalone/.next/static` وانسخ محتويات `public` و`.next/static` إليهما قبل بدء `node .next/standalone/server.js`؛ تشغيل standalone قبل النسخ قد يترك الأصول غير متاحة حتى إعادة تشغيله. اضبط `TEST_BASE_URL` على loopback و`PLAYWRIGHT_BROWSERS_PATH` لمسار المتصفح المثبت محليًا، ثم شغّل:
+
+```sh
+node --test --test-concurrency=1 tests/blood-bank-live.test.mjs tests/blood-bank-reports-live.test.mjs
+```
+
+لا تشغّل اختبارات RefreshDatabase بالتزامن مع الخوادم الحية على القاعدة نفسها. تحتوي بعض الحالات حقن انقطاع/تأخير في النقل فوق الاستجابات الحقيقية لاختبار الاستعادة، ولا تستبدل الحفظ بمحاكاة API. يوجد اختبار مستقل باتصالَي PHP متزامنين داخل الكاتب الفعلي. بيانات الدخول والتوكنات والعينات واللقطات تبقى محلية داخل المسارات المستثناة من Git؛ يلغي cleanup توكنات الاختبار المملوكة له.
+
+اللقطات الجديدة والعينات في `frontend/.superdesign/blood-events/`: السجل والشخص والواقعة ونموذج التبرع عند 390 و768 و1440، ونموذج النقل المرتبط، وتقارير ledger/person/donation/issue/transfusion بصيغتي PDF وXLSX. نتائج التشغيل النهائية موثقة في مستند Backend المرتبط أعلاه. السجل العريض يستخدم تمرير المكوّن المشترك على الهاتف، دون تمرير أفقي للصفحة.
+
 ## إصلاح نماذج التسجيل بعد PR #15
 
 فرع الإصلاح `fix/blood-bank-profile-workflows` مبني على develop عند `14c301a`؛ PR #15 كان مدمجًا. يعيد استخدام `Modal`, `Picker`, أنماط حقول العيادات و`sectionHeading` و`doctorChoice`، مع تعديل CSS محدود داخل نموذج بنك الدم لضبط radio؛ لا تعديل لـAppShell أو الأطباء والعيادات.

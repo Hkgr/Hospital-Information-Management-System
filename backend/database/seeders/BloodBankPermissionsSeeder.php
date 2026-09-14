@@ -14,6 +14,8 @@ class BloodBankPermissionsSeeder extends Seeder
         'blood_bank.update' => 'تعديل ملفات بنك الدم في المنشأة',
         'blood_bank.donations.create' => 'تسجيل تبرع فعلي في المنشأة',
         'blood_bank.donations.update' => 'تصحيح بيانات تبرع فعلي في المنشأة',
+        'blood_bank.benefits.create' => 'تسجيل صرف مكوّن أو نقل دم فعلي وربط المرحلتين في المنشأة',
+        'blood_bank.benefits.update' => 'تصحيح واقعة صرف أو نقل دم في المنشأة',
         'blood_bank.patients.search' => 'البحث في سجل مرضى المشفى المشترك للربط ببنك الدم — تفويض عالمي',
     ];
 

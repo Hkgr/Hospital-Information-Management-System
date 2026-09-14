@@ -30,48 +30,24 @@ class BloodBankDocumentTransformer extends ClinicDocumentTransformer
         $screen = $this->object(['analyte' => (new StringType)->enum(['HBsAg', 'HCV', 'HIV']), 'screening_test_id' => (new IntegerType)->nullable(true), 'status' => (new StringType)->enum(['not_requested', 'requested', 'pending', 'complete', 'cancelled']), 'result' => (new StringType)->enum(['negative', 'positive', 'indeterminate'])->nullable(true)]);
         $base = ['id' => new IntegerType, 'kind' => (new StringType)->enum(['donor', 'recipient']), 'code' => $text(), 'name' => $text(), 'blood_group' => $nullable(), 'rh' => $nullable(), 'clinic_name' => $nullable(), 'doctor_name' => $nullable(), 'updated_at' => $nullable()];
         $profile = $this->object($base + ['facility_id' => new IntegerType, 'patient_id' => (new IntegerType)->nullable(true), 'patient_code' => $nullable(), 'person_mode' => (new StringType)->enum(['direct', 'patient']), 'person' => $person, 'governorate_name' => $nullable(), 'city_name' => $nullable(), 'component_name' => $nullable(), 'beneficiary_entity' => $nullable(), 'clinic_id' => (new IntegerType)->nullable(true), 'responsible_staff_id' => (new IntegerType)->nullable(true), 'blood_component_id' => (new IntegerType)->nullable(true), 'screenings' => $this->list($screen), 'lock_version' => new IntegerType]);
-        $donation = $this->object(['id' => new IntegerType, 'donation_code' => (new StringType)->example('DON-20260914-000123'), 'donated_on' => (new StringType)->format('date'), 'blood_group' => (new StringType)->enum(['A', 'B', 'AB', 'O']), 'rh' => (new StringType)->enum(['positive', 'negative']), 'units' => (new StringType)->example('1.0000'), 'status' => $text(), 'lock_version' => new IntegerType, 'voided_at' => $nullable()]);
+        $donation = $this->object(['id' => new IntegerType, 'donation_code' => (new StringType)->example('DON-20260914-000123'), 'donated_on' => (new StringType)->format('date'), 'blood_group' => (new StringType)->enum(['A', 'B', 'AB', 'O']), 'rh' => (new StringType)->enum(['positive', 'negative']), 'units' => (new StringType)->example('1.0000'), 'quantity_unit' => (new StringType)->enum(['unit', 'kg']), 'status' => $text(), 'lock_version' => new IntegerType, 'voided_at' => $nullable()]);
         $meta = $this->object(array_fill_keys(['page', 'per_page', 'total', 'last_page'], new IntegerType));
-        $caps = $this->object(array_fill_keys(['create', 'update', 'export', 'donations_create', 'donations_update', 'patients_search'], new BooleanType));
+        $caps = $this->object(array_fill_keys(['create', 'update', 'export', 'donations_create', 'donations_update', 'benefits_create', 'benefits_update', 'patients_search'], new BooleanType));
         foreach ($document->paths as $path) {
             $route = preg_replace('#^api/#', '', trim($path->path, '/'));
             if ($route !== 'blood-bank' && ! str_starts_with($route, 'blood-bank/')) {
                 continue;
             }
+            if (preg_match('#^blood-bank/(events|people|legacy)(/|$)#', $route)) {
+                continue;
+            }
             foreach ($path->operations as $operation) {
                 if (in_array($operation->method, ['post', 'put'], true)) {
-                    $schema = $operation->requestBodyObject->content['application/json'];
-                    $template = ($schema instanceof Reference ? $schema->resolve() : $schema)->type->clone();
-                    $required = ['facility_id', 'request_id'];
-                    if ($operation->method === 'put') {
-                        $template->addProperty('lock_version', new IntegerType);
-                        $required[] = 'lock_version';
-                    } else {
-                        unset($template->properties['lock_version']);
-                    }
-                    if (str_contains($route, '/donations')) {
-                        $template->setRequired([...$required, 'donated_on', 'blood_group', 'rh', 'units']);
-                        $operation->requestBodyObject->setContent('application/json', Schema::fromType($template));
-                    } else {
-                        $required = [...$required, 'person_mode', 'clinic_id', 'responsible_staff_id'];
-                        if ($operation->method === 'post') {
-                            $required[] = 'kind';
-                        } else {
-                            unset($template->properties['kind']);
-                        }
-                        $direct = $template->clone();
-                        unset($direct->properties['patient_id']);
-                        $direct->addProperty('person_mode', (new StringType)->enum(['direct']))->setRequired([...$required, 'first_name', 'family_name', 'gender', 'birth_date_accuracy', 'displacement_status']);
-                        $linked = $template->clone();
-                        foreach ([...SaveBloodProfile::PERSON, ...SaveBloodProfile::MANUAL_ADDRESS] as $key) {
-                            unset($linked->properties[$key]);
-                        }
-                        $linked->addProperty('person_mode', (new StringType)->enum(['patient']))->addProperty('patient_id', new IntegerType)->setRequired([...$required, 'patient_id']);
-                        if ($operation->method === 'post') {
-                            $linked->addProperty('kind', (new StringType)->enum(['recipient']));
-                        }
-                        $operation->requestBodyObject->setContent('application/json', Schema::fromType((new AnyOf)->setItems([$direct, $linked])));
-                    }
+                    $operation->description = 'Retired legacy write. Use POST /blood-bank/events (atomic person + event), PUT /blood-bank/events/{event}, or PUT /blood-bank/people/{person}. No write is performed.';
+                    $operation->security = [new SecurityRequirement(['bearerAuth' => []])];
+                    $operation->responses = [Response::make(410)->setDescription('BLOOD_BANK_LEGACY_WRITE_RETIRED; private, no-store')->setContent('application/json', Schema::fromType($this->object(['error' => $this->object(['code' => $text(), 'message' => $text()])])))];
+
+                    continue;
                 }
                 $operation->security = [new SecurityRequirement(['bearerAuth' => []])];
                 $operation->description .= "\nSanctum Bearer api ability, active account and selected active facility blood_bank.view required; every response private, no-store. facility_id is explicit, selected by the same authenticated directoryFacility rule as doctors/clinics; unauthorized URL never falls back. Profiles need blood_bank.create/update; donation writes need blood_bank.donations.create/update. Global patient search/link additionally requires global_user_roles blood_bank.patients.search and facility create or update. No automatic grants. Direct recipient requires first/family names; linked recipient sends patient_id and NO personal fields, never copied. UUID request_id is durable per user/facility: identical replay returns the same entity, changed content returns 409. PUT requires lock_version; resolve conflicts by fetching latest and explicitly reviewing the draft. Codes BD/BR are stable, historical codes retained. Creating a profile creates no donation, transfusion, patient or visit. Screenings are optional profile-only status records (0 to 3 distinct analytes). Complete does not require a result. Omitted rows, results and methods retain historical values; no deletion by omission. Only explicitly supplied result/method fields can update those values; methods must match the analyte. No eligibility or inventory effect. Syrian governorates use the country_code SY directory. Manual governorate_text (outside Syria) excludes directory governorate_id/city_id; city_text excludes city_id and requires a governorate. Linked recipients prohibit both manual fields. Historical unchanged directory IDs remain readable. Clinic and current eligible doctor are validated on new/changed assignment; historical unchanged responsibility is retained.";
