@@ -9,6 +9,7 @@ class BloodBankPermissionsSeeder extends Seeder
 {
     public const PERMISSIONS = [
         'blood_bank.view' => 'استعراض ملفات بنك الدم وتبرعات المنشأة',
+        'blood_bank.export' => 'تصدير تقارير ملفات بنك الدم ووقائع التبرع في المنشأة',
         'blood_bank.create' => 'إضافة ملف متبرع أو مستفيد في المنشأة',
         'blood_bank.update' => 'تعديل ملفات بنك الدم في المنشأة',
         'blood_bank.donations.create' => 'تسجيل تبرع فعلي في المنشأة',

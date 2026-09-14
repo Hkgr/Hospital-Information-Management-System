@@ -17,7 +17,7 @@ class ReportMetadata
             DB::table('number_sequences')->where('id', $sequence->id)->update(['current_value' => $sequence->current_value + 1, 'updated_at' => now()]);
 
             return match ($entity) {
-                'clinic' => 'CL', 'catalog' => 'SP', default => 'DR'
+                'clinic' => 'CL', 'catalog' => 'SP', 'blood_bank' => 'BB', default => 'DR'
             }.'-'.$facility['id'].'-'.$issued->format('Y').'-'.str_pad((string) ($sequence->current_value + 1), 6, '0', STR_PAD_LEFT);
         }, 3);
         $parts = [];

@@ -46,7 +46,13 @@ class BloodBankMigrationConcurrencyTest extends TestCase
         $payload = ['facility_id' => $f['facility'], 'request_id' => (string) Str::uuid(), 'lock_version' => 1, 'donated_on' => now('Asia/Damascus')->subDay()->toDateString(), 'blood_group' => 'O', 'rh' => 'positive', 'units' => '1.2500'];
         $file = storage_path('framework/testing/blood-correction-'.Str::uuid().'.json');
         file_put_contents($file, json_encode(['user_id' => $f['user']->id, 'donor' => $id, 'donation' => $event, 'payload' => $payload], JSON_THROW_ON_ERROR));
-        $process = new Process([PHP_BINARY, 'tests/Support/blood-correction-worker.php', $file], base_path(), ['APP_ENV' => 'testing']);
+        // Explicitly carry the guarded connection into the worker. PHPUnit's
+        // dotenv values can otherwise override a MariaDB run's process environment.
+        $db = config('database.connections.mysql');
+        $process = new Process([PHP_BINARY, 'tests/Support/blood-correction-worker.php', $file], base_path(), ['APP_ENV' => 'testing',
+            'DB_CONNECTION' => 'mysql', 'DB_HOST' => $db['host'], 'DB_PORT' => (string) $db['port'], 'DB_DATABASE' => $db['database'],
+            'DB_USERNAME' => $db['username'], 'DB_PASSWORD' => $db['password'], 'TEST_DATABASE_CONFIRMED' => 'true',
+            'TEST_DATABASE_HOST' => $db['host'], 'TEST_DATABASE_NAME' => $db['database']]);
         $process->setTimeout(20);
         try {
             $process->start();

@@ -1,0 +1,2196 @@
+{
+  "accessed_on": "2026-09-14",
+  "source": "https://github.com/Open-Syria/data-geography/blob/main/data/localities.json",
+  "attribution": "OpenSyria; OCHA populated places (CC BY 3.0 IGO); GeoNames (CC BY 4.0). See docs/syrian-cities.md.",
+  "records": [
+    {
+      "governorate": "SY-HL",
+      "name": "حلب",
+      "source_name": "حلب",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1007",
+      "geonames": "170063",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "منبج",
+      "source_name": "منبج",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1767",
+      "geonames": "167357",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "الباب",
+      "source_name": "الباب",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1202",
+      "geonames": "174018",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "أعزاز",
+      "source_name": "أعزاز",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1564",
+      "geonames": "172082",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "عفرين",
+      "source_name": "عفرين - مركز عفرين",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1366",
+      "geonames": "174186",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "جرابلس",
+      "source_name": "جرابلس",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C2227",
+      "geonames": "169179",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "عين العرب",
+      "source_name": "عين العرب",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1946",
+      "geonames": "172256",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "السفيرة",
+      "source_name": "السفيرة",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C2154",
+      "geonames": "172503",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "الأتارب",
+      "source_name": "الأتارب",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1022",
+      "geonames": "174030",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "دير حافر",
+      "source_name": "دير حافر - دير حافر",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1240",
+      "geonames": "170785",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "تل رفعت",
+      "source_name": "تل رفعت",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1621",
+      "geonames": "163476",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "مارع",
+      "source_name": "مارع",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1643",
+      "geonames": "167245",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "نبل",
+      "source_name": "نبل",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1655",
+      "geonames": "166331",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "الزهراء",
+      "source_name": "الزهراء - نبل",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1646",
+      "geonames": "166458",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "مسكنة",
+      "source_name": "مسكنة_عنيزة",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1933",
+      "geonames": null,
+      "source_ids": [
+        "hdx-syr-populated-places"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "قباسين",
+      "source_name": "قباسين - مركز الباب",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1209",
+      "geonames": "166285",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HL",
+      "name": "تادف",
+      "source_name": "تادف",
+      "source_governorate": "sy-aleppo",
+      "pcode": "C1219",
+      "geonames": "163811",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "إدلب",
+      "source_name": "إدلب",
+      "source_governorate": "sy-idlib",
+      "pcode": "C3871",
+      "geonames": "169389",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "معرة النعمان",
+      "source_name": "معرة النعمان",
+      "source_governorate": "sy-idlib",
+      "pcode": "C3985",
+      "geonames": "167611",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "أريحا",
+      "source_name": "أريحا - مركز أريحا",
+      "source_governorate": "sy-idlib",
+      "pcode": "C4278",
+      "geonames": "172994",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "جسر الشغور",
+      "source_name": "جسر الشغور",
+      "source_governorate": "sy-idlib",
+      "pcode": "C4199",
+      "geonames": "169023",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "حارم",
+      "source_name": "حارم",
+      "source_governorate": "sy-idlib",
+      "pcode": "C4115",
+      "geonames": "169866",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "سلقين",
+      "source_name": "سلقين",
+      "source_governorate": "sy-idlib",
+      "pcode": "C4140",
+      "geonames": "164898",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "بنش",
+      "source_name": "بنش",
+      "source_governorate": "sy-idlib",
+      "pcode": "C3904",
+      "geonames": "171451",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "سراقب",
+      "source_name": "سراقب - سراقب",
+      "source_governorate": "sy-idlib",
+      "pcode": "C3916",
+      "geonames": "164816",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "خان شيخون",
+      "source_name": "خان شيخون - خان شيخون",
+      "source_governorate": "sy-idlib",
+      "pcode": "C3987",
+      "geonames": "168325",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "كفر نبل",
+      "source_name": "كفر نبل",
+      "source_governorate": "sy-idlib",
+      "pcode": "C4068",
+      "geonames": "168661",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "معرتمصرين",
+      "source_name": "معر تمصرين",
+      "source_governorate": "sy-idlib",
+      "pcode": "C3947",
+      "geonames": null,
+      "source_ids": [
+        "hdx-syr-populated-places"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "كفر تخاريم",
+      "source_name": "كفر تخاريم",
+      "source_governorate": "sy-idlib",
+      "pcode": "C4157",
+      "geonames": "168629",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "الدانا",
+      "source_name": "الدانا - دانا",
+      "source_governorate": "sy-idlib",
+      "pcode": "C4126",
+      "geonames": "174259",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "سرمدا",
+      "source_name": "سرمدا",
+      "source_governorate": "sy-idlib",
+      "pcode": "C4121",
+      "geonames": "164786",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "دركوش",
+      "source_name": "دركوش",
+      "source_governorate": "sy-idlib",
+      "pcode": "C4252",
+      "geonames": "170865",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "كفريا",
+      "source_name": "كفريا - معرة تمصرين",
+      "source_governorate": "sy-idlib",
+      "pcode": "C3952",
+      "geonames": "168689",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "تفتناز",
+      "source_name": "تفتناز - تفتناز",
+      "source_governorate": "sy-idlib",
+      "pcode": "C3932",
+      "geonames": "163799",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-ID",
+      "name": "سرمين",
+      "source_name": "سرمين",
+      "source_governorate": "sy-idlib",
+      "pcode": "C3953",
+      "geonames": "164782",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "حمص",
+      "source_name": "حمص",
+      "source_governorate": "sy-homs",
+      "pcode": "C2528",
+      "geonames": "169577",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "تدمر",
+      "source_name": "تدمر",
+      "source_governorate": "sy-homs",
+      "pcode": "C2889",
+      "geonames": "163808",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "القصير",
+      "source_name": "القصير - مركز القصير",
+      "source_governorate": "sy-homs",
+      "pcode": "C2733",
+      "geonames": "173322",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "الرستن",
+      "source_name": "الرستن",
+      "source_governorate": "sy-homs",
+      "pcode": "C2870",
+      "geonames": "172946",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "تلبيسة",
+      "source_name": "تلبيسة",
+      "source_governorate": "sy-homs",
+      "pcode": "C2882",
+      "geonames": "163779",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "تلكلخ",
+      "source_name": "تلكلخ",
+      "source_governorate": "sy-homs",
+      "pcode": "C2762",
+      "geonames": "163533",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "تلدو",
+      "source_name": "تلدو",
+      "source_governorate": "sy-homs",
+      "pcode": "C2541",
+      "geonames": "163596",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "المخرم",
+      "source_name": "المخرم الفوقاني",
+      "source_governorate": "sy-homs",
+      "pcode": "C2901",
+      "geonames": "166719",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "القريتين",
+      "source_name": "القريتين",
+      "source_governorate": "sy-homs",
+      "pcode": "C2663",
+      "geonames": "173361",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "السخنة",
+      "source_name": "السخنة",
+      "source_governorate": "sy-homs",
+      "pcode": "C2893",
+      "geonames": "172425",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "مهين",
+      "source_name": "مهين",
+      "source_governorate": "sy-homs",
+      "pcode": "C2667",
+      "geonames": "167488",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "حسياء",
+      "source_name": "حسياء",
+      "source_governorate": "sy-homs",
+      "pcode": "C2675",
+      "geonames": "169557",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HI",
+      "name": "الحواش",
+      "source_name": "الحواش - الحواش",
+      "source_governorate": "sy-homs",
+      "pcode": "C2842",
+      "geonames": "173802",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "حماة",
+      "source_name": "حماة",
+      "source_governorate": "sy-hama",
+      "pcode": "C2987",
+      "geonames": "170017",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "سلمية",
+      "source_name": "السلمية",
+      "source_governorate": "sy-hama",
+      "pcode": "C3244",
+      "geonames": "164947",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "مصياف",
+      "source_name": "مصياف",
+      "source_governorate": "sy-hama",
+      "pcode": "C3367",
+      "geonames": "167046",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "محردة",
+      "source_name": "محردة",
+      "source_governorate": "sy-hama",
+      "pcode": "C3457",
+      "geonames": "166742",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "السقيلبية",
+      "source_name": "السقيلبية",
+      "source_governorate": "sy-hama",
+      "pcode": "C3114",
+      "geonames": "163921",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "صوران",
+      "source_name": "صوران - حماة",
+      "source_governorate": "sy-hama",
+      "pcode": "C3026",
+      "geonames": "163915",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "طيبة الإمام",
+      "source_name": "طيبة الإمام",
+      "source_governorate": "sy-hama",
+      "pcode": "C3028",
+      "geonames": "163270",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "حلفايا",
+      "source_name": "حلفايا",
+      "source_governorate": "sy-hama",
+      "pcode": "C3453",
+      "geonames": "170044",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "كفرزيتا",
+      "source_name": "كفر زيتا",
+      "source_governorate": "sy-hama",
+      "pcode": "C3463",
+      "geonames": "168620",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "كفرنبودة",
+      "source_name": "كفر نبودة",
+      "source_governorate": "sy-hama",
+      "pcode": "C3209",
+      "geonames": "168660",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "قلعة المضيق",
+      "source_name": "قلعة المضيق",
+      "source_governorate": "sy-hama",
+      "pcode": "C3207",
+      "geonames": "166227",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "شطحة",
+      "source_name": "شطحة التحتا",
+      "source_governorate": "sy-hama",
+      "pcode": "C3180",
+      "geonames": "164398",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "السعن",
+      "source_name": "السعن",
+      "source_governorate": "sy-hama",
+      "pcode": "C3275",
+      "geonames": "172515",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HM",
+      "name": "عقيربات",
+      "source_name": "عقيربات",
+      "source_governorate": "sy-hama",
+      "pcode": "C3315",
+      "geonames": "162803",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "اللاذقية",
+      "source_name": "اللاذقية",
+      "source_governorate": "sy-latakia",
+      "pcode": "C3480",
+      "geonames": "173576",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "جبلة",
+      "source_name": "جبلة",
+      "source_governorate": "sy-latakia",
+      "pcode": "C3585",
+      "geonames": "169304",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "القرداحة",
+      "source_name": "القرداحة",
+      "source_governorate": "sy-latakia",
+      "pcode": "C3809",
+      "geonames": "173364",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "الحفة",
+      "source_name": "الحفة",
+      "source_governorate": "sy-latakia",
+      "pcode": "C3671",
+      "geonames": "173856",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "كسب",
+      "source_name": "كسب",
+      "source_governorate": "sy-latakia",
+      "pcode": "C3557",
+      "geonames": "168519",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "صلنفة",
+      "source_name": "صلنفة",
+      "source_governorate": "sy-latakia",
+      "pcode": "C3700",
+      "geonames": "164052",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "عين البيضا",
+      "source_name": "عين البيضة - عين البيضا",
+      "source_governorate": "sy-latakia",
+      "pcode": "C3519",
+      "geonames": "172243",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "بيت ياشوط",
+      "source_name": "بيت ياشوط_عين قيطة",
+      "source_governorate": "sy-latakia",
+      "pcode": "C3667",
+      "geonames": null,
+      "source_ids": [
+        "hdx-syr-populated-places"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "عين الشرقية",
+      "source_name": "عين الشرقية",
+      "source_governorate": "sy-latakia",
+      "pcode": "C3603",
+      "geonames": "172173",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-LA",
+      "name": "البسيط",
+      "source_name": "راس البسيط",
+      "source_governorate": "sy-latakia",
+      "pcode": "C8341",
+      "geonames": null,
+      "source_ids": [
+        "hdx-syr-populated-places"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "طرطوس",
+      "source_name": "طرطوس",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5221",
+      "geonames": "163345",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "بانياس",
+      "source_name": "بانياس",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5360",
+      "geonames": "171830",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "صافيتا",
+      "source_name": "صافيتا",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5472",
+      "geonames": "165060",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "دريكيش",
+      "source_name": "الدريكيش",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5586",
+      "geonames": "170572",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "الشيخ بدر",
+      "source_name": "الشيخ بدر",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5638",
+      "geonames": "172743",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "القدموس",
+      "source_name": "القدموس",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5404",
+      "geonames": "173389",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "مشتى الحلو",
+      "source_name": "مشتى الحلو",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5509",
+      "geonames": "167100",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "الكفرون - مشتى الحلو",
+      "source_name": "الكفرون - مشتى الحلو",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5496",
+      "geonames": "13436488",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "حمام واصل",
+      "source_name": "حمام واصل",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5430",
+      "geonames": "169966",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "السودا",
+      "source_name": "السودا",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5299",
+      "geonames": "172454",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-TA",
+      "name": "أرواد",
+      "source_name": "أرواد",
+      "source_governorate": "sy-tartus",
+      "pcode": "C5257",
+      "geonames": "172880",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DI",
+      "name": "دمشق",
+      "source_name": "دمشق",
+      "source_governorate": "sy-damascus",
+      "pcode": "C1001",
+      "geonames": "170654",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "دوما",
+      "source_name": "دوما - مركز دوما",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2338",
+      "geonames": "170592",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "داريا",
+      "source_name": "داريا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2498",
+      "geonames": "170892",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "التل",
+      "source_name": "التل",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2395",
+      "geonames": "172349",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "قطنا",
+      "source_name": "قطنا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2470",
+      "geonames": "165929",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "قدسيا",
+      "source_name": "قدسيا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2328",
+      "geonames": "166251",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "النبك",
+      "source_name": "النبك",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2419",
+      "geonames": "173193",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "القطيفة",
+      "source_name": "القطيفة",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2384",
+      "geonames": "173312",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "الزبداني",
+      "source_name": "الزبداني",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2429",
+      "geonames": "172059",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "يبرود",
+      "source_name": "يبرود",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2416",
+      "geonames": "162627",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "جرمانا",
+      "source_name": "جرمانا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2304",
+      "geonames": "169174",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "حرستا",
+      "source_name": "حرستا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2342",
+      "geonames": "169897",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "دير عطية",
+      "source_name": "دير عطية",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2424",
+      "geonames": "170797",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "السيدة زينب",
+      "source_name": "السيدة زينب",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2299",
+      "geonames": "166277",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "الحجر الأسود",
+      "source_name": "الحجر الأسود",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2502",
+      "geonames": "8419677",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "معضمية الشام",
+      "source_name": "معضمية الشام",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2499",
+      "geonames": "166833",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "صحنايا",
+      "source_name": "صحنايا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2501",
+      "geonames": "164994",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "أشرفية صحنايا",
+      "source_name": "أشرفية صحنايا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2500",
+      "geonames": "172840",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "الكسوة",
+      "source_name": "الكسوة - الكسوة",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2280",
+      "geonames": "173598",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "عدرا",
+      "source_name": "عدرا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2331",
+      "geonames": "174201",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "الضمير",
+      "source_name": "الضمير",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2346",
+      "geonames": "170589",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "معلولا",
+      "source_name": "معلولا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2393",
+      "geonames": "167375",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "صيدنايا",
+      "source_name": "صيدنايا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2404",
+      "geonames": "164717",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "قارة",
+      "source_name": "قارة",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2427",
+      "geonames": "166111",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "بلودان",
+      "source_name": "بلودان",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2434",
+      "geonames": "171331",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "عين الفيجة",
+      "source_name": "عين الفيجة",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2447",
+      "geonames": "172232",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "عربين",
+      "source_name": "عربين",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2321",
+      "geonames": "169372",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "سقبا",
+      "source_name": "سقبا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2314",
+      "geonames": "164828",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RD",
+      "name": "كفر بطنا",
+      "source_name": "كفر بطنا",
+      "source_governorate": "sy-rif-dimashq",
+      "pcode": "C2319",
+      "geonames": "168713",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "درعا",
+      "source_name": "درعا",
+      "source_governorate": "sy-daraa",
+      "pcode": "C5993",
+      "geonames": "170905",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "إزرع",
+      "source_name": "ازرع",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6101",
+      "geonames": "169341",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "الصنمين",
+      "source_name": "الصنمين",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6051",
+      "geonames": "172469",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "نوى",
+      "source_name": "نوى - نوى",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6124",
+      "geonames": "166365",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "جاسم",
+      "source_name": "جاسم",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6111",
+      "geonames": "165997",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "الحراك",
+      "source_name": "الحراك",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6116",
+      "geonames": "173819",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "الشيخ مسكين",
+      "source_name": "الشيخ مسكين",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6126",
+      "geonames": "164328",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "بصرى الشام",
+      "source_name": "بصرى الشام",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6002",
+      "geonames": "171126",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "طفس",
+      "source_name": "طفس - مزيريب",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6034",
+      "geonames": "163806",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "داعل",
+      "source_name": "داعل",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6030",
+      "geonames": "170959",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "إنخل",
+      "source_name": "أنخل",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6058",
+      "geonames": "169375",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "الحارة",
+      "source_name": "الحارة - مركز الصنمين",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6048",
+      "geonames": "173814",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "تسيل",
+      "source_name": "تسيل",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6131",
+      "geonames": "163330",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "المزيريب",
+      "source_name": "مزيريب - مزيريب",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6039",
+      "geonames": "166503",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "الشجرة",
+      "source_name": "الشجرة",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6021",
+      "geonames": "172829",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "الجيزة",
+      "source_name": "الجيزة",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6043",
+      "geonames": "169017",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DR",
+      "name": "خربة غزالة",
+      "source_name": "خربة غزالة - خربة غزالة",
+      "source_governorate": "sy-daraa",
+      "pcode": "C6012",
+      "geonames": "168120",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "السويداء",
+      "source_name": "السويداء",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6147",
+      "geonames": "172408",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "صلخد",
+      "source_name": "صلخد",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6184",
+      "geonames": "164917",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "شهبا",
+      "source_name": "شهبا - مركز شهبا",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6226",
+      "geonames": "164626",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "القريا",
+      "source_name": "القريا",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6200",
+      "geonames": "173331",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "شقا",
+      "source_name": "شقا",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6233",
+      "geonames": "164479",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "عرى",
+      "source_name": "عرى",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6138",
+      "geonames": "173108",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "المزرعة",
+      "source_name": "المزرعة_السجن",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6164",
+      "geonames": null,
+      "source_ids": [
+        "hdx-syr-populated-places"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "ملح",
+      "source_name": "ملح",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6219",
+      "geonames": "167408",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "ذيبين",
+      "source_name": "ذيبين",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6205",
+      "geonames": "170689",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-SU",
+      "name": "قنوات",
+      "source_name": "قنوات",
+      "source_governorate": "sy-as-suwayda",
+      "pcode": "C6154",
+      "geonames": "166141",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-QU",
+      "name": "القنيطرة",
+      "source_name": "القنيطرة - مركز القنيطرة",
+      "source_governorate": "sy-quneitra",
+      "pcode": "C6268",
+      "geonames": "173334",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-QU",
+      "name": "خان أرنبة",
+      "source_name": "خان أرنبة",
+      "source_governorate": "sy-quneitra",
+      "pcode": "C6273",
+      "geonames": "168355",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-QU",
+      "name": "جباتا الخشب",
+      "source_name": "جباتا الخشب",
+      "source_governorate": "sy-quneitra",
+      "pcode": "C6281",
+      "geonames": "168946",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-QU",
+      "name": "حضر",
+      "source_name": "حضر",
+      "source_governorate": "sy-quneitra",
+      "pcode": "C6278",
+      "geonames": "170150",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-QU",
+      "name": "البعث",
+      "source_name": "البعث",
+      "source_governorate": "sy-quneitra",
+      "pcode": "C6275",
+      "geonames": "11486812",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-QU",
+      "name": "الرفيد",
+      "source_name": "الرفيد",
+      "source_governorate": "sy-quneitra",
+      "pcode": "C6296",
+      "geonames": "172973",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-QU",
+      "name": "البريقة",
+      "source_name": "بريقة",
+      "source_governorate": "sy-quneitra",
+      "pcode": "C6269",
+      "geonames": "171174",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-QU",
+      "name": "بئر عجم",
+      "source_name": "بئر عجم",
+      "source_governorate": "sy-quneitra",
+      "pcode": "C6267",
+      "geonames": "171436",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "الحسكة",
+      "source_name": "الحسكة",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4360",
+      "geonames": "173811",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "القامشلي",
+      "source_name": "القامشلي",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4564",
+      "geonames": "173377",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "رأس العين",
+      "source_name": "رأس العين - مركز رأس العين",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4988",
+      "geonames": "165509",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "المالكية",
+      "source_name": "المالكية - مركز المالكية",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4881",
+      "geonames": "173530",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "عامودا",
+      "source_name": "عامودا",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4688",
+      "geonames": "173230",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "الدرباسية",
+      "source_name": "الدرباسية",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C5054",
+      "geonames": "170887",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "القحطانية",
+      "source_name": "القحطانية - قحطانية",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4751",
+      "geonames": "165757",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "الجوادية",
+      "source_name": "الجوادية - جوادية",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4919",
+      "geonames": "173711",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "اليعربية",
+      "source_name": "اليعربية - يعربية",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4969",
+      "geonames": "383661",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "تل تمر",
+      "source_name": "تل تمر",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4409",
+      "geonames": "163434",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "الشدادي",
+      "source_name": "الشدادة",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4446",
+      "geonames": "172837",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "الهول",
+      "source_name": "الهول",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4519",
+      "geonames": null,
+      "source_ids": [
+        "hdx-syr-populated-places"
+      ]
+    },
+    {
+      "governorate": "SY-HA",
+      "name": "مركدة",
+      "source_name": "مركدة",
+      "source_governorate": "sy-al-hasakah",
+      "pcode": "C4454",
+      "geonames": "167208",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RA",
+      "name": "الرقة",
+      "source_name": "الرقة",
+      "source_governorate": "sy-raqqa",
+      "pcode": "C5710",
+      "geonames": "172955",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RA",
+      "name": "الطبقة",
+      "source_name": "الثورة - مركز الثورة",
+      "source_governorate": "sy-raqqa",
+      "pcode": "C5929",
+      "geonames": "172374",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RA",
+      "name": "تل أبيض",
+      "source_name": "تل أبيض",
+      "source_governorate": "sy-raqqa",
+      "pcode": "C5792",
+      "geonames": "163750",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RA",
+      "name": "عين عيسى",
+      "source_name": "عين عيسى",
+      "source_governorate": "sy-raqqa",
+      "pcode": "C5905",
+      "geonames": "172134",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RA",
+      "name": "سلوك",
+      "source_name": "سلوك",
+      "source_governorate": "sy-raqqa",
+      "pcode": "C5843",
+      "geonames": "164895",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RA",
+      "name": "الكرامة",
+      "source_name": "الكرامة - الكرامة",
+      "source_governorate": "sy-raqqa",
+      "pcode": "C5766",
+      "geonames": "4273",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RA",
+      "name": "المنصورة",
+      "source_name": "المنصورة - المنصورة",
+      "source_governorate": "sy-raqqa",
+      "pcode": "C5942",
+      "geonames": "8559276",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RA",
+      "name": "معدان",
+      "source_name": "معدان",
+      "source_governorate": "sy-raqqa",
+      "pcode": "C5787",
+      "geonames": "167538",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-RA",
+      "name": "السبخة",
+      "source_name": "السبخة",
+      "source_governorate": "sy-raqqa",
+      "pcode": "C5747",
+      "geonames": "172511",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "دير الزور",
+      "source_name": "دير الزور",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5086",
+      "geonames": "170794",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "الميادين",
+      "source_name": "الميادين",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5192",
+      "geonames": "173480",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "البوكمال",
+      "source_name": "البوكمال",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5167",
+      "geonames": "174448",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "هجين",
+      "source_name": "هجين",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5175",
+      "geonames": "174506",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "العشارة",
+      "source_name": "العشارة",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5210",
+      "geonames": "174036",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "القورية",
+      "source_name": "القورية",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5207",
+      "geonames": "173327",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "البصيرة",
+      "source_name": "البصيرة",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5110",
+      "geonames": "173927",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "الشحيل",
+      "source_name": "الشحيل",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5119",
+      "geonames": "164623",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "ذيبان",
+      "source_name": "ذيبان - ذيبان",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5202",
+      "geonames": "170691",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "موحسن",
+      "source_name": "موحسن",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5127",
+      "geonames": "162284",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "التبني",
+      "source_name": "التبني",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5131",
+      "geonames": "172327",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "الكسرة",
+      "source_name": "الكسرة - كسرة",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5096",
+      "geonames": "8308210",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "خشام",
+      "source_name": "خشام - خشام",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5140",
+      "geonames": "167899",
+      "source_ids": [
+        "hdx-syr-populated-places",
+        "geonames-sy"
+      ]
+    },
+    {
+      "governorate": "SY-DY",
+      "name": "الصور",
+      "source_name": "الصور",
+      "source_governorate": "sy-deir-ez-zor",
+      "pcode": "C5157",
+      "geonames": null,
+      "source_ids": [
+        "hdx-syr-populated-places"
+      ]
+    }
+  ]
+}

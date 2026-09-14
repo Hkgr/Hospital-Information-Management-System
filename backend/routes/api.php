@@ -12,6 +12,9 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
     Route::prefix('blood-bank')->name('blood-bank.')->group(function () {
+        Route::get('/export/{format}', [BloodBankController::class, 'export'])->whereIn('format', ['pdf', 'xlsx'])->name('export');
+        Route::get('/{kind}/{item}/report/{format}', [BloodBankController::class, 'report'])->whereIn('kind', ['donor', 'recipient'])->whereNumber('item')->whereIn('format', ['pdf', 'xlsx'])->name('report');
+        Route::get('/donor/{donor}/donations/{donation}/report/{format}', [BloodBankController::class, 'donationReport'])->whereNumber(['donor', 'donation'])->whereIn('format', ['pdf', 'xlsx'])->name('donationReport');
         Route::get('/', [BloodBankController::class, 'index'])->name('index');
         Route::post('/', [BloodBankController::class, 'store'])->name('store');
         foreach (['options', 'cities', 'clinics', 'doctors', 'patients'] as $action) {

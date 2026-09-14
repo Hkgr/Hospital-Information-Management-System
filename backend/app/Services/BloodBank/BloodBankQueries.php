@@ -30,13 +30,18 @@ class BloodBankQueries
         $name = $kind === 'donor' ? 'b.full_name' : "CONCAT_WS(' ', b.first_name, b.family_name)";
 
         return DB::table(self::table($kind).' as b')->leftJoin('patients as p', 'p.id', '=', 'b.patient_id')
+            ->leftJoin('governorates as bg', 'bg.id', '=', 'b.governorate_id')->leftJoin('cities as bt', 'bt.id', '=', 'b.city_id')
+            ->leftJoin('governorates as pg', 'pg.id', '=', 'p.governorate_id')->leftJoin('cities as pt', 'pt.id', '=', 'p.city_id')
             ->leftJoin('clinics as c', 'c.id', '=', 'b.clinic_id')->leftJoin('staff as s', 's.id', '=', 'b.responsible_staff_id')
             ->leftJoin('blood_components as bc', 'bc.id', '=', 'b.blood_component_id')->where('b.facility_id', $facility)
             ->select('b.id', 'b.'.self::codeColumn($kind).' as code', 'b.blood_group', 'b.rh', 'b.updated_at', 'c.name_ar as clinic_name', 's.full_name as doctor_name', 'bc.name_ar as component_name')
-            ->selectRaw('? as kind', [$kind])->selectRaw("CASE WHEN b.patient_id IS NOT NULL THEN CONCAT_WS(' ', p.first_name, p.family_name) ELSE $name END as name");
+            ->selectRaw('? as kind', [$kind])->selectRaw("CASE WHEN b.patient_id IS NOT NULL THEN CONCAT_WS(' ', p.first_name, p.family_name) ELSE $name END as name")
+            ->selectRaw('CASE WHEN b.patient_id IS NOT NULL THEN p.phone ELSE b.phone END as phone')
+            ->selectRaw('CASE WHEN b.patient_id IS NOT NULL THEN pg.name_ar ELSE COALESCE(b.governorate_text, bg.name_ar) END as governorate_name')
+            ->selectRaw('CASE WHEN b.patient_id IS NOT NULL THEN pt.name_ar ELSE COALESCE(b.city_text, bt.name_ar) END as city_name');
     }
 
-    public function listing(array $facility, array $filters): array
+    public function files(array $facility, array $filters): Builder
     {
         $union = $this->listingQuery('donor', $facility['id'])->unionAll($this->listingQuery('recipient', $facility['id']));
         $q = DB::query()->fromSub($union, 'files');
@@ -47,7 +52,13 @@ class BloodBankQueries
             $like = self::like($filters['search']);
             $q->where(fn ($q) => $q->where('code', 'like', $like)->orWhereRaw("REGEXP_REPLACE(name, '[[:space:]]+', ' ') LIKE ?", [$like]));
         }
-        $page = $q->orderBy($filters['sort'] ?? 'code', $filters['direction'] ?? 'asc')->orderBy('kind')->orderBy('id')->paginate($filters['per_page'] ?? 20, ['*'], 'page', $filters['page'] ?? 1);
+
+        return $q->orderBy($filters['sort'] ?? 'code', $filters['direction'] ?? 'asc')->orderBy('kind')->orderBy('id');
+    }
+
+    public function listing(array $facility, array $filters): array
+    {
+        $page = $this->files($facility, $filters)->paginate($filters['per_page'] ?? 20, ['id', 'code', 'name', 'kind', 'blood_group', 'rh', 'clinic_name', 'doctor_name', 'component_name', 'updated_at'], 'page', $filters['page'] ?? 1);
 
         return ['data' => $page->items(), 'meta' => CatalogQueries::meta($page)];
     }

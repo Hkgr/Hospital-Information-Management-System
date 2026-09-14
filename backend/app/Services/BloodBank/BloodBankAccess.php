@@ -35,7 +35,7 @@ class BloodBankAccess
     public function capabilities(User $user, array $facility): array
     {
         $caps = [];
-        foreach (['create', 'update', 'donations.create', 'donations.update'] as $action) {
+        foreach (['create', 'update', 'export', 'donations.create', 'donations.update'] as $action) {
             $caps[str_replace('.', '_', $action)] = in_array('blood_bank.'.$action, $facility['permissions'], true);
         }
         $caps['patients_search'] = ($caps['create'] || $caps['update']) && $this->canSearchPatients($user);

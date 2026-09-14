@@ -5,6 +5,7 @@ namespace App\Services\Directory;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
+use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
@@ -14,6 +15,11 @@ class DirectorySpreadsheet
 {
     public function render(array $document): string
     {
+        return $this->bytes($this->workbook($document));
+    }
+
+    public function workbook(array $document): Spreadsheet
+    {
         $book = new Spreadsheet;
         $book->setValueBinder((new DefaultValueBinder)->setPreserveCr(true));
         $meta = $document['metadata'];
@@ -21,7 +27,7 @@ class DirectorySpreadsheet
         $book->getProperties()->setCreator($meta['issuer'])->setTitle($meta['title'])->setSubject($meta['number']);
         $sheet = $book->getActiveSheet()->setTitle($meta['title'])->setRightToLeft(true);
         $columns = $document['columns'];
-        $widths = ReportLayout::widths($columns);
+        $widths = $document['widths'] ?? ReportLayout::widths($columns);
         $count = count($columns);
         foreach ($columns as $index => $key) {
             $sheet->getColumnDimensionByColumn($index + 1)->setWidth(ReportLayout::excelWidth($widths[$key]));
@@ -74,8 +80,16 @@ class DirectorySpreadsheet
                 if (ReportLayout::numeric($key)) {
                     $cell->setValueExplicit((int) $value, DataType::TYPE_NUMERIC);
                 }
+                $cellType = $row['_types'][$key] ?? $document['types'][$key] ?? null;
+                if ($cellType === 'date' && $value !== '' && $value !== null) {
+                    $cell->setValueExplicit(Date::PHPToExcel(new \DateTimeImmutable($value)), DataType::TYPE_NUMERIC);
+                    $cell->getStyle()->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+                } elseif ($cellType === 'decimal') {
+                    $cell->setValueExplicit((float) $value, DataType::TYPE_NUMERIC);
+                    $cell->getStyle()->getNumberFormat()->setFormatCode('0.####');
+                }
                 $height = max($height, 4 + ReportLayout::lines($display, $widths[$key] - 3) * 23.25);
-                $cell->getStyle()->getAlignment()->setHorizontal(ReportLayout::numeric($key) || $key === 'is_active' ? 'center' : ($key === 'code' ? 'left' : 'right'));
+                $cell->getStyle()->getAlignment()->setHorizontal(ReportLayout::numeric($key) || $key === 'is_active' || in_array($cellType, ['date', 'decimal'], true) ? 'center' : ($key === 'code' ? 'left' : 'right'));
                 if ($key === 'code') {
                     $cell->getStyle()->getAlignment()->setReadOrder(1);
                 }
@@ -84,7 +98,7 @@ class DirectorySpreadsheet
         }
         $last = max(8, 8 + count($document['rows']));
         $this->table($sheet, 8, $last, $count);
-        $this->printSetup($sheet, $count, $last, 8, $meta, $count > 4);
+        $this->printSetup($sheet, $count, $last, 8, $meta, $document['landscape'] ?? $count > 4);
         if ($longTexts) {
             $this->mergedText($sheet, 1, $count, 7, 'النصوص الطويلة: يظهر مقتطف معلّم؛ النص محفوظ في الخلية وتستكمله ورقة «النصوص للطباعة».');
             $sheet->getRowDimension(7)->setRowHeight(19);
@@ -111,6 +125,12 @@ class DirectorySpreadsheet
             $extra->setSheetState(Worksheet::SHEETSTATE_HIDDEN);
         }
         $book->setActiveSheetIndex(0);
+
+        return $book;
+    }
+
+    public function bytes(Spreadsheet $book): string
+    {
         $stream = fopen('php://temp', 'w+b');
         try {
             (new Xlsx($book))->save($stream);
@@ -162,7 +182,7 @@ class DirectorySpreadsheet
         }
         $this->mergedText($sheet, 1, $count, 5, 'نطاق التقرير: '.$meta['filters']);
         $sheet->getRowDimension(5)->setRowHeight(8 + ReportLayout::lines($meta['filters'], $width - 12, 9) * 14);
-        $this->mergedText($sheet, 1, $count, 6, 'احتساب المرضى: '.$meta['definition']);
+        $this->mergedText($sheet, 1, $count, 6, ($meta['definition_label'] ?? 'احتساب المرضى').': '.$meta['definition']);
         $sheet->getRowDimension(6)->setRowHeight(8 + ReportLayout::lines($meta['definition'], $width - 12, 9) * 14);
         $sheet->getRowDimension(7)->setRowHeight(8);
         $sheet->getStyle([1, 3, $count, 7])->getFont()->setSize(9)->getColor()->setARGB('FF36564E');
