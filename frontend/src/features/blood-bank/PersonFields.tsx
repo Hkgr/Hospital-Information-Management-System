@@ -4,6 +4,7 @@ import { type Person } from "./events";
 import AddressFields from "./AddressFields";
 import Picker from "./Picker";
 import styles from "../clinics/clinics.module.css";
+import layout from "./profile.module.css";
 
 export type Draft = Record<string, string>;
 export function personDraft(person?: Person): Draft {
@@ -25,23 +26,27 @@ export function personPayload(d: Draft, patient: Choice | null) {
   }
   return p;
 }
-export function BloodFields({ draft, change }: { draft: Draft; change: (key: string, value: string) => void }) {
-  return <><label>زمرة ABO<select aria-label="زمرة ABO" value={draft.blood_group} onChange={e => change("blood_group", e.target.value)}><option value="">غير معروفة</option>{["A", "B", "AB", "O"].map(g => <option key={g}>{g}</option>)}</select></label><label>عامل Rh<select aria-label="عامل Rh" value={draft.rh} onChange={e => change("rh", e.target.value)}><option value="">غير معروف</option>{Object.entries(choices.rh).map(([v, name]) => <option key={v} value={v}>{name}</option>)}</select></label></>;
+export function BloodFields({ draft, change, fieldError }: { draft: Draft; change: (key: string, value: string) => void; fieldError?: (key: string) => React.ReactNode }) {
+  return <><label>زمرة ABO<select name="blood_group" aria-label="زمرة ABO" value={draft.blood_group} onChange={e => change("blood_group", e.target.value)}><option value="">غير معروفة</option>{["A", "B", "AB", "O"].map(g => <option key={g}>{g}</option>)}</select>{fieldError?.("blood_group")}</label><label>عامل Rh<select name="rh" aria-label="عامل Rh" value={draft.rh} onChange={e => change("rh", e.target.value)}><option value="">غير معروف</option>{Object.entries(choices.rh).map(([v, name]) => <option key={v} value={v}>{name}</option>)}</select>{fieldError?.("rh")}</label></>;
 }
 export default function PersonFields({ draft, change, patient, onPatient, base, facilityId, options, fieldError }: { draft: Draft; change: (key: string, value: string) => void; patient: Choice | null; onPatient: (p: Choice) => void; base?: Person; facilityId: number; options: Options; fieldError: (key: string) => React.ReactNode }) {
   const linked = draft.person_mode === "patient";
   const current = useBloodRequest<Record<string, string | number | null>>(linked && patient && patient.id !== base?.patient_id ? `blood-bank/patients/${patient.id}?facility_id=${facilityId}` : null);
   const cities = useBloodRequest<Choice[]>(!linked && draft.governorate_mode === "directory" && draft.governorate_id ? `blood-bank/cities?facility_id=${facilityId}&governorate_id=${draft.governorate_id}` : null);
+  const input = (key: keyof typeof personLabels) => <label key={key}>{personLabels[key]}{["first_name", "family_name"].includes(key) ? " *" : ""}{choices[key] ? <select name={key} aria-label={personLabels[key]} value={draft[key]} onChange={e => change(key, e.target.value)}>{Object.entries(choices[key]).map(([v, name]) => <option key={v} value={v}>{name}</option>)}</select> : <input name={key} aria-label={personLabels[key]} type={key === "birth_date" ? "date" : key.includes("phone") ? "tel" : "text"} dir={key.includes("phone") ? "ltr" : undefined} required={["first_name", "family_name"].includes(key)} maxLength={key.includes("phone") ? 30 : key === "mother_name" ? 120 : 80} value={draft[key]} onChange={e => change(key, e.target.value)} />}{fieldError(key)}</label>;
   return <>
     {!base && <label className={styles.full}>مصدر بيانات الشخص<select value={draft.person_mode} onChange={e => change("person_mode", e.target.value)}><option value="direct">إدخال البيانات مباشرة</option><option value="patient" disabled={!options.capabilities.patients_search}>اختيار مريض مسجل في المشفى</option></select></label>}
-    {linked ? <div className={styles.full}>{!base && <Picker label="المريض المسجل" path={`blood-bank/patients?facility_id=${facilityId}`} selected={patient} onSelect={onPatient} />}{fieldError("patient_id")}
+    {linked ? <div className={styles.full}>{!base && <Picker name="patient_id" label="المريض المسجل" path={`blood-bank/patients?facility_id=${facilityId}`} selected={patient} onSelect={onPatient} />}{fieldError("patient_id")}
       {current.loading && <p role="status">جارٍ جلب بيانات المريض…</p>}{current.error && <p role="alert">تعذّر جلب المريض؛ الاختيار محفوظ. <button type="button" onClick={current.retry}>إعادة المحاولة</button></p>}
-      {(base || current.data) && <><p className={styles.hint}>تُقرأ البيانات الحالية من ملف المريض دون نسخها أو تعديلها هنا.</p><dl className={styles.facts}>{Object.entries(personLabels).filter(([k]) => !k.endsWith("_id")).map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{choices[key]?.[String((base?.person ?? current.data)?.[key])] ?? (base?.person ?? current.data)?.[key] ?? "غير مسجل"}</dd></div>)}</dl></>}
+      {(base || current.data) && <><p className={styles.hint}>تُقرأ البيانات الحالية من ملف المريض دون نسخها أو تعديلها هنا.</p><details className={layout.personDetails}><summary>عرض بيانات المريض الحالية</summary><dl className={styles.facts}>{Object.entries(personLabels).filter(([k]) => !k.endsWith("_id")).map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{choices[key]?.[String((base?.person ?? current.data)?.[key])] ?? (base?.person ?? current.data)?.[key] ?? "غير مسجل"}</dd></div>)}</dl></details></>}
     </div> : <>
-      {Object.entries(personLabels).filter(([key]) => !["governorate_id", "city_id", "address_line", "displacement_status"].includes(key)).map(([key, label]) => <label key={key}>{label}{["first_name", "family_name"].includes(key) ? " *" : ""}{choices[key] ? <select aria-label={label} value={draft[key]} onChange={e => change(key, e.target.value)}>{Object.entries(choices[key]).map(([v, name]) => <option key={v} value={v}>{name}</option>)}</select> : <input aria-label={label} type={key === "birth_date" ? "date" : "text"} required={["first_name", "family_name"].includes(key)} maxLength={key.includes("phone") ? 30 : key === "mother_name" ? 120 : 80} value={draft[key]} onChange={e => change(key, e.target.value)} />}{fieldError(key)}</label>)}
+      {(["first_name", "family_name", "father_name", "mother_name"] as const).map(input)}
+      <div className={`${styles.fields} ${styles.full} ${layout.demographics}`}>{(["birth_date", "birth_date_accuracy", "gender"] as const).map(input)}</div>
+      <h4 className={layout.subheading}>التواصل والسكن</h4>
+      {(["phone", "alt_phone"] as const).map(input)}
       <AddressFields draft={draft} profile={base} options={options} cities={cities} change={change} fieldError={fieldError} />
-      <label className={styles.full}>عنوان السكن<input aria-label="عنوان السكن" maxLength={255} value={draft.address_line} onChange={e => change("address_line", e.target.value)} />{fieldError("address_line")}</label>
-      <label>حالة النزوح<select value={draft.displacement_status} onChange={e => change("displacement_status", e.target.value)}>{Object.entries(choices.displacement_status).map(([v, name]) => <option key={v} value={v}>{name}</option>)}</select></label>
+      <label className={styles.full}>عنوان السكن<input name="address_line" aria-label="عنوان السكن" maxLength={255} value={draft.address_line} onChange={e => change("address_line", e.target.value)} />{fieldError("address_line")}</label>
+      {input("displacement_status")}
     </>}
   </>;
 }

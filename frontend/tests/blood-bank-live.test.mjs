@@ -25,7 +25,7 @@ test('new person and donation are saved together; decimal kg has no default; per
     await eventFields(page, component);
     await page.getByRole('button', { name: 'إضافة فحص', exact: true }).click(); await page.getByLabel('نوع الفحص الجديد').selectOption('HCV'); await page.getByLabel('حالة HCV', { exact: true }).selectOption('complete');
     await page.getByRole('button', { name: 'إضافة طبيب', exact: true }).click();
-    await page.getByRole('dialog').last().getByRole('button', { name: 'إلغاء', exact: true }).click();
+    await page.getByRole('dialog', { name: 'إضافة طبيب جديد', exact: true }).getByRole('button', { name: 'إلغاء', exact: true }).click();
     assert.equal(await page.getByLabel('الكمية (كغ)', { exact: true }).inputValue(), '0.4500');
     for (const width of [390, 768, 1440]) { await page.setViewportSize({ width, height: 1000 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false); await page.screenshot({ path: `${output}/donation-form-${width}.png`, fullPage: true }); }
     const saved = page.waitForResponse(r => r.url().includes('/hospital-api/blood-bank/events') && r.request().method() === 'POST');
@@ -121,7 +121,7 @@ test('saved inline doctor survives option failure and relinks without a second c
 test('actual patient picker retains both drafts and sends only linked identity with an independent actual transfusion',async()=>{
   const {page,context}=await pageAt(browser);try{
     await page.getByRole('button',{name:'تسجيل استفادة',exact:true}).click();await page.getByRole('combobox',{name:'الشخص',exact:true}).selectOption('new');await page.getByLabel('الاسم الأول',{exact:true}).fill('مسودة شخصية');
-    const mode=page.getByRole('combobox',{name:'مصدر بيانات الشخص'});await mode.selectOption('patient');await page.getByRole('searchbox',{name:'البحث: المريض المسجل',exact:true}).fill(`${f.tag}-P2`);await page.getByRole('button',{name:/مستفيد اختبار 2/}).click();await page.getByRole('definition').filter({hasText:/عنوان المريض المرجعي/}).waitFor();await mode.selectOption('direct');assert.equal(await page.getByLabel('الاسم الأول',{exact:true}).inputValue(),'مسودة شخصية');await mode.selectOption('patient');
+    const mode=page.getByRole('combobox',{name:'مصدر بيانات الشخص'});await mode.selectOption('patient');await page.getByRole('searchbox',{name:'البحث: المريض المسجل',exact:true}).fill(`${f.tag}-P2`);await page.getByRole('button',{name:/مستفيد اختبار 2/}).click();await page.getByText('عرض بيانات المريض الحالية',{exact:true}).click();await page.getByRole('definition').filter({hasText:/عنوان المريض المرجعي/}).waitFor();await mode.selectOption('direct');assert.equal(await page.getByLabel('الاسم الأول',{exact:true}).inputValue(),'مسودة شخصية');await mode.selectOption('patient');
     await page.getByRole('dialog').getByRole('combobox',{name:'نوع الاستفادة'}).selectOption('transfusion');await page.getByRole('combobox',{name:'ارتباط عملية النقل'}).selectOption('independent');await eventFields(page,component);
     const response=page.waitForResponse(r=>r.url().includes('/hospital-api/blood-bank/events')&&r.request().method()==='POST');await page.getByRole('button',{name:'حفظ الواقعة',exact:true}).click();const saved=await response;assert.equal(saved.status(),201,await saved.text());const body=saved.request().postDataJSON();assert.equal(body.person.patient_id,f.patients[2]);assert.equal(body.person.first_name,undefined);assert.ok((await saved.json()).data.blood_transfusion_id);
   }finally{await context.close();}
