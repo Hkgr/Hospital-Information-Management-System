@@ -248,10 +248,9 @@ class AuthApiTest extends TestCase
         $role = fn (string $code, bool $active = true) => DB::table('roles')->insertGetId([
             'code' => $code, 'name_ar' => 'دور '.$code, 'name_en' => null, 'is_active' => $active,
         ]);
-        $permission = fn (string $code, bool $active = true) => (int) (DB::table('permissions')->where('code', $code)->value('id')
-            ?? DB::table('permissions')->insertGetId([
-                'code' => $code, 'name_ar' => $code, 'is_active' => $active,
-            ]));
+        $permission = fn (string $code, bool $active = true) => DB::table('permissions')->insertGetId([
+            'code' => $code, 'name_ar' => $code, 'is_active' => $active,
+        ]);
         $z = $facility('Z');
         $a = $facility('A');
         $inactive = $facility('INACTIVE', false);
