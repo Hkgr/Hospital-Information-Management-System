@@ -16,6 +16,7 @@ class DossierQueryRequest extends FormRequest
     {
         return [
             'facility_id' => ['required', 'integer', 'min:1'],
+            'status' => ['sometimes', Rule::in(['all', 'draft', 'active'])],
             'search' => ['nullable', 'string', 'max:200'],
             'oncology' => ['nullable', Rule::in(['yes', 'no'])],
             'visits' => ['nullable', Rule::in(['with', 'without'])],

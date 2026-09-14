@@ -162,27 +162,75 @@ class DossierApiTest extends TestCase
         }
     }
 
-    public function test_draft_future_and_void_records_do_not_claim_actual_completed_care(): void
+    public function test_future_and_void_records_are_excluded_from_dossier_chronology(): void
     {
         $id = $this->f['dossiers'][0];
         $row = (array) DB::table('visits')->where('id', $this->f['latest_visit'])->first();
         unset($row['id']);
-        foreach (['draft', 'future', 'void'] as $kind) {
+        foreach (['future', 'void', 'voided_complete'] as $kind) {
             $copy = array_replace($row, ['visit_no' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid()]);
-            if ($kind === 'draft') {
-                $copy['status'] = 'draft';
-            }
             if ($kind === 'future') {
                 $copy['visit_date'] = now()->addMonth()->toDateString();
             }
             if ($kind === 'void') {
                 $copy = array_replace($copy, ['status' => 'void', 'voided_at' => now(), 'voided_by' => $this->f['user']->id, 'void_reason' => 'اختبار']);
             }
-            DB::table('visits')->insert($copy);
+            if ($kind === 'voided_complete') {
+                $copy = array_replace($copy, ['voided_at' => now(), 'voided_by' => $this->f['user']->id, 'void_reason' => 'test']);
+                try {
+                    DB::table('visits')->insert($copy);
+                    $this->fail('Invalid status/void combination accepted');
+                } catch (QueryException $e) {
+                    $this->assertSame('23000', $e->getCode());
+                }
+
+                continue;
+            }
+            $excluded = DB::table('visits')->insertGetId($copy);
+            $this->api('/'.$id.'/visits/'.$excluded)->assertNotFound();
         }
         $this->api('/'.$id)->assertOk()->assertJsonPath('data.visit_count', 3)->assertJsonPath('data.latest_visit.id', $this->f['latest_visit']);
+        $this->api('/'.$id.'/visits')->assertOk()->assertJsonPath('meta.total', 3);
+    }
+
+    public function test_saved_draft_dossiers_are_discoverable_without_activation(): void
+    {
+        $id = $this->f['dossiers'][0];
         DB::table('patient_dossiers')->where('id', $id)->update(['status' => 'draft']);
-        $this->api('/'.$id)->assertNotFound();
+        $this->api()->assertOk()->assertJsonPath('totals.dossiers', 10);
+        $this->api('', ['status' => 'all'])->assertOk()->assertJsonPath('meta.total', 10);
+        $this->api('', ['status' => 'draft'])->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $id)->assertJsonPath('data.0.status', 'draft');
+        $this->api('', ['status' => 'active'])->assertOk()->assertJsonPath('meta.total', 9);
+        $this->api('', ['status' => 'complete'])->assertUnprocessable();
+        // A complete visit and populated sections do not activate the dossier.
+        $this->api('/'.$id)->assertOk()->assertJsonPath('data.status', 'draft')->assertJsonPath('data.latest_visit.status', 'complete');
+        $this->assertDatabaseHas('patient_dossiers', ['id' => $id, 'status' => 'draft']);
+    }
+
+    public function test_saved_draft_visits_share_actual_chronology_count_filters_and_endpoints(): void
+    {
+        $id = $this->f['dossiers'][0];
+        $latest = $this->f['latest_visit'];
+        DB::table('visits')->where('dossier_id', $id)->where('id', '!=', $latest)->update(['visit_date' => now()->subDays(2)->toDateString(), 'created_at' => '2099-01-01']);
+        DB::table('visits')->where('id', $latest)->update(['status' => 'draft', 'updated_at' => '2000-01-01']);
+        $this->api('/'.$id)->assertOk()->assertJsonPath('data.visit_count', 3)->assertJsonPath('data.latest_visit.id', $latest)->assertJsonPath('data.latest_visit.status', 'draft');
+        $this->api('/'.$id.'/visits')->assertOk()->assertJsonPath('meta.total', 3)->assertJsonPath('data.0.id', $latest)->assertJsonPath('data.0.status', 'draft');
+        $this->api('/'.$id.'/visits/'.$latest)->assertOk()->assertJsonPath('data.status', 'draft')->assertJsonCount(2, 'data.diagnoses');
+        $this->api('', ['visits' => 'with'])->assertOk()->assertJsonPath('data.0.latest_visit_status', 'draft');
+        $other = $this->f['dossiers'][1];
+        $visit = (array) DB::table('visits')->where('id', $latest)->first();
+        unset($visit['id']);
+        $onlyDraft = DB::table('visits')->insertGetId(array_replace($visit, ['dossier_id' => $other, 'patient_id' => $this->f['patients'][2], 'visit_no' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid()]));
+        $this->api('/'.$other)->assertOk()->assertJsonPath('data.visit_count', 1)->assertJsonPath('data.latest_visit.id', $onlyDraft)->assertJsonPath('data.latest_visit.services', []);
+        $this->api('', ['visits' => 'with'])->assertOk()->assertJsonPath('totals.dossiers', 2);
+        $this->api('', ['visits' => 'without'])->assertOk()->assertJsonPath('totals.dossiers', 8);
+        // Larger ID at the same actual date wins, regardless of its saved timestamps/status.
+        $complete = DB::table('visits')->insertGetId(array_replace($visit, ['status' => 'complete', 'created_at' => '1990-01-01', 'visit_no' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid()]));
+        $this->api('/'.$id)->assertOk()->assertJsonPath('data.latest_visit.id', $complete)->assertJsonPath('data.latest_visit.status', 'complete');
+        DB::table('visits')->where('id', $complete)->update(['visit_date' => now()->subDay()->toDateString()]);
+        $this->api('/'.$id)->assertOk()->assertJsonPath('data.latest_visit.id', $latest);
+        DB::table('visits')->where('id', $latest)->update(['visit_date' => now()->subDays(2)->toDateString()]);
+        $this->api('/'.$id)->assertOk()->assertJsonPath('data.latest_visit.id', $complete);
     }
 
     public function test_openapi_read_contracts_and_safe_internal_failure(): void

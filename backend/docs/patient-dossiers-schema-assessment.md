@@ -30,7 +30,7 @@ Assessed before implementation against develop `9f14022` (including merged PR #1
 
 ## Query/compatibility and rollback risks
 
-One dossier is the outer row; correlated latest-visit/count queries and batched child queries prevent join multiplication/N+1. Latest **complete, nonvoided, nonfuture** actual visit is ordered by visit_date DESC, id DESC (same rule for count/history). Draft/voided visits are not actual completed care; opening dates do not limit recorded visits. History is independently paginated. Clinical voided/future rows are excluded; diagnosis dates may be unknown and are never replaced.
+One dossier is the outer row; correlated latest-visit/count queries and batched child queries prevent join multiplication/N+1. Latest **draft or complete, nonvoided, nonfuture** actual visit is ordered by visit_date DESC, id DESC (same rule for count/history). A saved draft may represent actual care; voided/invalid/future visits are excluded; opening dates do not limit recorded visits. History is independently paginated. Clinical voided/future rows are excluded; diagnosis dates may be unknown and are never replaced.
 
 MariaDB 10.11/mysql uses InnoDB utf8mb4_unicode_ci and explicit short FK/index names. Code uniqueness follows existing facility directories, including case-insensitive collation. Add complete-date/nonblank code checks; historical dates allowed. Composite FK parent indexes must exist before adding children. DDL auto-commits: deployment needs its normal maintenance/backup procedure. No edits to historical migrations. Rollback preflights all new data/links and unknown dates before any DDL; refuses populated use rather than deleting data or fabricating values.
 
@@ -39,3 +39,7 @@ Substring normalized name search requires bounded facility scans (leading wildca
 ## Deferred visit/wizard behavior
 
 No writes in Phase 1. Future full-page arrow wizard: personal data → general/oncology → diagnoses → services/procedures → medications/outcome → attachments/review. Explicit first save selects/creates patient and draft dossier (manual code + complete date required); diagnosis save creates a draft visit. Merely opening the page creates nothing. Save/continue, save draft, resume and backward navigation must use durable UUIDs, version checks, transactions and audit rows without deleting later steps. Future workflow must explicitly resolve legacy reporting-period requirements and capture diagnosis clinic/doctor independently; Phase 1 does not bypass those rules or implement draft storage endpoints. Reports, uploads and all clinical/identity mutations are deferred.
+
+## Confirmed draft workflow clarification (PR #20 follow-up)
+
+The original completed-only/active-only read restriction was a workflow mismatch, not a schema limitation. Dossier reads now include saved draft and active dossiers, and explicitly linked draft and complete visits. Dossier activation and visit completion remain separate explicit future actions. Existing Catalog and blood-bank eligibility rules do not change. No schema alteration or current_step field is needed.

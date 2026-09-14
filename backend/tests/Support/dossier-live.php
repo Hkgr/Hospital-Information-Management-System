@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Support\TestDatabaseSafety;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\DossierFixture;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
@@ -28,6 +29,12 @@ if (($argv[1] ?? '') === 'prepare') {
     $p['patient_code'] .= '-EXTRA';
     $patient = DB::table('patients')->insertGetId($p);
     DB::table('patient_dossiers')->insert(['facility_id' => $f['facility'], 'patient_id' => $patient, 'code' => 'DOS-'.$f['tag'].'-011', 'opening_date' => '2011-01-01', 'status' => 'active', 'entered_by' => $f['user']->id]);
+    // Saved visit data is visible even before completion; activation is independent.
+    DB::table('visits')->where('id', $f['latest_visit'])->update(['status' => 'draft']);
+    DB::table('patient_dossiers')->where('id', $f['dossiers'][1])->update(['status' => 'draft']);
+    $draft = (array) DB::table('visits')->where('id', $f['latest_visit'])->first();
+    unset($draft['id']);
+    $f['draft_visit'] = DB::table('visits')->insertGetId(array_replace($draft, ['dossier_id' => $f['dossiers'][1], 'patient_id' => $f['patients'][2], 'visit_no' => 'DRAFT-'.$f['tag'], 'client_request_id' => (string) Str::uuid()]));
     $f['user_id'] = $f['user']->id;
     $f['viewer_id'] = $f['viewer']->id;
     $f['token'] = $f['user']->createToken('dossier-live', ['api'])->plainTextToken;

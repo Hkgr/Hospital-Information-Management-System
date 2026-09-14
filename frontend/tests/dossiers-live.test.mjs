@@ -40,8 +40,48 @@ test('list reuses server pagination and add cannot write; complete visual states
     await page.getByRole('button',{name:'استعراض الزيارة',exact:true}).last().click();await page.getByRole('heading',{name:'الزيارة المختارة',exact:true}).waitFor();await page.getByText('لا توجد تشخيصات مسجلة.',{exact:true}).waitFor();await capture(page,`previous-visit-${width}`);
     await page.getByRole('link',{name:'العودة إلى الإضبارات',exact:true}).click();assert.equal(await page.getByRole('searchbox').inputValue(),'  أحمد    محمد  ');
     await page.getByRole('searchbox').fill('لا توجد مطابقة');await page.getByText('0 إضبارة مطابقة',{exact:true}).waitFor();await capture(page,`empty-${width}`);
-    await page.goto(`${base}/dossiers/${f.dossiers[1]}?facility_id=${f.facility}`);await page.getByText('لا توجد زيارات فعلية مرتبطة بهذه الإضبارة.',{exact:true}).waitFor();await capture(page,`no-visits-${width}`);
+    await page.goto(`${base}/dossiers/${f.dossiers[2]}?facility_id=${f.facility}`);await page.getByText('لا توجد زيارات فعلية مرتبطة بهذه الإضبارة.',{exact:true}).waitFor();await capture(page,`no-visits-${width}`);
   }finally{await context.close();}}
+});
+
+test('draft dossier filters and visit badges work through real saved records without writes',async()=>{
+  for(const width of [390,768,1440]) {
+    const {page,context}=await pageAt(`/dossiers?facility_id=${f.facility}&sort=code&direction=asc`,width);
+    try {
+      await page.getByText('11 إضبارة مطابقة',{exact:true}).waitFor();
+      assert.equal(await page.getByRole("combobox",{name:'حالة الإضبارة',exact:true}).inputValue(),'all');
+      const row=page.getByRole('row').filter({has:page.getByText(`DOS-${f.tag}-002`,{exact:true})});
+      assert.equal(await row.getByLabel('حالة الإضبارة: مسودة',{exact:true}).innerText(),'مسودة');
+      assert.equal(await row.getByLabel('حالة الزيارة: مسودة',{exact:true}).innerText(),'مسودة');
+      await page.getByRole("combobox",{name:'حالة الإضبارة',exact:true}).selectOption('draft');
+      await page.getByText('1 إضبارة مطابقة',{exact:true}).waitFor();
+      assert.equal(await page.locator('tbody tr').count(),1);
+      await page.getByRole('link',{name:`استعراض DOS-${f.tag}-002`,exact:true}).click();
+      await page.getByLabel('حالة الإضبارة: مسودة',{exact:true}).waitFor();
+      await page.getByText('لم تُسجّل تشخيصات لهذه المسودة بعد.',{exact:true}).waitFor();
+      assert.equal(await page.getByText('لم تُسجّل بيانات هذا القسم بعد.',{exact:true}).count(),5);
+      await page.getByRole('region',{name:'زيارات الإضبارة',exact:true}).waitFor();
+      assert.equal(await page.getByLabel('حالة الزيارة: مسودة',{exact:true}).count(),2);
+      assert.equal(await page.getByRole('button',{name:/استكمال|تعديل|إضافة زيارة/}).count(),0);
+      await capture(page,`draft-detail-${width}`);
+      await page.getByRole('link',{name:'العودة إلى الإضبارات',exact:true}).click();
+      await page.getByText('1 إضبارة مطابقة',{exact:true}).waitFor();
+      assert.equal(await page.getByRole("combobox",{name:'حالة الإضبارة',exact:true}).inputValue(),'draft');
+      await page.getByRole("combobox",{name:'حالة الإضبارة',exact:true}).selectOption('active');
+      await page.getByText('10 إضبارة مطابقة',{exact:true}).waitFor();
+      assert.equal(await page.getByLabel('حالة الإضبارة: مسودة',{exact:true}).count(),0);
+      await page.getByRole('link',{name:`استعراض DOS-${f.tag}-001`,exact:true}).click();
+      await page.getByRole('heading',{name:'الملف الورمي الحالي',exact:true}).waitFor();
+      await page.getByLabel('حالة الإضبارة: فعالة',{exact:true}).waitFor();
+      await page.getByRole('region',{name:'تشخيصات الزيارة',exact:true}).waitFor();
+      await page.getByRole('region',{name:'زيارات الإضبارة',exact:true}).waitFor();
+      assert.equal(await page.getByLabel('حالة الزيارة: مكتملة',{exact:true}).count(),2);
+      await page.getByRole('button',{name:'استعراض الزيارة',exact:true}).last().click();
+      await page.getByRole('heading',{name:'الزيارة المختارة',exact:true}).waitFor();
+      await page.getByText('لا توجد تشخيصات مسجلة.',{exact:true}).waitFor();
+      assert.equal(await page.getByLabel('حالة الزيارة: مكتملة',{exact:true}).count(),3);
+    } finally { await context.close(); }
+  }
 });
 
 test('delayed actual replies, failed transport, browser history and facility changes cannot restore stale results',async()=>{
@@ -57,5 +97,5 @@ test('delayed actual replies, failed transport, browser history and facility cha
     await search.fill('أحمد');await page.waitForTimeout(350);await page.evaluate(id=>history.pushState(null,'',`/dossiers?facility_id=${id}`),f.second);await page.getByText('0 إضبارة مطابقة',{exact:true}).waitFor();await page.waitForTimeout(1500);assert.equal(await page.getByText('1 إضبارة مطابقة',{exact:true}).count(),0);
     await page.goto(`${base}/dossiers?facility_id=${f.other}`);await page.getByRole('heading',{name:'الإضبارات غير متاحة',exact:true}).waitFor();assert.equal(await page.getByRole('region',{name:'جدول الإضبارات'}).count(),0);
   }finally{await context.close();}}
-  await writeFile(new URL('README.md',gallery),'# مراجعة الإضبارات — المرحلة الأولى\n\nلقطات فعلية ببيانات اصطناعية من Chromium، Next standalone → Laravel → MariaDB 10.11.\nالتحميل/الفشل يؤخّران تسليم استجابة Laravel الفعلية أو يفشلان النقل بعدها؛ لا page.route ولا API محاكٍ.\nيستخدم الجدول التمرير الأفقي الداخلي المشترك على الهاتف؛ صور list-actions تظهر الأعمدة والإجراءات بعد التمرير.\n\n'+[390,768,1440].map(w=>`## ${w}px\n\n`+['list','list-actions','oncology-detail','previous-visit','empty','no-visits','loading','error'].map(s=>`- [${s}](${s}-${w}.jpg)`).join('\n')).join('\n\n')+'\n\n![قائمة الإضبارات على سطح المكتب](list-1440.jpg)\n');
+  await writeFile(new URL('README.md',gallery),'# مراجعة الإضبارات — المرحلة الأولى\n\nلقطات فعلية ببيانات اصطناعية من Chromium، Next standalone → Laravel → MariaDB 10.11.\nالتحميل/الفشل يؤخّران تسليم استجابة Laravel الفعلية أو يفشلان النقل بعدها؛ لا page.route ولا API محاكٍ.\nيستخدم الجدول التمرير الأفقي الداخلي المشترك على الهاتف؛ صور list-actions تظهر الأعمدة والإجراءات بعد التمرير.\n\n'+[390,768,1440].map(w=>`## ${w}px\n\n`+['list','list-actions','oncology-detail','draft-detail','previous-visit','empty','no-visits','loading','error'].map(s=>`- [${s}](${s}-${w}.jpg)`).join('\n')).join('\n\n')+'\n\n![قائمة الإضبارات على سطح المكتب](list-1440.jpg)\n');
 });

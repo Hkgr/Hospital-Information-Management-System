@@ -10,24 +10,29 @@ class DossierQueries
 {
     public function actualVisits(array $facility): Builder
     {
-        return DB::table('visits as v')->where('v.facility_id', $facility['id'])->where('v.status', 'complete')
+        return DB::table('visits as v')->where('v.facility_id', $facility['id'])->whereNotNull('v.dossier_id')->whereIn('v.status', ['draft', 'complete'])
             ->whereNull('v.voided_at')->where('v.visit_date', '<=', $facility['today']);
     }
 
     private function dossiers(array $f): Builder
     {
         return DB::table('patient_dossiers as d')->join('patients as p', 'p.id', '=', 'd.patient_id')
-            ->where('d.facility_id', $f['id'])->where('d.status', 'active');
+            ->where('d.facility_id', $f['id'])->whereIn('d.status', ['draft', 'active']);
     }
 
     public function listing(array $f, array $input): array
     {
         return DB::transaction(function () use ($f, $input) {
             $visits = $this->actualVisits($f)->whereColumn('v.dossier_id', 'd.id');
-            $q = $this->dossiers($f)->select('d.id', 'd.code', 'd.opening_date', 'd.is_oncology', 'p.patient_code')
+            $latest = (clone $visits)->orderByDesc('v.visit_date')->orderByDesc('v.id')->limit(1);
+            $q = $this->dossiers($f)->select('d.id', 'd.code', 'd.status', 'd.opening_date', 'd.is_oncology', 'p.patient_code')
                 ->selectRaw("CONCAT_WS(' ', p.first_name, p.family_name) as patient_name")
                 ->selectSub((clone $visits)->selectRaw('COUNT(*)'), 'visit_count')
-                ->selectSub((clone $visits)->orderByDesc('v.visit_date')->orderByDesc('v.id')->limit(1)->select('v.id'), 'latest_visit_id');
+                ->selectSub((clone $latest)->select('v.id'), 'latest_visit_id')
+                ->selectSub((clone $latest)->select('v.status'), 'latest_visit_status');
+            if (($input['status'] ?? 'all') !== 'all') {
+                $q->where('d.status', $input['status']);
+            }
             $search = trim(preg_replace('/\s+/u', ' ', $input['search'] ?? ''));
             if ($search !== '') {
                 // Explicit escape character keeps %, _, and backslashes literal regardless of SQL mode.
@@ -53,9 +58,9 @@ class DossierQueries
             $ids = $page->getCollection()->pluck('latest_visit_id')->filter()->all();
             $diagnoses = $this->diagnoses($f, $ids);
             $page->setCollection($page->getCollection()->map(function ($row) use ($diagnoses) {
-                return ['id' => (int) $row->id, 'code' => $row->code, 'opening_date' => $row->opening_date, 'is_oncology' => (bool) $row->is_oncology,
+                return ['id' => (int) $row->id, 'code' => $row->code, 'status' => $row->status, 'opening_date' => $row->opening_date, 'is_oncology' => (bool) $row->is_oncology,
                     'patient_code' => $row->patient_code, 'patient_name' => $row->patient_name, 'visit_count' => (int) $row->visit_count,
-                    'latest_visit_id' => $row->latest_visit_id ? (int) $row->latest_visit_id : null, 'diagnoses' => $diagnoses[$row->latest_visit_id] ?? []];
+                    'latest_visit_id' => $row->latest_visit_id ? (int) $row->latest_visit_id : null, 'latest_visit_status' => $row->latest_visit_status, 'diagnoses' => $diagnoses[$row->latest_visit_id] ?? []];
             }));
 
             return ['data' => $page->items(), 'meta' => CatalogQueries::meta($page), 'totals' => ['dossiers' => $page->total()]];
@@ -88,7 +93,7 @@ class DossierQueries
             $v = $this->actualVisits($f)->where('v.dossier_id', $id);
             $latest = (clone $v)->orderByDesc('v.visit_date')->orderByDesc('v.id')->value('v.id');
 
-            return ['id' => (int) $d->id, 'facility_id' => (int) $d->facility_id, 'code' => $d->code, 'opening_date' => $d->opening_date,
+            return ['id' => (int) $d->id, 'facility_id' => (int) $d->facility_id, 'code' => $d->code, 'status' => $d->status, 'opening_date' => $d->opening_date,
                 'disability_text' => $d->disability_text, 'clinical_history' => $d->clinical_history, 'is_oncology' => (bool) $d->is_oncology,
                 'oncology' => $d->is_oncology ? ['previous_examinations' => $d->previous_examinations, 'medication_source' => $d->medication_source, 'other_organization' => $d->other_organization,
                     'selections' => DB::table('dossier_oncology_selections')->where('dossier_id', $id)->where('facility_id', $f['id'])->orderBy('selection_group')->orderBy('code')->get(['selection_group', 'code'])->all()] : null,
@@ -100,7 +105,7 @@ class DossierQueries
     {
         abort_unless($this->dossiers($f)->where('d.id', $id)->exists(), 404);
         $p = $this->actualVisits($f)->where('v.dossier_id', $id)->orderByDesc('v.visit_date')->orderByDesc('v.id')
-            ->paginate($input['per_page'] ?? 10, ['v.id', 'v.visit_no', 'v.visit_date'], 'page', $input['page'] ?? 1);
+            ->paginate($input['per_page'] ?? 10, ['v.id', 'v.visit_no', 'v.visit_date', 'v.status'], 'page', $input['page'] ?? 1);
 
         return ['data' => $p->items(), 'meta' => CatalogQueries::meta($p)];
     }
@@ -110,7 +115,7 @@ class DossierQueries
         abort_unless($this->dossiers($f)->where('d.id', $id)->exists(), 404);
         $v = $this->actualVisits($f)->where('v.dossier_id', $id)->where('v.id', $visit)
             ->leftJoin('clinics as c', fn ($j) => $j->on('c.id', '=', 'v.clinic_id')->on('c.facility_id', '=', 'v.facility_id'))
-            ->leftJoin('staff as s', 's.id', '=', 'v.attending_staff_id')->first(['v.id', 'v.visit_no', 'v.visit_date', 'c.name_ar as visit_clinic', 's.full_name as attending_doctor']);
+            ->leftJoin('staff as s', 's.id', '=', 'v.attending_staff_id')->first(['v.id', 'v.visit_no', 'v.visit_date', 'v.status', 'c.name_ar as visit_clinic', 's.full_name as attending_doctor']);
         abort_unless($v, 404);
         $result = (array) $v;
         $result['diagnoses'] = $this->diagnoses($f, [$visit])[$visit] ?? [];
