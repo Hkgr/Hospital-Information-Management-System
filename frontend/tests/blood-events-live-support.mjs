@@ -10,7 +10,7 @@ export let fixtureData;
 export function fixture(mode) {
   const r = spawnSync('php', ['tests/Support/blood-bank-live.php', mode], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: { ...process.env, APP_ENV: 'testing' }, encoding: 'utf8', timeout: 60000 });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  if (mode === 'prepare-unified') fixtureData = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/blood-bank-live.json', import.meta.url)));
+  if (mode === 'prepare-unified' || mode.startsWith('periods-')) fixtureData = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/blood-bank-live.json', import.meta.url)));
   process.stdout.write(r.stdout);
 }
 export function payload(kind = 'donation', personId) {

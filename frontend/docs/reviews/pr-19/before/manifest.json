@@ -1,0 +1,191 @@
+[
+  {
+    "scenario": "new-donation",
+    "width": 390,
+    "files": [
+      "new-donation-390-1.jpg",
+      "new-donation-390-2.jpg",
+      "new-donation-390-3.jpg",
+      "new-donation-390-4.jpg",
+      "new-donation-390-5.jpg",
+      "new-donation-390-error.jpg"
+    ]
+  },
+  {
+    "scenario": "existing-donation",
+    "width": 390,
+    "files": [
+      "existing-donation-390-1.jpg",
+      "existing-donation-390-2.jpg",
+      "existing-donation-390-3.jpg",
+      "existing-donation-390-error.jpg"
+    ]
+  },
+  {
+    "scenario": "new-issue",
+    "width": 390,
+    "files": [
+      "new-issue-390-1.jpg",
+      "new-issue-390-2.jpg",
+      "new-issue-390-3.jpg",
+      "new-issue-390-4.jpg",
+      "new-issue-390-5.jpg",
+      "new-issue-390-error.jpg"
+    ]
+  },
+  {
+    "scenario": "linked-transfusion",
+    "width": 390,
+    "files": [
+      "linked-transfusion-390-1.jpg",
+      "linked-transfusion-390-2.jpg",
+      "linked-transfusion-390-3.jpg",
+      "linked-transfusion-390-4.jpg",
+      "linked-transfusion-390-error.jpg"
+    ]
+  },
+  {
+    "scenario": "patient-issue",
+    "width": 390,
+    "files": [
+      "patient-issue-390-1.jpg",
+      "patient-issue-390-2.jpg",
+      "patient-issue-390-3.jpg",
+      "patient-issue-390-4.jpg",
+      "patient-issue-390-error.jpg"
+    ]
+  },
+  {
+    "scenario": "person-edit",
+    "width": 390,
+    "files": [
+      "person-edit-390-1.jpg",
+      "person-edit-390-2.jpg",
+      "person-edit-390-3.jpg"
+    ]
+  },
+  {
+    "scenario": "new-donation",
+    "width": 768,
+    "files": [
+      "new-donation-768-1.jpg",
+      "new-donation-768-2.jpg",
+      "new-donation-768-3.jpg",
+      "new-donation-768-4.jpg",
+      "new-donation-768-error.jpg"
+    ]
+  },
+  {
+    "scenario": "existing-donation",
+    "width": 768,
+    "files": [
+      "existing-donation-768-1.jpg",
+      "existing-donation-768-2.jpg",
+      "existing-donation-768-3.jpg",
+      "existing-donation-768-error.jpg"
+    ]
+  },
+  {
+    "scenario": "new-issue",
+    "width": 768,
+    "files": [
+      "new-issue-768-1.jpg",
+      "new-issue-768-2.jpg",
+      "new-issue-768-3.jpg",
+      "new-issue-768-4.jpg",
+      "new-issue-768-error.jpg"
+    ]
+  },
+  {
+    "scenario": "linked-transfusion",
+    "width": 768,
+    "files": [
+      "linked-transfusion-768-1.jpg",
+      "linked-transfusion-768-2.jpg",
+      "linked-transfusion-768-3.jpg",
+      "linked-transfusion-768-4.jpg",
+      "linked-transfusion-768-error.jpg"
+    ]
+  },
+  {
+    "scenario": "patient-issue",
+    "width": 768,
+    "files": [
+      "patient-issue-768-1.jpg",
+      "patient-issue-768-2.jpg",
+      "patient-issue-768-3.jpg",
+      "patient-issue-768-4.jpg",
+      "patient-issue-768-error.jpg"
+    ]
+  },
+  {
+    "scenario": "person-edit",
+    "width": 768,
+    "files": [
+      "person-edit-768-1.jpg",
+      "person-edit-768-2.jpg"
+    ]
+  },
+  {
+    "scenario": "new-donation",
+    "width": 1440,
+    "files": [
+      "new-donation-1440-1.jpg",
+      "new-donation-1440-2.jpg",
+      "new-donation-1440-3.jpg",
+      "new-donation-1440-4.jpg",
+      "new-donation-1440-error.jpg"
+    ]
+  },
+  {
+    "scenario": "existing-donation",
+    "width": 1440,
+    "files": [
+      "existing-donation-1440-1.jpg",
+      "existing-donation-1440-2.jpg",
+      "existing-donation-1440-3.jpg",
+      "existing-donation-1440-error.jpg"
+    ]
+  },
+  {
+    "scenario": "new-issue",
+    "width": 1440,
+    "files": [
+      "new-issue-1440-1.jpg",
+      "new-issue-1440-2.jpg",
+      "new-issue-1440-3.jpg",
+      "new-issue-1440-4.jpg",
+      "new-issue-1440-error.jpg"
+    ]
+  },
+  {
+    "scenario": "linked-transfusion",
+    "width": 1440,
+    "files": [
+      "linked-transfusion-1440-1.jpg",
+      "linked-transfusion-1440-2.jpg",
+      "linked-transfusion-1440-3.jpg",
+      "linked-transfusion-1440-4.jpg",
+      "linked-transfusion-1440-error.jpg"
+    ]
+  },
+  {
+    "scenario": "patient-issue",
+    "width": 1440,
+    "files": [
+      "patient-issue-1440-1.jpg",
+      "patient-issue-1440-2.jpg",
+      "patient-issue-1440-3.jpg",
+      "patient-issue-1440-4.jpg",
+      "patient-issue-1440-error.jpg"
+    ]
+  },
+  {
+    "scenario": "person-edit",
+    "width": 1440,
+    "files": [
+      "person-edit-1440-1.jpg",
+      "person-edit-1440-2.jpg"
+    ]
+  }
+]

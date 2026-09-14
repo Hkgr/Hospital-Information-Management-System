@@ -119,6 +119,21 @@ class CatalogApiTest extends TestCase
         }
     }
 
+    public function test_transfusions_without_periods_keep_catalog_presentations_and_totals(): void
+    {
+        $before = [];
+        foreach (['service', 'procedure'] as $kind) {
+            $id = $this->f['items'][$kind][1];
+            foreach (["/$kind/$id", "/$kind/$id/events", "/$kind/$id/beneficiaries"] as $path) {
+                $before[$path] = $this->api('GET', $path)->assertOk()->json();
+            }
+        }
+        $this->assertGreaterThan(0, DB::table('blood_transfusions')->where('facility_id', $this->f['facility'])->update(['reporting_period_id' => null]));
+        foreach ($before as $path => $body) {
+            $this->assertSame($body, $this->api('GET', $path)->assertOk()->json(), $path);
+        }
+    }
+
     #[DataProvider('kinds')]
     public function test_lifecycle_preserves_events_and_excludes_ineligible_new_choices(string $kind): void
     {

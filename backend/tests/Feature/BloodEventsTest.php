@@ -68,6 +68,74 @@ class BloodEventsTest extends TestCase
         $this->assertDatabaseCount('blood_donation_screenings', 0);
     }
 
+    public function test_registration_does_not_require_absent_closed_or_overlapping_periods(): void
+    {
+        $role = DB::table('facility_user_roles')->where('user_id', $this->f['user']->id)->value('role_id');
+        $this->f['facility'] = DB::table('facilities')->insertGetId(['code' => 'NO-PERIODS', 'name_ar' => 'منشأة بلا فترات', 'timezone' => 'Asia/Damascus']);
+        DB::table('facility_user_roles')->insert(['facility_id' => $this->f['facility'], 'user_id' => $this->f['user']->id, 'role_id' => $role]);
+        $this->f['clinic'] = DB::table('clinics')->insertGetId(['facility_id' => $this->f['facility'], 'code' => 'NO-PERIODS', 'name_ar' => 'عيادة اختبار']);
+        DB::table('clinic_staff')->insert(['clinic_id' => $this->f['clinic'], 'staff_id' => $this->f['staff'], 'starts_on' => $this->f['today']]);
+        foreach (['absent', 'closed', 'overlapping'] as $state) {
+            if ($state !== 'absent') {
+                DB::table('reporting_periods')->insert(['facility_id' => $this->f['facility'], 'starts_on' => $state === 'closed' ? '2000-01-01' : '2001-01-01', 'ends_on' => '2099-12-31', 'status' => $state === 'closed' ? 'locked' : 'open']);
+            }
+            $periods = DB::table('reporting_periods')->orderBy('id')->get()->all();
+            foreach (['donation', 'issue', 'transfusion'] as $kind) {
+                $input = $this->payload($kind === 'donation' ? 'donation' : 'benefit');
+                if ($kind === 'transfusion') {
+                    $input['benefit_kind'] = 'transfusion';
+                    $input['benefit_link_mode'] = 'independent';
+                }
+                $e = $this->api('POST', '/events', $input)->assertCreated()->assertJsonPath('data.reporting_period_id', null)->json('data');
+                foreach (['blood_donations' => 'blood_donation_id', 'blood_transfusions' => 'blood_transfusion_id'] as $table => $key) {
+                    if ($e[$key]) {
+                        $this->assertDatabaseHas($table, ['id' => $e[$key], 'reporting_period_id' => null]);
+                    }
+                }
+            }
+            $this->assertEquals($periods, DB::table('reporting_periods')->orderBy('id')->get()->all());
+        }
+        $this->api('GET', '/events')->assertJsonPath('totals', ['donations' => 3, 'benefits' => 6, 'unique_people' => 9]);
+    }
+
+    public function test_closed_historical_period_links_survive_correction_outside_period_dates(): void
+    {
+        $period = DB::table('reporting_periods')->where('facility_id', $this->f['facility'])->value('id');
+        foreach (['donation', 'transfusion'] as $kind) {
+            $input = $this->payload($kind === 'donation' ? 'donation' : 'benefit');
+            if ($kind === 'transfusion') {
+                $input['benefit_kind'] = 'transfusion';
+                $input['benefit_link_mode'] = 'independent';
+            }
+            $e = $this->api('POST', '/events', $input)->assertCreated()->json('data');
+            $table = $kind === 'donation' ? 'blood_donations' : 'blood_transfusions';
+            $key = $kind === 'donation' ? 'blood_donation_id' : 'blood_transfusion_id';
+            DB::table('blood_bank_events')->where('id', $e['id'])->update(['reporting_period_id' => $period]);
+            DB::table($table)->where('id', $e[$key])->update(['reporting_period_id' => $period]);
+            DB::table('reporting_periods')->where('id', $period)->update(['status' => 'locked']);
+            unset($input['person']);
+            $input = ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'person_id' => $e['person_id'], 'occurred_on' => '1999-01-01'] + $input;
+            $this->api('PUT', '/events/'.$e['id'], $input)->assertOk()->assertJsonPath('data.reporting_period_id', $period)->assertJsonPath('data.occurred_on', '1999-01-01');
+            $this->assertDatabaseHas($table, ['id' => $e[$key], 'reporting_period_id' => $period]);
+            $this->assertDatabaseHas('reporting_periods', ['id' => $period, 'status' => 'locked']);
+        }
+    }
+
+    public function test_first_event_blood_type_initializes_new_person_but_never_overwrites_existing_person(): void
+    {
+        $input = $this->payload();
+        $input['person'] += ['blood_group' => 'AB', 'rh' => 'negative'];
+        $e = $this->api('POST', '/events', $input)->assertCreated()->json('data');
+        $this->api('GET', '/people/'.$e['person_id'])->assertJsonPath('data.blood_group', 'O')->assertJsonPath('data.rh', 'positive');
+        $this->api('POST', '/events', ['blood_group' => 'B', 'rh' => 'negative'] + $this->payload('donation', $e['person_id']))->assertCreated()->assertJsonPath('data.blood_group', 'B');
+        $this->api('GET', '/people/'.$e['person_id'])->assertJsonPath('data.blood_group', 'O')->assertJsonPath('data.rh', 'positive');
+        $this->api('GET', '/events/'.$e['id'])->assertJsonPath('data.blood_group', 'O');
+        $unknown = ['blood_group' => null, 'rh' => null] + $this->payload('benefit');
+        $u = $this->api('POST', '/events', $unknown)->assertCreated()->assertJsonPath('data.blood_group', null)->json('data');
+        $this->api('GET', '/people/'.$u['person_id'])->assertJsonPath('data.blood_group', null)->assertJsonPath('data.rh', null);
+        $this->api('POST', '/events', ['blood_group' => null, 'rh' => null] + $this->payload())->assertUnprocessable();
+    }
+
     public function test_issue_is_not_transfusion_and_linked_stages_count_as_one_benefit(): void
     {
         $before = DB::table('blood_transfusions')->count();
@@ -93,7 +161,7 @@ class BloodEventsTest extends TestCase
         $this->assertSame('unit', $historic->quantity_unit);
         $this->assertSame('1.0000', $historic->quantity);
         $this->api('POST', '/events', ['occurred_on' => now('Asia/Damascus')->addDay()->toDateString()] + $this->payload())->assertUnprocessable();
-        $this->api('POST', '/events', ['occurred_on' => '2000-01-01'] + $this->payload())->assertUnprocessable();
+        $this->api('POST', '/events', ['occurred_on' => '2000-01-01'] + $this->payload())->assertCreated()->assertJsonPath('data.reporting_period_id', null);
     }
 
     public function test_date_corrections_keep_aliases_and_versions_and_screening_history(): void

@@ -18,3 +18,59 @@ form.profileForm input[type="radio"] {
   background: #eaf5f6;
   border-color: #25839b;
 }
+
+/* Extend the actual directory form/section/button primitives only inside blood-bank forms. */
+.profileForm { gap: 28px; }
+.sectionList { display: grid; gap: 30px; border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+.section { min-inline-size: 0; display: grid; gap: 20px; }
+.profileForm label { align-content: start; text-align: start; }
+.profileForm :is(input:not([type="radio"]), select, textarea) { min-block-size: 44px; }
+.profileForm :is(input, select, textarea, button) { scroll-margin-block: 24px 100px; }
+.profileForm :is(label, legend) { line-height: 1.8; }
+.profileForm :is(fieldset, section) { min-inline-size: 0; }
+.subheading { grid-column: 1 / -1; color: #365f69; font-size: 13px; font-weight: 700; margin: 8px 0 0; padding-block-start: 12px; border-block-start: 1px solid #e3ecef; }
+.demographics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bloodFields { margin: 0; padding: 16px; border: 1px solid #dce7eb; border-radius: 9px; background: #f8fbfc; }
+.bloodFields legend { padding-inline: 6px; font-size: 13px; font-weight: 600; }
+.personSummary { display: flex; align-items: flex-start; gap: 14px; padding: 16px; border: 1px solid #cfe3e7; border-radius: 9px; background: #f3f9fa; overflow-wrap: anywhere; }
+.personSummary > div { display: grid; gap: 8px; min-inline-size: 0; }
+.personSummary strong { display: block; color: #285b67; font-size: 15px; line-height: 1.8; }
+.personSummary :is(small,p) { font-size: 12px; color: #526e78; margin: 0; line-height: 1.9; }
+.personIcon { display: grid; place-items: center; inline-size: 38px; block-size: 38px; flex: 0 0 38px; border-radius: 9px; background: #e0eff2; color: #0b6178; }
+.summaryFacts { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 12px; }
+.personDetails { margin-block-start: 16px; }
+.personDetails summary { color: #0b6178; font-size: 13px; cursor: pointer; padding: 8px 0; }
+.personDetails dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.personDetails dd { font-size: 14px; overflow-wrap: anywhere; }
+.secondaryActions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-block-start: 14px; }
+.secondaryActions p { flex-basis: 100%; }
+.screenings { display: grid; gap: 14px; }
+.screenings > button { justify-self: start; }
+.formActions { align-items: center; flex-wrap: wrap; }
+.saveHint { margin-inline-end: auto; font-size: 12px; color: #617a82; }
+.picker { display: grid; gap: 12px; align-content: start; }
+.picker > p { margin: 0; }
+.pickerChoices { display: grid; gap: 6px; max-block-size: 184px; overflow-y: auto; scrollbar-gutter: stable; padding: 4px; overscroll-behavior: contain; scroll-padding-block: 8px; }
+.pickerChoices button { inline-size: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; min-block-size: 44px; text-align: start; white-space: normal; overflow-wrap: anywhere; }
+.pickerChoices button span { display: grid; gap: 3px; }
+.pickerChoices button bdi { font-size: 11px; color: #607c87; }
+.pickerChoices button svg { flex-shrink: 0; }
+.choiceColumns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pickerPagination { border-block-start: 1px solid #e3ecef; }
+.pickerPagination > div { justify-content: start; gap: 8px; padding-block-start: 10px; }
+.addressField { align-self: start; }
+@media (max-width: 767px) {
+  .profileForm { gap: 24px; }
+  .sectionList { gap: 28px; }
+  .section { gap: 16px; }
+  .demographics { grid-template-columns: 1fr; }
+  .personSummary { padding: 12px; gap: 10px; }
+  .personSummary strong { font-size: 14px; }
+  .personDetails dl { grid-template-columns: 1fr; }
+  .summaryFacts { display: grid; }
+  .saveHint { flex-basis: 100%; }
+  .formActions button { flex: 1; }
+  .pickerChoices { max-block-size: 168px; }
+  .choiceColumns { grid-template-columns: 1fr; }
+  .pickerPagination > div { flex-wrap: wrap; }
+}
