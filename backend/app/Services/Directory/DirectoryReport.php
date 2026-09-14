@@ -22,7 +22,7 @@ class DirectoryReport
         ]);
     }
 
-    private function pdf(array $document): string
+    public function pdf(array $document, string $view = 'reports.directory'): string
     {
         $container = new class implements ContainerInterface
         {
@@ -59,7 +59,7 @@ class DirectoryReport
             $pdf->DefHTMLHeaderByName('continuation', '<table width="100%" style="border-bottom:.5pt solid #bed1cb;font-family:cairo;color:#155c56;font-size:10pt"><tr><td><b>'.e($document['metadata']['title']).'</b> · مشفى محمد بن زايد الإماراتي</td><td align="left"><img src="var:medicalLine" width="95"></td></tr></table>');
             $pdf->WriteHTML('<sethtmlpageheader name="continuation" value="on" show-this-page="0" />');
             $pdf->SetHTMLFooter('<div style="border-top:.5pt solid #bed1cb;color:#36564e;text-align:center;font-family:cairo;font-size:9pt"><span dir="ltr">'.e($document['metadata']['number']).'</span> &nbsp; · &nbsp; الصفحة {PAGENO} من {nbpg}</div>');
-            $pdf->WriteHTML(view('reports.directory', $document)->render());
+            $pdf->WriteHTML(view($view, $document)->render());
 
             return $pdf->Output('', 'S');
         } finally {

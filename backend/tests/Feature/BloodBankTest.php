@@ -193,6 +193,13 @@ class BloodBankTest extends TestCase
         $row = $this->api('POST', '', $this->profile())->assertCreated()->json('data');
         $donation = $this->api('POST', "/donor/{$row['id']}/donations", ['request_id' => (string) Str::uuid(), 'donated_on' => $this->f['today'], 'blood_group' => 'B', 'rh' => 'negative', 'units' => '1'])->assertCreated()->json('data');
         $doc = $this->getJson('/docs/api.json')->assertOk()->json();
+        foreach (['/export/{format}', '/{kind}/{item}/report/{format}', '/donor/{donor}/donations/{donation}/report/{format}'] as $report) {
+            $operation = $doc['paths']['/api/blood-bank'.$report]['get'];
+            $this->assertSame([['bearerAuth' => []]], $operation['security']);
+            $this->assertStringContainsString('blood_bank.export', $operation['description']);
+            $this->assertArrayHasKey('application/pdf', $operation['responses']['200']['content']);
+            $this->assertArrayHasKey('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $operation['responses']['200']['content']);
+        }
         foreach (['' => '', '/options' => '/options', '/cities' => '/cities', '/clinics' => '/clinics', '/doctors' => '/doctors', '/patients' => '/patients', '/patients/'.$this->f['patients'][1] => '/patients/{patient}', '/donor/'.$row['id'] => '/{kind}/{item}', "/donor/{$row['id']}/donations" => '/donor/{donor}/donations', "/donor/{$row['id']}/donations/{$donation['id']}" => '/donor/{donor}/donations/{donation}'] as $actual => $template) {
             $operation = $doc['paths']['/api/blood-bank'.$template]['get'];
             $this->assertSame([['bearerAuth' => []]], $operation['security']);

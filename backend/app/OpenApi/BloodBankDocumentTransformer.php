@@ -32,7 +32,7 @@ class BloodBankDocumentTransformer extends ClinicDocumentTransformer
         $profile = $this->object($base + ['facility_id' => new IntegerType, 'patient_id' => (new IntegerType)->nullable(true), 'patient_code' => $nullable(), 'person_mode' => (new StringType)->enum(['direct', 'patient']), 'person' => $person, 'governorate_name' => $nullable(), 'city_name' => $nullable(), 'component_name' => $nullable(), 'beneficiary_entity' => $nullable(), 'clinic_id' => (new IntegerType)->nullable(true), 'responsible_staff_id' => (new IntegerType)->nullable(true), 'blood_component_id' => (new IntegerType)->nullable(true), 'screenings' => $this->list($screen), 'lock_version' => new IntegerType]);
         $donation = $this->object(['id' => new IntegerType, 'donation_code' => (new StringType)->example('DON-20260914-000123'), 'donated_on' => (new StringType)->format('date'), 'blood_group' => (new StringType)->enum(['A', 'B', 'AB', 'O']), 'rh' => (new StringType)->enum(['positive', 'negative']), 'units' => (new StringType)->example('1.0000'), 'status' => $text(), 'lock_version' => new IntegerType, 'voided_at' => $nullable()]);
         $meta = $this->object(array_fill_keys(['page', 'per_page', 'total', 'last_page'], new IntegerType));
-        $caps = $this->object(array_fill_keys(['create', 'update', 'donations_create', 'donations_update', 'patients_search'], new BooleanType));
+        $caps = $this->object(array_fill_keys(['create', 'update', 'export', 'donations_create', 'donations_update', 'patients_search'], new BooleanType));
         foreach ($document->paths as $path) {
             $route = preg_replace('#^api/#', '', trim($path->path, '/'));
             if ($route !== 'blood-bank' && ! str_starts_with($route, 'blood-bank/')) {
@@ -108,6 +108,12 @@ class BloodBankDocumentTransformer extends ClinicDocumentTransformer
                 $errors = new ObjectType;
                 $errors->additionalProperties = $this->list($text());
                 $operation->addResponse(Response::make(422)->setDescription('Invalid fields, relationship, unavailable reporting period, future date or inconsistent screening.')->setContent('application/json', Schema::fromType($this->object(['message' => $text(), 'errors' => $errors]))));
+                if (str_contains($route, '/export/') || str_contains($route, '/report/')) {
+                    $operation->description = 'Requires blood_bank.view AND blood_bank.export in the requested active facility, Bearer api ability and active account. Private, no-store. PDF or XLSX attachment with BB-prefixed filename and X-Report-Number. Lists include ALL matching profiles in the committed search/kind/sort, ignoring pagination; count means profiles, not unique people. Limit 1000 profiles/donations: 422 EXPORT_LIMIT_EXCEEDED, never partial. Individual reports read current linked patient fields; screening statuses only, no historical results or methods. Donor reports include actual donations and a separate voided count; recipient registration implies no transfusion. Donation report is not an eligibility certificate.';
+                    $operation->responses = array_values(array_filter($operation->responses, fn ($r) => (int) ($r instanceof Reference ? $r->resolve() : $r)->code !== 200));
+                    $operation->addResponse(Response::make(200)->setDescription('Complete report attachment')->setContent('application/pdf', Schema::fromType((new StringType)->format('binary')))->setContent('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', Schema::fromType((new StringType)->format('binary'))));
+                    $operation->addResponse(Response::make(422)->setDescription('Invalid query or EXPORT_LIMIT_EXCEEDED; no partial report.')->setContent('application/json', Schema::fromType(new AnyOf([$this->object(['message' => $text(), 'errors' => $errors]), $this->object(['error' => $this->object(['code' => (new StringType)->enum(['EXPORT_LIMIT_EXCEEDED']), 'message' => $text()])])]))));
+                }
             }
         }
     }

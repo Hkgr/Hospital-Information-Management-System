@@ -8,6 +8,7 @@ use App\Http\Requests\BloodBank\SaveBloodProfile;
 use App\Http\Requests\BloodBank\SaveDonation;
 use App\Services\BloodBank\BloodBankAccess;
 use App\Services\BloodBank\BloodBankQueries;
+use App\Services\BloodBank\BloodBankReports;
 use App\Services\BloodBank\BloodBankWriter;
 use App\Services\Catalog\CatalogQueries;
 use App\Services\Clinics\ClinicCounts;
@@ -16,11 +17,33 @@ use Database\Seeders\BloodBankReferenceSeeder;
 use Dedoc\Scramble\Attributes\Group;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
 
 #[Group('Blood bank')]
 class BloodBankController extends Controller
 {
     public function __construct(private BloodBankAccess $access, private BloodBankQueries $queries, private BloodBankWriter $writer) {}
+
+    public function export(BloodBankQuery $request, string $format): Response
+    {
+        $f = $this->access->facility($request->user(), $request->integer('facility_id'), 'export');
+
+        return app(BloodBankReports::class)->export($request, $f, $request->validated(), $format);
+    }
+
+    public function report(BloodBankQuery $request, string $kind, int $item, string $format): Response
+    {
+        $f = $this->access->facility($request->user(), $request->integer('facility_id'), 'export');
+
+        return app(BloodBankReports::class)->export($request, $f, $request->validated(), $format, $kind, $item);
+    }
+
+    public function donationReport(BloodBankQuery $request, int $donor, int $donation, string $format): Response
+    {
+        $f = $this->access->facility($request->user(), $request->integer('facility_id'), 'export');
+
+        return app(BloodBankReports::class)->export($request, $f, $request->validated(), $format, 'donor', $donor, $donation);
+    }
 
     public function index(BloodBankQuery $request): JsonResponse
     {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\BloodBankProfileSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -107,7 +108,7 @@ return new class extends Migration
         Schema::dropIfExists('blood_donation_codes');
         Schema::table('blood_donations', fn (Blueprint $t) => $t->dropColumn('donation_code'));
         Schema::dropIfExists('blood_bank_screenings');
-        DB::statement('ALTER TABLE screening_tests DROP CHECK bb_test_analyte');
+        DB::statement(BloodBankProfileSchema::dropCheck('screening_tests', 'bb_test_analyte'));
         Schema::table('screening_tests', fn (Blueprint $t) => $t->dropColumn('blood_bank_analyte'));
         Schema::dropIfExists('blood_recipients');
         Schema::table('blood_donors', function (Blueprint $t) {
