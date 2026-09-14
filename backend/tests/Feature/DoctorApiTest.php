@@ -39,14 +39,16 @@ class DoctorApiTest extends TestCase
         $this->token = $this->user->createToken('doctor-test', ['api'])->plainTextToken;
         $this->facility = DB::table('facilities')->insertGetId(['code' => 'TEST-A', 'name_ar' => 'منشأة اختبار أ', 'timezone' => 'Asia/Damascus']);
         $this->other = DB::table('facilities')->insertGetId(['code' => 'TEST-B', 'name_ar' => 'منشأة اختبار ب', 'timezone' => 'Asia/Damascus']);
-        $this->role = DB::table('roles')->insertGetId(['code' => 'super_admin', 'name_ar' => 'دور اختباري']);
+        $this->role = (int) (DB::table('roles')->where('code', 'super_admin')->value('id')
+            ?? DB::table('roles')->insertGetId(['code' => 'super_admin', 'name_ar' => 'دور اختباري']));
         $this->seed(DoctorPermissionsSeeder::class);
         foreach (DB::table('permissions')->pluck('id') as $permission) {
-            DB::table('role_permissions')->insert(['role_id' => $this->role, 'permission_id' => $permission]);
+            DB::table('role_permissions')->insertOrIgnore(['role_id' => $this->role, 'permission_id' => $permission]);
         }
         foreach (['clinics.view', 'clinics.update'] as $code) {
-            $permission = DB::table('permissions')->insertGetId(['code' => $code, 'name_ar' => $code]);
-            DB::table('role_permissions')->insert(['role_id' => $this->role, 'permission_id' => $permission]);
+            $permission = DB::table('permissions')->where('code', $code)->value('id')
+                ?? DB::table('permissions')->insertGetId(['code' => $code, 'name_ar' => $code]);
+            DB::table('role_permissions')->insertOrIgnore(['role_id' => $this->role, 'permission_id' => $permission]);
         }
         DB::table('facility_user_roles')->insert(['user_id' => $this->user->id, 'role_id' => $this->role, 'facility_id' => $this->facility]);
         DB::table('global_user_roles')->insert(['user_id' => $this->user->id, 'role_id' => $this->role]);
