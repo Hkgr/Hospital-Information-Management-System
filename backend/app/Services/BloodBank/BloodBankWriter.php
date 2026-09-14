@@ -161,12 +161,7 @@ class BloodBankWriter
             if ($input['donated_on'] > $facility['today']) {
                 throw ValidationException::withMessages(['donated_on' => 'تاريخ التبرع الفعلي لا يمكن أن يكون في المستقبل.']);
             }
-            $periods = DB::table('reporting_periods')->where('facility_id', $facility['id'])->where(fn ($q) => $q->where(fn ($dates) => $dates->where('starts_on', '<=', $input['donated_on'])->where('ends_on', '>=', $input['donated_on']))->orWhere('id', $old['reporting_period_id'] ?? 0))->orderBy('id')->lockForUpdate()->get();
-            $matching = $periods->filter(fn ($p) => $p->starts_on <= $input['donated_on'] && $p->ends_on >= $input['donated_on']);
-            if ($matching->count() !== 1 || $matching->first()->status !== 'open' || ($old && $periods->firstWhere('id', $old['reporting_period_id'])?->status !== 'open')) {
-                throw ValidationException::withMessages(['donated_on' => 'يلزم وجود فترة تقارير مفتوحة واحدة تغطي التاريخ؛ الفترة السابقة أيضًا يجب أن تبقى مفتوحة عند التصحيح.']);
-            }
-            $fields = Arr::only($input, ['donated_on', 'blood_group', 'rh', 'units']) + ['reporting_period_id' => $matching->first()->id, 'updated_by' => $request->user()->id, 'updated_at' => now(), 'lock_version' => ($old['lock_version'] ?? 0) + 1];
+            $fields = Arr::only($input, ['donated_on', 'blood_group', 'rh', 'units']) + ['reporting_period_id' => $old['reporting_period_id'] ?? null, 'updated_by' => $request->user()->id, 'updated_at' => now(), 'lock_version' => ($old['lock_version'] ?? 0) + 1];
             if ($id) {
                 DB::table('blood_donations')->where('id', $id)->update($fields);
             } else {

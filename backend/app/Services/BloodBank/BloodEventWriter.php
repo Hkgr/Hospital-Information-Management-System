@@ -100,17 +100,15 @@ class BloodEventWriter
             if (($old && $old->quantity_unit !== $data['quantity_unit']) || (! $old && $data['quantity_unit'] !== 'kg')) {
                 throw ValidationException::withMessages(['quantity_unit' => 'الجديد بالكيلوغرام؛ لا تحويل للوحدات التاريخية دون بيانات تحويل.']);
             }
-            $personId = $data['person_id'] ?? $this->person($request, $f, $data['person']);
+            // The event is the sole blood-group input for atomic new-person registration.
+            // person() reuses an existing patient-linked identity without updating it.
+            $personId = $data['person_id'] ?? $this->person($request, $f, array_replace($data['person'], ['blood_group' => $data['blood_group'] ?? null, 'rh' => $data['rh'] ?? null]));
             $person = DB::table('blood_bank_people')->where('id', $personId)->where('facility_id', $f['id'])->lockForUpdate()->first();
             if (! $person || ! $person->is_active) {
                 throw new BloodBankException('BLOOD_BANK_NOT_FOUND', 'الشخص غير متاح في المنشأة.', 404);
             }
             if ($data['occurred_on'] > $f['today']) {
                 throw ValidationException::withMessages(['occurred_on' => 'التاريخ الفعلي لا يمكن أن يكون في المستقبل.']);
-            }
-            $period = DB::table('reporting_periods')->where('facility_id', $f['id'])->where('starts_on', '<=', $data['occurred_on'])->where('ends_on', '>=', $data['occurred_on'])->lockForUpdate()->get();
-            if ($period->count() !== 1 || $period[0]->status !== 'open' || ($old && DB::table('reporting_periods')->where('id', $old->reporting_period_id)->value('status') !== 'open')) {
-                throw ValidationException::withMessages(['occurred_on' => 'يلزم وجود فترة تقارير مفتوحة واحدة تغطي التاريخ؛ والفترة السابقة مفتوحة عند التعديل.']);
             }
             $links = app(ClinicStaffLinks::class);
             $links->lockStaff(array_filter([$data['responsible_staff_id'], $old->responsible_staff_id ?? null]));
@@ -142,8 +140,10 @@ class BloodEventWriter
             if ($data['kind'] === 'donation' && (! $fields['blood_group'] || ! $fields['rh'])) {
                 throw ValidationException::withMessages(['blood_group' => 'التبرع الفعلي يحتاج ABO وRh وفق سجل التبرعات الحالي.']);
             }
-            $fields += ['person_id' => $personId, 'facility_id' => $f['id'], 'issue_event_id' => $issueId, 'reporting_period_id' => $period[0]->id, 'updated_by' => $request->user()->id, 'updated_at' => now(), 'lock_version' => ($old->lock_version ?? 0) + 1];
-            $clinical = ['facility_id' => $f['id'], 'reporting_period_id' => $period[0]->id, 'blood_group' => $fields['blood_group'], 'rh' => $fields['rh'], 'units' => $data['quantity'], 'quantity_unit' => $data['quantity_unit'], 'updated_by' => $request->user()->id, 'updated_at' => now(), 'lock_version' => $fields['lock_version']];
+            // Omit reporting_period_id: new records use NULL; each historical link
+            // stays untouched, even when the corrected date leaves its old period.
+            $fields += ['person_id' => $personId, 'facility_id' => $f['id'], 'issue_event_id' => $issueId, 'updated_by' => $request->user()->id, 'updated_at' => now(), 'lock_version' => ($old->lock_version ?? 0) + 1];
+            $clinical = ['facility_id' => $f['id'], 'blood_group' => $fields['blood_group'], 'rh' => $fields['rh'], 'units' => $data['quantity'], 'quantity_unit' => $data['quantity_unit'], 'updated_by' => $request->user()->id, 'updated_at' => now(), 'lock_version' => $fields['lock_version']];
             $sourceId = null;
             if ($data['kind'] === 'donation') {
                 $anchor = $old ? DB::table('blood_donors')->find(DB::table('blood_donations')->where('id', $old->blood_donation_id)->value('donor_id')) : DB::table('blood_donors')->where('person_id', $personId)->orderBy('id')->first();

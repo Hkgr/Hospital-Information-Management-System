@@ -51,6 +51,35 @@ if (in_array($argv[1] ?? '', ['prepare', 'prepare-unified'], true)) {
     });
     file_put_contents($path, json_encode($f, JSON_THROW_ON_ERROR));
     echo "Prepared isolated blood-bank records; credentials remain in ignored local storage.\n";
+} elseif (in_array($argv[1] ?? '', ['periods-absent', 'periods-locked', 'periods-overlapping', 'periods-verify'], true)) {
+    $f = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+    if (! str_starts_with(DB::table('facilities')->where('id', $f['second'])->value('code'), 'ZZZ-BB-SECOND-')) {
+        throw new RuntimeException('Not this isolated synthetic facility.');
+    }
+    if ($argv[1] === 'periods-absent') {
+        if (DB::table('reporting_periods')->where('facility_id', $f['second'])->exists()) {
+            throw new RuntimeException('Expected a facility without periods.');
+        }
+        $f['second_clinic'] = DB::table('clinics')->insertGetId(['facility_id' => $f['second'], 'code' => 'NO-PERIODS-'.$f['tag'], 'name_ar' => 'عيادة بلا فترات']);
+        DB::table('clinic_staff')->insert(['clinic_id' => $f['second_clinic'], 'staff_id' => $f['staff'], 'starts_on' => $f['today']]);
+    } elseif ($argv[1] !== 'periods-verify') {
+        DB::table('reporting_periods')->insert(['facility_id' => $f['second'], 'starts_on' => $argv[1] === 'periods-locked' ? '2000-01-01' : '2001-01-01', 'ends_on' => '2099-12-31', 'status' => $argv[1] === 'periods-locked' ? 'locked' : 'open']);
+    }
+    $periods = DB::table('reporting_periods')->orderBy('id')->get()->all();
+    if ($argv[1] === 'periods-verify') {
+        if (json_encode($periods) !== json_encode($f['period_snapshot'])) {
+            throw new RuntimeException('Event writes unexpectedly changed reporting periods.');
+        }
+        foreach (['blood_bank_events', 'blood_donations', 'blood_transfusions'] as $table) {
+            if (DB::table($table)->where('facility_id', $f['second'])->whereNotNull('reporting_period_id')->exists()) {
+                throw new RuntimeException('Unexpected period assignment: '.$table);
+            }
+        }
+    } else {
+        $f['period_snapshot'] = $periods;
+        file_put_contents($path, json_encode($f, JSON_THROW_ON_ERROR), LOCK_EX);
+    }
+    echo 'Verified/arranged isolated period state: '.$argv[1]."\n";
 } elseif (in_array($argv[1] ?? '', ['doctor-types-empty', 'doctor-types-reset'], true)) {
     $f = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
     $f['doctor_staff_types'] = $argv[1] === 'doctor-types-empty' ? [] : ['CAT-'.$f['tag']];
