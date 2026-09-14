@@ -11,7 +11,7 @@ function fixture(mode) { const r=spawnSync('php',['tests/Support/dossier-live.ph
 before(async()=>{fixture('prepare');f=JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-live.json',import.meta.url)));browser=await chromium.launch();await mkdir(gallery,{recursive:true});});
 after(async()=>{await browser?.close();try{fixture('verify');}finally{fixture('cleanup');}});
 async function pageAt(path='/dossiers',width=1440,token=f.token){const context=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'});await context.addInitScript(t=>sessionStorage.setItem('hospital.bearer',t),token);const page=await context.newPage();page.setDefaultTimeout(20000);await page.goto(`${base}${path}`);return{page,context};}
-async function capture(page,name){await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:fileURLToPath(new URL(name+'.jpg',gallery)),type:'jpeg',quality:78,fullPage:true});}
+async function capture(page,name){await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);if(process.env.DOSSIER_SKIP_GALLERY !== "1") await page.screenshot({path:fileURLToPath(new URL(name+'.jpg',gallery)),type:'jpeg',quality:78,fullPage:true});}
 
 test('real rewrites enforce read-only scope, status codes and shapes',async()=>{
   for(const suffix of ['',`/${f.dossiers[0]}`,`/${f.dossiers[0]}/visits`,`/${f.dossiers[0]}/visits/${f.latest_visit}`]){
@@ -28,7 +28,7 @@ test('list reuses server pagination and add cannot write; complete visual states
     await page.getByRole('link',{name:'الإضبارات',exact:true}).waitFor();
     if(width===390) await page.keyboard.press('Escape');
     const writes=[];page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method())&&r.url().includes('/hospital-api/'))writes.push(r.url());});
-    const add=page.getByRole('button',{name:'إضافة إضبارة',exact:true});assert.equal(await add.isDisabled(),true);await page.getByText('ستتاح إضافة الإضبارة في المرحلة التالية.',{exact:true}).waitFor();await add.evaluate(el=>el.click());assert.equal(writes.length,0);assert.equal(await page.getByRole('dialog').count(),0);
+    const add=page.getByRole('button',{name:'إضافة إضبارة',exact:true});assert.equal(await add.isDisabled(),true);await add.evaluate(el=>el.click());assert.equal(writes.length,0);assert.equal(await page.getByRole('dialog').count(),0);
     await capture(page,`list-${width}`);
     await page.getByRole('region',{name:'جدول الإضبارات',exact:true}).evaluate(el=>el.scrollLeft=-el.scrollWidth);
     await capture(page,`list-actions-${width}`);

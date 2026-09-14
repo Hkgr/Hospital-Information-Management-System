@@ -100,7 +100,7 @@ class DossierApiTest extends TestCase
         $this->api('', ['sort' => 'password'])->assertUnprocessable();
         $this->api('', [], $this->f['user']->createToken('no-ability', [])->plainTextToken)->assertForbidden();
         $this->app['auth']->forgetGuards();
-        $this->postJson('/api/dossiers', ['facility_id' => $this->f['facility']], ['Authorization' => 'Bearer '.$this->token])->assertStatus(405);
+        $this->postJson('/api/dossiers', ['facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $this->f['patients'][1], 'code' => 'FORBIDDEN', 'opening_date' => '2000-01-01'], ['Authorization' => 'Bearer '.$this->token])->assertForbidden();
         DB::table('facilities')->where('id', $this->f['facility'])->update(['is_active' => false]);
         $this->api()->assertForbidden();
     }
@@ -236,13 +236,19 @@ class DossierApiTest extends TestCase
     public function test_openapi_read_contracts_and_safe_internal_failure(): void
     {
         $doc = $this->getJson('/docs/api.json')->assertOk()->json();
+        $diagnosisInput = $doc['paths']['/api/dossiers/{dossier}/visits']['post']['requestBody']['content']['application/json']['schema']['properties']['diagnoses']['items'];
+        $this->assertSame(['diagnosis_id', 'clinic_id', 'diagnosing_staff_id'], $diagnosisInput['required']);
+        $this->assertArrayHasKey('dossier_id', $doc['paths']['/api/dossiers/options/patients']['get']['responses'][200]['content']['application/json']['schema']['properties']['data']['items']['properties']);
         foreach (['/api/dossiers', '/api/dossiers/{dossier}', '/api/dossiers/{dossier}/visits', '/api/dossiers/{dossier}/visits/{visit}'] as $path) {
             $op = $doc['paths'][$path]['get'];
             $this->assertSame([['bearerAuth' => []]], $op['security']);
             foreach ([200, 401, 403, 404, 422, 500] as $status) {
                 $this->assertArrayHasKey($status, $op['responses']);
             }
-            $this->assertArrayNotHasKey('post', $doc['paths'][$path]);
+            if (in_array($path, ['/api/dossiers', '/api/dossiers/{dossier}/visits'], true)) {
+                $this->assertSame([['bearerAuth' => []]], $doc['paths'][$path]['post']['security']);
+                $this->assertArrayHasKey(409, $doc['paths'][$path]['post']['responses']);
+            }
         }
         $this->mock(DossierQueries::class)->shouldReceive('listing')->once()->andThrow(new \RuntimeException('SQL secret internal exception'));
         $r = $this->api()->assertStatus(500)->assertJsonPath('error.code', 'DOSSIERS_UNAVAILABLE')->assertHeader('Cache-Control', 'no-store, private');

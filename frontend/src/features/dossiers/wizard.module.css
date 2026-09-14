@@ -1,0 +1,47 @@
+.wizard { min-inline-size: 0; display: grid; gap: 24px; }
+.progress { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; padding: 0; margin: 0; list-style: none; }
+.progress li { min-inline-size: 0; }
+.progress button { inline-size: 100%; min-block-size: 100px; padding: 16px 22px; border: 0; background: #e8eef2; color: #4d626e; text-align: start; clip-path: polygon(100% 0, 13px 0, 0 50%, 13px 100%, 100% 100%, calc(100% - 13px) 50%); }
+.progress li:first-child button { clip-path: polygon(100% 0, 13px 0, 0 50%, 13px 100%, 100% 100%); }
+.progress button strong { display: block; font-size: 13px; margin-block: 5px; }
+.progress button small { font-size: 11px; }
+.progress button[data-state="saved"] { background: #e2f3ec; color: #176247; }
+.progress button[data-state="error"] { background: #fff0ee; color: #a0271c; }
+.progress button[aria-current="step"] { background: var(--mbz-action); color: #fff; }
+.progress button:disabled { opacity: .66; cursor: not-allowed; }
+.progress button:focus-visible { outline-offset: -5px; outline-color: #15a999; }
+.form { display: grid; gap: 28px; min-inline-size: 0; padding: 0; }
+.form label { display: grid; gap: 8px; font-size: 13px; }
+.form :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { min-block-size: 44px; }
+.form textarea { border: 1px solid #d4e1e5; border-radius: 8px; padding: 9px 11px; background: white; color: #29454e; font: inherit; font-size: 13px; max-inline-size: 100%; inline-size: 100%; resize: vertical; }
+.progress button { block-size: 100%; }
+.section { background: #fff; border: 1px solid #dce6ed; border-radius: 14px; padding: 28px; display: grid; gap: 24px; min-inline-size: 0; }
+.section h3 { font-size: 20px; margin: 0; color: var(--mbz-action); }
+.section p { margin-block: 4px; }
+.section fieldset { min-inline-size: 0; }
+.section label { align-content: start; }
+.summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; background: #eaf3f5; border-radius: 12px; padding: 18px 22px; }
+.summary p { margin-block: 4px; }
+.actions { position: sticky; inset-block-end: 12px; z-index: 4; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: #fff; border: 1px solid #dce6ed; border-radius: 12px; padding: 16px; box-shadow: 0 5px 22px #203a4b12; }
+.actions span { margin-inline-end: auto; color: #576b76; font-size: 13px; }
+.checkGroup { display: flex; gap: 12px 20px; flex-wrap: wrap; }
+.form .checkGroup label { display: flex; align-items: center; gap: 8px; }
+.form input:is([type="radio"], [type="checkbox"]) { inline-size: 18px; block-size: 18px; flex: 0 0 18px; margin: 0; padding: 0; accent-color: var(--mbz-action); }
+.diagnosis { display: grid; gap: 20px; min-inline-size: 0; border-block-start: 1px solid #dce6ed; padding-block-start: 24px; }
+.diagnosisHeader { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; align-items: center; }
+.error { color: #a0271c; font-size: 13px; }
+.form [aria-invalid="true"] { border-color: #bd4036; }
+.form input, .form textarea, .form select { scroll-margin-block: 110px; }
+.subheading { grid-column: 1 / -1; margin: 4px 0 0; padding-block-start: 12px; border-block-start: 1px solid #e8eef2; font-size: 16px; }
+@media (max-width: 1100px) { .progress { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } }
+@media (max-width: 600px) {
+  .wizard { gap: 18px; }
+  .progress { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .progress button, .progress li:first-child button { clip-path: none; border-radius: 8px; min-block-size: 86px; padding: 12px; }
+  .section { padding: 18px 14px; gap: 22px; }
+  .section h3 { font-size: 18px; }
+  .summary { padding: 16px; }
+  .actions { position: static; padding: 14px; }
+  .actions span { flex-basis: 100%; }
+  .actions button { flex: 1 1 100%; }
+}

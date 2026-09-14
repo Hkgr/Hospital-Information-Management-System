@@ -96,7 +96,7 @@ class DossierQueries
             return ['id' => (int) $d->id, 'facility_id' => (int) $d->facility_id, 'code' => $d->code, 'status' => $d->status, 'opening_date' => $d->opening_date,
                 'disability_text' => $d->disability_text, 'clinical_history' => $d->clinical_history, 'is_oncology' => (bool) $d->is_oncology,
                 'oncology' => $d->is_oncology ? ['previous_examinations' => $d->previous_examinations, 'medication_source' => $d->medication_source, 'other_organization' => $d->other_organization,
-                    'selections' => DB::table('dossier_oncology_selections')->where('dossier_id', $id)->where('facility_id', $f['id'])->orderBy('selection_group')->orderBy('code')->get(['selection_group', 'code'])->all()] : null,
+                    'selections' => DB::table('dossier_oncology_selections')->where('dossier_id', $id)->where('facility_id', $f['id'])->where('is_active', true)->orderBy('selection_group')->orderBy('code')->get(['selection_group', 'code'])->all()] : null,
                 'patient' => (array) $patient, 'visit_count' => $v->count(), 'latest_visit' => $latest ? $this->visit($f, $id, (int) $latest) : null];
         });
     }
@@ -115,9 +115,10 @@ class DossierQueries
         abort_unless($this->dossiers($f)->where('d.id', $id)->exists(), 404);
         $v = $this->actualVisits($f)->where('v.dossier_id', $id)->where('v.id', $visit)
             ->leftJoin('clinics as c', fn ($j) => $j->on('c.id', '=', 'v.clinic_id')->on('c.facility_id', '=', 'v.facility_id'))
-            ->leftJoin('staff as s', 's.id', '=', 'v.attending_staff_id')->first(['v.id', 'v.visit_no', 'v.visit_date', 'v.status', 'c.name_ar as visit_clinic', 's.full_name as attending_doctor']);
+            ->leftJoin('staff as s', 's.id', '=', 'v.attending_staff_id')->first(['v.id', 'v.visit_no', 'v.visit_date', 'v.status', 'v.is_referred', 'v.referring_hospital', 'v.referral_date', 'v.referral_reason', 'c.name_ar as visit_clinic', 's.full_name as attending_doctor']);
         abort_unless($v, 404);
         $result = (array) $v;
+        $result['is_referred'] = (bool) $result['is_referred'];
         $result['diagnoses'] = $this->diagnoses($f, [$visit])[$visit] ?? [];
         foreach (['services' => ['services', 'service_id', 'performed_on'], 'procedures' => ['procedures', 'procedure_id', 'performed_on'], 'outcomes' => ['visit_results', 'result_id', 'outcome_on']] as $kind => [$catalog, $key, $date]) {
             $result[$kind] = DB::table('visit_'.$kind.' as e')->join($catalog.' as n', 'n.id', '=', 'e.'.$key)
