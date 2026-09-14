@@ -8,12 +8,24 @@ use App\Http\Controllers\Api\ClinicController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DoctorController;
 use App\Http\Controllers\Api\DossierController;
+use App\Http\Controllers\Api\DossierWizardController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
     Route::prefix('dossiers')->name('dossiers.')->group(function () {
+        Route::post('/', [DossierWizardController::class, 'personal'])->defaults('section', 'personal')->name('store');
+        Route::get('/options', [DossierWizardController::class, 'options'])->name('options');
+        foreach (['patients', 'cities', 'clinics', 'doctors', 'diagnoses'] as $lookup) {
+            Route::get('/options/'.$lookup, [DossierWizardController::class, 'lookup'])->defaults('lookup', $lookup)->name('options.'.$lookup);
+        }
+        Route::post('/diagnoses', [DossierWizardController::class, 'diagnosis'])->name('diagnoses.store');
+        Route::get('/{dossier}/progress', [DossierWizardController::class, 'progress'])->whereNumber('dossier')->name('progress');
+        Route::put('/{dossier}/personal', [DossierWizardController::class, 'personal'])->whereNumber('dossier')->defaults('section', 'personal')->name('personal');
+        Route::put('/{dossier}/medical', [DossierWizardController::class, 'medical'])->whereNumber('dossier')->defaults('section', 'medical')->name('medical');
+        Route::post('/{dossier}/visits', [DossierWizardController::class, 'visit'])->whereNumber('dossier')->defaults('section', 'visit')->name('visits.store');
+        Route::put('/{dossier}/visits/{visit}', [DossierWizardController::class, 'visit'])->whereNumber(['dossier', 'visit'])->defaults('section', 'visit')->name('visits.update');
         Route::get('/', [DossierController::class, 'index'])->name('index');
         Route::get('/{dossier}', [DossierController::class, 'show'])->whereNumber('dossier')->name('show');
         Route::get('/{dossier}/visits', [DossierController::class, 'visits'])->whereNumber('dossier')->name('visits');

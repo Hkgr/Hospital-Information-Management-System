@@ -1,5 +1,7 @@
 # Patient dossiers — Phase 1 operating contract
 
+Historical Phase 1 baseline. [Phase 2](patient-dossiers-phase-two.md) now adds explicitly authorized section writes, an enabled Add action for creators and draft resume. The read-only assertions below remain applicable to users with dossiers.view alone; they no longer mean that all write routes are absent.
+
 Read-only dossier list and detail foundation, based on develop `9f14022`. See [pre-implementation schema assessment](patient-dossiers-schema-assessment.md) for verified existing meanings, foreign keys, reuse and deferred fields.
 
 ## Storage and migration

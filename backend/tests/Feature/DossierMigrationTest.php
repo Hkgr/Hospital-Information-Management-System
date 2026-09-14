@@ -14,6 +14,9 @@ class DossierMigrationTest extends TestCase
 
     public function test_fresh_rollback_populated_upgrade_and_lossless_refusal(): void
     {
+        // Remove the unused additive Phase 2 schema before exercising its parent migration.
+        $workflow = require database_path('migrations/2026_09_17_000001_add_dossier_section_workflow.php');
+        $workflow->down();
         $m = require database_path('migrations/2026_09_16_000001_add_patient_dossier_foundation.php');
         $m->down();
         $this->assertFalse(Schema::hasTable('patient_dossiers'));

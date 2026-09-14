@@ -23,11 +23,13 @@ class DossierQueries
     public function listing(array $f, array $input): array
     {
         return DB::transaction(function () use ($f, $input) {
-            $visits = $this->actualVisits($f)->whereColumn('v.dossier_id', 'd.id');
+            $visits = $this->actualVisits($f)->whereColumn('v.dossier_id', 'd.id')->whereColumn('v.patient_id', 'd.patient_id');
             $latest = (clone $visits)->orderByDesc('v.visit_date')->orderByDesc('v.id')->limit(1);
             $q = $this->dossiers($f)->select('d.id', 'd.code', 'd.status', 'd.opening_date', 'd.is_oncology', 'p.patient_code')
                 ->selectRaw("CONCAT_WS(' ', p.first_name, p.family_name) as patient_name")
                 ->selectSub((clone $visits)->selectRaw('COUNT(*)'), 'visit_count')
+                ->selectSub((clone $visits)->join('visit_procedures as procedure_events', fn ($j) => $j->on('procedure_events.visit_id', '=', 'v.id')->on('procedure_events.facility_id', '=', 'v.facility_id'))
+                    ->whereNull('procedure_events.voided_at')->where('procedure_events.performed_on', '<=', $f['today'])->selectRaw('COUNT(*)'), 'procedure_count')
                 ->selectSub((clone $latest)->select('v.id'), 'latest_visit_id')
                 ->selectSub((clone $latest)->select('v.status'), 'latest_visit_status');
             if (($input['status'] ?? 'all') !== 'all') {
@@ -57,9 +59,10 @@ class DossierQueries
             $page = $q->orderBy($sort, $input['direction'] ?? 'desc')->orderByDesc('d.id')->paginate($input['per_page'] ?? 20, ['*'], 'page', $input['page'] ?? 1);
             $ids = $page->getCollection()->pluck('latest_visit_id')->filter()->all();
             $diagnoses = $this->diagnoses($f, $ids);
-            $page->setCollection($page->getCollection()->map(function ($row) use ($diagnoses) {
+            $actions = app(DossierWorkflowActions::class)->forDossiers($f, $page->items());
+            $page->setCollection($page->getCollection()->map(function ($row) use ($diagnoses, $actions) {
                 return ['id' => (int) $row->id, 'code' => $row->code, 'status' => $row->status, 'opening_date' => $row->opening_date, 'is_oncology' => (bool) $row->is_oncology,
-                    'patient_code' => $row->patient_code, 'patient_name' => $row->patient_name, 'visit_count' => (int) $row->visit_count,
+                    'patient_code' => $row->patient_code, 'patient_name' => $row->patient_name, 'visit_count' => (int) $row->visit_count, 'procedure_count' => (int) $row->procedure_count, 'workflow' => $actions[$row->id]['workflow'],
                     'latest_visit_id' => $row->latest_visit_id ? (int) $row->latest_visit_id : null, 'latest_visit_status' => $row->latest_visit_status, 'diagnoses' => $diagnoses[$row->latest_visit_id] ?? []];
             }));
 
@@ -96,8 +99,9 @@ class DossierQueries
             return ['id' => (int) $d->id, 'facility_id' => (int) $d->facility_id, 'code' => $d->code, 'status' => $d->status, 'opening_date' => $d->opening_date,
                 'disability_text' => $d->disability_text, 'clinical_history' => $d->clinical_history, 'is_oncology' => (bool) $d->is_oncology,
                 'oncology' => $d->is_oncology ? ['previous_examinations' => $d->previous_examinations, 'medication_source' => $d->medication_source, 'other_organization' => $d->other_organization,
-                    'selections' => DB::table('dossier_oncology_selections')->where('dossier_id', $id)->where('facility_id', $f['id'])->orderBy('selection_group')->orderBy('code')->get(['selection_group', 'code'])->all()] : null,
-                'patient' => (array) $patient, 'visit_count' => $v->count(), 'latest_visit' => $latest ? $this->visit($f, $id, (int) $latest) : null];
+                    'selections' => DB::table('dossier_oncology_selections')->where('dossier_id', $id)->where('facility_id', $f['id'])->where('is_active', true)->orderBy('selection_group')->orderBy('code')->get(['selection_group', 'code'])->all()] : null,
+                'patient' => (array) $patient, 'visit_count' => $v->count(), 'latest_visit' => $latest ? $this->visit($f, $id, (int) $latest) : null,
+                'workflow' => app(DossierWorkflowActions::class)->forDossiers($f, [$d])[$id]['workflow']];
         });
     }
 
@@ -115,9 +119,10 @@ class DossierQueries
         abort_unless($this->dossiers($f)->where('d.id', $id)->exists(), 404);
         $v = $this->actualVisits($f)->where('v.dossier_id', $id)->where('v.id', $visit)
             ->leftJoin('clinics as c', fn ($j) => $j->on('c.id', '=', 'v.clinic_id')->on('c.facility_id', '=', 'v.facility_id'))
-            ->leftJoin('staff as s', 's.id', '=', 'v.attending_staff_id')->first(['v.id', 'v.visit_no', 'v.visit_date', 'v.status', 'c.name_ar as visit_clinic', 's.full_name as attending_doctor']);
+            ->leftJoin('staff as s', 's.id', '=', 'v.attending_staff_id')->first(['v.id', 'v.visit_no', 'v.visit_date', 'v.status', 'v.is_referred', 'v.referring_hospital', 'v.referral_date', 'v.referral_reason', 'c.name_ar as visit_clinic', 's.full_name as attending_doctor']);
         abort_unless($v, 404);
         $result = (array) $v;
+        $result['is_referred'] = (bool) $result['is_referred'];
         $result['diagnoses'] = $this->diagnoses($f, [$visit])[$visit] ?? [];
         foreach (['services' => ['services', 'service_id', 'performed_on'], 'procedures' => ['procedures', 'procedure_id', 'performed_on'], 'outcomes' => ['visit_results', 'result_id', 'outcome_on']] as $kind => [$catalog, $key, $date]) {
             $result[$kind] = DB::table('visit_'.$kind.' as e')->join($catalog.' as n', 'n.id', '=', 'e.'.$key)

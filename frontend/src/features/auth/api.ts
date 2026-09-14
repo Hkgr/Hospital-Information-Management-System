@@ -43,7 +43,7 @@ export function subscribeSession(listener: () => void) {
 
 export class AuthError extends Error {
   constructor(public status: number, public code: string, message: string,
-    public fields: Partial<Record<string, string>> = {}) {
+    public fields: Partial<Record<string, string>> = {}, public details: { existing_dossier_id?: number } = {}) {
     super(message);
   }
 }
@@ -103,7 +103,9 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {},
       : response.status === 403 ? "لا يملك هذا الدخول صلاحية الوصول المطلوبة. راجع مسؤول النظام."
       : response.status === 422 ? "تحقق من بيانات الحقول ثم حاول مجددًا."
       : "تعذّر إتمام الطلب الآن. حاول مجددًا بعد قليل.");
-    throw new AuthError(response.status, code, message, fields);
+    const existing = body?.error?.existing_dossier_id;
+    const details = code === "DOSSIER_ALREADY_EXISTS" && Number.isSafeInteger(existing) && existing > 0 ? { existing_dossier_id: existing as number } : {};
+    throw new AuthError(response.status, code, message, fields, details);
   }
   if (!body?.data) throw new AuthError(502, "INVALID_RESPONSE", "تعذّر قراءة استجابة الخادم. حاول مجددًا.");
   return (mode === "envelope" ? body : body.data) as T;
