@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     // Transport only: Laravel still authenticates every Bearer token.
     const api = (process.env.LARAVEL_API_URL || "http://127.0.0.1:8000/api").replace(/\/$/, "");
     return [
+      "dossiers", "dossiers/:dossier(\\d+)", "dossiers/:dossier(\\d+)/visits", "dossiers/:dossier(\\d+)/visits/:visit(\\d+)",
       "login", "user", "logout", "dashboards", "dashboards/:key",
       "blood-bank", "blood-bank/options", "blood-bank/cities", "blood-bank/clinics", "blood-bank/doctors", "blood-bank/patients",
       "blood-bank/events", "blood-bank/events/export/:format(pdf|xlsx)", "blood-bank/events/:event(\\d+)",
