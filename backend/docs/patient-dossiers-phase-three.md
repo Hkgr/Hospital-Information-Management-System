@@ -60,6 +60,8 @@ This schedules cleanup once daily and prevents overlapping runs. Give that accou
 
 ## Reports
 
+Phase 4 extends the existing individual dossier export with voided historical facts and an optional actual-visit date range; it adds a separately authorized read-only change history. See [Phase 4 closure](patient-dossiers-phase-four.md) for the final audit permission, report semantics and operator instructions. The list and individual-visit exports remain unchanged.
+
 PDF uses the existing shared section-report template and locally embedded Cairo. Excel uses the existing measured spreadsheet layout and continuation sheets, explicit safe text/code/date/numeric types, RTL, frozen headers and filters. No attachment binaries are embedded. Private attachment metadata additionally needs `.attachments.view`.
 
 Every Excel sheet has an explicit A4 print area, fit-to-width 1 and unrestricted page height, repeated table headers, a Cairo page header and numbered footer. The shared layout reserves 0.5-inch top/bottom margins and separate header/footer space. Opening/birth dates and attachment timestamps use numeric Excel date cells with explicit formats; identifiers, phone numbers and user text remain literal strings. To reopen all three downloaded review workbooks with PhpSpreadsheet, without a database connection, run `php tests/Support/verify-dossier-workbooks.php` from a development `backend` checkout with Composer dev dependencies (optionally pass another sample directory). The regression suite additionally checks adversarial formula-like strings, leading zeros and long Unicode content. Install the project's Cairo font on the spreadsheet printing workstation; XLSX references the font rather than embedding it.

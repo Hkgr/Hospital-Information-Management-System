@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
       "dossiers/export/:format(pdf|xlsx)",
       "dossiers/:dossier(\\d+)/report/:format(pdf|xlsx)",
       "dossiers/:dossier(\\d+)/attachments",
+      "dossiers/:dossier(\\d+)/audit",
       "dossiers/:dossier(\\d+)/visits/new",
       "dossiers/:dossier(\\d+)/visits/subsequent",
       "dossiers/:dossier(\\d+)/visits/:visit(\\d+)/progress",

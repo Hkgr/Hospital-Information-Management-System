@@ -96,7 +96,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
             foreach (['search', 'status', 'oncology', 'visits', 'from', 'to', 'sort', 'direction'] as $key) {
                 $fields[$key] = $s();
             }$required = ['facility_id'];
-            $op->description .= ' POST requires dossiers.export. Authoritative complete filtered results, not visible page; safe limits 1000 dossiers / 5000 detail rows. Drafts marked incomplete. Private attachment metadata requires attachments.view; no binary embedding. Returns PDF or XLSX attachment; report generation assigns an audited report number.';
+            $op->description .= ' POST requires dossiers.export. Authoritative complete filtered results, not visible page; safe limits 1000 dossiers / 5000 detail rows. Drafts marked incomplete. Private attachment metadata requires attachments.view; no binary embedding. Returns PDF or XLSX attachment; report generation assigns an audited report number. Individual dossier report is Full dossier history: includes saved and explicitly voided linked visits/facts and reasons, with current saved versions; prior correction values stay in separately authorized audit. Optional from/to select actual visit_date inclusively (never created_at); each selected fact retains its own date. Current personal/medical data are labelled current. List and individual-visit semantics stay unchanged.';
             $op->responses = [];
             $report = Response::make(200)->setDescription('Private report');
             foreach (['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'] as $mime) {
