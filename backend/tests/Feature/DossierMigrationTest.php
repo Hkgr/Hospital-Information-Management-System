@@ -14,6 +14,9 @@ class DossierMigrationTest extends TestCase
 
     public function test_fresh_rollback_populated_upgrade_and_lossless_refusal(): void
     {
+        foreach (['2026_09_18_000002_add_dossier_upload_reservations.php', '2026_09_18_000001_extend_dossier_visit_workflow.php'] as $file) {
+            (require database_path('migrations/'.$file))->down();
+        }
         // Remove the unused additive Phase 2 schema before exercising its parent migration.
         $workflow = require database_path('migrations/2026_09_17_000001_add_dossier_section_workflow.php');
         $workflow->down();

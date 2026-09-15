@@ -13,6 +13,7 @@ use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\DossierWizardQueries;
 use App\Services\Dossiers\DossierWorkflowActions;
 use App\Services\Dossiers\DossierWrites;
+use Database\Seeders\DossierOutcomeSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,9 +46,9 @@ class DossierWizardController extends Controller
         $dossier = (int) $r->route('dossier');
         $visit = $r->route('visit') ? (int) $r->route('visit') : null;
         $f = $this->access->facility($r->user(), $r->integer('facility_id'), $visit ? 'visits.update' : 'visits.create');
-        app(DossierVisitWriter::class)->save($r, $f, $dossier, $r->validated(), $visit);
+        $saved = app(DossierVisitWriter::class)->save($r, $f, $dossier, $r->validated(), $visit);
 
-        return response()->json(['data' => $this->queries->snapshot($f, $dossier)], $visit ? 200 : 201);
+        return response()->json(['data' => $this->queries->snapshot($f, $dossier, $saved)], $visit ? 200 : 201);
     }
 
     public function progress(Request $r, int $dossier): JsonResponse
@@ -91,7 +92,7 @@ class DossierWizardController extends Controller
                 ->where(fn ($q) => $q->whereRaw("s.full_name LIKE ? ESCAPE '!'", [$like])->orWhereRaw("s.staff_code LIKE ? ESCAPE '!'", [$like]))
                 ->select('s.id', 's.staff_code as code', 's.full_name as name_ar')->distinct();
         } else {
-            $table = ['cities' => 'cities', 'clinics' => 'clinics', 'diagnoses' => 'diagnoses'][$kind];
+            $table = ['cities' => 'cities', 'clinics' => 'clinics', 'diagnoses' => 'diagnoses', 'services' => 'services', 'procedures' => 'procedures', 'medications' => 'medications', 'outcomes' => 'visit_results'][$kind];
             $q = DB::table($table)->where(function ($q) use ($kind, $like) {
                 $q->whereRaw("name_ar LIKE ? ESCAPE '!'", [$like]);
                 if ($kind !== 'cities') {
@@ -102,6 +103,12 @@ class DossierWizardController extends Controller
                 $q->where('governorate_id', $r->integer('governorate_id'))->select('id', 'name_ar')->selectRaw('NULL as code');
             } else {
                 $q->where('is_active', true)->select('id', 'code', 'name_ar');
+                if (in_array($kind, ['services', 'procedures'])) {
+                    $q->whereNull('archived_at');
+                }
+                if ($kind === 'outcomes') {
+                    $q->whereIn('code', array_keys(DossierOutcomeSeeder::OUTCOMES));
+                }
                 if ($kind === 'clinics') {
                     $q->where('facility_id', $f['id'])->whereNull('archived_at');
                 }

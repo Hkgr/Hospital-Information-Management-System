@@ -64,9 +64,12 @@ class DossierWrites
     public function progress(Request $r, array $f, int $id, string $section, string $state = 'saved', ?int $visit = null): void
     {
         // The dossier row is locked by every writer before updating section progress.
-        $key = ['dossier_id' => $id, 'facility_id' => $f['id'], 'section' => $section];
+        $key = ['dossier_id' => $id, 'facility_id' => $f['id'], 'section' => $section, 'visit_id' => $visit];
         $prior = DB::table('dossier_section_progress')->where($key)->first();
         DB::table('dossier_section_progress')->updateOrInsert($key, ['state' => $state, 'last_saved_by' => $r->user()->id, 'last_saved_at' => now(), 'lock_version' => ($prior?->lock_version ?? 0) + 1, 'visit_id' => $visit]);
+        if ($section !== 'attachments') {
+            DB::table('dossier_section_progress')->where('dossier_id', $id)->where('facility_id', $f['id'])->where('section', 'attachments')->when($visit, fn ($q) => $q->where('visit_id', $visit))->where('state', 'saved')->update(['state' => 'needs_review', 'lock_version' => DB::raw('lock_version + 1')]);
+        }
     }
 
     public function audit(Request $r, array $f, string $type, int $id, ?array $old, array $new, string $event = 'saved'): void

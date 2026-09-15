@@ -6,7 +6,7 @@ import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 const base = 'http://127.0.0.1:3194'; let browser, f, completed = false;
-const gallery = new URL('../docs/reviews/dossiers-phase-two/', import.meta.url);
+const gallery = new URL('../.superdesign/tmp/dossiers-phase2-regression/', import.meta.url);
 function fixture(mode) { const r = spawnSync('php', ['tests/Support/dossier-workflow-live.php', mode], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: { ...process.env, APP_ENV: 'testing' }, encoding: 'utf8' }); assert.equal(r.status, 0, r.stdout + r.stderr); process.stdout.write(r.stdout); }
 before(async () => { fixture('prepare'); f = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-workflow-live.json', import.meta.url))); browser = await chromium.launch(); await mkdir(gallery, { recursive: true }); });
 after(async () => { await browser?.close(); try { if (completed) fixture('verify'); } finally { fixture('cleanup'); } });
@@ -26,7 +26,7 @@ async function choose(page, label, search, text) { const field = page.getByRole(
 test('opening has no writes; actual rewrite boundary, permission isolation and diagnostic options', async () => {
   for (const width of [390, 768, 1440]) {
     const { page, context } = await pageAt(width);
-    try { await page.getByRole('heading', { name: 'البيانات الشخصية', exact: true }).waitFor(); await capture(page, `empty-${width}`); const future = page.getByRole('list', { name: 'مراحل الإضبارة' }).getByRole('button').filter({ hasText: 'المرحلة التالية' }); assert.equal(await future.count(), 3); for (const b of await future.all()) { assert.equal(await b.isDisabled(), true); await b.evaluate(el => el.click()); } }
+    try { await page.getByRole('heading', { name: 'البيانات الشخصية', exact: true }).waitFor(); await capture(page, `empty-${width}`); const future = page.getByRole('list', { name: 'مراحل الإضبارة' }).getByRole('button'); assert.equal(await future.count(), 6); for (const b of (await future.all()).slice(3)) { assert.equal(await b.isDisabled(), true); await b.evaluate(el => el.click()); } }
     finally { await context.close(); }
   }
   fixture('verify-empty');
@@ -63,10 +63,10 @@ test('real three-section wizard, saved/resumed draft, diagnoses, validation and 
       }
       await page.getByRole('button', { name: 'إضافة تشخيص إلى الدليل', exact: true }).first().click(); await page.getByRole('dialog').waitFor(); await page.getByRole('textbox', { name: 'كود التشخيص الجديد', exact: true }).fill(`WIZ-DX-${f.tag}-${width}`); await page.getByRole('textbox', { name: 'اسم التشخيص الجديد', exact: true }).fill(`تشخيص معالج اصطناعي ${f.tag} ${width}`); await capture(page, `inline-diagnosis-${width}`); await button(page, 'حفظ التشخيص'); await page.getByRole('dialog').waitFor({ state: 'hidden' }); assert.equal(await page.locator('[name="referral_reason"]').inputValue(), 'سبب إحالة اصطناعي');
       await capture(page, `multiple-diagnoses-${width}`);
-      const saved = page.waitForResponse(r => r.url().includes(`/dossiers/${d.id}/visits`) && r.request().method() === 'POST'); await button(page, 'حفظ الزيارة كمسودة'); const response = await saved; assert.equal(response.status(), 201, await response.text()); d = (await response.json()).data;
+      const saved = page.waitForResponse(r => r.url().includes(`/dossiers/${d.id}/visits`) && r.request().method() === 'POST'); await button(page, 'حفظ ومتابعة'); const response = await saved; assert.equal(response.status(), 201, await response.text()); d = (await response.json()).data;
       assert.equal(d.visit.diagnoses.length, 2); assert.equal(d.visit.diagnoses[0].diagnosed_on, null); assert.notEqual(d.visit.diagnoses[0].clinic_id, d.visit.diagnoses[1].clinic_id);
       const before = await api('GET', `/${d.id}`); assert.equal(before.body.data.visit_count, 1); assert.equal(before.body.data.latest_visit.status, 'draft');
-      await capture(page, `saved-${width}`); await page.goto(page.url() + '&section=not-a-step'); await page.getByRole('heading', { name: 'البيانات الشخصية', exact: true }).waitFor();
+      await capture(page, `saved-${width}`); await page.goto(page.url() + '&section=not-a-step'); await page.getByRole('heading', { name: 'المرفقات والمراجعة', exact: true }).waitFor();
       const nav = page.getByRole('list', { name: 'مراحل الإضبارة' }); await nav.getByRole('button', { name: /الزيارة والتشخيصات/ }).click(); assert.equal(await page.locator('[name="referral_reason"]').inputValue(), 'سبب إحالة اصطناعي'); await capture(page, `resumed-${width}`);
       await nav.getByRole('button', { name: /المعلومات الطبية والورمية/ }).click(); await page.locator('[name="clinical_history"]').fill('مسودتي المحلية لا تضيع');
       const current = (await api('GET', `/${d.id}/progress`)).body.data;
@@ -98,6 +98,7 @@ test('failed refresh, second conflict and saving a previous section never advanc
   const { page, context } = await pageAt(1440, `/dossiers/${id}/edit`);
   try {
     const nav = page.getByRole('list', { name: 'مراحل الإضبارة' });
+    await nav.getByRole('button', { name: /البيانات الشخصية/ }).click();
     await page.getByRole('heading', { name: 'البيانات الشخصية', exact: true }).waitFor();
     await nav.getByRole('button', { name: /المعلومات الطبية والورمية/ }).click();
     await page.locator('[name="clinical_history"]').fill('مسودة تنتظر أثناء تعديل القسم السابق');

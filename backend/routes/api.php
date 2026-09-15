@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\ClinicController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DoctorController;
+use App\Http\Controllers\Api\DossierCompletionController;
 use App\Http\Controllers\Api\DossierController;
 use App\Http\Controllers\Api\DossierWizardController;
 use Illuminate\Support\Facades\Route;
@@ -15,9 +16,28 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
     Route::prefix('dossiers')->name('dossiers.')->group(function () {
+        $completion = DossierCompletionController::class;
+        Route::post('/export/{format}', [$completion, 'report'])->whereIn('format', ['pdf', 'xlsx'])->name('export');
+        Route::post('/{dossier}/report/{format}', [$completion, 'report'])->whereNumber('dossier')->whereIn('format', ['pdf', 'xlsx'])->name('report');
+        Route::post('/{dossier}/visits/{visit}/report/{format}', [$completion, 'report'])->whereNumber(['dossier', 'visit'])->whereIn('format', ['pdf', 'xlsx'])->name('visits.report');
+        Route::post('/medications', [$completion, 'medication'])->name('medications.store');
+        Route::get('/{dossier}/visits/new', [$completion, 'newVisit'])->whereNumber('dossier')->name('visits.new');
+        Route::post('/{dossier}/visits/subsequent', [$completion, 'subsequent'])->whereNumber('dossier')->defaults('section', 'visit')->name('visits.subsequent');
+        Route::get('/{dossier}/visits/{visit}/progress', [$completion, 'progress'])->whereNumber(['dossier', 'visit'])->name('visits.progress');
+        foreach (['clinical', 'medications'] as $section) {
+            Route::put('/{dossier}/visits/{visit}/'.$section, [$completion, 'clinical'])->whereNumber(['dossier', 'visit'])->defaults('section', $section)->name('visits.'.$section);
+        }
+        Route::post('/{dossier}/visits/{visit}/review', [$completion, 'review'])->whereNumber(['dossier', 'visit'])->name('visits.review');
+        Route::post('/{dossier}/visits/{visit}/complete', [$completion, 'complete'])->whereNumber(['dossier', 'visit'])->name('visits.complete');
+        Route::get('/{dossier}/attachments', [$completion, 'attachments'])->whereNumber('dossier')->name('attachments');
+        Route::post('/{dossier}/visits/{visit}/uploads', [$completion, 'beginUpload'])->whereNumber(['dossier', 'visit'])->name('uploads.begin');
+        Route::post('/{dossier}/visits/{visit}/uploads/{upload}', [$completion, 'finishUpload'])->whereNumber(['dossier', 'visit', 'upload'])->name('uploads.finish');
+        Route::post('/{dossier}/visits/{visit}/uploads/{upload}/cancel', [$completion, 'cancelUpload'])->whereNumber(['dossier', 'visit', 'upload'])->name('uploads.cancel');
+        Route::get('/{dossier}/visits/{visit}/attachments/{attachment}/download', [$completion, 'download'])->whereNumber(['dossier', 'visit', 'attachment'])->name('attachments.download');
+        Route::post('/{dossier}/visits/{visit}/attachments/{attachment}/void', [$completion, 'voidAttachment'])->whereNumber(['dossier', 'visit', 'attachment'])->name('attachments.void');
         Route::post('/', [DossierWizardController::class, 'personal'])->defaults('section', 'personal')->name('store');
         Route::get('/options', [DossierWizardController::class, 'options'])->name('options');
-        foreach (['patients', 'cities', 'clinics', 'doctors', 'diagnoses'] as $lookup) {
+        foreach (['patients', 'cities', 'clinics', 'doctors', 'diagnoses', 'services', 'procedures', 'medications', 'outcomes'] as $lookup) {
             Route::get('/options/'.$lookup, [DossierWizardController::class, 'lookup'])->defaults('lookup', $lookup)->name('options.'.$lookup);
         }
         Route::post('/diagnoses', [DossierWizardController::class, 'diagnosis'])->name('diagnoses.store');

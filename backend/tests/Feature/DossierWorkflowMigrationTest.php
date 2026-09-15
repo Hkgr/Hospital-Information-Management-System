@@ -14,6 +14,9 @@ class DossierWorkflowMigrationTest extends TestCase
 
     public function test_populated_upgrade_preserves_period_fks_and_rollback_refuses_before_ddl(): void
     {
+        foreach (['2026_09_18_000002_add_dossier_upload_reservations.php', '2026_09_18_000001_extend_dossier_visit_workflow.php'] as $file) {
+            (require database_path('migrations/'.$file))->down();
+        }
         $m = require database_path('migrations/2026_09_17_000001_add_dossier_section_workflow.php');
         $m->down();
         try {

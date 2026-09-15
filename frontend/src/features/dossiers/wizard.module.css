@@ -20,6 +20,11 @@
 .section p { margin-block: 4px; }
 .section fieldset { min-inline-size: 0; }
 .section label { align-content: start; }
+.section > div { min-inline-size: 0; }
+.review { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; min-inline-size: 0; }
+.review > *, .diagnosis > * { min-inline-size: 0; }
+.review[hidden] { display: none; }
+.review dl > div { min-inline-size: 0; max-inline-size: 100%; overflow-wrap: anywhere; }
 .summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; background: #eaf3f5; border-radius: 12px; padding: 18px 22px; }
 .summary p { margin-block: 4px; }
 .actions { position: sticky; inset-block-end: 12px; z-index: 4; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; background: #fff; border: 1px solid #dce6ed; border-radius: 12px; padding: 16px; box-shadow: 0 5px 22px #203a4b12; }
@@ -27,7 +32,7 @@
 .checkGroup { display: flex; gap: 12px 20px; flex-wrap: wrap; }
 .form .checkGroup label { display: flex; align-items: center; gap: 8px; }
 .form input:is([type="radio"], [type="checkbox"]) { inline-size: 18px; block-size: 18px; flex: 0 0 18px; margin: 0; padding: 0; accent-color: var(--mbz-action); }
-.diagnosis { display: grid; gap: 20px; min-inline-size: 0; border-block-start: 1px solid #dce6ed; padding-block-start: 24px; }
+.diagnosis { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-inline-size: 0; border-block-start: 1px solid #dce6ed; padding-block-start: 24px; }
 .diagnosisHeader { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; align-items: center; }
 .error { color: #a0271c; font-size: 13px; }
 .form [aria-invalid="true"] { border-color: #bd4036; }

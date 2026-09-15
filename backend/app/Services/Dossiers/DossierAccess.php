@@ -33,12 +33,12 @@ class DossierAccess
     private function capabilities(User $user, array $permissions): array
     {
         $caps = [];
-        foreach (['create', 'personal.update', 'medical.update', 'visits.create', 'visits.update'] as $code) {
+        foreach (['create', 'personal.update', 'medical.update', 'visits.create', 'visits.update', 'clinical.update', 'attachments.view', 'attachments.upload', 'attachments.download', 'attachments.void', 'finalize', 'visits.complete', 'export'] as $code) {
             $caps[str_replace('.', '_', $code)] = in_array('dossiers.'.$code, $permissions, true);
         }
         $global = DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
-            ->where('g.user_id', $user->id)->where('r.is_active', true)->where('p.is_active', true)->whereIn('p.code', ['patients.search', 'patients.create', 'patients.update', 'diagnoses.create'])->pluck('p.code')->all();
-        foreach (['patients.search', 'patients.create', 'patients.update', 'diagnoses.create'] as $code) {
+            ->where('g.user_id', $user->id)->where('r.is_active', true)->where('p.is_active', true)->whereIn('p.code', ['patients.search', 'patients.create', 'patients.update', 'diagnoses.create', 'medications.create'])->pluck('p.code')->all();
+        foreach (['patients.search', 'patients.create', 'patients.update', 'diagnoses.create', 'medications.create'] as $code) {
             $caps[str_replace('.', '_', $code)] = in_array($code, $global, true);
         }
 

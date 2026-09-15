@@ -76,7 +76,10 @@ class DossierWorkflowTest extends TestCase
         DB::table('visits')->where('id', $v['id'])->update(['visit_date' => '2099-01-01']);
         $this->callApi('GET', '', ['search' => $d['code']])->assertJsonPath('data.0.procedure_count', 0);
         DB::table('visits')->where('id', $v['id'])->update(['visit_date' => '2001-03-02']);
-        DB::table('visits')->where('id', $v['id'])->update(['dossier_id' => null]);
+        // Remove this fixture's workflow link before constructing an unlinked visit;
+        // Phase 3 correctly prevents a live progress row from crossing dossiers.
+        DB::table('dossier_section_progress')->where('visit_id', $v['id'])->delete();
+        DB::table('visits')->where('id', $v['id'])->update(['dossier_id' => null, 'dossier_visit_kind' => null]);
         $this->callApi('GET', '', ['search' => $d['code']])->assertJsonPath('data.0.procedure_count', 0);
     }
 

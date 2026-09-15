@@ -18,6 +18,9 @@ class BloodBankPeriodMigrationTest extends TestCase
     {
         $migration = require database_path('migrations/2026_09_15_000001_make_blood_bank_periods_optional.php');
         $tables = ['blood_bank_events', 'blood_donations', 'blood_transfusions'];
+        // Dossier Phase 2 independently made visits optional. This blood-bank
+        // migration must preserve the installed visit contract, not restore an old one.
+        $visitPeriodNullable = collect(Schema::getColumns('visits'))->firstWhere('name', 'reporting_period_id')['nullable'];
         $migration->down(); // Reproduce the deployed NOT NULL schema before inserting historical data.
         try {
             $f = BloodBankFixture::make();
@@ -67,7 +70,7 @@ class BloodBankPeriodMigrationTest extends TestCase
                 $this->assertTrue(collect(Schema::getColumns($table))->firstWhere('name', 'reporting_period_id')['nullable']);
                 $this->assertEquals($after[$table], DB::table($table)->orderBy('id')->get()->all());
             }
-            $this->assertFalse(collect(Schema::getColumns('visits'))->firstWhere('name', 'reporting_period_id')['nullable']);
+            $this->assertSame($visitPeriodNullable, collect(Schema::getColumns('visits'))->firstWhere('name', 'reporting_period_id')['nullable']);
             $this->assertEquals($before['reporting_periods'], DB::table('reporting_periods')->where('facility_id', '!=', $other)->orderBy('id')->get()->all());
         } finally {
             // Existing TestDatabaseSafety guard runs before the test can reach destructive DDL.
