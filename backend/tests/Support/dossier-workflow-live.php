@@ -48,7 +48,7 @@ if ($mode === 'prepare') {
                 throw new RuntimeException('Unrelated domain changed: '.$table);
             }
         }
-        $new = DB::table('patient_dossiers')->where('facility_id', $f['facility'])->where('code', 'like', 'WIZ-'.$f['tag'].'-%')->get();
+        $new = DB::table('patient_dossiers as d')->join('patients as p', 'p.id', '=', 'd.patient_id')->where('d.facility_id', $f['facility'])->where('p.patient_code', 'like', 'WIZ-'.$f['tag'].'-%')->get(['d.*']);
         if ($new->count() < 3) {
             throw new RuntimeException('Expected all three viewport workflows.');
         }

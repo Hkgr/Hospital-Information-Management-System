@@ -22,7 +22,7 @@ if ($mode === 'prepare') {
         $f = DossierWorkflowFixture::make();
         $f['token'] = $f['user']->createToken('dossier-review-live', ['api'])->plainTextToken;
         $f['actors'] = [$f['user']->id];
-        foreach (['no_identity' => ['dossiers.create'], 'search' => ['dossiers.create', 'patients.search'], 'new_patient' => ['dossiers.create', 'patients.create'], 'visit_create' => ['dossiers.visits.create'], 'visit_update' => ['dossiers.visits.update']] as $name => $codes) {
+        foreach (['no_identity' => ['dossiers.create', 'dossiers.visits.create'], 'search' => ['dossiers.create', 'dossiers.visits.create', 'patients.search'], 'new_patient' => ['dossiers.create', 'dossiers.visits.create', 'patients.create'], 'visit_create' => ['dossiers.visits.create'], 'visit_update' => ['dossiers.visits.update']] as $name => $codes) {
             $u = User::factory()->create();
             $role = DB::table('roles')->insertGetId(['code' => 'REVIEW-'.$u->id.'-'.$f['tag'], 'name_ar' => 'اختبار صلاحيات المراجعة']);
             foreach (['dossiers.view', ...$codes] as $code) {

@@ -8,8 +8,8 @@ class DossierWorkflowActions
 {
     public static function creation(array $caps): array
     {
-        $reason = ! $caps['create'] ? 'تحتاج الإضافة صلاحية إنشاء إضبارة.'
-            : (! $caps['patients_search'] && ! $caps['patients_create'] ? 'إنشاء الإضبارة يحتاج أيضًا صلاحية البحث عن مريض أو إنشاء مريض جديد.' : null);
+        $reason = ! $caps['create'] || ! $caps['visits_create'] ? 'تحتاج الإضافة صلاحية إنشاء بطاقة مريض وتسجيل زيارة.'
+            : (! $caps['patients_search'] && ! $caps['patients_create'] ? 'إنشاء بطاقة المريض يحتاج أيضًا صلاحية البحث عن مريض أو إنشاء مريض جديد.' : null);
 
         return ['allowed' => $reason === null, 'reason' => $reason];
     }

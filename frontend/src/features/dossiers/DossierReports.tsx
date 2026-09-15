@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiRequest, AuthError } from "../auth/api";
 import styles from "../clinics/clinics.module.css";
 
-export const reportColumns={sequence:"م",code:"كود الإضبارة",patient_code:"كود المريض",name:"اسم المريض",diagnoses:"تشخيصات آخر زيارة",clinics:"العيادات",doctors:"الأطباء المسؤولون",visit_count:"عدد الزيارات",procedure_count:"عدد الإجراءات",status:"الحالة",latest_visit_date:"تاريخ آخر زيارة"};
+export const reportColumns={sequence:"م",code:"كود المريض",name:"اسم المريض",diagnoses:"تشخيصات آخر زيارة",clinics:"العيادات",doctors:"الأطباء المسؤولون",visit_count:"عدد الزيارات",procedure_count:"عدد الإجراءات",status:"الحالة",latest_visit_date:"تاريخ آخر زيارة"};
 export default function DossierReports({path,filters,ready,allowed}:{path:string;filters:string;ready:boolean;allowed:boolean}){
   const pending=useRef<AbortController|null>(null);const [busy,setBusy]=useState(false),[error,setError]=useState("");
   useEffect(()=>()=>pending.current?.abort(),[path,filters,ready]);

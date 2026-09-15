@@ -37,7 +37,7 @@ class DossierVisitWriter
                     DossierWrites::conflict('توجد زيارة أولية محفوظة؛ اجلب أحدث نسخة لاستكمالها بدل إنشاء زيارة أخرى.');
                 }
                 if ($d['status'] !== ($subsequent ? 'active' : 'draft')) {
-                    DossierWrites::conflict('إضافة الزيارة الأولية متاحة للإضبارة المسودة فقط.');
+                    DossierWrites::conflict('إضافة الزيارة الأولية متاحة لبطاقة المريض المسودة فقط.');
                 }
             }
             if ($input['visit_date'] > $f['today']) {

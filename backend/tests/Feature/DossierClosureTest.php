@@ -103,7 +103,7 @@ class DossierClosureTest extends DossierCompletionCase
     public function test_attachment_history_and_report_metadata_require_their_own_permission_even_when_voided(): void
     {
         Storage::fake('dossier_private');
-        $ticket = $this->callApi('POST', $this->path('/uploads'), ['lock_version' => 1, 'title' => 'مرفق اصطناعي', 'original_filename' => 'scan.png'])->assertCreated()->json('data.upload_id');
+        $ticket = $this->callApi('POST', $this->path('/uploads'), ['lock_version' => $this->s['visit']['lock_version'], 'title' => 'مرفق اصطناعي', 'original_filename' => 'scan.png'])->assertCreated()->json('data.upload_id');
         $file = UploadedFile::fake()->image('scan.png', 10, 10);
         $url = '/api/dossiers'.$this->path('/uploads/'.$ticket).'?facility_id='.$this->f['facility'];
         $id = $this->post($url, ['file' => $file], ['Authorization' => 'Bearer '.$this->token, 'Accept' => 'application/json'])->assertCreated()->json('data.attachment_id');
@@ -190,7 +190,7 @@ class DossierClosureTest extends DossierCompletionCase
             $this->assertContains($field, $parameters);
         }
         $report = $paths['/api/dossiers/{dossier}/report/{format}']['post'];
-        $this->assertStringContainsString('Full dossier history', $report['description']);
+        $this->assertStringContainsString('Full Patient Card history', $report['description']);
         $this->assertStringContainsString('actual visit_date', $report['description']);
     }
 

@@ -1,3 +1,5 @@
+> Current identity/registration contract: [Unified Patient Cards](patient-card-correction.md). This phase record describes the earlier implementation; the correction supersedes separate dossier codes, delayed initial-visit creation, and per-facility card identity. Medical progress/activation remain facility-local.
+
 # Patient dossiers — Phase 4 closure
 
 Built from `develop` at `cd00240ce2586023f11714d022890bee72812907`, after PR #22 was merged. This phase adds a read-only audit view and extends the existing individual dossier report. It does not change the wizard, completion/write contracts, AppShell, authentication, other clinical modules or FastAPI.
@@ -6,7 +8,7 @@ Built from `develop` at `cd00240ce2586023f11714d022890bee72812907`, after PR #22
 
 Existing dossier writers already record authoritative `audit_logs` through `DossierWrites`/`ClinicAudit`. Catalog audit is catalog-scoped and cannot safely serve a dossier; no existing dossier audit permission or endpoint existed. `DossierAuditHistory` resolves ownership from the persisted dossier, patient, visit and child records, never from an `old_values`/`new_values` claim. No audit rows or clinical snapshots are copied into another table.
 
-The previous individual dossier report excluded all voided facts. Its existing `POST /api/dossiers/{dossier}/report/{pdf|xlsx}` now supplies **تاريخ الإضبارة الكامل**, using the same Cairo/RTL sections, spreadsheet continuation layout and PDF renderer. List and individual-visit exports keep their previous scopes and endpoints.
+The previous individual dossier report excluded all voided facts. Its existing `POST /api/dossiers/{dossier}/report/{pdf|xlsx}` now supplies **تاريخ بطاقة المريض الكامل**, using the same Cairo/RTL sections, spreadsheet continuation layout and PDF renderer. List and individual-visit exports keep their previous scopes and endpoints.
 
 ## Audit contract and authorization
 

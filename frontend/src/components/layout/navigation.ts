@@ -1,12 +1,11 @@
-import { LuDroplet, LuFolderHeart, LuUsersRound, LuStethoscope, LuHospital, LuClipboardPlus, LuPill, LuChartNoAxesCombined, LuHistory } from "react-icons/lu";
+import { LuDroplet, LuFolderHeart, LuStethoscope, LuHospital, LuClipboardPlus, LuPill, LuChartNoAxesCombined, LuHistory } from "react-icons/lu";
 import type { IconType } from "react-icons";
 
 type NavigationItem = { label: string; icon: IconType; href?: string; permission?: string };
 
 // Missing routes are presentation-only, not permissions or fabricated modules.
 export const primaryNavigation: NavigationItem[] = [
-  { label: "الإضبارات", icon: LuFolderHeart, href: "/dossiers", permission: "dossiers.view" },
-  { label: "المرضى", icon: LuUsersRound },
+  { label: "بطاقات المرضى", icon: LuFolderHeart, href: "/dossiers", permission: "dossiers.view" },
   { label: "الأطباء", icon: LuStethoscope, href: "/doctors", permission: "doctors.view" },
   { label: "العيادات", icon: LuHospital, href: "/clinics", permission: "clinics.view" },
   { label: "الخدمات والإجراءات", icon: LuClipboardPlus, href: "/services-procedures", permission: "catalog.view" },

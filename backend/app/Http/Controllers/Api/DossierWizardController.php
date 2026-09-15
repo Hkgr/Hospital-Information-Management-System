@@ -83,7 +83,7 @@ class DossierWizardController extends Controller
             $this->access->global($r->user(), 'patients.search');
             abort_unless(in_array('dossiers.create', $f['permissions'], true), 403);
             $q = DB::table('patients')->where('status', 'active')->when($search === '', fn ($q) => $q->whereRaw('1=0'))
-                ->where(fn ($q) => $q->whereRaw("patient_code LIKE ? ESCAPE '!'", [$like])->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', first_name, family_name), '[[:space:]]+', ' ') LIKE ? ESCAPE '!'", [$like]))
+                ->where(fn ($q) => $q->whereRaw("patient_code LIKE ? ESCAPE '!'", [$like])->orWhereExists(fn ($a) => $a->selectRaw('1')->from('patient_dossiers as legacy')->whereColumn('legacy.patient_id', 'patients.id')->whereRaw("legacy.code LIKE ? ESCAPE '!'", [$like]))->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', first_name, family_name), '[[:space:]]+', ' ') LIKE ? ESCAPE '!'", [$like]))
                 ->select('id', 'patient_code as code')->selectRaw("CONCAT_WS(' ', first_name, family_name) as name_ar")
                 ->selectSub(DB::table('patient_dossiers')->whereColumn('patient_id', 'patients.id')->where('facility_id', $f['id'])->select('id')->limit(1), 'dossier_id');
         } elseif ($kind === 'doctors') {

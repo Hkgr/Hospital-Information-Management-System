@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class DossierReports
 {
-    public const COLUMNS = ['sequence' => 'م', 'code' => 'كود الإضبارة', 'patient_code' => 'كود المريض', 'name' => 'اسم المريض', 'diagnoses' => 'تشخيصات آخر زيارة', 'clinics' => 'العيادات', 'doctors' => 'الأطباء المسؤولون', 'visit_count' => 'عدد الزيارات', 'procedure_count' => 'عدد الإجراءات', 'status' => 'حالة الإضبارة', 'latest_visit_date' => 'تاريخ آخر زيارة'];
+    public const COLUMNS = ['sequence' => 'م', 'code' => 'كود المريض', 'name' => 'اسم المريض', 'diagnoses' => 'تشخيصات آخر زيارة', 'clinics' => 'العيادات', 'doctors' => 'الأطباء المسؤولون', 'visit_count' => 'عدد الزيارات', 'procedure_count' => 'عدد الإجراءات', 'status' => 'حالة بطاقة المريض', 'latest_visit_date' => 'تاريخ آخر زيارة'];
 
     private function section(string $title, array $labels, array $rows, string $note = '', array $types = []): array
     {
@@ -69,7 +69,7 @@ class DossierReports
                 }
                 $labels = array_intersect_key(self::COLUMNS, array_flip($filters['columns'] ?? array_keys(self::COLUMNS)));
 
-                return [[$this->section('قائمة الإضبارات', $labels, $rows, 'جميع النتائج المطابقة للفلاتر؛ لا تقتصر على الصفحة المعروضة.', ['sequence' => 'integer', 'visit_count' => 'integer', 'procedure_count' => 'integer', 'latest_visit_date' => 'date'])], null, false];
+                return [[$this->section('قائمة بطاقات المرضى', $labels, $rows, 'جميع النتائج المطابقة للفلاتر؛ لا تقتصر على الصفحة المعروضة.', ['sequence' => 'integer', 'visit_count' => 'integer', 'procedure_count' => 'integer', 'latest_visit_date' => 'date'])], null, false];
             }
             $d = $queries->detail($f, $dossier);
             $identity = ['id' => $dossier, 'code' => $d['code'], 'name' => trim($d['patient']['first_name'].' '.$d['patient']['family_name'])];
@@ -91,7 +91,7 @@ class DossierReports
             }
             $this->limit($visits->count(), config('dossiers.report_detail_limit'));
             $draft = $visit ? $visits->first()->status === 'draft' : $d['status'] === 'draft';
-            $sections = [$this->facts('هوية الإضبارة', ['كود الإضبارة' => $d['code'], 'تاريخ فتح الإضبارة' => $d['opening_date'], 'المريض' => $identity['name'], 'كود المريض' => $d['patient']['patient_code'], 'حالة الإضبارة' => $d['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'فعالة', 'آخر زيارة فعلية' => $d['latest_visit'] ? ($d['latest_visit']['visit_no'].' · '.$d['latest_visit']['visit_date'].' · '.($d['latest_visit']['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'مكتملة')) : 'لا توجد زيارة مسجلة'], $identity, ['تاريخ فتح الإضبارة' => 'date'])];
+            $sections = [$this->facts('هوية بطاقة المريض', ['كود المريض' => $d['code'], 'تاريخ فتح بطاقة المريض' => $d['opening_date'], 'المريض' => $identity['name'], 'حالة بطاقة المريض' => $d['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'فعالة', 'آخر زيارة فعلية' => $d['latest_visit'] ? ($d['latest_visit']['visit_no'].' · '.$d['latest_visit']['visit_date'].' · '.($d['latest_visit']['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'مكتملة')) : 'لا توجد زيارة مسجلة'], $identity, ['تاريخ فتح بطاقة المريض' => 'date'])];
             $labels = ['first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم', 'birth_date' => 'الميلاد', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل', 'governorate' => 'المحافظة', 'city' => 'المدينة', 'address_line' => 'العنوان', 'displacement_status' => 'حالة النزوح'];
             $values = ['unknown' => 'غير معروف', 'male' => 'ذكر', 'female' => 'أنثى', 'exact' => 'دقيق', 'year_only' => 'السنة فقط', 'estimated' => 'تقديري', 'resident' => 'مقيم', 'idp' => 'نازح', 'returnee' => 'عائد'];
             $personal = [];
@@ -157,15 +157,15 @@ class DossierReports
 
             return [$sections, $identity, $draft];
         });
-        $meta = app(ReportMetadata::class)->make($r, $f, $filters, self::COLUMNS, 'dossier', $dossier !== null, 'بيانات حالية للإضبارة ووقائع تاريخية لكل زيارة؛ الوصفة منفصلة عن الصرف.');
-        $meta['title'] = ($visit ? 'تقرير زيارة' : ($dossier ? 'تاريخ الإضبارة الكامل' : 'قائمة الإضبارات')).($draft ? ' — مسودة — غير مكتملة' : '');
+        $meta = app(ReportMetadata::class)->make($r, $f, $filters, self::COLUMNS, 'dossier', $dossier !== null, 'بيانات حالية لبطاقة المريض ووقائع تاريخية لكل زيارة؛ الوصفة منفصلة عن الصرف.');
+        $meta['title'] = ($visit ? 'تقرير زيارة' : ($dossier ? 'تاريخ بطاقة المريض الكامل' : 'قائمة بطاقات المرضى')).($draft ? ' — مسودة — غير مكتملة' : '');
         $meta['definition_label'] = 'نطاق التقرير';
         $meta['filters'] = $dossier ? 'تقرير فردي ضمن المنشأة المصرح بها' : implode(' | ', array_map(fn ($key) => ['search' => 'البحث', 'status' => 'الحالة', 'oncology' => 'ورمي', 'visits' => 'الزيارات', 'from' => 'من', 'to' => 'إلى', 'sort' => 'الترتيب', 'direction' => 'الاتجاه'][$key].': '.($filters[$key] ?? 'الكل'), ['search', 'status', 'oncology', 'visits', 'from', 'to', 'sort', 'direction']));
         if ($dossier && ! $visit) {
             $meta['filters'] .= '؛ تاريخ الزيارة الفعلي: '.($filters['from'] ?? 'البداية').' — '.($filters['to'] ?? 'اليوم').'؛ يشمل الوقائع المبطلة وأسبابها؛ كل واقعة تحتفظ بتاريخها الخاص. القيم السابقة للتصحيحات متاحة في سجل التغييرات بصلاحيته المستقلة.';
         }
 
-        return ['metadata' => $meta, 'detail' => $dossier !== null, 'identity' => $identity, 'columns' => array_keys($sections[0]['labels']), 'sections' => $sections, 'moduleLabel' => 'إضبارات المرضى', 'printWidth' => $dossier ? 186 : 273, 'reportNote' => $draft ? 'مسودة — غير مكتملة؛ لا تمثل سجلًا طبيًا مكتملًا.' : 'معلومات الإضبارة الحالية مميزة عن وقائع زياراتها.'];
+        return ['metadata' => $meta, 'detail' => $dossier !== null, 'identity' => $identity, 'columns' => array_keys($sections[0]['labels']), 'sections' => $sections, 'moduleLabel' => 'بطاقات المرضى', 'printWidth' => $dossier ? 186 : 273, 'reportNote' => $draft ? 'مسودة — غير مكتملة؛ لا تمثل سجلًا طبيًا مكتملًا.' : 'معلومات بطاقة المريض الحالية مميزة عن وقائع زياراتها.'];
     }
 
     public function export(Request $r, array $f, array $filters, string $format, ?int $dossier = null, ?int $visit = null)

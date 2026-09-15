@@ -1,3 +1,5 @@
+> Current identity/registration contract: [Unified Patient Cards](patient-card-correction.md). This phase record describes the earlier implementation; the correction supersedes separate dossier codes, delayed initial-visit creation, and per-facility card identity. Medical progress/activation remain facility-local.
+
 # Patient dossiers — Phase 3
 
 This extends the existing six-step arrow wizard. Patient identity and persistent medical/oncology data remain dossier-level; diagnoses, services, procedures, prescriptions, outcomes and private attachments belong to a selected visit. No completed-visit correction lifecycle is introduced: completed visits are read-only.

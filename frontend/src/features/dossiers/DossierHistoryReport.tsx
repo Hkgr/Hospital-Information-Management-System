@@ -15,7 +15,7 @@ export default function DossierHistoryReport({ dossier, facility, ready }: { dos
     window.history.replaceState(null, "", `${pathname}?${next}`);
   }
   const invalid = !!from && !!to && to < from;
-  return <section className={styles.panel} aria-label="تاريخ الإضبارة الكامل"><h2>تاريخ الإضبارة الكامل</h2><p className={styles.hint}>يشمل الزيارات ووقائعها المحفوظة، بما فيها الملغاة وأسبابها. المدة اختيارية وتطبق على تاريخ الزيارة الفعلي. بيانات الشخص والملف الطبي هي الحالية؛ القيم السابقة للتصحيحات في سجل التغييرات بصلاحيته المستقلة.</p>
+  return <section className={styles.panel} aria-label="تاريخ بطاقة المريض الكامل"><h2>تاريخ بطاقة المريض الكامل</h2><p className={styles.hint}>يشمل الزيارات ووقائعها المحفوظة، بما فيها الملغاة وأسبابها. المدة اختيارية وتطبق على تاريخ الزيارة الفعلي. بيانات الشخص والملف الطبي هي الحالية؛ القيم السابقة للتصحيحات في سجل التغييرات بصلاحيته المستقلة.</p>
     <div className={styles.filters}><label>تقرير الزيارات من<input type="date" value={from} onChange={e => filter("from", e.target.value)} /></label><label>تقرير الزيارات إلى<input type="date" value={to} onChange={e => filter("to", e.target.value)} /></label></div>
     {invalid && <p role="alert">تاريخ النهاية يجب ألا يسبق تاريخ البداية.</p>}
     <DossierReports path={`dossiers/${dossier}/report`} filters={filters.toString()} ready={ready && !invalid} allowed />

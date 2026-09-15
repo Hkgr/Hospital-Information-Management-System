@@ -33,12 +33,20 @@ class DossierWorkflowTest extends TestCase
 
     private function personal(array $overrides = []): array
     {
-        return $overrides + ['request_id' => (string) Str::uuid(), 'person_mode' => 'new', 'code' => ' HIST-2000 ', 'opening_date' => '2000-02-03', 'first_name' => 'أحمد', 'family_name' => 'محمد %_', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
+        return $overrides + ['request_id' => (string) Str::uuid(), 'person_mode' => 'new', 'code' => ' HIST-2000 ', 'opening_date' => '2000-02-03', 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'first_name' => 'أحمد', 'family_name' => 'محمد %_', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
     }
 
-    private function create(): array
+    private function legacyCard(): array
     {
-        return $this->callApi('POST', '', $this->personal())->assertCreated()->json('data');
+        // These section regressions also preserve support for pre-correction contexts
+        // without visits. New atomic registrations are covered separately below
+        // and in PatientCardTest; no application save creates this legacy state.
+        $id = $this->f['dossiers'][9];
+        $patient = $this->f['patients'][10];
+        DB::table('patients')->where('id', $patient)->update(['patient_code' => 'HIST-2000', 'first_name' => 'أحمد', 'family_name' => 'محمد %_', 'search_name' => 'أحمد محمد %_']);
+        DB::table('patient_dossiers')->where('id', $id)->update(['code' => 'HIST-2000', 'status' => 'draft']);
+
+        return $this->callApi('GET', "/$id/progress")->assertOk()->json('data');
     }
 
     private function visit(array $overrides = []): array
@@ -53,7 +61,7 @@ class DossierWorkflowTest extends TestCase
 
     public function test_review_procedure_counts_are_scoped_and_not_multiplied_by_diagnoses(): void
     {
-        $d = $this->create();
+        $d = $this->legacyCard();
         $v = $this->callApi('POST', "/{$d['id']}/visits", $this->visit(['diagnoses' => [$this->diagnosis(), $this->diagnosis(['diagnosed_on' => '2000-01-01'])]]))->assertCreated()->json('data.visit');
         $copy = (array) DB::table('visits')->where('id', $v['id'])->first();
         unset($copy['id']);
@@ -85,7 +93,7 @@ class DossierWorkflowTest extends TestCase
 
     public function test_review_date_changes_revalidate_retained_historical_contexts_atomically(): void
     {
-        $d = $this->create();
+        $d = $this->legacyCard();
         $v = $this->callApi('POST', "/{$d['id']}/visits", $this->visit(['diagnoses' => [$this->diagnosis()]]))->assertCreated()->json('data.visit');
         DB::table('clinic_staff')->where('clinic_id', $this->f['clinics'][0])->update(['starts_on' => '2000-01-01', 'ends_on' => '2002-01-01']);
         DB::table('staff')->where('id', $this->f['workflow_doctors'][0])->update(['is_active' => false]);
@@ -114,7 +122,7 @@ class DossierWorkflowTest extends TestCase
         DB::table('global_user_roles')->where('user_id', $this->f['user']->id)->delete();
         $this->callApi('GET', '/options')->assertOk()->assertJsonPath('data.creation.allowed', false);
         DB::table('global_user_roles')->insert(['user_id' => $this->f['user']->id, 'role_id' => $this->f['dossier_role']]);
-        $d = $this->create();
+        $d = $this->legacyCard();
         $this->callApi('GET', "/{$d['id']}/progress")->assertJsonPath('data.workflow.visit.action', 'create');
         $v = $this->callApi('POST', "/{$d['id']}/visits", $this->visit())->assertCreated()->json('data.visit');
         $this->callApi('GET', "/{$d['id']}/progress")->assertJsonPath('data.workflow.visit.action', 'update')->assertJsonPath('data.workflow.visit.id', $v['id']);
@@ -126,9 +134,9 @@ class DossierWorkflowTest extends TestCase
 
     public function test_review_existing_dossier_is_explicit_conflict_without_writes(): void
     {
-        $d = $this->create();
+        $d = $this->legacyCard();
         $before = DB::table('patient_dossiers')->orderBy('id')->get()->toJson();
-        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'code' => 'MY-UNSAVED-CODE', 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.code', 'DOSSIER_ALREADY_EXISTS')->assertJsonPath('error.existing_dossier_id', $d['id']);
+        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.code', 'DOSSIER_ALREADY_EXISTS')->assertJsonPath('error.existing_dossier_id', $d['id']);
         $this->assertSame($before, DB::table('patient_dossiers')->orderBy('id')->get()->toJson());
     }
 
@@ -141,7 +149,7 @@ class DossierWorkflowTest extends TestCase
         $this->callApi('POST', '', array_replace($input, ['code' => 'different']))->assertConflict();
         $this->callApi('POST', '', $this->personal())->assertUnprocessable()->assertJsonValidationErrors('code');
         $this->assertSame($before + 1, DB::table('patients')->count());
-        $this->assertSame(0, DB::table('visits')->where('dossier_id', $d['id'])->count());
+        $this->assertSame(1, DB::table('visits')->where('dossier_id', $d['id'])->count());
         $this->callApi('GET', '', ['search' => 'HIST-2000'])->assertOk()->assertJsonPath('data.0.id', $d['id']);
         $this->callApi('GET', '/'.$d['id'].'/progress')->assertOk()->assertJsonPath('data.patient.first_name', 'أحمد');
         $this->callApi('POST', '', $this->personal(['code' => 'SECOND']))->assertCreated();
@@ -150,19 +158,19 @@ class DossierWorkflowTest extends TestCase
 
     public function test_existing_patient_search_literal_wildcards_returns_existing_and_never_replaces_identity(): void
     {
-        $d = $this->create();
+        $d = $this->legacyCard();
         foreach (['أحمد محمد', '  أحمد   محمد  ', '%_', 'أحمد', 'محمد', $d['patient']['patient_code']] as $search) {
             $this->callApi('GET', '/options/patients', ['search' => $search])->assertOk()->assertJsonPath('data.0.id', $d['patient']['id']);
         }
         $this->callApi('GET', '/options/patients', ['search' => '%_'])->assertJsonCount(1, 'data');
         $this->callApi('GET', '/options/patients', ['search' => ''])->assertJsonCount(0, 'data');
-        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'code' => 'NOT-USED', 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.existing_dossier_id', $d['id']);
+        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.existing_dossier_id', $d['id']);
         $this->callApi('PUT', '/'.$d['id'].'/personal', ['patient_id' => $this->f['patients'][2]])->assertUnprocessable()->assertJsonValidationErrors('patient_id');
     }
 
     public function test_medical_history_progress_audit_conflicts_and_prior_save_preserve_visit(): void
     {
-        $d = $this->create();
+        $d = $this->legacyCard();
         $id = $d['id'];
         $medical = ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_oncology' => true, 'clinical_history' => 'قصة محفوظة', 'history' => ['medical', 'family'], 'treatment' => ['chemotherapy'], 'previous_examinations' => 'فحص سابق', 'medication_source' => 'other_organization', 'other_organization' => 'جهة'];
         $this->callApi('PUT', "/$id/medical", $medical)->assertOk()->assertJsonPath('data.lock_version', 2);
@@ -178,7 +186,7 @@ class DossierWorkflowTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['actor_id' => $this->f['user']->id, 'entity_type' => 'dossier_medical', 'entity_id' => $id]);
     }
 
-    public function test_existing_patient_creates_only_one_dossier_per_facility_and_preserves_blood_links(): void
+    public function test_existing_card_adds_only_one_local_context_per_facility_and_preserves_blood_links(): void
     {
         $patient = $this->f['patients'][1];
         $facility = $this->f['other'];
@@ -186,7 +194,7 @@ class DossierWorkflowTest extends TestCase
         $beforePatients = DB::table('patients')->orderBy('id')->get()->toJson();
         $beforeBlood = DB::table('blood_transfusions')->orderBy('id')->get()->toJson();
         $this->assertTrue(DB::table('blood_transfusions')->where('patient_id', $patient)->exists());
-        $input = ['facility_id' => $facility, 'request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $patient, 'code' => 'EXISTING-1990', 'opening_date' => '1990-01-02'];
+        $input = ['facility_id' => $facility, 'request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $patient, 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'opening_date' => '1990-01-02'];
         $d = $this->callApi('POST', '', $input)->assertCreated()->assertJsonPath('data.patient.id', $patient)->json('data');
         $this->callApi('POST', '', array_replace($input, ['request_id' => (string) Str::uuid()]))->assertConflict()->assertJsonPath('error.existing_dossier_id', $d['id']);
         $this->assertSame(1, DB::table('patient_dossiers')->where('facility_id', $facility)->where('patient_id', $patient)->count());
@@ -197,7 +205,7 @@ class DossierWorkflowTest extends TestCase
 
     public function test_medication_organization_is_required_only_for_the_other_source(): void
     {
-        $d = $this->create();
+        $d = $this->legacyCard();
         $medical = ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_oncology' => true, 'medication_source' => 'other_organization'];
         $this->callApi('PUT', "/{$d['id']}/medical", $medical)->assertUnprocessable()->assertJsonValidationErrors('other_organization');
         foreach (['ministry_of_health', 'al_rowad', 'personal_expense', 'none', null] as $source) {
@@ -209,7 +217,7 @@ class DossierWorkflowTest extends TestCase
 
     public function test_draft_visit_has_no_period_no_diagnoses_and_validates_referral_future_and_duplicate_creation(): void
     {
-        $d = $this->create();
+        $d = $this->legacyCard();
         $id = $d['id'];
         $before = DB::table('reporting_periods')->orderBy('id')->get()->toJson();
         DB::table('reporting_periods')->update(['status' => 'locked']);
@@ -230,7 +238,7 @@ class DossierWorkflowTest extends TestCase
 
     public function test_multiple_diagnoses_historical_contexts_unknown_dates_omission_voiding_and_duplicate_prevention(): void
     {
-        $d = $this->create();
+        $d = $this->legacyCard();
         $id = $d['id'];
         $rows = [$this->diagnosis(), $this->diagnosis(['clinic_id' => $this->f['clinics'][1], 'diagnosing_staff_id' => $this->f['workflow_doctors'][1]])];
         $v = $this->callApi('POST', "/$id/visits", $this->visit(['diagnoses' => $rows]))->assertCreated()->assertJsonPath('data.progress.1.state', 'not_started')->assertJsonPath('data.progress.2.state', 'saved')->json('data.visit');
@@ -278,7 +286,8 @@ class DossierWorkflowTest extends TestCase
         $f = DB::table('facilities')->insertGetId(['code' => 'NO-PERIOD-'.$this->f['tag'], 'name_ar' => 'مشفى اختبار بلا فترات']);
         DB::table('facility_user_roles')->insert(['facility_id' => $f, 'user_id' => $this->f['user']->id, 'role_id' => $this->f['dossier_role']]);
         $d = $this->callApi('POST', '', $this->personal(['facility_id' => $f]))->assertCreated()->json('data');
-        $this->callApi('POST', '/'.$d['id'].'/visits', $this->visit(['facility_id' => $f]))->assertCreated();
+        $this->assertSame('draft', $d['visit']['status']);
+        $this->assertSame(1, DB::table('visits')->where('dossier_id', $d['id'])->count());
         $this->assertSame(0, DB::table('reporting_periods')->where('facility_id', $f)->count());
         $id = $this->f['dossiers'][1];
         $v = DB::table('visits')->where('facility_id', $this->f['facility'])->where('patient_id', $this->f['patients'][2])->first();

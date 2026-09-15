@@ -16,7 +16,7 @@ class DossierAccess
                 return $entry['facility'] + ['permissions' => $entry['permissions'], 'capabilities' => $this->capabilities($user, $entry['permissions']), 'today' => now($entry['facility']['timezone'])->toDateString()];
             }
         }
-        throw new HttpResponseException(response()->json(['error' => ['code' => 'DOSSIER_ACCESS_DENIED', 'message' => 'لا يتوفر لك وصول إلى إضبارات هذه المنشأة.']], 403));
+        throw new HttpResponseException(response()->json(['error' => ['code' => 'DOSSIER_ACCESS_DENIED', 'message' => 'لا يتوفر لك وصول إلى بطاقات المرضى في هذه المنشأة.']], 403));
     }
 
     public function global(User $user, string $permission, bool $require = true): bool

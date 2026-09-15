@@ -100,7 +100,7 @@ class DossierApiTest extends TestCase
         $this->api('', ['sort' => 'password'])->assertUnprocessable();
         $this->api('', [], $this->f['user']->createToken('no-ability', [])->plainTextToken)->assertForbidden();
         $this->app['auth']->forgetGuards();
-        $this->postJson('/api/dossiers', ['facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $this->f['patients'][1], 'code' => 'FORBIDDEN', 'opening_date' => '2000-01-01'], ['Authorization' => 'Bearer '.$this->token])->assertForbidden();
+        $this->postJson('/api/dossiers', ['facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $this->f['patients'][1], 'visit_date' => '2001-01-01', 'visit_type_id' => DB::table('visits')->where('id', $this->f['latest_visit'])->value('visit_type_id'), 'opening_date' => '2000-01-01'], ['Authorization' => 'Bearer '.$this->token])->assertForbidden();
         DB::table('facilities')->where('id', $this->f['facility'])->update(['is_active' => false]);
         $this->api()->assertForbidden();
     }

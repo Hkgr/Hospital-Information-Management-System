@@ -42,7 +42,7 @@ class DossierCompletionSafetyTest extends DossierCompletionCase
         $rx = $this->rx();
         $rx['prescribed_on'] = '2099-01-01';
         $this->saveSection('medications', ['prescription' => $rx, 'outcome' => null])->assertUnprocessable()->assertJsonValidationErrors('prescription.prescribed_on');
-        $this->assertDatabaseCount('visit_prescriptions', 0);
+        $this->assertSame(0, DB::table('visit_prescriptions')->where('visit_id', $this->s['visit']['id'])->count());
     }
 
     public function test_a_late_invalid_row_rolls_back_all_rows_versions_and_progress(): void
@@ -57,7 +57,7 @@ class DossierCompletionSafetyTest extends DossierCompletionCase
     public function test_upload_size_excel_types_scope_pagination_and_cancelled_tickets(): void
     {
         Storage::fake('dossier_private');
-        $ticket = $this->callApi('POST', $this->path('/uploads'), ['lock_version' => 1, 'title' => 'حجم', 'original_filename' => 'large.pdf'])->assertCreated()->json('data.upload_id');
+        $ticket = $this->callApi('POST', $this->path('/uploads'), ['lock_version' => $this->s['visit']['lock_version'], 'title' => 'حجم', 'original_filename' => 'large.pdf'])->assertCreated()->json('data.upload_id');
         config(['dossiers.attachment_max_kb' => 1]);
         $this->upload($ticket, UploadedFile::fake()->createWithContent('large.pdf', '%PDF-1.4'.str_repeat('a', 2048)))->assertUnprocessable();
         $this->callApi('POST', $this->path("/uploads/$ticket/cancel"))->assertNoContent();

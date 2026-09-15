@@ -18,21 +18,42 @@ class DossierPersonalWriter
     public function save(Request $r, array $f, array $input, ?int $id): int
     {
         $this->access->global($r->user(), $id ? 'patients.update' : ($input['person_mode'] === 'new' ? 'patients.create' : 'patients.search'));
+        if (! $id) {
+            $this->access->facility($r->user(), $f['id'], 'visits.create');
+        }
         try {
             return $this->writes->once($r, $f, $input, 'personal:'.($id ?? 'new'), function () use ($r, $f, $input, $id) {
                 $old = $id ? $this->writes->dossier($f, $id) : null;
                 if ($old) {
                     DossierWrites::version($old, $input['lock_version']);
                 }
+                if (! $old) {
+                    if ($input['visit_date'] > $f['today']) {
+                        throw ValidationException::withMessages(['visit_date' => 'لا يمكن تسجيل زيارة فعلية مستقبلية.']);
+                    }
+                    if (! DB::table('visit_types')->where('id', $input['visit_type_id'])->where('is_active', true)->exists()) {
+                        throw ValidationException::withMessages(['visit_type_id' => 'اختر نوع زيارة فعالًا من الدليل.']);
+                    }
+                    // Serialize canonical-code/legacy-code reservations across facilities.
+                    DB::table('number_sequences')->insertOrIgnore(['sequence_key' => 'patient_card', 'scope_key' => 'global', 'period_key' => 'all']);
+                    DB::table('number_sequences')->where('sequence_key', 'patient_card')->where('scope_key', 'global')->where('period_key', 'all')->lockForUpdate()->first();
+                }
                 $patientId = $old['patient_id'] ?? ($input['patient_id'] ?? null);
                 $patient = $patientId ? DB::table('patients')->where('id', $patientId)->where('status', 'active')->lockForUpdate()->first() : null;
                 if ($patientId) {
                     abort_unless($patient, 404);
                 }
+                if ($old && $input['code'] !== $patient->patient_code) {
+                    throw ValidationException::withMessages(['code' => 'كود المريض ثابت؛ لا يُغيَّر من تعديل بيانات البطاقة.']);
+                }
+                if (! $patient && (DB::table('patients')->where('patient_code', $input['code'])->exists()
+                    || DB::table('patient_dossiers')->where('code', $input['code'])->exists())) {
+                    throw ValidationException::withMessages(['code' => 'الكود مستخدم حاليًا أو محفوظ كمعرّف تاريخي. اختر المريض الموجود صراحة أو راجع المسؤول.']);
+                }
                 if (! $id && $patient) {
                     $existing = DB::table('patient_dossiers')->where('patient_id', $patientId)->where('facility_id', $f['id'])->value('id');
                     if ($existing) {
-                        throw new HttpResponseException(response()->json(['error' => ['code' => 'DOSSIER_ALREADY_EXISTS', 'message' => 'للمريض إضبارة في هذا المشفى. افتح الإضبارة الموجودة أو اختر مريضًا آخر؛ لم تُحفظ بيانات المسودة الجديدة.', 'existing_dossier_id' => (int) $existing]], 409));
+                        throw new HttpResponseException(response()->json(['error' => ['code' => 'DOSSIER_ALREADY_EXISTS', 'message' => 'للمريض ملف طبي محفوظ في هذا المشفى. افتح بطاقة المريض لإضافة زيارة أو استكمال المسودة؛ لم تُحفظ المسودة الجديدة.', 'existing_dossier_id' => (int) $existing]], 409));
                     }
                 }
                 if ($id || ! $patient) {
@@ -53,15 +74,26 @@ class DossierPersonalWriter
                     if ($patient) {
                         DB::table('patients')->where('id', $patientId)->update($fields);
                     } else {
-                        $patientId = DB::table('patients')->insertGetId($fields + ['patient_code' => 'P-'.Str::uuid(), 'identity_document_type' => 'unknown', 'identity_check_status' => 'pending', 'created_by' => $r->user()->id, 'created_at' => now()]);
+                        $patientId = DB::table('patients')->insertGetId($fields + ['patient_code' => $input['code'], 'identity_document_type' => 'unknown', 'identity_check_status' => 'pending', 'created_by' => $r->user()->id, 'created_at' => now()]);
                     }
                     $this->writes->audit($r, $f, 'patient', $patientId, $patient ? Arr::only((array) $patient, [...SaveBloodProfile::PERSON, 'lock_version']) : null, $fields);
                 }
-                $values = Arr::only($input, ['code', 'opening_date']) + ['updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($old['lock_version'] ?? 0) + 1];
+                // patients is the one global card. patient_dossiers rows remain local
+                // clinical contexts; their historical codes are immutable aliases.
+                $values = Arr::only($input, ['opening_date']) + ['updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($old['lock_version'] ?? 0) + 1];
                 if ($id) {
                     DB::table('patient_dossiers')->where('id', $id)->update($values);
                 } else {
-                    $id = DB::table('patient_dossiers')->insertGetId($values + ['facility_id' => $f['id'], 'patient_id' => $patientId, 'status' => 'draft', 'entered_by' => $r->user()->id, 'created_at' => now()]);
+                    $id = DB::table('patient_dossiers')->insertGetId($values + ['code' => null, 'facility_id' => $f['id'], 'patient_id' => $patientId, 'status' => 'draft', 'entered_by' => $r->user()->id, 'created_at' => now()]);
+                    $visit = ['facility_id' => $f['id'], 'patient_id' => $patientId, 'dossier_id' => $id,
+                        'visit_date' => $input['visit_date'], 'visit_type_id' => $input['visit_type_id'],
+                        'dossier_visit_kind' => 'initial', 'reporting_period_id' => null,
+                        'visit_no' => 'V-'.Str::uuid(), 'client_request_id' => $input['request_id'],
+                        'entered_by' => $r->user()->id, 'status' => 'draft', 'created_at' => now(), 'updated_at' => now()];
+                    $visitId = DB::table('visits')->insertGetId($visit);
+                    DB::table('patient_dossiers')->where('id', $id)->update(['registration_visit_id' => $visitId]);
+                    $this->writes->progress($r, $f, $id, 'visit', 'in_progress', $visitId);
+                    $this->writes->audit($r, $f, 'dossier_visit', $visitId, null, $visit);
                 }
                 $this->writes->progress($r, $f, $id, 'personal');
                 $this->writes->audit($r, $f, 'patient_dossier', $id, $old, $this->writes->dossier($f, $id));

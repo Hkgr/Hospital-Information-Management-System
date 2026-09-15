@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
 const base = 'http://127.0.0.1:3194'; let f, browser, dossier;
-const gallery = new URL('../docs/reviews/dossiers-phase-four/', import.meta.url);
+const gallery = new URL('../.superdesign/tmp/patient-card-regressions/dossiers-phase-four/', import.meta.url);
 function fixture(mode) {
   const r = spawnSync('php', ['tests/Support/dossier-closure-live.php', mode], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: process.env, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stdout + r.stderr); process.stdout.write(r.stdout);
@@ -22,10 +22,10 @@ async function write(method, path, data) { const r = await api(method, path, { r
 before(async () => {
   fixture('prepare'); f = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-closure-live.json', import.meta.url)));
   browser = await chromium.launch(); await mkdir(gallery, { recursive: true });
-  dossier = await write('POST', '', { person_mode: 'new', code: `PH4-${f.tag}`, opening_date: '2001-01-01', first_name: 'ليلى', family_name: 'مراجعة اصطناعية', birth_date_accuracy: 'unknown', gender: 'female', displacement_status: 'unknown' });
+  dossier = await write('POST', '', { person_mode: 'new', code: `PH4-${f.tag}`, opening_date: '2001-01-01', visit_date: '2001-03-02', visit_type_id: f.visit_type, first_name: 'ليلى', family_name: 'مراجعة اصطناعية', birth_date_accuracy: 'unknown', gender: 'female', displacement_status: 'unknown' });
   dossier = await write('PUT', `/${dossier.id}/medical`, { lock_version: dossier.lock_version, is_oncology: false, clinical_history: 'قصة مرضية اصطناعية قبل التصحيح' });
   for (let i = 0; i < 12; i++) dossier = await write('PUT', `/${dossier.id}/medical`, { lock_version: dossier.lock_version, is_oncology: false, clinical_history: `قصة مرضية اصطناعية بعد التصحيح ${i + 1}` });
-  dossier = await write('POST', `/${dossier.id}/visits`, { visit_date: '2001-03-02', visit_type_id: f.visit_type, is_referred: false, diagnoses: [{ diagnosis_id: f.diagnosis, diagnosed_on: null, clinic_id: f.clinics[0], diagnosing_staff_id: f.workflow_doctors[0] }] });
+  dossier = await write('PUT', `/${dossier.id}/visits/${dossier.visit.id}`, { lock_version: dossier.visit.lock_version, visit_date: '2001-03-02', visit_type_id: f.visit_type, is_referred: false, diagnoses: [{ diagnosis_id: f.diagnosis, diagnosed_on: null, clinic_id: f.clinics[0], diagnosing_staff_id: f.workflow_doctors[0] }] });
   const path = `/${dossier.id}/visits/${dossier.visit.id}`;
   dossier = await write('PUT', path + '/clinical', { lock_version: dossier.visit.lock_version, services: [{ catalog_id: f.service, clinic_id: f.clinics[0], doctor_id: f.workflow_doctors[0], note: '=ملاحظة اصطناعية آمنة' }], procedures: [] });
   const row = dossier.clinical.services[0];
@@ -103,7 +103,7 @@ test('delayed real responses cannot replace a newer filter or resurrect an old d
 test('existing full-history PDF and XLSX download through Next with actual date range and void reasons', async () => {
   const { context, page } = await open(1440);
   try {
-    const report = page.getByRole('region', { name: 'تاريخ الإضبارة الكامل', exact: true });
+    const report = page.getByRole('region', { name: 'تاريخ بطاقة المريض الكامل', exact: true });
     await report.getByLabel('تقرير الزيارات من', { exact: true }).fill('2001-03-02');
     await report.getByLabel('تقرير الزيارات إلى', { exact: true }).fill('2001-03-02');
     for (const [format, label] of [['xlsx', 'تصدير Excel'], ['pdf', 'تصدير PDF']]) {
