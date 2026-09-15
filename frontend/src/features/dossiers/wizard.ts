@@ -2,11 +2,12 @@ import type { Choice } from "../blood-bank/api";
 
 export type Fields = Record<string, string>;
 export type DiagnosisDraft = { key: string; id?: number; lock_version?: number; diagnosis: Choice | null; clinic: Choice | null; doctor: Choice | null; diagnosed_on: string; remove?: boolean; void_reason?: string };
-export type WorkflowActions = { personal_update: boolean; medical_update: boolean; resume_section: number | null; visit: { id: number | null; action: "create" | "update" | null; label: string | null } };
+export type WorkflowActions = { sections?: boolean[]; subsequent_create?: boolean; personal_update: boolean; medical_update: boolean; resume_section: number | null; visit: { id: number | null; action: "create" | "update" | null; label: string | null } };
 export type WizardOptions = { capabilities: Record<string, boolean>; creation: { allowed: boolean; reason: string | null }; today: string; governorates: Choice[]; visit_types: Choice[] };
 export type Snapshot = {
   id: number; code: string; status: "draft" | "active"; opening_date: string; lock_version: number;
   workflow: WorkflowActions;
+  clinical?: import("./clinical").ClinicalData;
   patient: { id: number; patient_code: string; lock_version: number } & Record<string, string | number | null>;
   medical: { is_oncology: boolean | number; history: string[]; treatment: string[] } & Record<string, unknown>;
   progress: { section: string; state: "not_started" | "in_progress" | "saved" | "needs_review"; last_saved_at: string | null; lock_version: number }[];

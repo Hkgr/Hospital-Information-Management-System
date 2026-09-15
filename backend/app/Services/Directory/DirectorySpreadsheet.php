@@ -84,6 +84,9 @@ class DirectorySpreadsheet
                 if ($cellType === 'date' && $value !== '' && $value !== null) {
                     $cell->setValueExplicit(Date::PHPToExcel(new \DateTimeImmutable($value)), DataType::TYPE_NUMERIC);
                     $cell->getStyle()->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+                } elseif ($cellType === 'integer') {
+                    $cell->setValueExplicit((int) $value, DataType::TYPE_NUMERIC);
+                    $cell->getStyle()->getNumberFormat()->setFormatCode('0');
                 } elseif ($cellType === 'decimal') {
                     $cell->setValueExplicit((float) $value, DataType::TYPE_NUMERIC);
                     $cell->getStyle()->getNumberFormat()->setFormatCode('0.####');

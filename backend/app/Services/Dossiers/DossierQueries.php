@@ -31,6 +31,7 @@ class DossierQueries
                 ->selectSub((clone $visits)->join('visit_procedures as procedure_events', fn ($j) => $j->on('procedure_events.visit_id', '=', 'v.id')->on('procedure_events.facility_id', '=', 'v.facility_id'))
                     ->whereNull('procedure_events.voided_at')->where('procedure_events.performed_on', '<=', $f['today'])->selectRaw('COUNT(*)'), 'procedure_count')
                 ->selectSub((clone $latest)->select('v.id'), 'latest_visit_id')
+                ->selectSub((clone $latest)->select('v.visit_date'), 'latest_visit_date')
                 ->selectSub((clone $latest)->select('v.status'), 'latest_visit_status');
             if (($input['status'] ?? 'all') !== 'all') {
                 $q->where('d.status', $input['status']);
@@ -63,7 +64,7 @@ class DossierQueries
             $page->setCollection($page->getCollection()->map(function ($row) use ($diagnoses, $actions) {
                 return ['id' => (int) $row->id, 'code' => $row->code, 'status' => $row->status, 'opening_date' => $row->opening_date, 'is_oncology' => (bool) $row->is_oncology,
                     'patient_code' => $row->patient_code, 'patient_name' => $row->patient_name, 'visit_count' => (int) $row->visit_count, 'procedure_count' => (int) $row->procedure_count, 'workflow' => $actions[$row->id]['workflow'],
-                    'latest_visit_id' => $row->latest_visit_id ? (int) $row->latest_visit_id : null, 'latest_visit_status' => $row->latest_visit_status, 'diagnoses' => $diagnoses[$row->latest_visit_id] ?? []];
+                    'latest_visit_id' => $row->latest_visit_id ? (int) $row->latest_visit_id : null, 'latest_visit_date' => $row->latest_visit_date, 'latest_visit_status' => $row->latest_visit_status, 'diagnoses' => $diagnoses[$row->latest_visit_id] ?? []];
             }));
 
             return ['data' => $page->items(), 'meta' => CatalogQueries::meta($page), 'totals' => ['dossiers' => $page->total()]];
@@ -108,7 +109,20 @@ class DossierQueries
     public function visits(array $f, int $id, array $input): array
     {
         abort_unless($this->dossiers($f)->where('d.id', $id)->exists(), 404);
-        $p = $this->actualVisits($f)->where('v.dossier_id', $id)->orderByDesc('v.visit_date')->orderByDesc('v.id')
+        $q = $this->actualVisits($f)->where('v.dossier_id', $id);
+        if (($input['status'] ?? 'all') !== 'all') {
+            $q->where('v.status', $input['status']);
+        }
+        foreach (['from' => '>=', 'to' => '<='] as $key => $op) {
+            if (! empty($input[$key])) {
+                $q->where('v.visit_date', $op, $input[$key]);
+            }
+        }
+        if (! empty($input['search'])) {
+            $q->whereRaw("v.visit_no LIKE ? ESCAPE '!'", ['%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], trim($input['search'])).'%']);
+        }
+        $sort = in_array($input['sort'] ?? '', ['visit_no', 'visit_date', 'status']) ? $input['sort'] : 'visit_date';
+        $p = $q->orderBy('v.'.$sort, $input['direction'] ?? 'desc')->orderByDesc('v.id')
             ->paginate($input['per_page'] ?? 10, ['v.id', 'v.visit_no', 'v.visit_date', 'v.status'], 'page', $input['page'] ?? 1);
 
         return ['data' => $p->items(), 'meta' => CatalogQueries::meta($p)];
@@ -133,6 +147,8 @@ class DossierQueries
             ->orderBy('e.dispensed_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 'e.dispensed_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit'])->all();
         $result['administered_medications'] = DB::table('dose_sessions as s')->join('dose_session_items as e', 'e.dose_session_id', '=', 's.id')->where('s.visit_id', $visit)->where('s.facility_id', $f['id'])->whereNull('s.voided_at')->where('s.administered_on', '<=', $f['today'])
             ->orderBy('s.administered_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 's.administered_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit'])->all();
+
+        $result['clinical'] = app(DossierVisitSections::class)->read($f, $visit);
 
         return $result;
     }
