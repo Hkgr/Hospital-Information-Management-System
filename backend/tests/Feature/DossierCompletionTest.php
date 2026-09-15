@@ -12,7 +12,7 @@ class DossierCompletionTest extends DossierCompletionCase
     {
         $periods = DB::table('reporting_periods')->orderBy('id')->get()->toJson();
         $row = ['catalog_id' => $this->f['service'], 'note' => 'ملاحظة'] + $this->context();
-        $input = ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'services' => [$row, $row], 'procedures' => [['catalog_id' => $this->f['procedure']] + $this->context()]];
+        $input = ['request_id' => (string) Str::uuid(), 'lock_version' => $this->s['visit']['lock_version'], 'services' => [$row, $row], 'procedures' => [['catalog_id' => $this->f['procedure']] + $this->context()]];
         $this->s = $this->saveSection('clinical', $input)->assertOk()->assertJsonCount(2, 'data.clinical.services')->json('data');
         $this->saveSection('clinical', $input)->assertOk();
         $this->saveSection('clinical', array_replace($input, ['services' => []]))->assertConflict();
@@ -75,7 +75,7 @@ class DossierCompletionTest extends DossierCompletionCase
 
     public function test_finalization_explicit_atomic_and_subsequent_visit_independent(): void
     {
-        $this->callApi('POST', $this->path('/complete'), ['lock_version' => 1, 'dossier_lock_version' => $this->s['lock_version'], 'confirmed' => true, 'clinic_id' => $this->f['clinics'][0], 'attending_staff_id' => $this->f['workflow_doctors'][0]])->assertUnprocessable();
+        $this->callApi('POST', $this->path('/complete'), ['lock_version' => $this->s['visit']['lock_version'], 'dossier_lock_version' => $this->s['lock_version'], 'confirmed' => true, 'clinic_id' => $this->f['clinics'][0], 'attending_staff_id' => $this->f['workflow_doctors'][0]])->assertUnprocessable();
         $this->s = $this->saveSection('clinical', ['services' => [], 'procedures' => []])->assertOk()->json('data');
         $this->s = $this->saveSection('medications', ['prescription' => null, 'outcome' => $this->outcome()])->assertOk()->json('data');
         $this->s = $this->callApi('POST', $this->path('/review'), ['lock_version' => $this->s['visit']['lock_version'], 'confirmed' => true])->assertOk()->json('data');

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditHistory
 {
     public const ENTITIES = [
-        'patient_dossier' => 'الإضبارة', 'patient' => 'بيانات الشخص', 'dossier_medical' => 'المعلومات الطبية والورمية',
+        'patient_dossier' => 'بطاقة المريض', 'patient' => 'بيانات الشخص', 'dossier_medical' => 'المعلومات الطبية والورمية',
         'dossier_visit' => 'الزيارة', 'visit_diagnosis' => 'التشخيص', 'visit_services' => 'الخدمة',
         'visit_procedures' => 'الإجراء', 'visit_prescriptions' => 'الوصفة', 'visit_prescription_items' => 'بند الوصفة',
         'visit_outcomes' => 'النتيجة والإحالة', 'dossier_upload' => 'رفع المرفق', 'visit_attachment' => 'بيانات المرفق',

@@ -21,9 +21,9 @@ abstract class DossierCompletionCase extends TestCase
         parent::setUp();
         $this->f = DossierCompletionFixture::make();
         $this->token = $this->f['user']->createToken('completion-test', ['api'])->plainTextToken;
-        $this->s = $this->callApi('POST', '', ['person_mode' => 'new', 'code' => 'PH3-'.Str::random(8), 'opening_date' => '2001-01-01', 'first_name' => 'أحمد', 'family_name' => 'محمد', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'])->assertCreated()->json('data');
+        $this->s = $this->callApi('POST', '', ['person_mode' => 'new', 'code' => 'PH3-'.Str::random(8), 'opening_date' => '2001-01-01', 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'first_name' => 'أحمد', 'family_name' => 'محمد', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'])->assertCreated()->json('data');
         $this->s = $this->callApi('PUT', "/{$this->s['id']}/medical", ['lock_version' => 1, 'is_oncology' => false])->assertOk()->json('data');
-        $this->s = $this->callApi('POST', "/{$this->s['id']}/visits", $this->visit())->assertCreated()->json('data');
+        $this->s = $this->callApi('PUT', $this->path(), $this->visit(['lock_version' => $this->s['visit']['lock_version']]))->assertOk()->json('data');
     }
 
     protected function callApi(string $method, string $path, array $data = [])

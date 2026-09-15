@@ -1,3 +1,5 @@
+> Current identity/registration contract: [Unified Patient Cards](patient-card-correction.md). This phase record describes the earlier implementation; the correction supersedes separate dossier codes, delayed initial-visit creation, and per-facility card identity. Medical progress/activation remain facility-local.
+
 # Patient dossiers — Phase 1 operating contract
 
 Historical Phase 1 baseline. [Phase 2](patient-dossiers-phase-two.md) now adds explicitly authorized section writes, an enabled Add action for creators and draft resume. The read-only assertions below remain applicable to users with dossiers.view alone; they no longer mean that all write routes are absent.
@@ -19,7 +21,7 @@ Rollback preflights **before any DDL**: refuses when dossiers/selections, explic
 
 ## Permission and navigation
 
-New minimal facility permission: **`dossiers.view` — عرض إضبارات المرضى وزياراتها في المنشأة**. `DossierPermissionsSeeder` defines it idempotently and assigns nothing. No doctor/clinic/catalog/global permission substitutes for it. A user with only this permission can enter directly.
+New minimal facility permission: **`dossiers.view` — عرض بطاقات المرضى وزياراتها في المنشأة**. `DossierPermissionsSeeder` defines it idempotently and assigns nothing. No doctor/clinic/catalog/global permission substitutes for it. A user with only this permission can enter directly.
 
 Navigation uses the existing primaryNavigation permission configuration, with the existing canView flag passed through desktop/mobile sidebar props. The only AuthenticatedLayout change passes the existing identity's dossiers.view capability to AppShell; login, sessions, tokens and authorization behavior are unchanged. No AppShell layout redesign. No additional facility dropdown or environment setting. Shared directoryFacility chooses the first permitted facility when URL has none; an explicitly forbidden facility never falls back.
 
@@ -56,7 +58,7 @@ Dossier activation is an explicit future action. Visit completion is independent
 
 List and dossier detail return `status` (`draft`/`active`); list also returns `latest_visit_status` (`draft`/`complete`/null). Visit history, latest visit and individual visit return `status` (`draft`/`complete`). Compact Arabic badges distinguish dossier مسودة/فعالة and visit مسودة/مكتملة without a new table column. Saved draft sections are displayed as stored, and empty sections say they are not yet recorded. Every status filter is validated and applied on the server before pagination and totals. Existing authorization, no-store, schema safeguards and Catalog/blood-bank eligibility remain unchanged.
 
-The Add dossier button is disabled with “ستتاح إضافة الإضبارة في المرحلة التالية.” It opens nothing and sends no write. No create/edit/visit/diagnosis/service/procedure/medication/outcome/upload/report flow exists. **A fresh installation correctly shows an empty dossier list.** Existing patient.paper_file_number, visits.paper_reference and cancer case numbers require a separate reviewed legacy-mapping operation; do not run a guessed backfill. Existing visits remain available to their prior consumers and catalog statistics; they appear in a dossier only after a future authorized explicit link.
+The Add dossier button is disabled with “ستتاح إضافة بطاقة المريض في المرحلة التالية.” It opens nothing and sends no write. No create/edit/visit/diagnosis/service/procedure/medication/outcome/upload/report flow exists. **A fresh installation correctly shows an empty dossier list.** Existing patient.paper_file_number, visits.paper_reference and cancer case numbers require a separate reviewed legacy-mapping operation; do not run a guessed backfill. Existing visits remain available to their prior consumers and catalog statistics; they appear in a dossier only after a future authorized explicit link.
 
 Future wizard contract: full-page arrow steps (personal → general/oncology → diagnoses → services/procedures → medications/outcome → attachments/review). Explicit first save selects/creates patient and draft dossier with code/date; diagnosis save creates the draft visit. Opening alone creates nothing. Future save/continue/draft/resume/back actions must retain later steps, use durable request UUIDs/optimistic versions and transactionally audit all changes. No transient drafts or draft APIs are implemented now. Clinical-event/reporting-period write requirements remain for future workflow design.
 

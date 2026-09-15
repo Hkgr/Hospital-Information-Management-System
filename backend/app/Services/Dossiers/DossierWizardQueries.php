@@ -36,7 +36,7 @@ class DossierWizardQueries
                 $visit->is_referred = (bool) $visit->is_referred;
             }
 
-            return ['id' => $id, 'code' => $d['code'], 'status' => $d['status'], 'lock_version' => $d['lock_version'], 'opening_date' => $d['opening_date'], 'patient' => $p, 'workflow' => $context['workflow'],
+            return ['id' => $id, 'card_id' => (int) $p->id, 'code' => $p->patient_code, 'status' => $d['status'], 'lock_version' => $d['lock_version'], 'opening_date' => $d['opening_date'], 'patient' => $p, 'workflow' => $context['workflow'],
                 'medical' => Arr::only($d, ['disability_text', 'clinical_history', 'is_oncology', 'previous_examinations', 'medication_source', 'other_organization']) + ['history' => $selections->where('selection_group', 'history')->pluck('code')->values()->all(), 'treatment' => $selections->where('selection_group', 'treatment')->pluck('code')->values()->all()],
                 'clinical' => $visit ? app(DossierVisitSections::class)->read($f, $visit->id) : ['services' => [], 'procedures' => [], 'prescription' => null, 'outcome' => null, 'attachment_count' => 0],
                 'progress' => collect(['personal', 'medical', 'visit', 'clinical', 'medications', 'attachments'])->map(fn ($s) => $progress->has($s) ? (array) $progress->get($s) : ['section' => $s, 'state' => 'not_started', 'last_saved_by' => null, 'last_saved_at' => null, 'lock_version' => 0, 'visit_id' => null])->all(),

@@ -6,7 +6,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 const base='http://127.0.0.1:3194';let f,browser,finished=false;
-const gallery=new URL('../docs/reviews/dossiers-phase-three/',import.meta.url);
+const gallery=new URL('../.superdesign/tmp/patient-card-regressions/dossiers-phase-three/',import.meta.url);
 function fixture(mode){const r=spawnSync('php',['tests/Support/dossier-completion-live.php',mode],{cwd:fileURLToPath(new URL('../../backend/',import.meta.url)),env:process.env,encoding:'utf8'});assert.equal(r.status,0,r.stdout+r.stderr);process.stdout.write(r.stdout);}
 before(async()=>{fixture('prepare');f=JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-completion-live.json',import.meta.url)));browser=await chromium.launch();await mkdir(gallery,{recursive:true});});
 after(async()=>{await browser?.close();try{if(finished)fixture('verify');}finally{fixture('cleanup');}});
@@ -16,7 +16,7 @@ async function capture(page,name){await page.evaluate(async()=>{await document.f
 async function button(page,name){await page.getByRole('button',{name,exact:true}).click();}
 async function choose(page,label,search,text=search){const g=page.getByRole('group',{name:label,exact:true});await g.getByRole('searchbox').fill(search);await g.getByRole('button',{name:new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'))}).first().click();}
 async function save(page,suffix,label='حفظ ومتابعة'){const response=page.waitForResponse(r=>r.url().includes('/hospital-api/dossiers')&&r.url().split('?')[0].endsWith(suffix)&&['POST','PUT'].includes(r.request().method()));await button(page,label);const r=await response;assert.ok(r.ok(),await r.text());return (await r.json()).data;}
-async function initial(width){const d=await api('POST','',{request_id:crypto.randomUUID(),person_mode:'new',code:`PH3-${f.tag}-${width}`,opening_date:'2001-01-01',first_name:'ليلى',family_name:'اختبار اصطناعي',birth_date_accuracy:'unknown',gender:'female',displacement_status:'unknown'});assert.equal(d.status,201);const id=d.body.data.id;const m=await api('PUT',`/${id}/medical`,{request_id:crypto.randomUUID(),lock_version:1,is_oncology:false,clinical_history:'قصة اصطناعية للمراجعة فقط'});assert.equal(m.status,200);const v=await api('POST',`/${id}/visits`,{request_id:crypto.randomUUID(),visit_date:'2001-03-02',visit_type_id:f.visit_type,is_referred:true,referring_hospital:'المشفى المحيل الاختباري',referral_date:'2001-03-01',referral_reason:'إحالة واردة اصطناعية',diagnoses:[{diagnosis_id:f.diagnosis,clinic_id:f.clinics[0],diagnosing_staff_id:f.workflow_doctors[0],diagnosed_on:null}]});assert.equal(v.status,201);return v.body.data;}
+async function initial(width){const d=await api('POST','',{request_id:crypto.randomUUID(),person_mode:'new',code:`PH3-${f.tag}-${width}`,opening_date:'2001-01-01',visit_date:'2001-03-02',visit_type_id:f.visit_type,first_name:'ليلى',family_name:'اختبار اصطناعي',birth_date_accuracy:'unknown',gender:'female',displacement_status:'unknown'});assert.equal(d.status,201);const id=d.body.data.id;const m=await api('PUT',`/${id}/medical`,{request_id:crypto.randomUUID(),lock_version:1,is_oncology:false,clinical_history:'قصة اصطناعية للمراجعة فقط'});assert.equal(m.status,200);const v=await api('PUT',`/${id}/visits/${d.body.data.visit.id}`,{lock_version:d.body.data.visit.lock_version,request_id:crypto.randomUUID(),visit_date:'2001-03-02',visit_type_id:f.visit_type,is_referred:true,referring_hospital:'المشفى المحيل الاختباري',referral_date:'2001-03-01',referral_reason:'إحالة واردة اصطناعية',diagnoses:[{diagnosis_id:f.diagnosis,clinic_id:f.clinics[0],diagnosing_staff_id:f.workflow_doctors[0],diagnosed_on:null}]});assert.equal(v.status,200);return v.body.data;}
 
 test('actual Next boundary rejects unauthorized and unknown paths',async()=>{
   assert.equal((await api('GET','/options',{},'')).status,401);assert.equal((await api('GET','/options',{facility_id:f.other})).status,403);
@@ -43,8 +43,8 @@ test('resume, multiple clinical entries, prescription, outgoing referral, upload
       const fileInput=page.locator('input[type=file]');await fileInput.setInputFiles({name:'invalid.png',mimeType:'image/png',buffer:Buffer.from('<html>invalid</html>')});await button(page,'رفع الملف');await page.getByText('محتوى الملف لا يطابق امتداده.',{exact:true}).waitFor();await button(page,'إعادة رفع هذا الملف');await page.getByText('محتوى الملف لا يطابق امتداده.',{exact:true}).waitFor();await button(page,'إلغاء هذا الملف');
       const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aV1sAAAAASUVORK5CYII=','base64');await fileInput.setInputFiles({name:'sample.png',mimeType:'image/png',buffer:png});await button(page,'رفع الملف');await page.getByText('تم حفظ الملف',{exact:true}).waitFor();await page.getByRole('button',{name:'تنزيل',exact:true}).waitFor();const download=page.waitForEvent('download');await button(page,'تنزيل');assert.equal((await download).suggestedFilename(),'sample.png');
       await capture(page,`review-${width}`);await page.locator('[name="confirmed"]').check();d=await save(page,'/review','حفظ المراجعة كمسودة');
-      if(width===390){await button(page,'حفظ كمسودة والخروج');await page.getByRole('heading',{name:'الإضبارات',exact:true,level:2}).waitFor();const current=await api('GET',`/${d.id}`);assert.equal(current.body.data.status,'draft');}
-      else{await choose(page,'العيادة · المسؤول عن إكمال الزيارة','عيادة التشخيص 1');await choose(page,'الطبيب المسؤول · المسؤول عن إكمال الزيارة','الطبيب المسؤول 1');await button(page,'تفعيل الإضبارة وإكمال الزيارة');await page.getByRole('dialog').waitFor();await capture(page,`confirm-${width}`);await button(page,'أؤكد الإكمال');await page.getByRole('heading',{name:'بيانات المريض الحالية',exact:true}).waitFor();const current=await api('GET',`/${d.id}`);assert.equal(current.body.data.status,'active');assert.equal(current.body.data.latest_visit.status,'complete');await capture(page,`detail-${width}`);}
+      if(width===390){await button(page,'حفظ كمسودة والخروج');await page.getByRole('heading',{name:'بطاقات المرضى',exact:true,level:2}).waitFor();const current=await api('GET',`/${d.id}`);assert.equal(current.body.data.status,'draft');}
+      else{await choose(page,'العيادة · المسؤول عن إكمال الزيارة','عيادة التشخيص 1');await choose(page,'الطبيب المسؤول · المسؤول عن إكمال الزيارة','الطبيب المسؤول 1');await button(page,'تفعيل بطاقة المريض وإكمال الزيارة');await page.getByRole('dialog').waitFor();await capture(page,`confirm-${width}`);await button(page,'أؤكد الإكمال');await page.getByRole('heading',{name:'بيانات المريض الحالية',exact:true}).waitFor();const current=await api('GET',`/${d.id}`);assert.equal(current.body.data.status,'active');assert.equal(current.body.data.latest_visit.status,'complete');await capture(page,`detail-${width}`);}
     }catch(error){console.error(await page.evaluate(()=>Array.from(document.querySelectorAll('#main-content *')).map(el=>({tag:el.tagName,cls:el.className,w:el.getBoundingClientRect().width,x:el.getBoundingClientRect().x,scroll:el.scrollWidth,client:el.clientWidth})).filter(e=>e.w>innerWidth||e.scroll>e.client+2).slice(0,35)));throw error;}finally{await context.close();}
   }
   finished=true;
@@ -56,7 +56,7 @@ test('dossier list and individual reports download through actual Next with sele
   for(const [name,path] of [['list','/export'],['dossier',`/${d.id}/report`],['visit',`/${d.id}/visits/${d.latest_visit_id}/report`]])for(const format of ['pdf','xlsx']){
     const r=await fetch(`${base}/hospital-api/dossiers${path}/${format}`,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json',Authorization:`Bearer ${f.token}`},body:JSON.stringify({facility_id:f.facility,search:`PH3-${f.tag}`})});assert.equal(r.status,200,await(r.ok?Promise.resolve(''):r.text()));assert.equal(r.headers.get('x-test-laravel'),'dossiers');const bytes=Buffer.from(await r.arrayBuffer());assert.ok(bytes.length>500);await writeFile(new URL(`${name}.${format}`,gallery),bytes);
   }
-  const {page,context}=await open(1440,`/dossiers?search=PH3-${f.tag}`);try{await page.getByRole('region',{name:'جدول الإضبارات',exact:true}).waitFor();await page.getByRole('button',{name:'تصدير Excel',exact:true}).waitFor();const download=page.waitForEvent('download');await button(page,'تصدير Excel');assert.match((await download).suggestedFilename(),/\.xlsx$/);await capture(page,'list-1440');}finally{await context.close();}
+  const {page,context}=await open(1440,`/dossiers?search=PH3-${f.tag}`);try{await page.getByRole('region',{name:'جدول بطاقات المرضى',exact:true}).waitFor();await page.getByRole('button',{name:'تصدير Excel',exact:true}).waitFor();const download=page.waitForEvent('download');await button(page,'تصدير Excel');assert.match((await download).suggestedFilename(),/\.xlsx$/);await capture(page,'list-1440');}finally{await context.close();}
 });
 
 test('later visit reuses visit-only steps, resumes independently and appears above the earlier complete visit',async()=>{
@@ -64,13 +64,13 @@ test('later visit reuses visit-only steps, resumes independently and appears abo
   const {page,context}=await open(768,`/dossiers/${d.id}`);
   try{
     await page.getByRole('link',{name:'إضافة زيارة',exact:true}).click();await page.getByRole('heading',{name:'الزيارة والتشخيصات',exact:true}).waitFor();
-    const nav=page.getByRole('list',{name:'مراحل الإضبارة'});assert.equal(await nav.getByRole('button',{name:/البيانات الشخصية/}).isDisabled(),true);
+    const nav=page.getByRole('list',{name:'مراحل بطاقة المريض'});assert.equal(await nav.getByRole('button',{name:/البيانات الشخصية/}).isDisabled(),true);
     await page.locator('[name="visit_date"]').fill('2002-02-01');await page.locator('[name="visit_type_id"]').selectOption(String(f.visit_type));await page.locator('[name="is_referred"]').selectOption('no');
     await button(page,'إضافة تشخيص للزيارة');await choose(page,'التشخيص من الدليل 1','خباثات الاذن');await choose(page,'العيادة للتشخيص 1','عيادة التشخيص 1');await choose(page,'الطبيب المسؤول عن التشخيص 1','الطبيب المسؤول 1');
     let saved=await save(page,'/subsequent');const next=saved.visit.id;assert.notEqual(next,d.latest_visit_id);assert.equal(saved.visit.dossier_visit_kind,'subsequent');
-    await capture(page,'subsequent-768');await button(page,'حفظ كمسودة والخروج');await page.getByRole('heading',{name:'الإضبارات',exact:true,level:2}).waitFor();
+    await capture(page,'subsequent-768');await button(page,'حفظ كمسودة والخروج');await page.getByRole('heading',{name:'بطاقات المرضى',exact:true,level:2}).waitFor();
     const detail=await api('GET',`/${d.id}`);assert.equal(detail.body.data.latest_visit.id,next);assert.equal(detail.body.data.visit_count,2);assert.equal(detail.body.data.status,'active');
-    await page.goto(`${base}/dossiers/${d.id}?facility_id=${f.facility}`);await page.getByRole('region',{name:'زيارات الإضبارة',exact:true}).waitFor();await button(page,'استعراض الزيارة');await page.getByRole('heading',{name:'الزيارة المختارة',exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('visit'),String(d.latest_visit_id));
+    await page.goto(`${base}/dossiers/${d.id}?facility_id=${f.facility}`);await page.getByRole('region',{name:'زيارات بطاقة المريض',exact:true}).waitFor();await button(page,'استعراض الزيارة');await page.getByRole('heading',{name:'الزيارة المختارة',exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('visit'),String(d.latest_visit_id));
     await button(page,'العودة إلى آخر زيارة');await page.getByRole('link',{name:'استكمال هذه الزيارة المسودة',exact:true}).click();await page.getByRole('heading',{name:'الزيارة والتشخيصات',exact:true}).waitFor();assert.equal(await page.locator('[name="visit_date"]').inputValue(),'2002-02-01');
   }finally{await context.close();}
 });
@@ -96,7 +96,7 @@ test('two editors review clinical conflicts explicitly and preserve another edit
 test('browser Back cancellation retains the entire unsaved clinical draft',async()=>{
   const d=await initial('navigation');const {page,context}=await open(768,`/dossiers/${d.id}`);
   try{
-    await page.getByRole('link',{name:'استكمال الإضبارة',exact:true}).click();
+    await page.getByRole('link',{name:'استكمال بطاقة المريض',exact:true}).click();
     await page.getByRole('heading',{name:'الخدمات والإجراءات',exact:true}).waitFor();
     await button(page,'إضافة الخدمة للزيارة');await page.locator('[name="services.0.note"]').fill('مسودة باقية بعد إلغاء الرجوع');
     const current=page.url();page.removeAllListeners('dialog');
@@ -113,6 +113,6 @@ test('browser Back cancellation retains the entire unsaved clinical draft',async
      await context.addInitScript(()=>{const original=window.fetch;window.fetch=async(...args)=>{const r=await original(...args);if(String(args[0]).includes('/options/doctors?'))await new Promise(resolve=>setTimeout(resolve,800));return r;};});
      await page.reload();await button(page,'إضافة الخدمة للزيارة');await choose(page,'الخدمة من الدليل 1',f.service_name);await choose(page,'العيادة · الخدمة 1','عيادة التشخيص 1');await choose(page,'العيادة · الخدمة 1','عيادة التشخيص 2');
      const picker=page.getByRole('group',{name:'الطبيب المسؤول · الخدمة 1',exact:true});await picker.getByRole('button',{name:/الطبيب المسؤول 2/}).waitFor();assert.equal(await picker.getByRole('button',{name:/الطبيب المسؤول 1/}).count(),0);
-     await choose(page,'العيادة · الخدمة 1','عيادة التشخيص 1');await page.goto(base+'/dossiers/'+d.id+'/edit?facility_id='+f.other);await page.getByRole('heading',{name:'تعذّر فتح الإضبارة',exact:true}).waitFor();assert.equal(await page.locator('[name="services.0.note"]').count(),0);
+     await choose(page,'العيادة · الخدمة 1','عيادة التشخيص 1');await page.goto(base+'/dossiers/'+d.id+'/edit?facility_id='+f.other);await page.getByRole('heading',{name:'تعذّر فتح بطاقة المريض',exact:true}).waitFor();assert.equal(await page.locator('[name="services.0.note"]').count(),0);
    }finally{await context.close();}
  });

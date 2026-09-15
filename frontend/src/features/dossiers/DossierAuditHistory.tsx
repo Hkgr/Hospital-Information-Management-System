@@ -14,7 +14,7 @@ type AuditEvent = {
 };
 type History = Page<AuditEvent> & { filters: { entities: Record<string, string>; actions: Record<string, string> }; timezone: string };
 // Static contract labels keep filters usable during loading/error without retaining previous entries.
-const entities = { patient_dossier: "الإضبارة", patient: "بيانات الشخص", dossier_medical: "المعلومات الطبية والورمية", dossier_visit: "الزيارة", visit_diagnosis: "التشخيص", visit_services: "الخدمة", visit_procedures: "الإجراء", visit_prescriptions: "الوصفة", visit_prescription_items: "بند الوصفة", visit_outcomes: "النتيجة والإحالة" };
+const entities = { patient_dossier: "بطاقة المريض", patient: "بيانات الشخص", dossier_medical: "المعلومات الطبية والورمية", dossier_visit: "الزيارة", visit_diagnosis: "التشخيص", visit_services: "الخدمة", visit_procedures: "الإجراء", visit_prescriptions: "الوصفة", visit_prescription_items: "بند الوصفة", visit_outcomes: "النتيجة والإحالة" };
 const actions = { created: "إنشاء", updated: "تعديل", activated: "تفعيل", completed: "إكمال", reviewed: "مراجعة", voided: "إلغاء", started: "بدء رفع", uploaded: "رفع", cancelled: "إلغاء رفع" };
 
 export default function DossierAuditHistory({ dossier, facility, attachments }: { dossier: string; facility: number; attachments: boolean }) {

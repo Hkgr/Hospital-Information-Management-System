@@ -9,13 +9,13 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditValues
 {
     private const FIELDS = [
-        'code' => 'كود الإضبارة', 'opening_date' => 'تاريخ فتح الإضبارة', 'status' => 'الحالة',
+        'code' => 'معرّف السياق التاريخي (غير الكود الحالي)', 'opening_date' => 'تاريخ فتح بطاقة المريض', 'status' => 'الحالة',
         'patient_code' => 'كود المريض', 'first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم',
         'birth_date' => 'الميلاد', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل',
         'governorate_id' => 'المحافظة', 'city_id' => 'المدينة', 'address_line' => 'عنوان السكن', 'displacement_status' => 'حالة النزوح',
         'is_oncology' => 'ملف ورمي', 'disability_text' => 'معلومات الإعاقة', 'clinical_history' => 'القصة المرضية',
         'previous_examinations' => 'الفحوص السابقة', 'medication_source' => 'مصدر الدواء', 'other_organization' => 'الجهة الأخرى', 'selections' => 'السوابق والعلاجات الورمية',
-        'visit_no' => 'كود الزيارة', 'visit_date' => 'تاريخ الزيارة', 'visit_type_id' => 'نوع الزيارة', 'dossier_visit_kind' => 'نوع زيارة الإضبارة',
+        'visit_no' => 'كود الزيارة', 'visit_date' => 'تاريخ الزيارة', 'visit_type_id' => 'نوع الزيارة', 'dossier_visit_kind' => 'نوع زيارة بطاقة المريض',
         'is_referred' => 'إحالة واردة', 'referring_hospital' => 'المشفى المحيل', 'referral_date' => 'تاريخ الإحالة الواردة', 'referral_reason' => 'سبب الإحالة الواردة',
         'diagnosis_id' => 'التشخيص', 'diagnosed_on' => 'تاريخ التشخيص', 'clinic_id' => 'العيادة', 'attending_staff_id' => 'الطبيب المسؤول', 'diagnosing_staff_id' => 'الطبيب المشخّص',
         'service_id' => 'الخدمة', 'procedure_id' => 'الإجراء', 'performed_by' => 'الطبيب المسؤول', 'specialist_id' => 'الطبيب المختص', 'performed_on' => 'تاريخ التقديم',

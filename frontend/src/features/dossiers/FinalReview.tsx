@@ -16,7 +16,7 @@ export default function FinalReview({facility,snapshot:s,caps,onSaved,onPending,
   const pending=useRef<AbortController|null>(null),reservation=useRef<{signature:string;id:string}|null>(null);const router=useRouter();
   useEffect(()=>()=>pending.current?.abort(),[]);
   useEffect(()=>{onPending(uploading||busy);},[uploading,busy,onPending]);
-  const title=s.status==="draft"?"تفعيل الإضبارة وإكمال الزيارة":"إكمال هذه الزيارة";
+  const title=s.status==="draft"?"تفعيل بطاقة المريض وإكمال الزيارة":"إكمال هذه الزيارة";
   async function complete(){
     if(pending.current||blocked||dirty||uploading||!s.visit)return;
     const c=new AbortController();pending.current=c;setBusy(true);

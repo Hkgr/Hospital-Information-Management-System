@@ -39,7 +39,7 @@ class PrivateClinicResponse
         }
         if ($request->is('api/dossiers', 'api/dossiers/*') && in_array($response->getStatusCode(), [404, 500], true)) {
             $status = $response->getStatusCode();
-            $response = response()->json(['error' => ['code' => $status === 404 ? 'DOSSIER_NOT_FOUND' : 'DOSSIERS_UNAVAILABLE', 'message' => $status === 404 ? 'الإضبارة أو الزيارة غير متاحة في المشفى المحدد.' : 'تعذّر تحميل الإضبارات. حاول مجددًا.']], $status);
+            $response = response()->json(['error' => ['code' => $status === 404 ? 'DOSSIER_NOT_FOUND' : 'DOSSIERS_UNAVAILABLE', 'message' => $status === 404 ? 'بطاقة المريض أو الزيارة غير متاحة في المشفى المحدد.' : 'تعذّر تحميل بطاقات المرضى. حاول مجددًا.']], $status);
         }
         $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->set('Vary', 'Authorization');

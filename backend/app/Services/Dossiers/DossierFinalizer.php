@@ -30,7 +30,7 @@ class DossierFinalizer
                     app(DossierAccess::class)->facility($r->user(), $f['id'], 'finalize');
                     $initial = app(DossierWorkflowActions::class)->forDossiers($f, [$d])[$dossier]['initial_visit'];
                     if (! $initial || $initial->id !== $visit) {
-                        DossierWrites::conflict('يجب إكمال الزيارة الأولية المحددة مع تفعيل الإضبارة.');
+                        DossierWrites::conflict('يجب إكمال الزيارة الأولية المحددة مع تفعيل بطاقة المريض.');
                     }
                 }
                 $progress = DB::table('dossier_section_progress')->where('dossier_id', $dossier)->where('facility_id', $f['id'])->where(fn ($q) => $q->whereNull('visit_id')->orWhere('visit_id', $visit))->get()->keyBy('section');
