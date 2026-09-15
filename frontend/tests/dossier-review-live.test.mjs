@@ -6,7 +6,7 @@ import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 const base = 'http://127.0.0.1:3194'; let f, browser;
-const gallery = new URL('../docs/reviews/dossiers-phase-two/review-fixes/', import.meta.url);
+const gallery = new URL('../.superdesign/tmp/dossier-review-regression/', import.meta.url);
 function fixture(mode) { const r = spawnSync('php', ['tests/Support/dossier-review-live.php', mode], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: process.env, encoding: 'utf8' }); assert.equal(r.status, 0, r.stdout + r.stderr); process.stdout.write(r.stdout); }
 before(async () => { fixture('prepare'); f = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-review-live.json', import.meta.url))); browser = await chromium.launch(); await mkdir(gallery, { recursive: true }); });
 after(async () => { await browser?.close(); fixture('cleanup'); });
@@ -43,5 +43,5 @@ test('review existing-patient selection blocks submission and a real creation ra
 });
 
 test('review historical context rechecks the new date through Next and keeps failed browser/server drafts', async () => {
-  for (const width of [390, 768, 1440]) { const { page, context } = await open(width, `/dossiers/${f.context_dossier}/edit?section=2`); try { await page.locator('[name="visit_date"]').waitFor(); const before = (await api('GET', `/${f.context_dossier}/progress`)).body.data; await page.locator('[name="visit_date"]').fill('2002-01-01'); const response = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes(`/visits/${f.context_visit}`)); await page.getByRole('button', { name: 'حفظ الزيارة كمسودة', exact: true }).click(); const r = await response; assert.equal(r.status(), 422); assert.ok((await r.json()).errors['diagnoses.0.diagnosing_staff_id']); assert.equal(await page.locator('[name="visit_date"]').inputValue(), '2002-01-01'); assert.deepEqual((await api('GET', `/${f.context_dossier}/progress`)).body.data, before); await capture(page, `date-context-error-${width}`); } finally { await context.close(); } }
+  for (const width of [390, 768, 1440]) { const { page, context } = await open(width, `/dossiers/${f.context_dossier}/edit?section=2`); try { await page.locator('[name="visit_date"]').waitFor(); const before = (await api('GET', `/${f.context_dossier}/progress`)).body.data; await page.locator('[name="visit_date"]').fill('2002-01-01'); const response = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes(`/visits/${f.context_visit}`)); await page.getByRole('button', { name: 'حفظ ومتابعة', exact: true }).click(); const r = await response; assert.equal(r.status(), 422); assert.ok((await r.json()).errors['diagnoses.0.diagnosing_staff_id']); assert.equal(await page.locator('[name="visit_date"]').inputValue(), '2002-01-01'); assert.deepEqual((await api('GET', `/${f.context_dossier}/progress`)).body.data, before); await capture(page, `date-context-error-${width}`); } finally { await context.close(); } }
 });

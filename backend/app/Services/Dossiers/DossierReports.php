@@ -25,11 +25,11 @@ class DossierReports
         }
     }
 
-    private function facts(string $title, array $facts, array $identity): array
+    private function facts(string $title, array $facts, array $identity, array $types = []): array
     {
         $rows = [];
         foreach ($facts as $field => $value) {
-            $rows[] = ['field' => $field, 'value' => $value === null || $value === '' ? 'غير مسجل' : $value] + $identity;
+            $rows[] = ['field' => $field, 'value' => $value === null || $value === '' ? 'غير مسجل' : $value, '_types' => $value !== null && $value !== '' && isset($types[$field]) ? ['value' => $types[$field]] : []] + $identity;
         }
 
         return $this->section($title, ['field' => 'البيان', 'value' => 'القيمة'], $rows);
@@ -62,14 +62,14 @@ class DossierReports
             }
             $this->limit($visits->count(), config('dossiers.report_detail_limit'));
             $draft = $visit ? $visits->first()->status === 'draft' : $d['status'] === 'draft';
-            $sections = [$this->facts('هوية الإضبارة', ['كود الإضبارة' => $d['code'], 'تاريخ فتح الإضبارة' => $d['opening_date'], 'المريض' => $identity['name'], 'كود المريض' => $d['patient']['patient_code'], 'حالة الإضبارة' => $d['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'فعالة', 'آخر زيارة فعلية' => $d['latest_visit'] ? ($d['latest_visit']['visit_no'].' · '.$d['latest_visit']['visit_date'].' · '.($d['latest_visit']['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'مكتملة')) : 'لا توجد زيارة مسجلة'], $identity)];
+            $sections = [$this->facts('هوية الإضبارة', ['كود الإضبارة' => $d['code'], 'تاريخ فتح الإضبارة' => $d['opening_date'], 'المريض' => $identity['name'], 'كود المريض' => $d['patient']['patient_code'], 'حالة الإضبارة' => $d['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'فعالة', 'آخر زيارة فعلية' => $d['latest_visit'] ? ($d['latest_visit']['visit_no'].' · '.$d['latest_visit']['visit_date'].' · '.($d['latest_visit']['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'مكتملة')) : 'لا توجد زيارة مسجلة'], $identity, ['تاريخ فتح الإضبارة' => 'date'])];
             $labels = ['first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم', 'birth_date' => 'الميلاد', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل', 'governorate' => 'المحافظة', 'city' => 'المدينة', 'address_line' => 'العنوان', 'displacement_status' => 'حالة النزوح'];
             $values = ['unknown' => 'غير معروف', 'male' => 'ذكر', 'female' => 'أنثى', 'exact' => 'دقيق', 'year_only' => 'السنة فقط', 'estimated' => 'تقديري', 'resident' => 'مقيم', 'idp' => 'نازح', 'returnee' => 'عائد'];
             $personal = [];
             foreach ($labels as $key => $label) {
                 $personal[$label] = $values[$d['patient'][$key] ?? ''] ?? $d['patient'][$key];
             }
-            $sections[] = $this->facts('بيانات المريض الحالية', $personal, $identity);
+            $sections[] = $this->facts('بيانات المريض الحالية', $personal, $identity, ['الميلاد' => 'date']);
             $medical = ['معلومات الإعاقة' => $d['disability_text'], 'القصة المرضية' => $d['clinical_history'], 'مريض ورمي' => $d['is_oncology'] ? 'نعم' : 'لا'];
             if ($d['oncology']) {
                 $codes = ['medical' => 'مرضية', 'surgical' => 'جراحية', 'medication' => 'دوائية', 'family' => 'عائلية', 'chemotherapy' => 'كيميائي', 'radiotherapy' => 'شعاعي', 'other' => 'أخرى'];
@@ -120,7 +120,7 @@ class DossierReports
                 $rows = DB::table('visit_attachments')->where('facility_id', $f['id'])->where('dossier_id', $dossier)->whereIn('visit_id', $ids)->whereNull('voided_at')->orderBy('id')->limit(config('dossiers.report_detail_limit') + 1)->get();
                 $total += $rows->count();
                 $this->limit($total, config('dossiers.report_detail_limit'));
-                $sections[] = $this->section('بيانات المرفقات', ['code' => 'كود الزيارة', 'name' => 'عنوان الملف', 'filename' => 'اسم الملف الأصلي', 'size' => 'الحجم بالبايت', 'uploaded_at' => 'تاريخ الرفع'], $rows->map(fn ($a) => ['id' => $a->id, 'code' => $byId[$a->visit_id]->visit_no, 'name' => $a->title, 'filename' => $a->original_filename, 'size' => $a->size, 'uploaded_at' => $a->created_at])->all(), 'بيانات وصفية فقط؛ الملفات الخاصة ليست مضمنة في التقرير.', ['size' => 'integer']);
+                $sections[] = $this->section('بيانات المرفقات', ['code' => 'كود الزيارة', 'name' => 'عنوان الملف', 'filename' => 'اسم الملف الأصلي', 'size' => 'الحجم بالبايت', 'uploaded_at' => 'تاريخ الرفع'], $rows->map(fn ($a) => ['id' => $a->id, 'code' => $byId[$a->visit_id]->visit_no, 'name' => $a->title, 'filename' => $a->original_filename, 'size' => $a->size, 'uploaded_at' => $a->created_at])->all(), 'بيانات وصفية فقط؛ الملفات الخاصة ليست مضمنة في التقرير.', ['size' => 'integer', 'uploaded_at' => 'datetime']);
             }
 
             return [$sections, $identity, $draft];

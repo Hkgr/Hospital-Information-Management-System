@@ -50,9 +50,19 @@ The client reserves an upload with title/original filename and then posts multip
 
 `php artisan dossiers:cleanup-uploads` is a dry run. The separately reviewed `--apply` removes only UUID-named abandoned files older than 24 hours that have no attachment metadata, including preservation of voided metadata/binaries. This is not a patient-record retention policy. Expired reservations no longer block completion; a retry after expiry requires a new reservation.
 
+After reviewing the dry run, the operator can add this example to the application account's crontab (replace `/srv/hospital/backend`, PHP binary and log path with the approved installation paths):
+
+```cron
+15 3 * * * cd /srv/hospital/backend && /usr/bin/flock -n storage/framework/dossier-cleanup.lock /usr/bin/php artisan dossiers:cleanup-uploads --apply --no-interaction >> storage/logs/dossier-cleanup.log 2>&1
+```
+
+This schedules cleanup once daily and prevents overlapping runs. Give that account access to the private disk and lock/log directories. Keep logs under the site's existing rotation policy. The command uses that installation's operator-managed environment. No credentials belong in cron. This PR does not install a cron entry, modify an external scheduler or delete recorded/voided attachment binaries.
+
 ## Reports
 
 PDF uses the existing shared section-report template and locally embedded Cairo. Excel uses the existing measured spreadsheet layout and continuation sheets, explicit safe text/code/date/numeric types, RTL, frozen headers and filters. No attachment binaries are embedded. Private attachment metadata additionally needs `.attachments.view`.
+
+Every Excel sheet has an explicit A4 print area, fit-to-width 1 and unrestricted page height, repeated table headers, a Cairo page header and numbered footer. The shared layout reserves 0.5-inch top/bottom margins and separate header/footer space. Opening/birth dates and attachment timestamps use numeric Excel date cells with explicit formats; identifiers, phone numbers and user text remain literal strings. To reopen all three downloaded review workbooks with PhpSpreadsheet, without a database connection, run `php tests/Support/verify-dossier-workbooks.php` from a development `backend` checkout with Composer dev dependencies (optionally pass another sample directory). The regression suite additionally checks adversarial formula-like strings, leading zeros and long Unicode content. Install the project's Cairo font on the spreadsheet printing workstation; XLSX references the font rather than embedding it.
 
 List exports use authoritative server filters and selected columns across **all** matching rows; the visible page is not the export boundary. UI readiness requires the current table request to succeed; pending/debounced/failed requests disable exporting, including inside the handler. Limits are 1000 dossier rows and 5000 detail event rows (`config/dossiers.php`); exceeding them returns 422 without a partial report. Dossier/visit reports are independent of table readiness and distinguish current identity from historical visit facts. Draft records are marked `مسودة — غير مكتملة`. Generation allocates an audited report number via POST.
 
@@ -61,10 +71,14 @@ List exports use authoritative server filters and selected columns across **all*
 After the usual reviewed backup and deployment procedure:
 
 ```bash
+composer install --no-dev --optimize-autoloader
 php artisan migrate --force
 php artisan db:seed --class=DossierCompletionPermissionsSeeder --force
 php artisan db:seed --class=DossierOutcomeSeeder --force
+php artisan optimize
 ```
+
+Build the frontend using the operator-configured internal Laravel URL: `npm ci` followed by `npm run build`. Copy `public` and `.next/static` into the standalone package before starting it, following the existing service/deployment mechanism. Do not copy test environment variables or fixtures to production. These instructions are for the operator; no deployment was performed here.
 
 Seeders define records idempotently and never grant permissions or reactivate disabled definitions. Review [dossier-completion-permissions.sql](../database/sql/dossier-completion-permissions.sql) against the explicitly selected database. It only links required permissions to the existing active `super_admin`; it creates no roles, users, global assignments or facility assignments. Facility permissions use existing facility-role assignments. `medications.create`, existing `diagnoses.create` and patient directory operations require an existing explicit global assignment.
 
@@ -76,9 +90,17 @@ Use only the existing isolated MariaDB database, configured through testing envi
 
 Local validation used driver `mysql`, MariaDB **10.11.18**, database `blood_bank_cities_testing` at `127.0.0.1:13416`. Credentials are not committed. Migration tests exercised populated upgrades, safe unused rollback and rollback refusal; three migration suites passed (29 assertions).
 
-The affected Laravel regression run passed **126 tests / 5820 assertions** (95.57s), including Phase 1/2, Phase 3 core/I/O, doctors, clinics, directory lifecycle/reports, Catalog/full-name beneficiaries and blood-bank reports. The separate safety suite passed **6 tests / 65 assertions** (43.20s), including permission-definition idempotency without grants/reactivation. The three migration suites passed **3 tests / 29 assertions** (250.25s). The real Phase 2 browser suite passed **4 tests** (81.91s), covering all three widths, retained drafts, repeated conflicts and delayed doctor responses.
+Final release verification ran the **complete Laravel suite**: **212 passed, 2 failed / 14147 assertions / 1040.48s**. One failure was an obsolete blood-bank migration-test assumption that visits still require periods; the test now asserts that the migration preserves the installed visit schema. The other was a missing subprocess startup signal in the pre-existing doctor concurrency test. No directory code or concurrency test was changed. A focused rerun of both migration/concurrency checks plus the new release tests passed **6 tests / 5304 assertions / 207.27s**, including both doctors and clinics. The initial full run is not represented as a green run.
 
-TypeScript, ESLint and a fresh production build passed. An initial rebuild was blocked by the task's running standalone process holding its output directory; stopping that owned process allowed the build to complete. Final `pint --dirty --test` and `git diff --check` passed after correcting argument spacing in the new safety test. The full Phase 3 browser suite passed **7 tests / 0 failed / 0 skipped** (130.87s). Its browser-Back regression also passed independently through a real in-app history entry; an earlier test harness used a full-page navigation and waited indefinitely, and was stopped before correcting the test. Its fixture tokens were revoked.
+After finalizing the shared print header/footer, the dossier release, DirectoryReportTest, BloodBankReportsTest and CatalogApiTest suites passed **34 tests / 7991 assertions / 50.36s**. New tests reopen list/dossier/visit workbooks, compare every document cell's value and type, check page properties and private payload exclusion, exercise cleanup dry-run/apply on aged synthetic files, and preserve both active and voided recorded attachments. Before the fix, these tests exposed a missing Cairo page header and an over-permissive generated-file pattern; an initial public-path assertion was also corrected to accept either 403 or 404 (both deny access).
+
+The complete relevant doctor/clinic/Catalog/export-readiness/lifecycle browser suites passed **86 tests, no failures or skips / 114.58s**. Shared authentication/AppShell/dashboard UI suites passed **22 tests**, with the opt-in real-auth test initially skipped; the real dossier suites and opt-in authentication result are recorded below. TypeScript, ESLint and a fresh Next 16.3.4 production standalone build passed. No frontend application behavior was changed for this release verification.
+
+All four real dossier browser suites ran together: **18 passed, 1 failed, 0 skipped / 406.42s**. The Phase 1 Back assertion read the old visit-code search box before client navigation completed. It now waits for the dossier list and verifies its specifically named search box and URL parameter. The entire Phase 1 suite rerun passed **4 tests, 0 failures/skips / 103.67s**. Phase 2 workflow (4), Phase 2 review (4) and Phase 3 (7) all passed in the combined run. These runs cover all 19 dossier tests using actual Next/Laravel/MariaDB, without mocked API bodies. The opt-in real login/user/logout/token-revocation check then passed **1 test / 9.66s**, resolving the earlier opt-in skip. Test-only changes keep old galleries from being overwritten and align the former Phase 2 save-button selector with the accepted Phase 3 label.
+
+Fresh downloaded XLSX artifacts passed the read-only PhpSpreadsheet command: **1/12/12 worksheets (25 total)**. Fresh server-generated PDFs rendered to **1/3/3 pages** in PDF.js 6.3.289 and all seven pages were visually inspected without clipping, blank overflow or overlapping content in these samples. Compressed font objects confirm embedded Cairo Regular/Bold. These PDF renders are not LibreOffice/Excel conversions. Existing accepted UI screenshots were retained; real viewport/overflow assertions ran again at 390/768/1440px.
+
+Final `php vendor/bin/pint --dirty --test`, `git diff --check` and staged diff checks passed. TypeScript and lint were rerun successfully after the test-selector changes; frontend application source and its verified production build remained unchanged.
 
 Unsaved input triggers link-leaving and `beforeunload` confirmation. Browsers implementing the Navigation API also receive a cancellable Back/Forward warning for same-document traversal; this behavior is verified in the bundled Chromium. Equivalent SPA-history cancellation is not claimed for older browsers without that API.
 
@@ -86,4 +108,4 @@ The live suite is `frontend/tests/dossier-completion-live.test.mjs`, using the g
 
 Synthetic [screenshots and actual report samples](../../frontend/docs/reviews/dossiers-phase-three/) are review artifacts, not patient data. No production access, FastAPI/authentication/AppShell changes, merge or deployment are part of this work.
 
-Microsoft Excel 16.0 build 20326 opened all three report workbooks read-only with Cairo installed (1/12/12 RTL sheets). Excel print rendering remains blocked by the local Printer Setup dialog / 0x800A03EC, including an attempt to select the existing PDF printer within that instance. No successful Excel print-preview claim is made. PDF.js rendered the list (1 page), dossier (3 pages) and visit (3 pages); embedded Cairo regular/bold font objects and rendered pages were inspected.
+LibreOffice headless is **not installed** (neither PATH nor the standard Windows installation paths contain it), so no XLSX-to-PDF rendering or visual print-preview success is claimed. Automated PhpSpreadsheet print-property assertions are the accepted verification in this environment. The previously observed Microsoft Excel 16.0 build 20326 Printer Setup / 0x800A03EC error is a local printer-environment limitation, not an application failure or a remaining non-environment release check. No printer configuration or server scheduler was changed. PDF.js rendering of server-generated PDF reports is separate from Excel print rendering.

@@ -19,7 +19,7 @@ class CleanupDossierUploads extends Command
         $count = 0;
         foreach (['staging', 'files'] as $directory) {
             foreach ($disk->files($directory) as $key) {
-                if (! preg_match('#^(staging|files)/[0-9a-f-]{36}(\.(pdf|xls|xlsx|jpg|jpeg|png|webp))?$#i', $key) || $disk->lastModified($key) >= $cutoff) {
+                if (! preg_match('#^(staging|files)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.(pdf|xls|xlsx|jpg|jpeg|png|webp))?$#i', $key) || $disk->lastModified($key) >= $cutoff) {
                     continue;
                 }
                 if (DB::table('visit_attachments')->where('storage_key', $key)->exists()) {

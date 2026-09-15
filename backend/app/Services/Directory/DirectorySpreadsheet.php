@@ -81,9 +81,9 @@ class DirectorySpreadsheet
                     $cell->setValueExplicit((int) $value, DataType::TYPE_NUMERIC);
                 }
                 $cellType = $row['_types'][$key] ?? $document['types'][$key] ?? null;
-                if ($cellType === 'date' && $value !== '' && $value !== null) {
+                if (in_array($cellType, ['date', 'datetime'], true) && $value !== '' && $value !== null) {
                     $cell->setValueExplicit(Date::PHPToExcel(new \DateTimeImmutable($value)), DataType::TYPE_NUMERIC);
-                    $cell->getStyle()->getNumberFormat()->setFormatCode('yyyy-mm-dd');
+                    $cell->getStyle()->getNumberFormat()->setFormatCode($cellType === 'datetime' ? 'yyyy-mm-dd hh:mm:ss' : 'yyyy-mm-dd');
                 } elseif ($cellType === 'integer') {
                     $cell->setValueExplicit((int) $value, DataType::TYPE_NUMERIC);
                     $cell->getStyle()->getNumberFormat()->setFormatCode('0');
@@ -212,8 +212,11 @@ class DirectorySpreadsheet
     private function printSetup(Worksheet $sheet, int $count, int $last, int $header, array $meta, bool $landscape): void
     {
         $sheet->getPageSetup()->setOrientation($landscape ? 'landscape' : 'portrait')->setPaperSize(9)->setFitToWidth(1)->setFitToHeight(0)->setRowsToRepeatAtTopByStartAndEnd($header, $header)->setPrintArea('A1:'.Coordinate::stringFromColumnIndex($count).$last);
-        $sheet->getPageMargins()->setLeft(0.47)->setRight(0.47)->setTop(0.35)->setBottom(0.5)->setFooter(0.2);
-        $sheet->getHeaderFooter()->setOddFooter('&"Cairo,Regular"&9&C'.$meta['number'].' | &P / &N');
+        $sheet->getPageMargins()->setLeft(0.47)->setRight(0.47)->setTop(0.5)->setBottom(0.5)->setHeader(0.18)->setFooter(0.2);
+        // Header/footer ampersands are formatting commands in Excel, not plain text.
+        $title = str_replace('&', '&&', mb_substr($meta['title'], 0, 100));
+        $sheet->getHeaderFooter()->setOddHeader('&R&"Cairo,Regular"&9'.$title);
+        $sheet->getHeaderFooter()->setOddFooter('&C&"Cairo,Regular"&9'.$meta['number'].' | &P / &N');
         $sheet->setShowGridlines(false);
     }
 
