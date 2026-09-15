@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Dossiers\DossierAuditRequest;
 use App\Http\Requests\Dossiers\DossierQueryRequest;
 use App\Services\Dossiers\DossierAccess;
+use App\Services\Dossiers\DossierAuditHistory;
 use App\Services\Dossiers\DossierQueries;
 use Dedoc\Scramble\Attributes\Group;
 
@@ -31,6 +33,13 @@ class DossierController extends Controller
     public function visit(DossierQueryRequest $r, int $dossier, int $visit)
     {
         return response()->json(['data' => $this->queries->visit($this->facility($r), $dossier, $visit)]);
+    }
+
+    public function audit(DossierAuditRequest $r, int $dossier)
+    {
+        $f = $this->access->facility($r->user(), $r->integer('facility_id'), 'audit');
+
+        return response()->json(app(DossierAuditHistory::class)->listing($f, $dossier, $r->validated()));
     }
 
     private function facility(DossierQueryRequest $r): array

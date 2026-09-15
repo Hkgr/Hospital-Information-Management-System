@@ -52,6 +52,11 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
             }
             foreach ($path->operations as $op) {
                 $op->security = [new SecurityRequirement(['bearerAuth' => []])];
+                if (str_ends_with($route, '/audit')) {
+                    (new DossierAuditDocument)->operation($op);
+
+                    continue;
+                }
                 if (DossierCompletionDocument::matches($route) && ! str_contains($route, '/options/')) {
                     (new DossierCompletionDocument)->operation($op, $route);
 
