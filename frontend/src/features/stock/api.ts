@@ -1,0 +1,12 @@
+export { useClinicRequest as useStockRequest } from "../clinics/api";
+export type Page<T> = { data: T[]; meta: { page: number; per_page: number; total: number; last_page: number }; capabilities?: Capabilities };
+export type Capabilities = Record<"manage" | "receive" | "adjust" | "issue" | "return" | "export", boolean>;
+export type DirectoryKind = "suppliers" | "stores";
+export type DirectoryRow = { id: number; facility_id: number; code: string; name_ar: string; location?: string | null; contact_person?: string | null; phone?: string | null; address_line?: string | null; note?: string | null; is_active: boolean; archived_at: string | null; lock_version: number };
+export type ReceiptItem = { id: number; medication_id: number; medication_code: string | null; medication_name_ar: string | null; batch_number: string; expiry_date: string; manufactured_on: string | null; quantity: string; free_quantity: string; unit_cost: string | null; note: string | null; batch_id: number | null };
+export type Receipt = { id: number; facility_id: number; store_id: number; store_name_ar: string | null; receipt_no: string; supplier_id: number | null; supplier_name_ar: string | null; funding_source_id: number; funding_name_ar: string | null; received_on: string; invoice_number: string | null; status: "draft" | "confirmed" | "cancelled"; note: string | null; confirmed_at: string | null; lock_version: number; items?: ReceiptItem[] };
+export type Choice = { id: number; code: string; name_ar: string };
+export type Options = { stores: Choice[]; suppliers: Choice[]; medications: Choice[]; funding_sources: Choice[] };
+export const directoryName = (kind: DirectoryKind) => kind === "stores" ? "المستودعات" : "الموردون";
+export const statusName = (row: { is_active: boolean; archived_at: string | null }) => row.archived_at ? "مؤرشف" : row.is_active ? "فعال" : "غير فعال";
+export const receiptStatus = (status: Receipt["status"]) => status === "confirmed" ? "مؤكد" : status === "cancelled" ? "ملغى" : "مسودة";

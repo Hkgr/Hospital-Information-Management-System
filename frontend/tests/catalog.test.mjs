@@ -9,7 +9,7 @@ assert.ok(["localhost", "127.0.0.1"].includes(new URL(base).hostname));
 let browser;
 before(async () => { browser = await chromium.launch({ channel: "chrome" }); });
 after(async () => { await browser?.close(); });
-const rowOf = kind => ({ id: 1, kind, code: kind === "service" ? "S001" : "P001", name_ar: kind === "service" ? "خدمة اختبار" : "إجراء اختبار", description: "الوصف الأصلي", category_id: kind === "service" ? 1 : null, procedure_type_id: null, is_active: true, archived_at: null, lock_version: 1, patient_count: 2, patient_count_definition: "مرضى فريدون ضمن المنشأة، دون الملغى والمسودة." });
+const rowOf = kind => ({ id: 1, kind, code: kind === "service" ? "S001" : "P001", name_ar: kind === "service" ? "خدمة اختبار" : "إجراء اختبار", description: "الوصف الأصلي", category_id: kind === "service" ? 1 : null, procedure_type_id: null, default_unit: null, strength: null, dosage_form: null, reorder_level: null, is_active: true, archived_at: null, lock_version: 1, patient_count: 2, patient_count_definition: "مرضى فريدون ضمن المنشأة، دون الملغى والمسودة." });
 const capabilities = { create: true, update: true, delete: true, export: true, beneficiaries: true, audit: true };
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { resolve, promise }; };
 async function setup({ limited = false, width = 1440, capOverrides = {}, access, initial = "/services-procedures?facility_id=1" } = {}) {
@@ -35,7 +35,7 @@ async function setup({ limited = false, width = 1440, capOverrides = {}, access,
       const code = url.searchParams.get("search") || "PAT01";
       try { return await route.fulfill({ json: { ...paginated([{ key: "visit_service:1", patient_code: code, patient_name: "مريض اختبار", performed_on: "2026-09-12", visit_no: "V01" }]), totals: { unique_patients: 1, presentations: 1 } } }); } catch { return; }
     }
-    if (path.endsWith("/classifications")) return route.fulfill({ json: { data: { categories: categories.filter(category => category.is_active), procedure_types: [] } } });
+    if (path.endsWith("/classifications")) return route.fulfill({ json: { data: { categories: categories.filter(category => category.is_active), procedure_types: [], medication_categories: [] } } });
     if (path.endsWith("/categories")) {
       if (categories.some(category => category.code === body.code)) return route.fulfill({ status: 422, json: { message: "تحقق", errors: { code: ["رمز الفئة مستخدم بالفعل"] } } });
       const category = { ...body, id: categories.length + 1 }; categories.push(category); return route.fulfill({ status: 201, json: { data: category } });

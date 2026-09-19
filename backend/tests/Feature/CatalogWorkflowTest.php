@@ -21,7 +21,7 @@ class CatalogWorkflowTest extends TestCase
     {
         parent::setUp();
         $this->f = CatalogFixture::make();
-        $this->token = $this->f['user']->createToken('workflow', ['api'])->plainTextToken;
+        $this->token = CatalogFixture::token($this->f['user'], 'workflow');
     }
 
     private function api(string $method, string $path, array $data = [], ?string $token = null)
@@ -108,6 +108,27 @@ class CatalogWorkflowTest extends TestCase
             $viewer = $this->f['viewer']->createToken('workflow', ['api'])->plainTextToken;
             $this->api('GET', $path, [], $viewer)->assertForbidden()->assertJsonMissingPath('data');
         }
+    }
+
+    public function test_medication_beneficiaries_cover_dispensed_on_dose_sessions_and_session_void(): void
+    {
+        $id = $this->f['items']['medication'][1];
+        $path = "/medication/$id/events";
+        $row = DB::table('visit_medications')->where('medication_id', $id)->whereNull('voided_at')->orderBy('id')->first();
+        $yesterday = now('Asia/Damascus')->subDay()->toDateString();
+        DB::table('visit_medications')->where('id', $row->id)->update(['dispensed_on' => $yesterday]);
+        $result = $this->api('GET', $path)->assertOk()->assertJsonPath('totals.presentations', 5)->assertJsonPath('totals.unique_patients', 3)->json('data');
+        $this->assertCount(5, array_unique(array_column($result, 'key')));
+        $this->assertSame($yesterday, collect($result)->firstWhere('key', 'visit_medication:'.$row->id)['performed_on']);
+        $this->assertContains('dose_session_item', array_column($result, 'source'));
+        $voidedSession = DB::table('dose_sessions')->where('facility_id', $this->f['facility'])->whereNotNull('voided_at')->value('id');
+        $voidedItem = DB::table('dose_session_items')->where('dose_session_id', $voidedSession)->where('medication_id', $id)->value('id');
+        $this->assertNotNull($voidedItem);
+        $this->assertNotContains('dose_session_item:'.$voidedItem, array_column($result, 'key'));
+        $this->api('GET', $path, ['from' => $yesterday, 'to' => $yesterday])->assertJsonPath('totals.presentations', 1)->assertJsonPath('totals.unique_patients', 1);
+        $this->api('GET', "/medication/$id")->assertJsonPath('data.patient_count', 3);
+        $this->api('POST', '/categories', ['kind' => 'medication', 'code' => 'MED-CAT', 'name_ar' => 'فئة دواء', 'is_active' => true])->assertCreated();
+        $this->assertContains(DB::table('medication_categories')->where('code', 'MED-CAT')->value('id'), array_column($this->api('GET', '/classifications')->json('data.medication_categories'), 'id'));
     }
 
     public function test_added_routes_match_the_published_openapi_contract(): void

@@ -25,7 +25,7 @@ class CatalogApiTest extends TestCase
     {
         parent::setUp();
         $this->f = CatalogFixture::make();
-        $this->token = $this->f['user']->createToken('catalog-test', ['api'])->plainTextToken;
+        $this->token = CatalogFixture::token($this->f['user']);
     }
 
     private function api(string $method, string $path = '', array $data = [], ?string $token = null)
@@ -64,12 +64,12 @@ class CatalogApiTest extends TestCase
 
     public static function kinds(): array
     {
-        return [['service'], ['procedure']];
+        return [['service'], ['procedure'], ['medication']];
     }
 
     private function payload(string $kind, array $extra = []): array
     {
-        return $extra + ['kind' => $kind, 'code' => '0009', 'name_ar' => 'تعريف جديد', 'description' => 'وصف', 'is_active' => true, ...($kind === 'service' ? ['category_id' => $this->f['category']] : [])];
+        return $extra + ['kind' => $kind, 'code' => '0009', 'name_ar' => 'تعريف جديد', 'description' => 'وصف', 'is_active' => true, ...($kind === 'service' ? ['category_id' => $this->f['category']] : ($kind === 'medication' ? ['strength' => '500mg', 'dosage_form' => 'tablet', 'default_unit' => 'قرص', 'reorder_level' => '10'] : []))];
     }
 
     #[DataProvider('kinds')]
@@ -95,19 +95,19 @@ class CatalogApiTest extends TestCase
 
     public function test_distinct_beneficiaries_match_lists_and_exports_across_both_sources(): void
     {
-        foreach (['service' => 2, 'procedure' => 3] as $kind => $count) {
+        foreach (['service' => [2, [1, 2], '-001'], 'procedure' => [3, [1, 2, 8], '-001'], 'medication' => [3, [1, 2, 8], '-M01']] as $kind => [$count, $patientKeys, $suffix]) {
             $id = $this->f['items'][$kind][1];
             $this->api('GET', "/$kind/$id")->assertOk()->assertJsonPath('data.patient_count', $count)->assertJsonPath('data.patient_count_definition', CatalogBeneficiaries::DEFINITION);
             $patients = $this->api('GET', "/$kind/$id/beneficiaries")->assertOk()->assertJsonPath('meta.total', $count)->json('data');
-            $this->assertEqualsCanonicalizing(array_values(array_intersect_key($this->f['patients'], array_flip($kind === 'service' ? [1, 2] : [1, 2, 8]))), array_column($patients, 'id'));
+            $this->assertEqualsCanonicalizing(array_values(array_intersect_key($this->f['patients'], array_flip($patientKeys))), array_column($patients, 'id'));
             $this->api('GET', "/$kind/$id/beneficiaries", ['search' => $this->f['tag'].'-P2'])->assertJsonPath('meta.total', 1);
-            $this->api('GET', '/export/xlsx', ['kind' => $kind, 'search' => $this->f['tag'].'-001', 'page' => 2, 'columns' => ['code', 'kind', 'patient_count']])->assertOk();
-            $bytes = $this->api('GET', '/export/xlsx', ['kind' => $kind, 'search' => $this->f['tag'].'-001', 'page' => 2, 'columns' => ['code', 'kind', 'patient_count']])->getContent();
+            $this->api('GET', '/export/xlsx', ['kind' => $kind, 'search' => $this->f['tag'].$suffix, 'page' => 2, 'columns' => ['code', 'kind', 'patient_count']])->assertOk();
+            $bytes = $this->api('GET', '/export/xlsx', ['kind' => $kind, 'search' => $this->f['tag'].$suffix, 'page' => 2, 'columns' => ['code', 'kind', 'patient_count']])->getContent();
             $path = tempnam(sys_get_temp_dir(), 'catalog-xlsx-');
             file_put_contents($path, $bytes);
             try {
                 $sheet = IOFactory::load($path)->getActiveSheet();
-                $this->assertSame($this->f['tag'].'-001', $sheet->getCell('A9')->getValue());
+                $this->assertSame($this->f['tag'].$suffix, $sheet->getCell('A9')->getValue());
                 $this->assertSame('s', $sheet->getCell('A9')->getDataType());
                 $this->assertSame($count, $sheet->getCell('C9')->getValue());
                 $this->assertSame('n', $sheet->getCell('C9')->getDataType());
@@ -155,7 +155,7 @@ class CatalogApiTest extends TestCase
 
     public function test_facility_privacy_capabilities_and_dynamic_permissions(): void
     {
-        $viewer = $this->f['viewer']->createToken('viewer', ['api'])->plainTextToken;
+        $viewer = CatalogFixture::token($this->f['viewer'], 'viewer');
         $id = $this->f['items']['service'][1];
         $this->api('GET', '', [], $viewer)->assertOk()->assertJsonPath('capabilities.update', false)->assertJsonPath('capabilities.beneficiaries', false);
         foreach (["/service/$id/beneficiaries", "/service/$id/history", "/service/$id/deletion-preview"] as $path) {
@@ -191,6 +191,8 @@ class CatalogApiTest extends TestCase
         $bad = User::factory()->create()->createToken('no-ability', [])->plainTextToken;
         $this->api('GET', '', [], $bad)->assertForbidden();
         $this->api('GET', '', ['sort' => 'SQL', 'per_page' => 999])->assertUnprocessable();
+        $this->f['user']->tokens()->update(['last_used_at' => now()]);
+        DB::flushQueryLog();
         DB::enableQueryLog();
         $this->api('GET')->assertOk();
         $small = count(DB::getQueryLog());

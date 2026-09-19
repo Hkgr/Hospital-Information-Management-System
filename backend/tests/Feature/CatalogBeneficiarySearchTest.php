@@ -15,14 +15,14 @@ class CatalogBeneficiarySearchTest extends TestCase
 
     public static function kinds(): array
     {
-        return [['service'], ['procedure']];
+        return [['service'], ['procedure'], ['medication']];
     }
 
     #[DataProvider('kinds')]
     public function test_full_name_search_preserves_literal_characters_events_and_paginated_totals(string $kind): void
     {
         $f = CatalogFixture::make();
-        $token = $f['user']->createToken('search-regression', ['api'])->plainTextToken;
+        $token = CatalogFixture::token($f['user'], 'search-regression');
         $id = $f['items'][$kind][2];
         $table = 'visit_'.$kind.'s';
         $event = (array) DB::table($table)->where($kind.'_id', $id)->first();

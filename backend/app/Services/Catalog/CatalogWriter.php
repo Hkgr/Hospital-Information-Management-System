@@ -14,12 +14,17 @@ class CatalogWriter
     public function createCategory(Request $request, array $facility, array $data): object
     {
         app(CatalogAccess::class)->directory($request->user(), $facility, 'create');
+        $kind = $data['kind'] ?? 'service';
+        [$table] = CatalogQueries::classification($kind);
+        $entity = match ($kind) {
+            'service' => 'service_category', 'procedure' => 'procedure_type', 'medication' => 'medication_category',
+        };
         try {
-            return DB::transaction(function () use ($request, $facility, $data) {
+            return DB::transaction(function () use ($request, $facility, $data, $table, $entity) {
                 $fields = array_intersect_key($data, array_flip(['code', 'name_ar', 'is_active']));
-                $id = DB::table('service_categories')->insertGetId($fields + ['created_at' => now(), 'updated_at' => now()]);
-                app(ClinicAudit::class)->record($request, $facility['id'], $id, 'created', null, $fields, 'service_category');
-                $row = DB::table('service_categories')->find($id, ['id', 'code', 'name_ar', 'is_active']);
+                $id = DB::table($table)->insertGetId($fields + ['created_at' => now(), 'updated_at' => now()]);
+                app(ClinicAudit::class)->record($request, $facility['id'], $id, 'created', null, $fields, $entity);
+                $row = DB::table($table)->find($id, ['id', 'code', 'name_ar', 'is_active']);
                 $row->is_active = (bool) $row->is_active;
 
                 return $row;
@@ -34,7 +39,12 @@ class CatalogWriter
 
     public function references(string $kind, int $id): bool
     {
-        $tables = $kind === 'service' ? ['visit_services', 'report_metric_catalog_items'] : ['visit_procedures', 'blood_recipient_procedures', 'report_metric_catalog_items'];
+        $tables = match ($kind) {
+            'service' => ['visit_services', 'report_metric_catalog_items'],
+            'procedure' => ['visit_procedures', 'blood_recipient_procedures', 'report_metric_catalog_items'],
+            'medication' => ['visit_medications', 'visit_prescription_items', 'dose_session_items', 'report_metric_catalog_items', 'medication_batches', 'inventory_transactions', 'medication_receipt_items', 'stock_issues'],
+            default => throw new CatalogException('CATALOG_NOT_FOUND', 'النوع غير موجود.', 404),
+        };
         foreach ($tables as $table) {
             if (DB::table($table)->where($kind.'_id', $id)->exists()) {
                 return true;
@@ -59,7 +69,7 @@ class CatalogWriter
 
     private function snapshot(object $row): array
     {
-        return array_intersect_key((array) $row, array_flip(['code', 'name_ar', 'description', 'is_active', 'archived_at', 'lock_version', 'category_id', 'procedure_type_id']));
+        return array_intersect_key((array) $row, array_flip(['code', 'name_ar', 'description', 'is_active', 'archived_at', 'lock_version', 'category_id', 'procedure_type_id', 'default_unit', 'strength', 'dosage_form', 'reorder_level']));
     }
 
     private function audit(Request $request, array $facility, string $kind, int $id, string $event, ?array $old): void
@@ -77,15 +87,19 @@ class CatalogWriter
                 if ($row?->archived_at) {
                     throw new CatalogException('CATALOG_STATE_CONFLICT', 'استعد العنصر المؤرشف أولًا قبل تعديله.');
                 }
-                $relation = $kind === 'service' ? 'category_id' : 'procedure_type_id';
+                [$classTable, $relation] = CatalogQueries::classification($kind);
                 $value = $data[$relation] ?? null;
                 if ($value && (! $row || $value != $row->$relation)) {
-                    $valid = DB::table($kind === 'service' ? 'service_categories' : 'procedure_types')->where('id', $value)->where('is_active', true)->sharedLock()->exists();
+                    $valid = DB::table($classTable)->where('id', $value)->where('is_active', true)->sharedLock()->exists();
                     if (! $valid) {
                         throw ValidationException::withMessages([$relation => 'التصنيف غير موجود أو غير فعال.']);
                     }
                 }
-                $fields = array_intersect_key($data, array_flip(['code', 'name_ar', 'description', 'is_active', $relation]));
+                $keys = ['code', 'name_ar', 'description', 'is_active', $relation];
+                if ($kind === 'medication') {
+                    $keys = [...$keys, 'default_unit', 'strength', 'dosage_form', 'reorder_level'];
+                }
+                $fields = array_intersect_key($data, array_flip($keys));
                 $fields['description'] = $data['description'] ?? null;
                 $fields[$relation] = $value;
                 $fields['updated_at'] = now();
@@ -93,7 +107,7 @@ class CatalogWriter
                     $fields['lock_version'] = $row->lock_version + 1;
                     DB::table(CatalogQueries::table($kind))->where('id', $id)->update($fields);
                 } else {
-                    $id = DB::table(CatalogQueries::table($kind))->insertGetId($fields + ['created_at' => now()]);
+                    $id = DB::table(CatalogQueries::table($kind))->insertGetId($fields + ['created_at' => now(), 'lock_version' => 1]);
                 }
                 $this->audit($request, $facility, $kind, $id, $row ? 'updated' : 'created', $row ? $this->snapshot($row) : null);
 

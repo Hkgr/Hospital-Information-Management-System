@@ -32,6 +32,8 @@ class CatalogFixture
             }
         }
         $category = DB::table('service_categories')->insertGetId(['code' => 'CAT-'.$tag, 'name_ar' => 'فئة اختبارية']);
+        $medicationCategory = DB::table('medication_categories')->insertGetId(['code' => 'MED-'.$tag, 'name_ar' => 'فئة دواء اختبار']);
+        $funding = DB::table('funding_sources')->insertGetId(['code' => 'FUND-'.$tag, 'name_ar' => 'جهة تمويل اختبار']);
         $type = DB::table('staff_types')->insertGetId(['code' => 'CAT-'.$tag, 'name_ar' => 'طبيب اختبار']);
         $staff = DB::table('staff')->insertGetId(['staff_code' => 'CAT-'.$tag, 'full_name' => 'طبيب اختبار', 'search_name' => 'طبيب اختبار', 'staff_type_id' => $type]);
         $visitType = DB::table('visit_types')->insertGetId(['code' => 'CAT-'.$tag, 'name_ar' => 'زيارة اختبار']);
@@ -42,9 +44,9 @@ class CatalogFixture
             $periods[$f] = DB::table('reporting_periods')->insertGetId(['facility_id' => $f, 'starts_on' => now()->startOfYear()->toDateString(), 'ends_on' => now()->endOfYear()->toDateString()]);
         }
         $items = [];
-        foreach (['service' => 'services', 'procedure' => 'procedures'] as $kind => $table) {
+        foreach (['service' => 'services', 'procedure' => 'procedures', 'medication' => 'medications'] as $kind => $table) {
             for ($n = 1; $n <= 2; $n++) {
-                $items[$kind][$n] = DB::table($table)->insertGetId(['code' => $tag.'-00'.$n, 'name_ar' => ($kind === 'service' ? 'خدمة' : 'إجراء').' اختبار '.$n, 'description' => 'وصف اختباري', ...($kind === 'service' ? ['category_id' => $category] : [])]);
+                $items[$kind][$n] = DB::table($table)->insertGetId(['code' => $tag.($kind === 'medication' ? '-M0' : '-00').$n, 'name_ar' => ($kind === 'service' ? 'خدمة' : ($kind === 'procedure' ? 'إجراء' : 'دواء')).' اختبار '.$n, 'description' => 'وصف اختباري', 'lock_version' => 1, ...($kind === 'service' ? ['category_id' => $category] : ($kind === 'medication' ? ['category_id' => $medicationCategory] : []))]);
             }
         }
         $patients = [];
@@ -61,6 +63,9 @@ class CatalogFixture
                 DB::table('visit_'.$kind.'s')->insert(['visit_id' => $v, 'facility_id' => $f, 'reporting_period_id' => $periods[$f], $kind.'_id' => $items[$kind][$n], 'performed_on' => $future ? now()->addDays(3)->toDateString() : $today,
                     'client_request_id' => (string) Str::uuid(), 'entered_by' => $user->id, ...($kind === 'procedure' ? ['specialist_id' => $staff] : []), ...($cancelled ? $void : [])]);
             }
+            DB::table('visit_medications')->insert(['visit_id' => $v, 'facility_id' => $f, 'reporting_period_id' => $periods[$f], 'medication_id' => $items['medication'][$n],
+                'medication_name_snapshot' => 'دواء اختبار '.$n, 'dispensed_on' => $future ? now()->addDays(3)->toDateString() : $today,
+                'client_request_id' => (string) Str::uuid(), 'entered_by' => $user->id, ...($cancelled ? $void : [])]);
         };
         $v1 = $visit($patients[1], $facility);
         $event($v1, $facility);
@@ -78,7 +83,29 @@ class CatalogFixture
                 'external_recipient_name' => $spec['p'] ? null : 'متلقٍ خارجي', 'visit_id' => $spec['visit'] ?? null, 'blood_component_id' => $component, 'units' => '1.0000', 'transfused_on' => $today, 'entered_by' => $user->id, ...(! empty($spec['void']) ? $void : [])]);
             DB::table('blood_recipient_procedures')->insert(['blood_transfusion_id' => $blood, 'procedure_id' => $items['procedure'][1], 'performed_on' => empty($spec['future']) ? $today : now()->addDays(3)->toDateString(), 'entered_by' => $user->id]);
         }
+        $dose = function (int $patient, int $f, array $spec = []) use ($items, $periods, $today, $user, $visit, $void, $funding) {
+            $visitId = $spec['visit'] ?? $visit($patient, $f, $spec['status'] ?? 'complete');
+            $session = DB::table('dose_sessions')->insertGetId(['visit_id' => $visitId, 'facility_id' => $f, 'reporting_period_id' => $periods[$f],
+                'administered_on' => empty($spec['future']) ? $today : now()->addDays(3)->toDateString(), 'client_request_id' => (string) Str::uuid(),
+                'entered_by' => $user->id, ...(! empty($spec['void']) ? $void : [])]);
+            DB::table('dose_session_items')->insert(['dose_session_id' => $session, 'medication_id' => $items['medication'][1], 'medication_name_snapshot' => 'دواء اختبار 1',
+                'funding_source_id' => $funding, 'entered_by' => $user->id]);
 
-        return compact('tag', 'user', 'viewer', 'facility', 'other', 'category', 'items', 'patients', 'today');
+            return $session;
+        };
+        $dose($patients[1], $facility, ['visit' => $v1]);
+        $dose($patients[8], $facility);
+        $dose($patients[9], $facility, ['void' => true]);
+        $dose($patients[10], $facility, ['future' => true]);
+
+        return compact('tag', 'user', 'viewer', 'facility', 'other', 'category', 'medicationCategory', 'items', 'patients', 'today');
+    }
+
+    public static function token(User $user, string $name = 'catalog-test'): string
+    {
+        $plain = $user->createToken($name, ['api'])->plainTextToken;
+        $user->tokens()->update(['last_used_at' => now()]);
+
+        return $plain;
     }
 }

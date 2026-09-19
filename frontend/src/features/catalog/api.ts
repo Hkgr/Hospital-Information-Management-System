@@ -1,12 +1,14 @@
 export { useClinicRequest as useCatalogRequest, downloadReport, useDebounced } from "../clinics/api";
 export type { Page } from "../clinics/api";
-export type Kind = "service" | "procedure";
-export type Item = { id: number; kind: Kind; code: string; name_ar: string; description: string | null; category_id: number | null; procedure_type_id: number | null; classification_name_ar: string | null; is_active: boolean; archived_at: string | null; lock_version: number; patient_count: number; patient_count_definition: string };
+export type Kind = "service" | "procedure" | "medication";
+export type Item = { id: number; kind: Kind; code: string; name_ar: string; description: string | null; category_id: number | null; procedure_type_id: number | null; classification_name_ar: string | null; default_unit: string | null; strength: string | null; dosage_form: string | null; reorder_level: string | null; is_active: boolean; archived_at: string | null; lock_version: number; patient_count: number; patient_count_definition: string };
 export type Capabilities = Record<"create" | "update" | "delete" | "export" | "beneficiaries" | "audit", boolean>;
-export type Choices = { categories: { id: number; name_ar: string }[]; procedure_types: { id: number; name_ar: string }[] };
+export type Choices = { categories: { id: number; name_ar: string }[]; procedure_types: { id: number; name_ar: string }[]; medication_categories: { id: number; name_ar: string }[] };
 export const columns = { number: "م", code: "الكود", name_ar: "الاسم", kind: "النوع", description: "الوصف", patient_count: "عدد المستفيدين", is_active: "الحالة" };
 export type Column = keyof typeof columns;
 export const columnKeys = Object.keys(columns) as Column[];
-export const kindName = (kind: Kind) => kind === "service" ? "خدمة" : "إجراء";
+export const kindName = (kind: Kind) => kind === "service" ? "خدمة" : kind === "procedure" ? "إجراء" : "دواء";
 export const itemPath = (item: Pick<Item, "kind" | "id">) => `service-catalog/${item.kind}/${item.id}`;
 export const stateName = (item: Item) => item.archived_at ? "مؤرشف" : item.is_active ? "فعال" : "غير فعال";
+export const catalogHref = (item: Pick<Item, "kind" | "id">, query: string) => item.kind === "medication" ? `/medications/${item.id}?${query}` : `/services-procedures/${item.kind}/${item.id}?${query}`;
+export const catalogHome = (kind: Kind, query: string) => kind === "medication" ? `/medications?${query}` : `/services-procedures?${query}`;

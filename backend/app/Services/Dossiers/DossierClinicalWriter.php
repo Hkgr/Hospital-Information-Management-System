@@ -134,7 +134,7 @@ class DossierClinicalWriter
             }
             $fields = ['medication_id' => $item['medication_id'], 'note' => $item['note'] ?? null, 'display_order' => $item['display_order']];
             if (! $prior || $prior->medication_id != $item['medication_id']) {
-                $med = DB::table('medications')->where('id', $item['medication_id'])->where('is_active', true)->first();
+                $med = DB::table('medications')->where('id', $item['medication_id'])->where('is_active', true)->whereNull('archived_at')->first();
                 if (! $med) {
                     throw ValidationException::withMessages(["prescription.items.$i.medication_id" => 'اختر دواء فعالًا من الدليل.']);
                 }

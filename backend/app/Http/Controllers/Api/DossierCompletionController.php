@@ -157,7 +157,7 @@ class DossierCompletionController extends Controller
                     throw ValidationException::withMessages([$field => 'القيمة موجودة في دليل الأدوية؛ اختر التعريف الموجود.']);
                 }
             }
-            $id = DB::table('medications')->insertGetId(['code' => $code, 'name_ar' => $name, 'created_at' => now(), 'updated_at' => now()]);
+            $id = DB::table('medications')->insertGetId(['code' => $code, 'name_ar' => $name, 'lock_version' => 1, 'archived_at' => null, 'created_at' => now(), 'updated_at' => now()]);
             app(DossierWrites::class)->audit($r, $f, 'medication', $id, null, ['code' => $code, 'name_ar' => $name]);
 
             return $id;
