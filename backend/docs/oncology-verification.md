@@ -1,5 +1,11 @@
 # Oncology Phase 3 verification
 
+This document retains the **initial reviewed implementation** evidence at
+`a0b233a33557c45c155b320d107fe885ea10f518`. The corrective pass and current results
+are recorded in [oncology-corrective-review.md](oncology-corrective-review.md).
+The original browser linkage between a 2090 appointment and a 2001 visit was
+invalid; it is now rejected and the workflow explicitly reschedules first.
+
 Branch: `feature/oncology-treatment-plans-and-doses`.
 Base: `e2ead6d96b2eee292186e3b7837a6eaa45a7d6d5` (develop after PR #26).
 The PR description records the final tested commit SHA; no empty verification commit

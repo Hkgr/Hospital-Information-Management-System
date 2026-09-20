@@ -3,10 +3,12 @@
 use App\Models\User;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\OncologyQueries;
+use App\Services\Dossiers\OncologyWriter;
 use App\Support\TestDatabaseSafety;
 use Database\Seeders\DossierPathologyPermissionsSeeder;
 use Database\Seeders\OncologyPermissionsSeeder;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
@@ -17,6 +19,7 @@ $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
 $app->loadEnvironmentFrom('.env.testing');
 $app->make(Kernel::class)->bootstrap();
 TestDatabaseSafety::assertAvailable($app);
+config(['clinics.doctor_staff_types' => ['DWF-DOCTOR']]);
 $path = storage_path('framework/testing/oncology-live.json');
 $mode = $argv[1] ?? '';
 if ($mode === 'prepare') {
@@ -34,6 +37,11 @@ if ($mode === 'prepare') {
     $f['period'] = DB::table('reporting_periods')->insertGetId(['facility_id' => $f['facility'], 'starts_on' => '2001-01-01', 'ends_on' => '2001-12-31', 'status' => 'open']);
     $f['user_id'] = $f['user']->id;
     $f['viewer_id'] = $f['viewer']->id;
+    $reader = DB::table('roles')->insertGetId(['code' => 'ONC-READ-'.$f['tag'], 'name_ar' => 'قارئ بطاقات اختباري دون عرض العلاج']);
+    foreach (['dossiers.view', 'dossiers.export'] as $permission) {
+        DB::table('role_permissions')->insert(['role_id' => $reader, 'permission_id' => DB::table('permissions')->where('code', $permission)->value('id')]);
+    }
+    DB::table('facility_user_roles')->insert(['user_id' => $f['viewer_id'], 'facility_id' => $f['facility'], 'role_id' => $reader]);
     $f['token'] = $f['user']->createToken('oncology-live', ['api'])->plainTextToken;
     $f['denied_token'] = $f['viewer']->createToken('oncology-live', ['api'])->plainTextToken;
     unset($f['user'], $f['viewer']);
@@ -62,16 +70,28 @@ if ($mode === 'prepare') {
             throw new RuntimeException('Expected an active synthetic scheduled session.');
         }
         $v = DB::table('visits')->where('dossier_id', $s->dossier_id)->where('facility_id', $f['facility'])->whereNull('voided_at')->first();
+        $request = Request::create('/testing/oncology');
+        $request->setUserResolver(fn () => User::findOrFail($f['user_id']));
+        app(OncologyWriter::class)->session($request, $access, $s->dossier_id, $s->id, ['request_id' => (string) Str::uuid(), 'lock_version' => $s->lock_version, 'plan_lock_version' => DB::table('oncology_plans')->where('id', $s->plan_id)->value('lock_version'), 'status' => 'rescheduled', 'planned_on' => $v->visit_date, 'reason' => 'إعادة جدولة صريحة لاختبار التزامن']);
+        $s = DB::table('oncology_sessions')->where('id', $s->id)->first();
         $payload = ['user' => $f['user_id'], 'facility' => $f['facility'], 'dossier' => $s->dossier_id, 'visit' => $v->id, 'id' => null,
             'data' => ['request_id' => (string) Str::uuid(), 'session_id' => $s->id, 'session_lock_version' => $s->lock_version, 'plan_lock_version' => DB::table('oncology_plans')->where('id', $s->plan_id)->value('lock_version'), 'visit_lock_version' => $v->lock_version, 'administered_on' => $v->visit_date, 'supervising_staff_id' => $s->doctor_id, 'administered_by' => $s->doctor_id, 'reporting_period_id' => $f['period'], 'items' => [['medication_id' => $f['medication'], 'dose_value' => '1', 'dose_unit' => 'mg', 'quantity' => '1', 'quantity_unit' => 'vial', 'route' => 'IV', 'funding_source_id' => $f['funding']]]]];
         $id = null;
-        foreach (['replay', 'correction'] as $op) {
+        foreach (['replay', 'competing', 'correction'] as $op) {
+            if ($op === 'competing') {
+                app(OncologyWriter::class)->schedule($request, $access, $s->dossier_id, $s->plan_id, ['request_id' => (string) Str::uuid(), 'lock_version' => DB::table('oncology_plans')->where('id', $s->plan_id)->value('lock_version'), 'sessions' => [['session_number' => 3, 'planned_on' => $v->visit_date]]]);
+                $next = DB::table('oncology_sessions')->where('plan_id', $s->plan_id)->where('session_number', 3)->first();
+                $payload['data'] = array_replace($payload['data'], ['session_id' => $next->id, 'session_lock_version' => $next->lock_version, 'plan_lock_version' => DB::table('oncology_plans')->where('id', $s->plan_id)->value('lock_version')]);
+            }
             $workers = [];
             DB::beginTransaction();
             try {
                 DB::table('patient_dossiers')->where('id', $s->dossier_id)->lockForUpdate()->first();
                 foreach ([1, 2] as $n) {
                     $data = $payload;
+                    if ($op === 'competing') {
+                        $data['data']['request_id'] = (string) Str::uuid();
+                    }
                     if ($op === 'correction') {
                         $data['id'] = $id;
                         $data['data'] = array_replace($data['data'], ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'items' => [], 'reason' => 'تصحيح اصطناعي متزامن', 'note' => 'author '.$n]);
@@ -104,6 +124,12 @@ if ($mode === 'prepare') {
                         throw new RuntimeException('Duplicate actual dose');
                     } $id = $rows[0]['id'];
                 }
+                if ($op === 'competing') {
+                    $id = collect($rows)->firstWhere('status', 200)['id'];
+                    if (DB::table('dose_sessions')->where('oncology_session_id', $payload['data']['session_id'])->whereNull('voided_at')->count() !== 1) {
+                        throw new RuntimeException('Competing UUIDs must create exactly one active dose.');
+                    }
+                }
             } finally {
                 if (DB::transactionLevel()) {
                     DB::rollBack();
@@ -113,7 +139,7 @@ if ($mode === 'prepare') {
                 }
             }
         }
-        echo "Two competing real connections: replay one dose ID (200/200); correction 200/409.\n";
+        echo "Two competing real connections: replay one dose ID (200/200); different UUID administrations 200/409 with one active dose; correction 200/409.\n";
     } elseif ($mode === 'cleanup') {
         foreach ([$f['user_id'], $f['viewer_id']] as $id) {
             User::findOrFail($id)->tokens()->where('name', 'oncology-live')->delete();

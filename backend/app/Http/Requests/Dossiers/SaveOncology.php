@@ -2,12 +2,22 @@
 
 namespace App\Http\Requests\Dossiers;
 
+use App\Services\Dossiers\OncologyIntegrity;
 use App\Services\Dossiers\OncologyQueries;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class SaveOncology extends FormRequest
 {
+    protected function failedValidation(Validator $validator): void
+    {
+        if ($this->operation() === 'void' && $this->route('dose') && ($validator->errors()->has('session_resolution') || $validator->errors()->has('planned_on'))) {
+            OncologyIntegrity::reject('ONCOLOGY_INVALID_VOID_RESOLUTION', 'حدد معالجة الموعد وتاريخ إعادة الجدولة عند إبطال الإعطاء.', ['fields' => $validator->errors()->toArray()]);
+        }
+        parent::failedValidation($validator);
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -53,7 +63,11 @@ class SaveOncology extends FormRequest
         $text = ['nullable', 'string', 'max:10000'];
         $rules = ['facility_id' => $id, 'request_id' => ['required', 'uuid'], 'lock_version' => $this->route('plan') || $this->route('session') || $this->route('dose') || $this->route('dispensing') ? $id : ['sometimes', 'integer', 'min:1']];
         if ($op === 'void') {
-            return $rules + ['reason' => ['required', 'string', 'max:255']];
+            return $rules + ['reason' => ['required', 'string', 'max:255']] + ($this->route('dose') ? [
+                'session_resolution' => ['required', 'in:rescheduled,missed,cancelled,referred'],
+                'planned_on' => ['required_if:session_resolution,rescheduled', 'nullable', 'date_format:Y-m-d'],
+                'session_lock_version' => $id, 'plan_lock_version' => $id, 'carry_forward' => ['sometimes', 'boolean'],
+            ] : []);
         }
         if ($op === 'status') {
             return $rules + ['status' => ['required', 'in:active,paused,completed,cancelled'], 'reason' => ['required', 'string', 'max:2000'], 'override_reason' => ['nullable', 'string', 'max:2000']];
@@ -62,9 +76,10 @@ class SaveOncology extends FormRequest
             return $rules + ['sessions' => ['required', 'array', 'min:1', 'max:24'], 'sessions.*.planned_on' => $date, 'sessions.*.cycle_number' => $optionalId, 'sessions.*.session_number' => [...$id, 'distinct'], 'sessions.*.note' => $text];
         }
         if ($op === 'session') {
-            return $rules + ['status' => ['required', 'in:rescheduled,missed,cancelled,referred'], 'planned_on' => ['required_if:status,rescheduled', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:2000']];
+            return $rules + ['status' => ['required', 'in:rescheduled,missed,cancelled,referred'], 'planned_on' => [Rule::requiredIf(fn () => $this->input('status') === 'rescheduled' && ! $this->boolean('carry_forward')), 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:2000'], 'plan_lock_version' => $id, 'carry_forward' => ['sometimes', 'boolean']];
         }
         if ($op === 'plan') {
+            $rules += ['confirm_duplicate' => ['sometimes', 'boolean'], 'duplicate_reason' => ['required_if:confirm_duplicate,true', 'nullable', 'string', 'max:2000']];
             $rules += ['modality' => ['required', Rule::in(array_keys(OncologyQueries::MODALITIES))], 'intent' => ['required', Rule::in(array_keys(OncologyQueries::INTENTS))], 'protocol_name' => ['required', 'string', 'max:200'], 'protocol_code' => ['nullable', 'string', 'max:100'], 'clinic_id' => $id, 'doctor_id' => $id, 'diagnosis_id' => $optionalId, 'starts_on' => $date, 'ends_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:starts_on'], 'planned_cycles' => $optionalId, 'planned_sessions' => $optionalId, 'interval_days' => $optionalId, 'note' => $text, 'amendment_reason' => ['nullable', 'string', 'max:2000'], 'items' => ['present', 'array', 'max:100']];
         } elseif ($op === 'administer') {
             $rules += ['reporting_period_id' => $id, 'administered_on' => $date, 'supervising_staff_id' => $id, 'administered_by' => $id, 'session_label' => ['nullable', 'string', 'max:200'], 'note' => $text, 'items' => ['present', 'array', 'max:100']];

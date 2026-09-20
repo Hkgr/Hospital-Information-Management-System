@@ -15,10 +15,12 @@ foreach (['card', 'visit', 'list'] as $kind) {
     $numbers = 0;
     $leadingZero = 0;
     $injection = 0;
+    $values = [];
     foreach ($book->getAllSheets() as $sheet) {
         foreach ($sheet->getCellCollection()->getCoordinates() as $address) {
             $cell = $sheet->getCell($address);
             $v = $cell->getValue();
+            $values[] = $v;
             if ($cell->getDataType() === DataType::TYPE_NUMERIC) {
                 if (Date::isDateTime($cell)) {
                     $dates++;
@@ -41,6 +43,13 @@ foreach (['card', 'visit', 'list'] as $kind) {
     if ($kind === 'card') {
         Assert::assertGreaterThan(0, $leadingZero);
         Assert::assertGreaterThan(0, $injection);
+        Assert::assertContains('إعطاء مبطل — محفوظ تاريخيًا', $values);
+        Assert::assertContains('إعطاء اصطناعي مسجل خطأ', $values);
+    }
+    if ($kind === 'visit') {
+        Assert::assertNotContains('إعطاء مبطل — محفوظ تاريخيًا', $values);
+        Assert::assertNotContains('إعطاء اصطناعي مسجل خطأ', $values);
+        Assert::assertContains('إعطاء مبطل — الصرف واقعة مستقلة', $values);
     }
     echo "$kind: {$book->getSheetCount()} valid RTL/Cairo sheets; $dates typed dates, $numbers numeric cells; $leadingZero leading-zero codes, $injection formula-like safe texts; print properties verified.\n";
     $book->disconnectWorksheets();

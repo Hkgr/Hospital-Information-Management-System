@@ -66,9 +66,9 @@ class OncologyTreatmentTest extends DossierCompletionCase
         return $this->callApi('POST', $this->planPath($p['id']).'/status', $extra + ['lock_version' => $p['lock_version'], 'status' => 'active', 'reason' => 'مراجعة الطبيب']);
     }
 
-    private function schedule(array $p): array
+    private function schedule(array $p, string $date = '2001-03-02'): array
     {
-        $this->callApi('POST', $this->planPath($p['id']).'/sessions', ['lock_version' => $p['lock_version'], 'sessions' => [['session_number' => 1, 'planned_on' => '2090-01-01'], ['session_number' => 2, 'planned_on' => '2090-02-01']]])->assertCreated();
+        $this->callApi('POST', $this->planPath($p['id']).'/sessions', ['lock_version' => $p['lock_version'], 'sessions' => [['session_number' => 1, 'planned_on' => $date], ['session_number' => 2, 'planned_on' => '2090-02-01']]])->assertCreated();
 
         return (array) DB::table('oncology_sessions')->where('plan_id', $p['id'])->orderBy('id')->first();
     }
@@ -78,12 +78,234 @@ class OncologyTreatmentTest extends DossierCompletionCase
         return $extra + ['session_id' => $s['id'], 'session_lock_version' => $s['lock_version'], 'plan_lock_version' => DB::table('oncology_plans')->where('id', $s['plan_id'])->value('lock_version'), 'visit_lock_version' => $this->s['visit']['lock_version'], 'administered_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'supervising_staff_id' => $this->f['workflow_doctors'][0], 'administered_by' => $this->f['workflow_doctors'][0], 'items' => [$this->item()]];
     }
 
+    private function historicalSession(array $p): array
+    {
+        $this->callApi('POST', $this->planPath($p['id']).'/sessions', ['lock_version' => $p['lock_version'], 'sessions' => [['session_number' => 1, 'planned_on' => '2001-03-02']]])->assertCreated();
+
+        return (array) DB::table('oncology_sessions')->where('plan_id', $p['id'])->first();
+    }
+
+    private function resolve(array $s, array $extra = [])
+    {
+        return $this->callApi('PUT', '/'.$this->s['id'].'/treatment-sessions/'.$s['id'], $extra + ['lock_version' => $s['lock_version'], 'plan_lock_version' => DB::table('oncology_plans')->where('id', $s['plan_id'])->value('lock_version'), 'status' => 'rescheduled', 'planned_on' => '2001-03-02', 'reason' => 'تصحيح موعد الحضور']);
+    }
+
+    public function test_integrity_future_appointment_requires_explicit_historical_reschedule(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $s = $this->schedule($p, '2090-01-01');
+        $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_SCHEDULE_DATE_MISMATCH');
+        $this->assertSame(0, DB::table('dose_sessions')->where('oncology_session_id', $s['id'])->count());
+        $this->resolve($s)->assertOk();
+        $s = (array) DB::table('oncology_sessions')->find($s['id']);
+        $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated();
+        $audit = DB::table('audit_logs')->where('entity_type', 'oncology_sessions')->where('entity_id', $s['id'])->whereNotNull('old_values')->orderBy('id')->first();
+        $this->assertSame('2090-01-01', json_decode($audit->old_values, true)['planned_on']);
+        $this->assertSame('2001-03-02', json_decode($audit->new_values, true)['planned_on']);
+        $this->assertSame('تصحيح موعد الحضور', json_decode($audit->new_values, true)['reason']);
+        $this->assertNotNull($audit->occurred_at);
+    }
+
+    public function test_integrity_old_revision_requires_explicit_carry_forward(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $s = $this->historicalSession($p);
+        $oldRevision = $s['revision_id'];
+        $p = $this->callApi('PUT', $this->planPath($p['id']), $this->planData(['lock_version' => $this->dose($s)['plan_lock_version'], 'clinic_id' => $this->f['clinics'][1], 'doctor_id' => $this->f['workflow_doctors'][1], 'note' => 'تعديل سريري', 'amendment_reason' => 'مراجعة']))->assertOk()->json('data');
+        $p = $this->activate($p)->assertOk()->json('data');
+        $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_OBSOLETE_SESSION_REVISION');
+        $this->resolve($s, ['carry_forward' => true, 'reason' => ''])->assertUnprocessable();
+        $this->resolve($s, ['carry_forward' => true, 'plan_lock_version' => 1])->assertConflict();
+        $this->resolve($s, ['carry_forward' => true])->assertOk();
+        $s = (array) DB::table('oncology_sessions')->find($s['id']);
+        $this->assertSame($p['current_revision_id'], $s['revision_id']);
+        $this->assertSame($this->f['clinics'][1], $s['clinic_id']);
+        $this->assertSame($this->f['workflow_doctors'][1], $s['doctor_id']);
+        $audit = DB::table('audit_logs')->where('entity_type', 'oncology_sessions')->where('entity_id', $s['id'])->orderByDesc('id')->first();
+        $this->assertSame($oldRevision, json_decode($audit->old_values, true)['revision_id']);
+        $this->assertSame($this->f['clinics'][0], json_decode($audit->old_values, true)['clinic_id']);
+        $this->callApi('POST', $this->path('/doses'), $this->dose($s, ['supervising_staff_id' => $s['doctor_id'], 'administered_by' => $s['doctor_id']]))->assertCreated();
+        $this->resolve($s, ['carry_forward' => true])->assertConflict();
+        $this->assertSame($p['current_revision_id'], DB::table('dose_sessions')->where('oncology_session_id', $s['id'])->value('plan_revision_id'));
+        $this->assertDatabaseHas('oncology_plan_revisions', ['id' => $oldRevision]);
+    }
+
+    public function test_integrity_revision_boundaries_are_enforced_without_silent_expansion(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan(['ends_on' => '2001-04-01', 'planned_sessions' => 2, 'planned_cycles' => 1]))->assertOk()->json('data');
+        foreach ([['planned_on' => '2001-03-01'], ['planned_on' => '2001-04-02'], ['session_number' => 3], ['cycle_number' => 2]] as $change) {
+            $this->callApi('POST', $this->planPath($p['id']).'/sessions', ['lock_version' => $p['lock_version'], 'sessions' => [$change + ['planned_on' => '2001-03-02', 'session_number' => 1]]])->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_SESSION_OUTSIDE_PLAN');
+        }
+        $s = $this->historicalSession($p);
+        $this->resolve($s, ['planned_on' => '2001-04-02'])->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_SESSION_OUTSIDE_PLAN');
+        $this->assertSame('2001-03-02', DB::table('oncology_sessions')->find($s['id'])->planned_on);
+    }
+
+    public function test_integrity_dose_void_requires_resolution_and_can_be_replaced_atomically(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $s = $this->historicalSession($p);
+        $id = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
+        $url = $this->path('/doses/'.$id.'/void');
+        $this->callApi('POST', $url, ['lock_version' => 1, 'reason' => 'لم يحدث الإعطاء'])->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_VOID_RESOLUTION');
+        $resolution = ['lock_version' => 1, 'session_lock_version' => 2, 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'reason' => 'لم يحدث الإعطاء', 'session_resolution' => 'rescheduled', 'planned_on' => '2001-03-01'];
+        $this->callApi('POST', $url, $resolution)->assertUnprocessable();
+        $this->assertDatabaseHas('dose_sessions', ['id' => $id, 'voided_at' => null]);
+        $this->assertDatabaseHas('oncology_sessions', ['id' => $s['id'], 'status' => 'completed']);
+        $resolution['planned_on'] = '2001-03-02';
+        $this->callApi('POST', $url, $resolution)->assertOk();
+        $s = (array) DB::table('oncology_sessions')->find($s['id']);
+        $new = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
+        $this->assertNotSame($id, $new);
+        $this->assertSame(2, DB::table('dose_sessions')->where('oncology_session_id', $s['id'])->count());
+        $this->assertSame(1, DB::table('dose_sessions')->where('oncology_session_id', $s['id'])->whereNull('voided_at')->count());
+        $this->assertNotNull(DB::table('dose_sessions')->find($id)->voided_at);
+    }
+
+    public function test_integrity_exact_plan_duplicate_requires_explicit_confirmation_and_reason(): void
+    {
+        $p = $this->makePlan();
+        $this->callApi('POST', $this->planPath(), $this->planData())->assertConflict()->assertJsonPath('error.code', 'ONCOLOGY_DUPLICATE_PLAN')->assertJsonPath('error.existing_plan_id', $p['id']);
+        $this->callApi('POST', $this->planPath(), $this->planData(['confirm_duplicate' => true]))->assertUnprocessable();
+        $copy = $this->callApi('POST', $this->planPath(), $this->planData(['confirm_duplicate' => true, 'duplicate_reason' => 'سبب سريري صريح للتكرار']))->assertCreated()->json('data');
+        $this->assertNotSame($p['id'], $copy['id']);
+        $this->assertTrue(DB::table('audit_logs')->where('entity_type', 'oncology_plans')->where('entity_id', $copy['id'])->where('new_values', 'like', '%duplicate_reason%')->exists());
+        $this->makePlan(['modality' => 'supportive']);
+    }
+
+    public function test_integrity_noop_revision_keeps_approval_and_version(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $before = DB::table('oncology_plan_revisions')->where('plan_id', $p['id'])->count();
+        $data = $this->planData(['lock_version' => $p['lock_version'], 'amendment_reason' => 'سبب وحده ليس تغييرًا سريريًا']);
+        $data['items'][0]['dose_value'] = '2.5000';
+        $data['protocol_name'] = '  خطة   اختبار =1+1  ';
+        $this->callApi('PUT', $this->planPath($p['id']), $data)->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_NO_CLINICAL_CHANGE');
+        $this->assertSame($before, DB::table('oncology_plan_revisions')->where('plan_id', $p['id'])->count());
+        $this->assertDatabaseHas('oncology_plans', ['id' => $p['id'], 'status' => 'active', 'lock_version' => $p['lock_version']]);
+    }
+
+    public function test_integrity_void_preserves_historical_revision_and_independent_dispensing_in_reports(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $s = $this->historicalSession($p);
+        $id = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
+        $dispensed = $this->callApi('POST', $this->path('/dispensing'), ['dose_session_id' => $id, 'dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'dispensing_purpose' => 'take_home'] + $this->item())->assertCreated()->json('data.id');
+        $current = $this->callApi('PUT', $this->planPath($p['id']), $this->planData(['lock_version' => $this->dose($s)['plan_lock_version'], 'protocol_name' => 'نسخة علاجية معدلة', 'amendment_reason' => 'تغيير سريري']))->assertOk()->json('data');
+        $current = $this->activate($current)->assertOk()->json('data');
+        $payload = ['lock_version' => 1, 'session_lock_version' => 2, 'plan_lock_version' => $current['lock_version'], 'reason' => 'إعطاء سُجل خطأ', 'session_resolution' => 'rescheduled', 'planned_on' => '2001-03-02'];
+        $this->callApi('POST', $this->path('/doses/'.$id.'/void'), $payload)->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_OBSOLETE_SESSION_REVISION');
+        $this->assertDatabaseHas('dose_sessions', ['id' => $id, 'voided_at' => null]);
+        $this->callApi('POST', $this->path('/doses/'.$id.'/void'), $payload + ['carry_forward' => true])->assertOk();
+        $this->assertDatabaseHas('dose_sessions', ['id' => $id, 'plan_revision_id' => $p['current_revision_id']]);
+        $this->assertDatabaseHas('oncology_sessions', ['id' => $s['id'], 'revision_id' => $current['current_revision_id']]);
+        $this->assertDatabaseHas('visit_medications', ['id' => $dispensed, 'voided_at' => null]);
+        $invalidActive = (array) DB::table('dose_sessions')->where('id', $id)->first();
+        unset($invalidActive['id'], $invalidActive['active_oncology_session_id'], $invalidActive['active_plan_revision_id']);
+        $invalidActive = array_replace($invalidActive, ['client_request_id' => (string) Str::uuid(), 'voided_at' => null, 'voided_by' => null, 'void_reason' => null]);
+        try {
+            DB::table('dose_sessions')->insert($invalidActive);
+            $this->fail('An active dose cannot use the old revision of a carried session, even outside the writer');
+        } catch (QueryException $e) {
+            $this->assertSame(1452, (int) $e->errorInfo[1]);
+        }
+        $f = app(DossierAccess::class)->facility($this->f['user'], $this->f['facility'], 'export');
+        $request = Request::create('/api/dossiers');
+        $request->setUserResolver(fn () => $this->f['user']);
+        foreach ([false, true] as $individual) {
+            $doc = app(DossierReports::class)->document($request, $f, [], $this->s['id'], $individual ? $this->s['visit']['id'] : null);
+            $section = collect($doc['sections'])->firstWhere('title', 'تفاصيل الأدوية المعطاة');
+            if ($individual) {
+                $this->assertEmpty($section['rows']);
+            } else {
+                $this->assertContains('إعطاء مبطل — محفوظ تاريخيًا', array_column($section['rows'], 'value'));
+                $this->assertContains('إعطاء سُجل خطأ', array_column($section['rows'], 'value'));
+            }
+            $path = tempnam(sys_get_temp_dir(), 'onc-void');
+            file_put_contents($path, app(BloodBankReports::class)->xlsx($doc));
+            try {
+                $book = IOFactory::load($path);
+                $values = [];
+                foreach ($book->getAllSheets() as $sheet) {
+                    foreach ($sheet->getCellCollection()->getCoordinates() as $coordinate) {
+                        $cell = $sheet->getCell($coordinate);
+                        $this->assertNotSame('f', $cell->getDataType());
+                        $values[] = $cell->getValue();
+                    }
+                }
+                if (! $individual) {
+                    $this->assertContains('إعطاء مبطل — محفوظ تاريخيًا', $values);
+                }
+                $this->assertContains('إعطاء مبطل — الصرف واقعة مستقلة', $values);
+                $book->disconnectWorksheets();
+            } finally {
+                unlink($path);
+            }
+        }
+        $this->callApi('POST', $this->path('/dispensing/'.$dispensed.'/void'), ['lock_version' => 1, 'reason' => 'قرار مستقل لإبطال الصرف'])->assertOk();
+        $migration = require database_path('migrations/2026_09_21_000001_preserve_voided_oncology_administrations.php');
+        try {
+            $migration->down();
+            $this->fail('Historical revision must prevent unsafe rollback');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('rollback refused', $e->getMessage());
+        }
+    }
+
+    public function test_integrity_active_unique_constraint_preserves_multiple_attempts_and_scope(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $s = $this->historicalSession($p);
+        $id = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
+        $row = (array) DB::table('dose_sessions')->where('id', $id)->first();
+        unset($row['id'], $row['active_oncology_session_id'], $row['active_plan_revision_id']);
+        $row['client_request_id'] = (string) Str::uuid();
+        try {
+            DB::table('dose_sessions')->insert($row);
+            $this->fail('Active session key must reject a second administration');
+        } catch (QueryException $e) {
+            $this->assertSame(1062, (int) $e->errorInfo[1]);
+        }
+        foreach (['missed', 'cancelled', 'referred'] as $resolution) {
+            $currentSession = (array) DB::table('oncology_sessions')->where('id', $s['id'])->first();
+            $this->callApi('POST', $this->path('/doses/'.$id.'/void'), ['lock_version' => 1, 'session_lock_version' => $currentSession['lock_version'], 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'reason' => 'اختبار قرار مستقل', 'session_resolution' => $resolution])->assertOk();
+            $this->assertDatabaseHas('oncology_sessions', ['id' => $s['id'], 'status' => $resolution]);
+            $currentSession = (array) DB::table('oncology_sessions')->where('id', $s['id'])->first();
+            $this->resolve($currentSession)->assertOk();
+            $currentSession = (array) DB::table('oncology_sessions')->where('id', $s['id'])->first();
+            $id = $this->callApi('POST', $this->path('/doses'), $this->dose($currentSession))->assertCreated()->json('data.id');
+        }
+        $this->assertSame(4, DB::table('dose_sessions')->where('oncology_session_id', $s['id'])->count());
+        $this->assertSame(1, DB::table('dose_sessions')->where('oncology_session_id', $s['id'])->whereNull('voided_at')->count());
+        $this->callApi('GET', '/'.$this->s['id'].'/treatment-sessions')->assertJsonCount(1, 'data');
+        try {
+            DB::table('dose_sessions')->where('id', $id)->update(['facility_id' => $this->f['other']]);
+            $this->fail('Dose facility composite FK must remain enforced');
+        } catch (QueryException $e) {
+            $this->assertSame(1452, (int) $e->errorInfo[1]);
+        }
+        $migration = require database_path('migrations/2026_09_21_000001_preserve_voided_oncology_administrations.php');
+        try {
+            $migration->down();
+            $this->fail('Multiple preserved attempts must prevent unsafe rollback');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('rollback refused', $e->getMessage());
+        }
+    }
+
     public function test_multiple_plans_filtered_list_aggregates_do_not_issue_per_row_queries(): void
     {
         $this->ready();
         $p = $this->activate($this->makePlan())->assertOk()->json('data');
-        $this->schedule($p);
-        $other = $this->activate($this->makePlan())->assertOk()->json('data');
+        $this->schedule($p, '2090-01-01');
+        $other = $this->activate($this->makePlan(['protocol_code' => 'OTHER']))->assertOk()->json('data');
         $measure = function () {
             DB::enableQueryLog();
             DB::flushQueryLog();
@@ -98,7 +320,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->assertSame(2, $row['active_treatment_count']);
         $this->assertSame('2090-01-01', $row['next_dose_on']);
         for ($i = 0; $i < 5; $i++) {
-            $this->makePlan();
+            $this->makePlan(['protocol_code' => 'LOAD-'.$i]);
         }
         [$after] = $measure();
         $this->assertSame($n, $after, 'List query count must not grow with plans');
@@ -118,7 +340,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->callApi('PUT', $this->path('/doses/'.$id), $edit)->assertOk();
         $this->assertDatabaseHas('dose_session_items', ['id' => $items[0]->id, 'medication_name_snapshot' => $before]);
         $this->assertDatabaseHas('dose_session_items', ['id' => $items[1]->id, 'voided_at' => null, 'lock_version' => 1]);
-        $this->callApi('POST', $this->path('/doses/'.$id.'/void'), ['lock_version' => 2, 'reason' => 'تصحيح الإعطاء'])->assertOk();
+        $this->callApi('POST', $this->path('/doses/'.$id.'/void'), ['lock_version' => 2, 'session_lock_version' => 2, 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'session_resolution' => 'cancelled', 'reason' => 'تصحيح الإعطاء'])->assertOk();
         $this->assertSame(2, DB::table('dose_session_items')->where('dose_session_id', $id)->count());
         $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertConflict();
         $permission = DB::table('permissions')->where('code', 'dossiers.audit')->value('id');
@@ -142,7 +364,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
                 'administer' => ['POST', $this->path('/doses'), $this->dose($s)],
                 'dispense' => ['POST', $this->path('/dispensing'), $this->item() + ['dose_session_id' => 1, 'dispensed_on' => '2001-03-02', 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'reporting_period_id' => $this->period, 'dispensing_purpose' => 'supportive']],
                 'correct' => ['PUT', $this->path('/doses/1'), $this->dose($s, ['lock_version' => 1, 'reason' => 'تصحيح'])],
-                'void' => ['POST', $this->path('/doses/1/void'), ['lock_version' => 1, 'reason' => 'إبطال']],
+                'void' => ['POST', $this->path('/doses/1/void'), ['lock_version' => 1, 'session_lock_version' => 1, 'plan_lock_version' => 1, 'session_resolution' => 'cancelled', 'reason' => 'إبطال']],
             };
             $this->callApi($method, $path, $data)->assertForbidden();
             DB::table('role_permissions')->insert(['role_id' => $this->f['dossier_role'], 'permission_id' => $permission]);
@@ -224,19 +446,19 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $p = $this->activate($this->makePlan())->assertOk()->json('data');
         $visits = DB::table('visits')->count();
         $doses = DB::table('dose_sessions')->count();
-        $s = $this->schedule($p);
+        $s = $this->schedule($p, '2090-01-01');
         $this->assertSame($visits, DB::table('visits')->count());
         $this->assertSame($doses, DB::table('dose_sessions')->count());
         $this->callApi('GET', $this->planPath())->assertOk()->assertJsonPath('next_dose.planned_on', '2090-01-01');
         $path = '/'.$this->s['id'].'/treatment-sessions/'.$s['id'];
-        $this->callApi('PUT', $path, ['lock_version' => 1, 'status' => 'rescheduled', 'planned_on' => '2090-03-01', 'reason' => 'طلب الطبيب'])->assertOk();
+        $this->callApi('PUT', $path, ['plan_lock_version' => $this->dose($s)['plan_lock_version'], 'lock_version' => 1, 'status' => 'rescheduled', 'planned_on' => '2090-03-01', 'reason' => 'طلب الطبيب'])->assertOk();
         $this->callApi('GET', $this->planPath())->assertOk()->assertJsonPath('next_dose.planned_on', '2090-02-01');
         $audit = DB::table('audit_logs')->where('entity_type', 'oncology_sessions')->where('entity_id', $s['id'])->orderByDesc('id')->first();
         $this->assertSame('2090-01-01', json_decode($audit->old_values, true)['planned_on']);
         foreach (['missed', 'cancelled', 'referred'] as $i => $status) {
-            $this->callApi('PUT', $path, ['lock_version' => $i + 2, 'status' => $status, 'reason' => 'سبب صريح'])->assertOk();
+            $this->callApi('PUT', $path, ['plan_lock_version' => $this->dose($s)['plan_lock_version'], 'lock_version' => $i + 2, 'status' => $status, 'reason' => 'سبب صريح'])->assertOk();
         }
-        $this->callApi('PUT', $path, ['lock_version' => 1, 'status' => 'cancelled', 'reason' => 'قديم'])->assertConflict();
+        $this->callApi('PUT', $path, ['plan_lock_version' => $this->dose($s)['plan_lock_version'], 'lock_version' => 1, 'status' => 'cancelled', 'reason' => 'قديم'])->assertConflict();
     }
 
     public function test_actual_administration_and_dispensing_are_distinct_idempotent_facts(): void
@@ -340,7 +562,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
     public function test_plan_omissions_keep_snapshots_and_actual_dispensing_rejects_future_or_referral_only_visit(): void
     {
         $p = $this->makePlan(['note' => 'ملاحظة محفوظة']);
-        $data = $this->planData(['lock_version' => $p['lock_version']]);
+        $data = $this->planData(['lock_version' => $p['lock_version'], 'protocol_name' => 'تعديل بروتوكول مع حفظ البنود']);
         unset($data['items']);
         DB::table('medications')->where('id', $this->f['medication'])->update(['name_ar' => 'تسمية لاحقة']);
         $next = $this->callApi('PUT', $this->planPath($p['id']), $data)->assertOk()->assertJsonPath('data.revisions.0.note', 'ملاحظة محفوظة')->json('data');

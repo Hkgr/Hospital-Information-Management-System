@@ -1,5 +1,36 @@
 # Oncology workflow — actual browser review
 
+## Corrective pass for PR #27
+
+These are the current synthetic real-browser captures after date/revision guards,
+explicit carry-forward, atomic dose void/resolution and replacement administration.
+The selected visit separates administrable appointments from other appointments.
+The latter stay visible with the required explanation and without an administer
+action. Open the full history images at original size to inspect the complete page.
+
+| Corrected state | 390 px | 768 px | 1440 px |
+| --- | --- | --- | --- |
+| Explicit historical reschedule | [Image](corrective-reschedule-390.png) | [Image](corrective-reschedule-768.png) | [Image](corrective-reschedule-1440.png) |
+| Explicit revision carry-forward | [Image](corrective-carry-forward-390.png) | [Image](corrective-carry-forward-768.png) | [Image](corrective-carry-forward-1440.png) |
+| Full void with selected resolution | [Image](corrective-void-resolution-390.png) | [Image](corrective-void-resolution-768.png) | [Image](corrective-void-resolution-1440.png) |
+| Preserved void history and independent dispensing | [Image](corrective-history-390.png) | [Image](corrective-history-768.png) | [Image](corrective-history-1440.png) |
+
+[Column menu without treatment permission](corrective-permission-columns-1440.png).
+PDF renders: [parent and item void states](corrective-card-page-10.png),
+[effective visit and independent dispensing](corrective-visit-page-5.png),
+[selected list columns](corrective-list-page-1.png).
+All 18 generated PDF pages (card 11, visit 6, list 1) were inspected using PDF.js;
+all three workbooks passed PhpSpreadsheet reopening/type/print/void-label checks.
+This is not an Excel or LibreOffice printer preview.
+
+[Current exact verification and limitations](../../../backend/docs/oncology-corrective-review.md).
+
+## Initial reviewed implementation (historical reference)
+
+The images below belong to the starting reviewed SHA. The old appointment-to-visit
+linkage in that initial test is not the accepted current workflow; use the corrected
+captures and evidence above for this review.
+
 Synthetic fixtures only. Captured from Chromium against a fresh Next production
 standalone → Laravel → isolated MariaDB, not mocked API responses. The existing
 Patient Cards interface, shared clinic/directory components, RTL and local Cairo

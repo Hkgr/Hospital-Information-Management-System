@@ -70,18 +70,43 @@ class OncologyWriter
                 }
                 $fields['diagnosis_snapshot'] = $diag->code.' · '.$diag->name_ar;
             }
+            $priorItems = $priorRevision ? DB::table('oncology_regimen_items')->where('revision_id', $priorRevision->id)->orderBy('display_order')->get()->keyBy('id') : collect();
+            $items = $data['items'] ?? $priorItems->map(fn ($i) => (array) $i)->values()->all();
+            foreach ($items as $i => &$item) {
+                $priorItem = isset($item['id']) ? $priorItems->get($item['id']) : null;
+                abort_if(isset($item['id']) && ! $priorItem, 404);
+                $item = $this->medication($item, $priorItem, "items.$i");
+            }
+            unset($item);
+            $content = OncologyIntegrity::content($fields, $items);
+            if ($priorRevision && $content === OncologyIntegrity::content((array) $priorRevision, $priorItems->values()->all())) {
+                OncologyIntegrity::reject('ONCOLOGY_NO_CLINICAL_CHANGE', 'لم تتغير الحقول السريرية أو بنود العلاج؛ لم تُنشأ نسخة جديدة.');
+            }
+            $duplicate = null;
+            if (! $old) {
+                $candidates = DB::table('oncology_plans as p')->join('oncology_plan_revisions as r', 'r.id', '=', 'p.current_revision_id')->where('p.dossier_id', $dossier)->where('p.facility_id', $f['id'])->whereNotIn('p.status', ['completed', 'cancelled'])->select('r.*')->get();
+                $candidateItems = DB::table('oncology_regimen_items')->whereIn('revision_id', $candidates->pluck('id'))->orderBy('display_order')->get()->groupBy('revision_id');
+                foreach ($candidates as $candidate) {
+                    if ($content === OncologyIntegrity::content((array) $candidate, ($candidateItems[$candidate->id] ?? collect())->all())) {
+                        $duplicate = $candidate->plan_id;
+                        break;
+                    }
+                }
+                if ($duplicate && ! ($data['confirm_duplicate'] ?? false)) {
+                    OncologyIntegrity::reject('ONCOLOGY_DUPLICATE_PLAN', 'توجد خطة مفتوحة بالمحتوى السريري نفسه. راجعها قبل إنشاء نسخة مستقلة مقصودة.', ['existing_plan_id' => (int) $duplicate], 409);
+                }
+                if (($data['confirm_duplicate'] ?? false) && blank($data['duplicate_reason'] ?? null)) {
+                    throw ValidationException::withMessages(['duplicate_reason' => 'إنشاء خطة مطابقة مقصودة يحتاج سببًا صريحًا.']);
+                }
+            }
             $number = $old ? DB::table('oncology_plan_revisions')->where('plan_id', $id)->max('revision_number') + 1 : 1;
             $plan = $old ?? (object) ['id' => $this->persist($r, $f, 'oncology_plans', null, ['dossier_id' => $dossier, 'facility_id' => $f['id'], 'client_request_id' => $data['request_id'], 'status' => 'draft'])];
             $revision = DB::table('oncology_plan_revisions')->insertGetId($fields + ['plan_id' => $plan->id, 'dossier_id' => $dossier, 'facility_id' => $f['id'], 'revision_number' => $number, 'client_request_id' => $data['request_id'], 'entered_by' => $r->user()->id, 'created_at' => now()]);
-            $priorItems = $priorRevision ? DB::table('oncology_regimen_items')->where('revision_id', $priorRevision->id)->orderBy('display_order')->get()->keyBy('id') : collect();
-            $items = $data['items'] ?? $priorItems->map(fn ($i) => (array) $i)->values()->all();
             foreach ($items as $i => $item) {
-                $priorItem = isset($item['id']) ? $priorItems->get($item['id']) : null;
-                if (isset($item['id']) && ! $priorItem) {
-                    abort(404);
-                }
-                $item = $this->medication($item, $priorItem, "items.$i");
                 DB::table('oncology_regimen_items')->insert(Arr::only($item, ['medication_id', 'medication_name_snapshot', 'medication_code_snapshot', 'dose_value', 'dose_unit', 'route', 'instructions', 'funding_source_id', 'note']) + ['revision_id' => $revision, 'display_order' => $i]);
+            }
+            if ($duplicate) {
+                $this->writes->audit($r, $f, 'oncology_plans', $plan->id, null, ['existing_plan_id' => $duplicate, 'duplicate_reason' => $data['duplicate_reason']], 'duplicate_confirmed');
             }
             $this->writes->audit($r, $f, 'oncology_plan_revisions', $revision, null, $fields + ['plan_id' => $plan->id, 'revision_number' => $number, 'items' => $items]);
             // Initial allocation is inside the transaction; no competing patient identity.
@@ -145,6 +170,7 @@ class OncologyWriter
             $this->active($f, $dossier, $planId);
             $revision = DB::table('oncology_plan_revisions')->where('id', $plan->current_revision_id)->first();
             foreach ($data['sessions'] as $i => $session) {
+                OncologyIntegrity::boundaries($revision, $session);
                 $this->context->check($f, $revision->clinic_id, $revision->doctor_id, $session['planned_on'], "sessions.$i.planned_on", false);
                 if (DB::table('oncology_sessions')->where('plan_id', $planId)->where('session_number', $session['session_number'])->exists()) {
                     throw ValidationException::withMessages(["sessions.$i.session_number" => 'رقم الجلسة محفوظ في هذه الخطة؛ عدّل الموعد بدل تكراره.']);
@@ -161,9 +187,10 @@ class OncologyWriter
     {
         $target = DB::table('oncology_sessions')->where('id', $id)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->first();
         abort_unless($target, 404);
+        $targets = $this->planTargets($f, $dossier, $target->plan_id);
 
-        return $this->writes->once($r, $f, $data, "oncology:session:$dossier:$id", function () use ($r, $f, $dossier, $id, $data, $target) {
-            $this->context->lock([[$target->doctor_id], [$target->clinic_id]]);
+        return $this->writes->once($r, $f, $data, "oncology:session:$dossier:$id", function () use ($r, $f, $dossier, $id, $data, $target, $targets) {
+            $this->context->lock([array_merge($targets[0], [$target->doctor_id]), array_merge($targets[1], [$target->clinic_id])]);
             $this->writes->dossier($f, $dossier);
             $s = DB::table('oncology_sessions')->where('id', $id)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
             abort_unless($s, 404);
@@ -171,19 +198,34 @@ class OncologyWriter
             if ($s->status === 'completed') {
                 DossierWrites::conflict('هذه الجلسة لها واقعة فعلية؛ صحح الواقعة أو أبطلها ولا تعِد جدولتها.');
             }
-            $plan = $this->plan($f, $dossier, $s->plan_id);
-            if (in_array($plan->status, ['completed', 'cancelled'])) {
-                DossierWrites::conflict('الخطة مغلقة.');
-            }
-            $fields = ['status' => $data['status'], 'reason' => $data['reason']];
-            if ($data['status'] === 'rescheduled') {
-                $this->active($f, $dossier, $s->plan_id);
-                $this->context->check($f, $s->clinic_id, $s->doctor_id, $data['planned_on'], 'planned_on', false);
-                $fields['planned_on'] = $data['planned_on'];
-            }
+            $plan = $this->plan($f, $dossier, $s->plan_id, $data['plan_lock_version']);
 
-            return $this->persist($r, $f, 'oncology_sessions', $s, $fields);
+            return $this->resolveSession($r, $f, $s, $plan, $data);
         });
+    }
+
+    private function resolveSession(Request $r, array $f, object $s, object $plan, array $data): int
+    {
+        if (DB::table('dose_sessions')->where('oncology_session_id', $s->id)->whereNull('voided_at')->exists()) {
+            DossierWrites::conflict('للموعد إعطاء فعال؛ صحح الواقعة أو أبطلها مع معالجة الموعد.');
+        }
+        $fields = ['status' => $data['status'], 'reason' => $data['reason']];
+        $revision = DB::table('oncology_plan_revisions')->where('id', $plan->current_revision_id)->first();
+        if ($data['carry_forward'] ?? false) {
+            $this->active($f, $s->dossier_id, $plan->id);
+            $fields += ['revision_id' => $revision->id, 'clinic_id' => $revision->clinic_id, 'doctor_id' => $revision->doctor_id];
+        }
+        if ($data['status'] === 'rescheduled') {
+            $this->active($f, $s->dossier_id, $plan->id);
+            if (($fields['revision_id'] ?? $s->revision_id) != $revision->id) {
+                OncologyIntegrity::reject('ONCOLOGY_OBSOLETE_SESSION_REVISION', 'نسخة علاجية سابقة — تحتاج معالجة قبل الإعطاء. أكد النقل إلى النسخة الحالية صراحة.');
+            }
+            $fields['planned_on'] = $data['planned_on'] ?? $s->planned_on;
+            OncologyIntegrity::boundaries($revision, $fields + (array) $s);
+            $this->context->check($f, $fields['clinic_id'] ?? $s->clinic_id, $fields['doctor_id'] ?? $s->doctor_id, $fields['planned_on'], 'planned_on', false);
+        }
+
+        return $this->persist($r, $f, 'oncology_sessions', $s, $fields);
     }
 
     private function active(array $f, int $dossier, int $id): void
@@ -244,8 +286,23 @@ class OncologyWriter
 
     public function administer(Request $r, array $f, int $dossier, int $visit, array $data, ?int $id = null, bool $void = false): int
     {
-        return $this->writes->once($r, $f, $data, "oncology:dose:$dossier:$visit:".($id ?? 'new').':'.($void ? 'void' : 'save'), function () use ($r, $f, $dossier, $visit, $data, $id, $void) {
-            $this->context->lock([array_filter([$data['supervising_staff_id'] ?? null, $data['administered_by'] ?? null]), []]);
+        $targets = [[], []];
+        if (! $id) {
+            $target = DB::table('oncology_sessions')->where('id', $data['session_id'])->where('dossier_id', $dossier)->where('facility_id', $f['id'])->first();
+            abort_unless($target, 404);
+            $targets = $this->planTargets($f, $dossier, $target->plan_id);
+            $targets[0][] = $target->doctor_id;
+            $targets[1][] = $target->clinic_id;
+        } elseif ($void) {
+            $target = DB::table('dose_sessions as d')->join('oncology_sessions as s', 's.id', '=', 'd.oncology_session_id')->where('d.id', $id)->where('d.visit_id', $visit)->where('d.dossier_id', $dossier)->where('d.facility_id', $f['id'])->first(['s.plan_id', 's.doctor_id', 's.clinic_id']);
+            abort_unless($target, 404);
+            $targets = $this->planTargets($f, $dossier, $target->plan_id);
+            $targets[0][] = $target->doctor_id;
+            $targets[1][] = $target->clinic_id;
+        }
+
+        return $this->writes->once($r, $f, $data, "oncology:dose:$dossier:$visit:".($id ?? 'new').':'.($void ? 'void' : 'save'), function () use ($r, $f, $dossier, $visit, $data, $id, $void, $targets) {
+            $this->context->lock([array_merge($targets[0], array_filter([$data['supervising_staff_id'] ?? null, $data['administered_by'] ?? null])), $targets[1]]);
             $v = app(DossierPathology::class)->visit($f, $dossier, $visit, true);
             $old = $id ? DB::table('dose_sessions')->where('id', $id)->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNotNull('oncology_session_id')->lockForUpdate()->first() : null;
             if ($id) {
@@ -256,12 +313,22 @@ class OncologyWriter
                 }
             }
             if ($void) {
+                abort_unless(in_array('dossiers.treatment.schedule', $f['permissions'], true), 403);
+                if (! in_array($data['session_resolution'] ?? null, ['rescheduled', 'missed', 'cancelled', 'referred'], true)
+                    || (($data['session_resolution'] ?? null) === 'rescheduled' && empty($data['planned_on']))) {
+                    OncologyIntegrity::reject('ONCOLOGY_INVALID_VOID_RESOLUTION', 'إبطال الإعطاء يحتاج اختيار معالجة الموعد وتاريخًا صريحًا عند إعادة الجدولة.');
+                }
                 $this->period($f, $old->reporting_period_id, $old->administered_on);
+                $session = DB::table('oncology_sessions')->where('id', $old->oncology_session_id)->lockForUpdate()->first();
+                DossierWrites::version((array) $session, $data['session_lock_version']);
+                $plan = $this->plan($f, $dossier, $session->plan_id, $data['plan_lock_version']);
+                $saved = $this->persist($r, $f, 'dose_sessions', $old, ['voided_at' => now(), 'voided_by' => $r->user()->id, 'void_reason' => $data['reason']]);
+                $this->resolveSession($r, $f, $session, $plan, ['status' => $data['session_resolution']] + $data);
 
-                return $this->persist($r, $f, 'dose_sessions', $old, ['voided_at' => now(), 'voided_by' => $r->user()->id, 'void_reason' => $data['reason']]);
+                return $saved;
             }
             if ($data['administered_on'] !== $v->visit_date || $data['administered_on'] > $f['today']) {
-                throw ValidationException::withMessages(['administered_on' => 'الإعطاء الفعلي يكون بتاريخ الزيارة الفعلية غير المستقبلي.']);
+                OncologyIntegrity::reject('ONCOLOGY_SCHEDULE_DATE_MISMATCH', 'تاريخ الإعطاء والموعد يجب أن يطابقا تاريخ الزيارة الفعلية غير المستقبلي.');
             }
             $this->period($f, $data['reporting_period_id'], $data['administered_on'], $old?->reporting_period_id);
             $session = DB::table('oncology_sessions')->where('id', $old?->oncology_session_id ?? $data['session_id'])->where('dossier_id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
@@ -272,20 +339,28 @@ class OncologyWriter
                 DossierWrites::version((array) $plan, $data['plan_lock_version']);
                 DossierWrites::version((array) $v, $data['visit_lock_version']);
                 $this->active($f, $dossier, $plan->id);
-                if (! in_array($session->status, ['scheduled', 'rescheduled']) || DB::table('dose_sessions')->where('oncology_session_id', $session->id)->exists()) {
+                if ($session->revision_id != $plan->current_revision_id) {
+                    OncologyIntegrity::reject('ONCOLOGY_OBSOLETE_SESSION_REVISION', 'نسخة علاجية سابقة — تحتاج معالجة قبل الإعطاء.');
+                }
+                if ($session->planned_on !== $v->visit_date) {
+                    OncologyIntegrity::reject('ONCOLOGY_SCHEDULE_DATE_MISMATCH', 'أعد جدولة الجلسة صراحة إلى تاريخ الحضور الفعلي قبل تسجيل الإعطاء.');
+                }
+                $this->context->check($f, $session->clinic_id, $session->doctor_id, $session->planned_on, 'session_id', false);
+                if (! in_array($session->status, ['scheduled', 'rescheduled']) || DB::table('dose_sessions')->where('oncology_session_id', $session->id)->whereNull('voided_at')->exists()) {
                     DossierWrites::conflict('الجلسة غير متاحة للإعطاء أو سُجل حضورها مسبقًا.');
                 }
                 if (DB::table('visit_outcomes as o')->join('visit_results as r', 'r.id', '=', 'o.result_id')->where('o.visit_id', $visit)->whereNull('o.voided_at')->where('r.code', 'DOS-REFER')->exists()) {
                     throw ValidationException::withMessages(['visit_id' => 'الزيارة المحالة لا تسجّل جرعة معطاة؛ راجع النتيجة السريرية أولًا.']);
                 }
             }
-            $this->context->check($f, $session->clinic_id, $data['supervising_staff_id'], $v->visit_date, 'supervising_staff_id', false);
+            $doseRevision = DB::table('oncology_plan_revisions')->where('id', $old?->plan_revision_id ?? $session->revision_id)->first();
+            $this->context->check($f, $doseRevision->clinic_id, $data['supervising_staff_id'], $v->visit_date, 'supervising_staff_id', false);
             if (! DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('s.id', $data['administered_by'])->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $v->visit_date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $v->visit_date))->exists()) {
                 throw ValidationException::withMessages(['administered_by' => 'اختر عضو كادر فعالًا له ارتباط في هذا المشفى يغطي تاريخ الإعطاء.']);
             }
             $fields = Arr::only($data, ['reporting_period_id', 'administered_on', 'supervising_staff_id', 'administered_by', 'session_label', 'note']);
             if (! $old) {
-                $fields += ['visit_id' => $visit, 'facility_id' => $f['id'], 'dossier_id' => $dossier, 'oncology_session_id' => $session->id, 'plan_revision_id' => $session->revision_id, 'activation_basis' => $plan->activation_basis, 'client_request_id' => $data['request_id']];
+                $fields += ['visit_id' => $visit, 'facility_id' => $f['id'], 'dossier_id' => $dossier, 'oncology_session_id' => $session->id, 'oncology_plan_id' => $plan->id, 'plan_revision_id' => $session->revision_id, 'activation_basis' => $plan->activation_basis, 'client_request_id' => $data['request_id']];
             }
             $saved = $this->persist($r, $f, 'dose_sessions', $old, $fields);
             foreach ($data['items'] as $i => $item) {
@@ -305,7 +380,7 @@ class OncologyWriter
                 }
             }
             if (! DB::table('dose_session_items')->where('dose_session_id', $saved)->whereNull('voided_at')->exists()) {
-                $modality = DB::table('oncology_plan_revisions')->where('id', $session->revision_id)->value('modality');
+                $modality = $doseRevision->modality;
                 if ($modality !== 'radiotherapy' || blank($data['session_label'] ?? null) || blank($data['note'] ?? null)) {
                     throw ValidationException::withMessages(['items' => 'وثّق الأدوية المعطاة فعليًا. الجلسة الشعاعية دون أدوية تحتاج عنوانًا ووصفًا صريحًا لما أُجري؛ الموعد وحده ليس إعطاءً.']);
                 }

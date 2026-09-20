@@ -51,8 +51,9 @@ class OncologyQueries
 
     public function scheduled(array $f): Builder
     {
-        return DB::table('oncology_sessions as s')->joinSub($this->plans($f)->select('p.id')->selectRaw(self::effectiveSql().' AS effective_status'), 'plan', 'plan.id', '=', 's.plan_id')
-            ->where('s.facility_id', $f['id'])->where('plan.effective_status', 'active')->whereIn('s.status', ['scheduled', 'rescheduled']);
+        return DB::table('oncology_sessions as s')->joinSub($this->plans($f)->select('p.id', 'p.current_revision_id')->selectRaw(self::effectiveSql().' AS effective_status'), 'plan', 'plan.id', '=', 's.plan_id')
+            ->where('s.facility_id', $f['id'])->where('plan.effective_status', 'active')->whereColumn('s.revision_id', 'plan.current_revision_id')->whereIn('s.status', ['scheduled', 'rescheduled'])
+            ->whereNotExists(fn ($q) => $q->from('dose_sessions as d')->selectRaw('1')->whereColumn('d.oncology_session_id', 's.id')->whereNull('d.voided_at'));
     }
 
     public function decorate(Builder $q, array $f, array $input): void
@@ -110,19 +111,19 @@ class OncologyQueries
         $revisions = DB::table('oncology_plan_revisions as r')->leftJoin('clinics as c', 'c.id', '=', 'r.clinic_id')->leftJoin('staff as s', 's.id', '=', 'r.doctor_id')->where('r.plan_id', $id)->orderByDesc('r.revision_number')->get(['r.*', 'c.name_ar as clinic_name', 's.full_name as doctor_name']);
         $items = DB::table('oncology_regimen_items')->whereIn('revision_id', $revisions->pluck('id'))->orderBy('display_order')->get()->groupBy('revision_id');
 
-        return (array) $row + ['revisions' => $revisions->map(fn ($r) => (array) $r + ['items' => ($items[$r->id] ?? collect())->all()])->all()];
+        return (array) $row + ['unresolved_session_count' => DB::table('oncology_sessions')->where('plan_id', $id)->where('revision_id', '<>', $row->current_revision_id)->whereIn('status', ['scheduled', 'rescheduled'])->count(), 'revisions' => $revisions->map(fn ($r) => (array) $r + ['items' => ($items[$r->id] ?? collect())->all()])->all()];
     }
 
     public function sessions(array $f, int $dossier, array $input): array
     {
         app(DossierWrites::class)->dossier($f, $dossier, false);
-        $q = DB::table('oncology_sessions as s')->joinSub($this->plans($f)->select('p.id', 'p.plan_number')->selectRaw(self::effectiveSql().' AS effective_status'), 'p', 'p.id', '=', 's.plan_id')->leftJoin('dose_sessions as dose', 'dose.oncology_session_id', '=', 's.id')->where('s.facility_id', $f['id'])->where('s.dossier_id', $dossier);
+        $q = DB::table('oncology_sessions as s')->joinSub($this->plans($f)->select('p.id', 'p.plan_number', 'p.current_revision_id', 'p.lock_version')->selectRaw(self::effectiveSql().' AS effective_status'), 'p', 'p.id', '=', 's.plan_id')->leftJoin('dose_sessions as dose', fn ($j) => $j->on('dose.oncology_session_id', '=', 's.id')->whereNull('dose.voided_at'))->where('s.facility_id', $f['id'])->where('s.dossier_id', $dossier);
         foreach (['plan_id', 'status'] as $key) {
             if (! empty($input[$key])) {
                 $q->where('s.'.$key, $input[$key]);
             }
         }
-        $page = $q->orderBy('s.planned_on')->orderBy('s.id')->paginate($input['per_page'] ?? 10, ['s.*', 'p.plan_number', 'p.effective_status', 'dose.id as dose_id', 'dose.visit_id', 'dose.voided_at as dose_voided_at'], 'page', $input['page'] ?? 1);
+        $page = $q->orderBy('s.planned_on')->orderBy('s.id')->paginate($input['per_page'] ?? 10, ['s.*', 'p.plan_number', 'p.effective_status', 'p.current_revision_id', 'p.lock_version as plan_lock_version', 'dose.id as dose_id', 'dose.visit_id', 'dose.voided_at as dose_voided_at'], 'page', $input['page'] ?? 1);
 
         return ['data' => $page->items(), 'meta' => CatalogQueries::meta($page)];
     }
@@ -130,9 +131,9 @@ class OncologyQueries
     public function doses(array $f, int $dossier, int $visit): array
     {
         app(DossierPathology::class)->visit($f, $dossier, $visit);
-        $doses = DB::table('dose_sessions as d')->leftJoin('oncology_sessions as s', 's.id', '=', 'd.oncology_session_id')->where('d.visit_id', $visit)->where('d.facility_id', $f['id'])->orderBy('d.id')->get(['d.*', 's.clinic_id']);
+        $doses = DB::table('dose_sessions as d')->leftJoin('oncology_sessions as s', 's.id', '=', 'd.oncology_session_id')->leftJoin('oncology_plan_revisions as r', 'r.id', '=', 'd.plan_revision_id')->leftJoin('oncology_plans as p', 'p.id', '=', 's.plan_id')->where('d.visit_id', $visit)->where('d.facility_id', $f['id'])->orderBy('d.id')->get(['d.*', 'r.clinic_id', 's.lock_version as session_lock_version', 's.planned_on', 's.revision_id as session_revision_id', 'p.current_revision_id', 'p.lock_version as plan_lock_version']);
         $items = DB::table('dose_session_items')->whereIn('dose_session_id', $doses->pluck('id'))->orderBy('id')->get()->groupBy('dose_session_id');
-        $dispensed = DB::table('visit_medications as m')->leftJoin('dose_sessions as d', 'd.id', '=', 'm.dose_session_id')->leftJoin('oncology_sessions as s', 's.id', '=', 'd.oncology_session_id')->where('m.visit_id', $visit)->where('m.facility_id', $f['id'])->orderBy('m.id')->get(['m.*', 's.clinic_id']);
+        $dispensed = DB::table('visit_medications as m')->leftJoin('dose_sessions as d', 'd.id', '=', 'm.dose_session_id')->leftJoin('oncology_plan_revisions as r', 'r.id', '=', 'd.plan_revision_id')->where('m.visit_id', $visit)->where('m.facility_id', $f['id'])->orderBy('m.id')->get(['m.*', 'r.clinic_id', 'd.voided_at as parent_voided_at']);
 
         return ['doses' => $doses->map(fn ($d) => (array) $d + ['items' => ($items[$d->id] ?? collect())->all()])->all(), 'dispensed' => $dispensed->all()];
     }

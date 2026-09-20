@@ -43,8 +43,8 @@ class DossierReports
         $reason = $row->void_reason ?? $row->parent_void_reason ?? null;
         $state = $void ? 'ملغاة' : 'محفوظة';
         $text = 'حالة الواقعة: '.$state.($reason ? '؛ السبب: '.$reason : '');
-        if (! empty($row->voided_at) && ! empty($row->parent_voided_at)) {
-            $text .= '؛ إلغاء السجل الحاوي: '.$row->parent_void_reason;
+        if (! empty($row->parent_voided_at)) {
+            $text .= '؛ '.(isset($row->dose_session_id) ? 'الإعطاء الحاوي' : 'السجل الحاوي').' مبطل بتاريخ '.$row->parent_voided_at.'؛ السبب: '.$row->parent_void_reason;
         }
         if ($visit->voided_at) {
             $text .= '؛ الزيارة ملغاة: '.$visit->void_reason;

@@ -60,7 +60,7 @@ class OncologyController extends Controller
     {
         $f = $this->scope($r);
         app(DossierWrites::class)->dossier($f, $dossier, false);
-        $row = DB::table('oncology_sessions')->where('id', $session)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->first();
+        $row = DB::table('oncology_sessions as s')->joinSub(app(OncologyQueries::class)->plans($f)->select('p.id', 'p.current_revision_id', 'p.lock_version')->selectRaw(OncologyQueries::effectiveSql().' AS effective_status'), 'p', 'p.id', '=', 's.plan_id')->where('s.id', $session)->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->first(['s.*', 'p.current_revision_id', 'p.lock_version as plan_lock_version', 'p.effective_status']);
         abort_unless($row, 404);
 
         return response()->json(['data' => $row]);

@@ -66,19 +66,45 @@ registration, diagnosis, pathology, prescription and visit workflows remain inta
    plans are allowed.
 4. Open/select an actual visit and explicitly record attendance/administration.
    Plan, session and visit versions must still match. A composite relationship and
-   unique session link prevent duplicate attendance. Actual items are entered
+   unique active-session link prevent duplicate attendance. The appointment date
+   must equal the visit date and its revision must be the current approved revision.
+   A different attendance date requires an explicit, reasoned reschedule first.
+   Actual items are entered
    independently; planned items are not silently copied into medical facts.
 5. Record take-home or supportive dispensing separately, linked to the dose and
    actual visit. No prescription, visit, stock movement or inventory deduction is
    inferred from a plan, appointment, administration or dispensing request.
 
-Plan amendments append immutable numbered revisions. Unchanged medication IDs
+Clinically changed plan amendments append immutable numbered revisions. Unchanged medication IDs
 retain their original name/code snapshots even if the directory changes. Scheduled
-sessions and administrations retain the revision that governed them. Omission of
+sessions on an older revision become ineligible until explicitly carried forward
+or resolved as missed/cancelled/referred. Completed administrations retain the
+revision that governed them. Omission of
 optional plan data or saved actual items preserves history; explicit removal of an
 actual item needs its ID, version and void reason. Actual corrections and voids need
 separate permissions and reasons. Voiding a dose does not erase its independently
-recorded dispensing or reopen its appointment.
+recorded dispensing. Full void requires a selected appointment resolution:
+`rescheduled`, `missed`, `cancelled`, or `referred`, plus dose/session/plan lock
+versions and reason. Rescheduling requires a date and explicit `carry_forward`
+when the appointment is obsolete. Void and resolution commit atomically.
+Use correction when treatment occurred but its recorded details were wrong.
+
+All new/rescheduled eligible appointments must be inside the current revision's
+start/end dates and planned session/cycle counts, with a date-valid doctor/clinic
+assignment. Neither boundaries nor counts expand implicitly. Session PUT requires
+`plan_lock_version` alongside its own `lock_version`. Carry-forward copies the
+current revision's clinic/doctor; audit retains the entire prior appointment.
+Historical void attempts retain their own immutable revision even after a resolved
+appointment moves forward. Active/completed administrations cannot be moved.
+
+Normalized meaningful fields and ordered regimen items detect accidental duplicates.
+No-op amendment returns `422 ONCOLOGY_NO_CLINICAL_CHANGE`, without changing version
+or approval. An identical open plan in the same dossier/facility returns
+`409 ONCOLOGY_DUPLICATE_PLAN` and scoped `error.existing_plan_id`. Intentional
+duplicates require `confirm_duplicate=true`, `duplicate_reason` and create access;
+UUID retries remain ordinary retries. The normalization excludes technical IDs,
+timestamps and amendment reason, preserves historical medication identification,
+and compares decimal values independently of trailing decimal zeroes.
 
 Pausing, completion and cancellation record actor, time and reason. Closed plans
 cannot receive new schedules or administration. Rescheduling, missing, cancelling
@@ -138,8 +164,11 @@ Additional permission suffixes under `dossiers.treatment.` are:
 `create`, `update`, `activate`, `override`, `status`, `schedule`, `administer`,
 `dispense`, `correct`, `void`. Export, audit, patient registration, visit creation
 and pathology permissions remain independently required by their existing APIs.
+Full-dose void also requires `dossiers.treatment.schedule` because it resolves the
+appointment. No permissions are newly defined or automatically assigned here.
 No treatment-view access means no new treatment summaries, facts or audit entries;
 requesting treatment filters/export columns explicitly returns 403.
+Treatment filters and optional column-menu entries are hidden without view access.
 
 ## Reports and performance
 
@@ -148,7 +177,10 @@ Optional columns: `treatment_count`, `active_treatment_count`,
 `review_treatment_count`, `treatment_modalities`, `next_dose_on`, `last_dose_on`.
 The default columns remain unchanged. Exports include all authorized matching rows.
 Card reports add revisions, planned items, appointment changes, actual medication
-and dispensing detail. Visit reports include only that visit's actual facts, never
+and dispensing detail. Each historical voided parent dose and item carries explicit
+state, reason and date; independently voided items keep their own reason. Active
+dispensing linked to a voided dose remains a clearly labelled independent fact.
+Visit reports include only that visit's effective non-voided actual facts, never
 future appointments. Existing report aliases/templates, RTL/Cairo, safe text cells,
 typed dates/decimals and attachment privacy remain in place.
 
@@ -170,11 +202,27 @@ php artisan db:seed --class=OncologyPermissionsSeeder --force
 php artisan oncology:reconcile
 ```
 
-The migration is `2026_09_20_000002_add_oncology_plans_and_sessions.php`.
+The original migration is `2026_09_20_000002_add_oncology_plans_and_sessions.php`.
 No old migration was changed. It adds `oncology_plans`, `oncology_plan_revisions`,
 `oncology_regimen_items`, `oncology_sessions`, and nullable scoped links/metadata to
 the three reused clinical tables. It preserves old data and infers no clinical
 backfill. Doctor/clinic reference inventories include the new FK references.
+
+The corrective follow-up is
+`2026_09_21_000001_preserve_voided_oncology_administrations.php`. It adds a nullable
+generated active-session key with a unique index, preserving every void attempt.
+It backfills only `dose_sessions.oncology_plan_id` from the existing session FK.
+Separate composite session/plan/context and historical-revision/plan/context FKs
+retain relational scope without forcing an old dose to adopt a newer revision.
+Existing visit/context constraints remain. Conflicting active duplicates refuse
+upgrade before DDL. The follow-up can roll back safely while the old constraints
+remain satisfiable; multiple historical attempts or a moved session with an older
+dose revision cause refusal before DDL. No medical row is deleted or detached.
+`2026_09_21_000002_constrain_active_oncology_revision.php` additionally enforces
+the exact active dose/session revision tuple using a nullable generated revision
+key. The historical revision FK remains enforced for voided rows; only the active
+equality FK becomes inapplicable upon explicit void. Its upgrade preflights active
+revision mismatches and refuses without choosing between medical facts.
 
 The seeder defines permissions only. An operator must review role assignments,
 including the elevated pathology exception. `database/sql/oncology-permissions.sql`
@@ -197,6 +245,7 @@ For local verification use the existing `.env.testing`, then:
 php artisan test-db:check --connect --env=testing
 php artisan migrate --env=testing
 php tests/Support/oncology-migration-check.php
+php tests/Support/oncology-integrity-migration.php
 php vendor/bin/phpunit --bootstrap tests/Support/preserve-database.php tests/Feature/OncologyTreatmentTest.php
 ```
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import PathologyPanel from "./PathologyPanel";
 import OncologyPanel from "./OncologyPanel";
-import {planStates,modalities} from "./oncology";
+import {planStates,modalities,treatmentColumns} from "./oncology";
 import { dispositionLabels } from "./pathology";
 import DossierAuditHistory from "./DossierAuditHistory";
 import DossierHistoryReport from "./DossierHistoryReport";
@@ -35,8 +35,10 @@ function StatusBadge({ status, visit = false }: { status: "draft" | "active" | "
   return <span className={status === "draft" ? styles.badge : styles.active} aria-label={`${visit ? "حالة الزيارة" : "حالة بطاقة المريض"}: ${text}`}>{text}</span>;
 }
 function Listing({ facility }: { facility: number }) {
-  const [columns,setColumns]=useState<(keyof typeof reportColumns)[]>(defaultColumns);
+  const [chosenColumns,setColumns]=useState<(keyof typeof reportColumns)[]>(defaultColumns);
   const options = useClinicRequest<WizardOptions>(`dossiers/options?facility_id=${facility}`);
+  const availableColumns = Object.fromEntries(Object.entries(reportColumns).filter(([key])=>options.data?.capabilities.treatment_view || !(key in treatmentColumns)));
+  const columns = chosenColumns.filter(key=>key in availableColumns);
   const params = useSearchParams(); const pathname = usePathname();
   const { search, committed, change, cancel, searching } = useClinicSearch(pathname, params.toString(), facility);
   const q = new URLSearchParams({ facility_id: String(facility) });
@@ -47,7 +49,7 @@ function Listing({ facility }: { facility: number }) {
   const exportQuery=new URLSearchParams(q);columns.forEach(c=>exportQuery.append("columns[]",c));
   const headings = [...columns.map(k=>reportColumns[k]),"الإجراءات"];
   return <><header className={styles.heading}><div><h2>بطاقات المرضى</h2><p>ملفات المرضى ومسوداتهم في المشفى</p></div><div>{options.data?.creation.allowed ? <Link className={styles.primary} href={`/patient-cards/new?${q}`}><LuPlus aria-hidden="true" />تسجيل بطاقة مريض</Link> : <button type="button" className={styles.primary} disabled aria-describedby="add-dossier-note"><LuPlus aria-hidden="true" />تسجيل بطاقة مريض</button>}<p id="add-dossier-note" className={styles.hint}>{options.data?.creation.allowed ? "احفظ البيانات على مراحل، وتابع المسودة لاحقًا." : options.loading ? "جارٍ التحقق من إمكانية الإضافة…" : options.error ? "تعذّر التحقق من إمكانية الإضافة؛ أعد المحاولة." : options.data?.creation.reason}</p>{options.error && <button className={styles.secondary} onClick={options.retry}>إعادة التحقق من إمكانية الإضافة</button>}</div></header>
-    <section className={styles.panel}><div className={`${styles.toolbar} ${cardStyles.toolbar}`}><DossierReports path="dossiers/export" filters={exportQuery.toString()} ready={!!list.data&&!list.loading&&!list.error&&!searching} allowed={!!options.data?.capabilities.export}/><ColumnMenu labels={reportColumns} visible={columns} onChange={setColumns}/><label className={styles.search}><span><LuSearch aria-hidden="true" />البحث</span><input type="search" aria-label="البحث في بطاقات المرضى" placeholder="كود المريض أو الاسم أو معرّف قديم…" value={search} onChange={e => change(e.target.value)} /></label></div><div className={styles.filters}>
+    <section className={styles.panel}><div className={`${styles.toolbar} ${cardStyles.toolbar}`}><DossierReports path="dossiers/export" filters={exportQuery.toString()} ready={!!list.data&&!list.loading&&!list.error&&!searching} allowed={!!options.data?.capabilities.export}/><ColumnMenu<string> labels={availableColumns} visible={columns} onChange={next=>setColumns(next.filter((key):key is keyof typeof reportColumns=>key in availableColumns))}/><label className={styles.search}><span><LuSearch aria-hidden="true" />البحث</span><input type="search" aria-label="البحث في بطاقات المرضى" placeholder="كود المريض أو الاسم أو معرّف قديم…" value={search} onChange={e => change(e.target.value)} /></label></div><div className={styles.filters}>
       <label>حالة بطاقة المريض<select value={params.get("status") ?? "all"} onChange={e => filter("status", e.target.value)}><option value="all">الكل</option><option value="draft">مسودة</option><option value="active">فعالة</option></select></label>
       <label>بداية الملف الطبي في المشفى من<input type="date" value={params.get("from") ?? ""} onChange={e => filter("from", e.target.value)} /></label>
       <label>بداية الملف الطبي في المشفى إلى<input type="date" value={params.get("to") ?? ""} onChange={e => filter("to", e.target.value)} /></label>
