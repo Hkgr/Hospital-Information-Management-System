@@ -1,0 +1,20 @@
+/* Match the shared directory filter's scrolling for the expanded column list. */
+.toolbar > details > fieldset {
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  max-block-size: min(480px, 65dvh);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* Keep the existing column picker inside this page's narrow toolbar. */
+@media (max-width: 600px) {
+  .toolbar > details {
+    inline-size: 100%;
+  }
+
+  .toolbar > details > fieldset {
+    inline-size: 100%;
+    max-inline-size: 100%;
+  }
+}

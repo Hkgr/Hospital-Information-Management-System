@@ -47,7 +47,7 @@ class DossierWorkflowActions
                     }
                 }
             }
-            $label = $visitAction === 'create' ? 'تسجيل الزيارة الأولية' : ($visitAction === 'update' ? (($sections->get('visit')?->state ?? 'not_started') === 'saved' ? 'تعديل الزيارة الأولية المسودة' : 'استكمال الزيارة الأولية المسودة') : null);
+            $label = $visitAction === 'create' ? 'تسجيل أول زيارة مسجلة ضمن البطاقة' : ($visitAction === 'update' ? (($sections->get('visit')?->state ?? 'not_started') === 'saved' ? 'تعديل أول زيارة مسجلة ضمن البطاقة المسودة' : 'استكمال أول زيارة مسجلة ضمن البطاقة المسودة') : null);
             $result[$d['id']] = ['progress' => $sections, 'initial_visit' => $visit, 'workflow' => ['personal_update' => $allowed[0], 'medical_update' => $allowed[1], 'resume_section' => $resume, 'sections' => $allowed, 'subsequent_create' => $d['status'] === 'active' && $caps['visits_create'], 'visit' => ['id' => $visit ? (int) $visit->id : null, 'action' => $visitAction, 'label' => $label]]];
         }
 

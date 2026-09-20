@@ -11,7 +11,9 @@ use Illuminate\Validation\ValidationException;
 
 class DossierReports
 {
-    public const COLUMNS = ['sequence' => 'م', 'code' => 'كود المريض', 'name' => 'اسم المريض', 'diagnoses' => 'تشخيصات آخر زيارة', 'clinics' => 'العيادات', 'doctors' => 'الأطباء المسؤولون', 'visit_count' => 'عدد الزيارات', 'procedure_count' => 'عدد الإجراءات', 'status' => 'حالة بطاقة المريض', 'latest_visit_date' => 'تاريخ آخر زيارة'];
+    public const COLUMNS = ['sequence' => 'م', 'code' => 'كود المريض', 'name' => 'اسم المريض', 'mother_name' => 'اسم الأم', 'gender' => 'الجنس', 'birth_date' => 'الميلاد', 'phone' => 'الهاتف', 'paper_file_number' => 'رقم الملف الورقي', 'opening_date' => 'بداية الملف الطبي في المشفى', 'latest_visit_date' => 'تاريخ آخر زيارة', 'status' => 'حالة السياق الطبي', 'is_oncology' => 'الحالة الورمية', 'diagnoses' => 'تشخيصات آخر زيارة', 'clinics' => 'العيادات', 'doctors' => 'الأطباء المسؤولون', 'visit_count' => 'عدد الزيارات', 'procedure_count' => 'عدد الإجراءات'];
+
+    public const DEFAULT_COLUMNS = ['sequence', 'code', 'name', 'mother_name', 'gender', 'birth_date', 'phone', 'paper_file_number', 'opening_date', 'latest_visit_date', 'status', 'is_oncology'];
 
     private function section(string $title, array $labels, array $rows, string $note = '', array $types = []): array
     {
@@ -66,10 +68,16 @@ class DossierReports
                 $rows = [];
                 foreach ($data['data'] as $i => $d) {
                     $rows[] = ['id' => $d['id'], 'sequence' => $i + 1, 'code' => $d['code'], 'patient_code' => $d['patient_code'], 'name' => $d['patient_name'], 'diagnoses' => implode('، ', array_column($d['diagnoses'], 'name')), 'clinics' => implode('، ', array_unique(array_filter(array_column($d['diagnoses'], 'clinic')))), 'doctors' => implode('، ', array_unique(array_filter(array_column($d['diagnoses'], 'doctor')))), 'visit_count' => $d['visit_count'], 'procedure_count' => $d['procedure_count'], 'status' => $d['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'فعالة', 'latest_visit_date' => $d['latest_visit_date']];
+                    $rows[array_key_last($rows)] += [
+                        'mother_name' => $d['mother_name'], 'gender' => ['male' => 'ذكر', 'female' => 'أنثى'][$d['gender']] ?? 'غير معروف',
+                        'birth_date' => self::birthDate($d['birth_date'], $d['birth_date_accuracy']),
+                        'phone' => $d['phone'], 'paper_file_number' => $d['paper_file_number'], 'opening_date' => $d['opening_date'], 'is_oncology' => $d['is_oncology'] ? 'ورمي' : 'غير ورمي',
+                        '_types' => $d['birth_date'] && $d['birth_date_accuracy'] === 'exact' ? ['birth_date' => 'date'] : [],
+                    ];
                 }
-                $labels = array_intersect_key(self::COLUMNS, array_flip($filters['columns'] ?? array_keys(self::COLUMNS)));
+                $labels = array_intersect_key(self::COLUMNS, array_flip($filters['columns'] ?? self::DEFAULT_COLUMNS));
 
-                return [[$this->section('قائمة بطاقات المرضى', $labels, $rows, 'جميع النتائج المطابقة للفلاتر؛ لا تقتصر على الصفحة المعروضة.', ['sequence' => 'integer', 'visit_count' => 'integer', 'procedure_count' => 'integer', 'latest_visit_date' => 'date'])], null, false];
+                return [[$this->section('قائمة بطاقات المرضى', $labels, $rows, 'جميع النتائج المطابقة للفلاتر؛ لا تقتصر على الصفحة المعروضة. الميلاد بحسب دقته المسجلة؛ السنة وحدها لا تعني تاريخًا كاملًا.', ['sequence' => 'integer', 'visit_count' => 'integer', 'procedure_count' => 'integer', 'opening_date' => 'date', 'latest_visit_date' => 'date'])], null, false];
             }
             $d = $queries->detail($f, $dossier);
             $identity = ['id' => $dossier, 'code' => $d['code'], 'name' => trim($d['patient']['first_name'].' '.$d['patient']['family_name'])];
@@ -91,14 +99,15 @@ class DossierReports
             }
             $this->limit($visits->count(), config('dossiers.report_detail_limit'));
             $draft = $visit ? $visits->first()->status === 'draft' : $d['status'] === 'draft';
-            $sections = [$this->facts('هوية بطاقة المريض', ['كود المريض' => $d['code'], 'تاريخ فتح بطاقة المريض' => $d['opening_date'], 'المريض' => $identity['name'], 'حالة بطاقة المريض' => $d['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'فعالة', 'آخر زيارة فعلية' => $d['latest_visit'] ? ($d['latest_visit']['visit_no'].' · '.$d['latest_visit']['visit_date'].' · '.($d['latest_visit']['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'مكتملة')) : 'لا توجد زيارة مسجلة'], $identity, ['تاريخ فتح بطاقة المريض' => 'date'])];
-            $labels = ['first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم', 'birth_date' => 'الميلاد', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل', 'governorate' => 'المحافظة', 'city' => 'المدينة', 'address_line' => 'العنوان', 'displacement_status' => 'حالة النزوح'];
+            $sections = [$this->facts('هوية بطاقة المريض', ['كود المريض' => $d['code'], 'بداية الملف الطبي في المشفى' => $d['opening_date'], 'المريض' => $identity['name'], 'حالة بطاقة المريض' => $d['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'فعالة', 'آخر زيارة فعلية' => $d['latest_visit'] ? ($d['latest_visit']['visit_no'].' · '.$d['latest_visit']['visit_date'].' · '.($d['latest_visit']['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'مكتملة')) : 'لا توجد زيارة مسجلة'], $identity, ['بداية الملف الطبي في المشفى' => 'date'])];
+            $labels = ['first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم', 'birth_date' => 'الميلاد', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'paper_file_number' => 'رقم الملف الورقي', 'alt_phone' => 'هاتف بديل', 'governorate' => 'المحافظة', 'city' => 'المدينة', 'address_line' => 'العنوان', 'displacement_status' => 'حالة النزوح'];
             $values = ['unknown' => 'غير معروف', 'male' => 'ذكر', 'female' => 'أنثى', 'exact' => 'دقيق', 'year_only' => 'السنة فقط', 'estimated' => 'تقديري', 'resident' => 'مقيم', 'idp' => 'نازح', 'returnee' => 'عائد'];
             $personal = [];
             foreach ($labels as $key => $label) {
                 $personal[$label] = $values[$d['patient'][$key] ?? ''] ?? $d['patient'][$key];
             }
-            $sections[] = $this->facts('بيانات المريض الحالية', $personal, $identity, ['الميلاد' => 'date']);
+            $personal['الميلاد'] = self::birthDate($d['patient']['birth_date'], $d['patient']['birth_date_accuracy']);
+            $sections[] = $this->facts('بيانات المريض الحالية', $personal, $identity, $d['patient']['birth_date_accuracy'] === 'exact' ? ['الميلاد' => 'date'] : []);
             $medical = ['معلومات الإعاقة' => $d['disability_text'], 'القصة المرضية' => $d['clinical_history'], 'مريض ورمي' => $d['is_oncology'] ? 'نعم' : 'لا'];
             if ($d['oncology']) {
                 $codes = ['medical' => 'مرضية', 'surgical' => 'جراحية', 'medication' => 'دوائية', 'family' => 'عائلية', 'chemotherapy' => 'كيميائي', 'radiotherapy' => 'شعاعي', 'other' => 'أخرى'];
@@ -158,7 +167,7 @@ class DossierReports
             return [$sections, $identity, $draft];
         });
         $meta = app(ReportMetadata::class)->make($r, $f, $filters, self::COLUMNS, 'dossier', $dossier !== null, 'بيانات حالية لبطاقة المريض ووقائع تاريخية لكل زيارة؛ الوصفة منفصلة عن الصرف.');
-        $meta['title'] = ($visit ? 'تقرير زيارة' : ($dossier ? 'تاريخ بطاقة المريض الكامل' : 'قائمة بطاقات المرضى')).($draft ? ' — مسودة — غير مكتملة' : '');
+        $meta['title'] = ($visit ? 'تقرير الزيارة' : ($dossier ? 'تقرير بطاقة المريض' : 'قائمة بطاقات المرضى')).($draft ? ' — مسودة — غير مكتملة' : '');
         $meta['definition_label'] = 'نطاق التقرير';
         $meta['filters'] = $dossier ? 'تقرير فردي ضمن المنشأة المصرح بها' : implode(' | ', array_map(fn ($key) => ['search' => 'البحث', 'status' => 'الحالة', 'oncology' => 'ورمي', 'visits' => 'الزيارات', 'from' => 'من', 'to' => 'إلى', 'sort' => 'الترتيب', 'direction' => 'الاتجاه'][$key].': '.($filters[$key] ?? 'الكل'), ['search', 'status', 'oncology', 'visits', 'from', 'to', 'sort', 'direction']));
         if ($dossier && ! $visit) {
@@ -171,9 +180,27 @@ class DossierReports
     public function export(Request $r, array $f, array $filters, string $format, ?int $dossier = null, ?int $visit = null)
     {
         $doc = $this->document($r, $f, $filters, $dossier, $visit);
+        if ($format === 'pdf' && $dossier !== null) {
+            // PDF already prints the canonical code in its identity banner.
+            // XLSX retains the code fact because it has no identity banner.
+            $doc['sections'][0]['rows'] = array_values(array_filter($doc['sections'][0]['rows'], fn ($row) => $row['field'] !== 'كود المريض'));
+        }
         $bytes = $format === 'pdf' ? app(DirectoryReport::class)->pdf($doc, 'reports.blood-bank') : app(BloodBankReports::class)->xlsx($doc);
         app(DossierWrites::class)->audit($r, $f, 'dossier_report', $dossier ?? 0, null, ['number' => $doc['metadata']['number'], 'format' => $format, 'visit_id' => $visit], 'exported');
 
         return response($bytes, 200, ['Content-Type' => $format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition' => 'attachment; filename="'.$doc['metadata']['number'].'.'.$format.'"', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store']);
+    }
+
+    private static function birthDate(?string $date, string $accuracy): ?string
+    {
+        if (! $date || $accuracy === 'unknown') {
+            return null;
+        }
+
+        return match ($accuracy) {
+            'year_only' => substr($date, 0, 4).' (السنة فقط)',
+            'estimated' => $date.' (تقديري)',
+            default => $date,
+        };
     }
 }

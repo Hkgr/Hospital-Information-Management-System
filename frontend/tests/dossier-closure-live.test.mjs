@@ -40,7 +40,7 @@ async function open(width, token = f.token, delay = false) {
     if (delay) { const real = window.fetch; window.fetch = async (...args) => { const response = await real(...args); if (String(args[0]).includes('/audit?') && new URL(String(args[0]), location.origin).searchParams.get('entity') === 'dossier_medical') await new Promise(r => setTimeout(r, 1600)); return response; }; }
   }, { token, delay });
   const page = await context.newPage(); page.setDefaultTimeout(20000);
-  await page.goto(`${base}/dossiers/${dossier.id}?facility_id=${f.facility}`);
+  await page.goto(`${base}/patient-cards/${dossier.id}?facility_id=${f.facility}`);
   return { context, page };
 }
 
@@ -94,7 +94,7 @@ test('delayed real responses cannot replace a newer filter or resurrect an old d
     await section.getByLabel('تاريخ التغيير من', { exact: true }).fill(''); await section.getByLabel('تاريخ التغيير إلى', { exact: true }).fill('');
     await section.getByRole('article').first().waitFor();
     await section.getByLabel('القسم', { exact: true }).selectOption('dossier_medical');
-    await page.goto(`${base}/dossiers/${f.dossiers[0]}?facility_id=${f.facility}`);
+    await page.goto(`${base}/patient-cards/${f.dossiers[0]}?facility_id=${f.facility}`);
     await page.locator('#dossier-change-history').getByText('لا توجد تغييرات مسجلة تطابق هذه الفلاتر.', { exact: true }).waitFor();
     await page.waitForTimeout(1800); assert.equal(await page.locator('#dossier-change-history article').count(), 0);
   } finally { await context.close(); }
@@ -103,7 +103,7 @@ test('delayed real responses cannot replace a newer filter or resurrect an old d
 test('existing full-history PDF and XLSX download through Next with actual date range and void reasons', async () => {
   const { context, page } = await open(1440);
   try {
-    const report = page.getByRole('region', { name: 'تاريخ بطاقة المريض الكامل', exact: true });
+    const report = page.getByRole('region', { name: 'تقرير بطاقة المريض', exact: true });
     await report.getByLabel('تقرير الزيارات من', { exact: true }).fill('2001-03-02');
     await report.getByLabel('تقرير الزيارات إلى', { exact: true }).fill('2001-03-02');
     for (const [format, label] of [['xlsx', 'تصدير Excel'], ['pdf', 'تصدير PDF']]) {

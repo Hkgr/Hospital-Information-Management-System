@@ -2,6 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  async redirects() {
+    // Browser routes only. Keep the numeric clinical-context ID and all query
+    // parameters; /hospital-api/dossiers continues to use Laravel unchanged.
+    return ["", "/new", "/:id(\\d+)", "/:id(\\d+)/edit"].map((suffix) => ({
+      source: `/dossiers${suffix}`,
+      destination: `/patient-cards${suffix.replace("(\\d+)", "")}`,
+      permanent: true,
+    }));
+  },
   async rewrites() {
     // Transport only: Laravel still authenticates every Bearer token.
     const api = (process.env.LARAVEL_API_URL || "http://127.0.0.1:8000/api").replace(/\/$/, "");
