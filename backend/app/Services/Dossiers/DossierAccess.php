@@ -33,7 +33,7 @@ class DossierAccess
     private function capabilities(User $user, array $permissions): array
     {
         $caps = [];
-        foreach (['create', 'personal.update', 'medical.update', 'visits.create', 'visits.update', 'clinical.update', 'attachments.view', 'attachments.upload', 'attachments.download', 'attachments.void', 'finalize', 'visits.complete', 'export', 'audit'] as $code) {
+        foreach (['create', 'personal.update', 'medical.update', 'visits.create', 'visits.update', 'clinical.update', 'attachments.view', 'attachments.upload', 'attachments.download', 'attachments.void', 'finalize', 'visits.complete', 'export', 'audit', 'assessment.update', 'pathology.create', 'pathology.update', 'pathology.void'] as $code) {
             $caps[str_replace('.', '_', $code)] = in_array('dossiers.'.$code, $permissions, true);
         }
         $global = DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')

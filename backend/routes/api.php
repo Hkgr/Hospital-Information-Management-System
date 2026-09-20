@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DoctorController;
 use App\Http\Controllers\Api\DossierCompletionController;
 use App\Http\Controllers\Api\DossierController;
+use App\Http\Controllers\Api\DossierPathologyController;
 use App\Http\Controllers\Api\DossierWizardController;
 use Illuminate\Support\Facades\Route;
 
@@ -16,6 +17,14 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
     Route::prefix('dossiers')->name('dossiers.')->group(function () {
+        Route::get('/{dossier}/pathology', [DossierPathologyController::class, 'index'])->whereNumber('dossier')->name('pathology.history');
+        Route::get('/{dossier}/visits/{visit}/pathology', [DossierPathologyController::class, 'index'])->whereNumber(['dossier', 'visit'])->name('pathology.index');
+        Route::post('/{dossier}/visits/{visit}/pathology', [DossierPathologyController::class, 'save'])->whereNumber(['dossier', 'visit'])->name('pathology.create');
+        Route::get('/{dossier}/visits/{visit}/pathology/{pathology}', [DossierPathologyController::class, 'show'])->whereNumber(['dossier', 'visit', 'pathology'])->name('pathology.show');
+        Route::put('/{dossier}/visits/{visit}/pathology/{pathology}', [DossierPathologyController::class, 'save'])->whereNumber(['dossier', 'visit', 'pathology'])->name('pathology.update');
+        Route::post('/{dossier}/visits/{visit}/pathology/{pathology}/void', [DossierPathologyController::class, 'save'])->whereNumber(['dossier', 'visit', 'pathology'])->name('pathology.void');
+        Route::get('/{dossier}/visits/{visit}/diagnostic-assessment', [DossierPathologyController::class, 'assessment'])->whereNumber(['dossier', 'visit'])->name('assessment.show');
+        Route::put('/{dossier}/visits/{visit}/diagnostic-assessment', [DossierPathologyController::class, 'saveAssessment'])->whereNumber(['dossier', 'visit'])->name('assessment.update');
         $completion = DossierCompletionController::class;
         Route::post('/export/{format}', [$completion, 'report'])->whereIn('format', ['pdf', 'xlsx'])->name('export');
         Route::post('/{dossier}/report/{format}', [$completion, 'report'])->whereNumber('dossier')->whereIn('format', ['pdf', 'xlsx'])->name('report');

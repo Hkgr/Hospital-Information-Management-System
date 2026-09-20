@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditValues
 {
     private const FIELDS = [
+        'supporting_attachment_id' => 'المرفق الداعم',
+        'source' => 'مصدر التقرير', 'report_number' => 'رقم التقرير', 'external_organization' => 'الجهة الخارجية', 'specimen_type' => 'نوع العينة', 'anatomical_site' => 'الموقع التشريحي', 'requested_on' => 'تاريخ الطلب', 'collected_on' => 'تاريخ جمع العينة', 'result_on' => 'تاريخ النتيجة', 'conclusion' => 'الخلاصة النهائية', 'unavailable_reason' => 'سبب عدم الإتاحة أو الإلغاء', 'procedure_event_id' => 'واقعة الإجراء', 'doctor_id' => 'الطبيب المسؤول', 'disposition' => 'التقييم التشخيصي', 'assessed_on' => 'تاريخ التقييم', 'required_reason' => 'سبب طلب التشريح', 'not_required_reason' => 'سبب عدم الحاجة للتشريح', 'follow_up' => 'المتابعة', 'evidence_pathology_id' => 'التقرير الداعم',
         'code' => 'معرّف السياق التاريخي (غير الكود الحالي)', 'opening_date' => 'بداية الملف الطبي في المشفى', 'status' => 'الحالة',
         'patient_code' => 'كود المريض', 'first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم',
         'birth_date' => 'الميلاد', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل',
@@ -28,6 +30,8 @@ class DossierAuditValues
     ];
 
     private const GROUPS = [
+        'visit_pathologies' => ['source', 'status', 'report_number', 'external_organization', 'specimen_type', 'anatomical_site', 'requested_on', 'collected_on', 'result_on', 'conclusion', 'unavailable_reason', 'procedure_event_id', 'clinic_id', 'doctor_id', 'supporting_attachment_id'],
+        'visit_diagnostic_assessments' => ['disposition', 'assessed_on', 'required_reason', 'not_required_reason', 'follow_up', 'evidence_pathology_id', 'clinic_id', 'doctor_id'],
         'patient_dossier' => ['code', 'opening_date', 'status'],
         'patient' => ['patient_code', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status'],
         'dossier_medical' => ['is_oncology', 'disability_text', 'clinical_history', 'previous_examinations', 'medication_source', 'other_organization', 'selections'],
@@ -123,6 +127,15 @@ class DossierAuditValues
         }
         if (! is_scalar($value)) {
             return 'قيمة غير قابلة للعرض';
+        }
+        if ($field === 'disposition') {
+            return DossierPathology::DISPOSITIONS[$value] ?? (string) $value;
+        }
+        if ($field === 'source') {
+            return ['internal' => 'ضمن المشفى', 'external' => 'من جهة خارجية'][$value] ?? (string) $value;
+        }
+        if ($field === 'status' && isset(DossierPathology::STATUSES[$value])) {
+            return DossierPathology::STATUSES[$value];
         }
         $enums = ['status' => ['draft' => 'مسودة', 'active' => 'فعالة', 'complete' => 'مكتملة', 'void' => 'ملغاة', 'voided' => 'ملغاة'],
             'gender' => ['male' => 'ذكر', 'female' => 'أنثى', 'unknown' => 'غير معروف'], 'birth_date_accuracy' => ['exact' => 'دقيق', 'year_only' => 'السنة فقط', 'estimated' => 'تقديري', 'unknown' => 'غير معروف'],

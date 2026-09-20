@@ -12,11 +12,11 @@ class DirectoryReferences
         'visits' => ['attending_staff_id', 'resident_staff_id'], 'visit_diagnoses' => ['diagnosing_staff_id'],
         'visit_services' => ['performed_by'], 'visit_procedures' => ['specialist_id', 'nurse_id'],
         'dose_sessions' => ['supervising_staff_id', 'administered_by'], 'visit_medications' => ['prescribing_staff_id'],
-        'visit_outcomes' => ['decided_by'], 'visit_prescriptions' => ['prescribing_staff_id'], 'case_reviews' => ['decided_by'], 'blood_recipient_procedures' => ['specialist_id'],
+        'visit_pathologies' => ['doctor_id'], 'visit_diagnostic_assessments' => ['doctor_id'], 'visit_outcomes' => ['decided_by'], 'visit_prescriptions' => ['prescribing_staff_id'], 'case_reviews' => ['decided_by'], 'blood_recipient_procedures' => ['specialist_id'],
         'cancer_case_diagnoses' => ['decided_by'], 'report_metric_catalog_items' => ['staff_id'],
         'blood_donors' => ['responsible_staff_id'], 'blood_recipients' => ['responsible_staff_id'], 'blood_bank_events' => ['responsible_staff_id']];
 
-    public const CLINIC = ['visit_diagnoses' => ['clinic_id'], 'visit_services' => ['clinic_id'], 'visit_procedures' => ['clinic_id'], 'visit_outcomes' => ['clinic_id'], 'visit_prescriptions' => ['prescribing_clinic_id'], 'visits' => ['clinic_id'], 'staff_work_days' => ['clinic_id'], 'report_metric_catalog_items' => ['clinic_id'], 'blood_donors' => ['clinic_id'], 'blood_recipients' => ['clinic_id'], 'blood_bank_events' => ['clinic_id']];
+    public const CLINIC = ['visit_pathologies' => ['clinic_id'], 'visit_diagnostic_assessments' => ['clinic_id'], 'visit_diagnoses' => ['clinic_id'], 'visit_services' => ['clinic_id'], 'visit_procedures' => ['clinic_id'], 'visit_outcomes' => ['clinic_id'], 'visit_prescriptions' => ['prescribing_clinic_id'], 'visits' => ['clinic_id'], 'staff_work_days' => ['clinic_id'], 'report_metric_catalog_items' => ['clinic_id'], 'blood_donors' => ['clinic_id'], 'blood_recipients' => ['clinic_id'], 'blood_bank_events' => ['clinic_id']];
 
     public function summary(bool $doctor, int $id, int $facilityId): array
     {
