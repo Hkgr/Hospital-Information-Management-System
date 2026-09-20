@@ -36,6 +36,7 @@ class DossierQueries
                 ->selectSub((clone $latest)->select('v.status'), 'latest_visit_status');
             $q->leftJoinSub(app(DossierPathology::class)->summaries($f), 'pathology_summary', 'pathology_summary.dossier_id', '=', 'd.id')
                 ->addSelect('pathology_summary.disposition as pathology_status', 'pathology_summary.visit_id as pathology_visit_id');
+            app(OncologyQueries::class)->decorate($q, $f, $input);
             if (! empty($input['pathology_status'])) {
                 $q->whereRaw("COALESCE(pathology_summary.disposition, 'not_assessed') = ?", [$input['pathology_status']]);
             }
@@ -69,6 +70,8 @@ class DossierQueries
             $actions = app(DossierWorkflowActions::class)->forDossiers($f, $page->items());
             $page->setCollection($page->getCollection()->map(function ($row) use ($diagnoses, $actions) {
                 return ['id' => (int) $row->id, 'card_id' => (int) $row->card_id, 'code' => $row->code, 'legacy_without_visits' => (int) $row->saved_visit_count === 0, 'status' => $row->status, 'opening_date' => $row->opening_date, 'is_oncology' => (bool) $row->is_oncology,
+                    'treatment_count' => $row->treatment_count === null ? null : (int) $row->treatment_count, 'active_treatment_count' => $row->active_treatment_count === null ? null : (int) $row->active_treatment_count, 'review_treatment_count' => $row->review_treatment_count === null ? null : (int) $row->review_treatment_count,
+                    'treatment_modalities' => $row->treatment_modalities, 'next_dose_on' => $row->next_dose_on, 'last_dose_on' => $row->last_dose_on,
                     'patient_code' => $row->patient_code, 'patient_name' => $row->patient_name, 'mother_name' => $row->mother_name, 'gender' => $row->gender, 'birth_date' => $row->birth_date, 'birth_date_accuracy' => $row->birth_date_accuracy, 'phone' => $row->phone, 'paper_file_number' => $row->paper_file_number,
                     'visit_count' => (int) $row->visit_count, 'procedure_count' => (int) $row->procedure_count, 'workflow' => $actions[$row->id]['workflow'],
                     'pathology_status' => $row->pathology_status ?? 'not_assessed', 'pathology_visit_id' => $row->pathology_visit_id ? (int) $row->pathology_visit_id : null,
@@ -142,7 +145,7 @@ class DossierQueries
         abort_unless($this->dossiers($f)->where('d.id', $id)->exists(), 404);
         $v = $this->actualVisits($f)->where('v.dossier_id', $id)->where('v.id', $visit)
             ->leftJoin('clinics as c', fn ($j) => $j->on('c.id', '=', 'v.clinic_id')->on('c.facility_id', '=', 'v.facility_id'))
-            ->leftJoin('staff as s', 's.id', '=', 'v.attending_staff_id')->first(['v.id', 'v.visit_no', 'v.visit_date', 'v.status', 'v.is_referred', 'v.referring_hospital', 'v.referral_date', 'v.referral_reason', 'c.name_ar as visit_clinic', 's.full_name as attending_doctor']);
+            ->leftJoin('staff as s', 's.id', '=', 'v.attending_staff_id')->first(['v.id', 'v.lock_version', 'v.visit_no', 'v.visit_date', 'v.status', 'v.is_referred', 'v.referring_hospital', 'v.referral_date', 'v.referral_reason', 'c.name_ar as visit_clinic', 's.full_name as attending_doctor']);
         abort_unless($v, 404);
         $result = (array) $v;
         $result['is_referred'] = (bool) $result['is_referred'];
@@ -153,9 +156,9 @@ class DossierQueries
                 ->orderBy('e.'.$date)->orderBy('e.id')->get(['e.id', 'n.code', 'n.name_ar as name', 'e.'.$date.' as date', ...($kind === 'outcomes' ? [] : ['e.quantity'])])->all();
         }
         $result['medications'] = DB::table('visit_medications as e')->where('e.visit_id', $visit)->where('e.facility_id', $f['id'])->whereNull('e.voided_at')->where('e.dispensed_on', '<=', $f['today'])
-            ->orderBy('e.dispensed_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 'e.dispensed_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit'])->all();
-        $result['administered_medications'] = DB::table('dose_sessions as s')->join('dose_session_items as e', 'e.dose_session_id', '=', 's.id')->where('s.visit_id', $visit)->where('s.facility_id', $f['id'])->whereNull('s.voided_at')->where('s.administered_on', '<=', $f['today'])
-            ->orderBy('s.administered_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 's.administered_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit'])->all();
+            ->when(! ($f['capabilities']['treatment_view'] ?? false), fn ($q) => $q->whereNull('e.dose_session_id'))->orderBy('e.dispensed_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 'e.dispensed_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit'])->all();
+        $result['administered_medications'] = DB::table('dose_sessions as s')->join('dose_session_items as e', 'e.dose_session_id', '=', 's.id')->where('s.visit_id', $visit)->where('s.facility_id', $f['id'])->whereNull('s.voided_at')->whereNull('e.voided_at')->where('s.administered_on', '<=', $f['today'])
+            ->when(! ($f['capabilities']['treatment_view'] ?? false), fn ($q) => $q->whereNull('s.oncology_session_id'))->orderBy('s.administered_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 's.administered_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit'])->all();
 
         $result['clinical'] = app(DossierVisitSections::class)->read($f, $visit);
         $result['diagnostic_assessment'] = app(DossierPathology::class)->assessment($f, $id, $visit);

@@ -1,0 +1,364 @@
+<?php
+
+namespace App\Services\Dossiers;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+class OncologyWriter
+{
+    public function __construct(private DossierWrites $writes, private DossierClinicalContext $context, private OncologyQueries $queries) {}
+
+    public function persist(Request $r, array $f, string $table, ?object $old, array $fields): int
+    {
+        $fields += ['updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($old?->lock_version ?? 0) + 1];
+        if ($old) {
+            $id = $old->id;
+            DB::table($table)->where('id', $id)->update($fields);
+        } else {
+            $id = DB::table($table)->insertGetId($fields + ['entered_by' => $r->user()->id, 'created_at' => now()]);
+        }
+        $this->writes->audit($r, $f, $table, $id, $old ? (array) $old : null, (array) DB::table($table)->where('id', $id)->first());
+
+        return $id;
+    }
+
+    private function plan(array $f, int $dossier, int $id, ?int $version = null): object
+    {
+        $this->writes->dossier($f, $dossier);
+        $plan = DB::table('oncology_plans')->where('id', $id)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
+        abort_unless($plan, 404);
+        if ($version !== null) {
+            DossierWrites::version((array) $plan, $version);
+        }
+
+        return $plan;
+    }
+
+    public function savePlan(Request $r, array $f, int $dossier, array $data, ?int $id): int
+    {
+        return $this->writes->once($r, $f, $data, "oncology:plan:$dossier:".($id ?? 'new'), function () use ($r, $f, $dossier, $data, $id) {
+            $this->context->lock([[$data['doctor_id']], [$data['clinic_id']]]);
+            $d = $this->writes->dossier($f, $dossier);
+            $old = $id ? $this->plan($f, $dossier, $id, $data['lock_version']) : null;
+            $priorRevision = $old ? DB::table('oncology_plan_revisions')->where('id', $old->current_revision_id)->first() : null;
+            if ($old && in_array($old->status, ['completed', 'cancelled'])) {
+                DossierWrites::conflict('الخطة مغلقة؛ لا تُعدّل نسخها أو تاريخها.');
+            }
+            if ($old && $old->status !== 'draft' && blank($data['amendment_reason'] ?? null)) {
+                throw ValidationException::withMessages(['amendment_reason' => 'تعديل الخطة المعتمدة يحتاج سببًا ونسخة جديدة ومراجعة اعتماد.']);
+            }
+            $this->context->check($f, $data['clinic_id'], $data['doctor_id'], $data['starts_on'], 'doctor_id', false);
+            $fields = Arr::only($data, ['modality', 'intent', 'protocol_name', 'protocol_code', 'planned_cycles', 'planned_sessions', 'interval_days', 'starts_on', 'ends_on', 'clinic_id', 'doctor_id', 'diagnosis_id', 'note', 'amendment_reason']);
+            // Omitted optional values preserve the previous revision. An explicit null clears them.
+            if ($priorRevision) {
+                $fields += Arr::only((array) $priorRevision, ['protocol_code', 'planned_cycles', 'planned_sessions', 'interval_days', 'ends_on', 'diagnosis_id', 'diagnosis_snapshot', 'note']);
+            }
+            if (array_key_exists('diagnosis_id', $data) && $data['diagnosis_id'] === null) {
+                $fields['diagnosis_snapshot'] = null;
+            }
+            if (! empty($fields['ends_on']) && $fields['ends_on'] < $fields['starts_on']) {
+                throw ValidationException::withMessages(['ends_on' => 'تاريخ النهاية المحفوظ لا يسبق البداية الجديدة؛ راجع التاريخين.']);
+            }
+            if (! empty($data['diagnosis_id'])) {
+                $diag = DB::table('diagnoses')->where('id', $data['diagnosis_id'])->where('is_active', true)->first();
+                if (! $diag) {
+                    throw ValidationException::withMessages(['diagnosis_id' => 'اختر تشخيصًا فعالًا.']);
+                }
+                $fields['diagnosis_snapshot'] = $diag->code.' · '.$diag->name_ar;
+            }
+            $number = $old ? DB::table('oncology_plan_revisions')->where('plan_id', $id)->max('revision_number') + 1 : 1;
+            $plan = $old ?? (object) ['id' => $this->persist($r, $f, 'oncology_plans', null, ['dossier_id' => $dossier, 'facility_id' => $f['id'], 'client_request_id' => $data['request_id'], 'status' => 'draft'])];
+            $revision = DB::table('oncology_plan_revisions')->insertGetId($fields + ['plan_id' => $plan->id, 'dossier_id' => $dossier, 'facility_id' => $f['id'], 'revision_number' => $number, 'client_request_id' => $data['request_id'], 'entered_by' => $r->user()->id, 'created_at' => now()]);
+            $priorItems = $priorRevision ? DB::table('oncology_regimen_items')->where('revision_id', $priorRevision->id)->orderBy('display_order')->get()->keyBy('id') : collect();
+            $items = $data['items'] ?? $priorItems->map(fn ($i) => (array) $i)->values()->all();
+            foreach ($items as $i => $item) {
+                $priorItem = isset($item['id']) ? $priorItems->get($item['id']) : null;
+                if (isset($item['id']) && ! $priorItem) {
+                    abort(404);
+                }
+                $item = $this->medication($item, $priorItem, "items.$i");
+                DB::table('oncology_regimen_items')->insert(Arr::only($item, ['medication_id', 'medication_name_snapshot', 'medication_code_snapshot', 'dose_value', 'dose_unit', 'route', 'instructions', 'funding_source_id', 'note']) + ['revision_id' => $revision, 'display_order' => $i]);
+            }
+            $this->writes->audit($r, $f, 'oncology_plan_revisions', $revision, null, $fields + ['plan_id' => $plan->id, 'revision_number' => $number, 'items' => $items]);
+            // Initial allocation is inside the transaction; no competing patient identity.
+            $current = DB::table('oncology_plans')->where('id', $plan->id)->first();
+            $this->persist($r, $f, 'oncology_plans', $current, ['current_revision_id' => $revision, 'plan_number' => $old?->plan_number ?? 'TP-'.str_pad((string) $plan->id, 8, '0', STR_PAD_LEFT), 'status' => ! $old || $old->status === 'draft' ? 'draft' : 'needs_review']);
+
+            return (int) $plan->id;
+        });
+    }
+
+    public function status(Request $r, array $f, int $dossier, int $id, array $data): int
+    {
+        $targets = $this->planTargets($f, $dossier, $id);
+
+        return $this->writes->once($r, $f, $data, "oncology:status:$dossier:$id", function () use ($r, $f, $dossier, $id, $data, $targets) {
+            $this->context->lock($targets);
+            $plan = $this->plan($f, $dossier, $id, $data['lock_version']);
+            if (in_array($plan->status, ['completed', 'cancelled'])) {
+                DossierWrites::conflict('الخطة مغلقة؛ تبقى للقراءة مع كامل تاريخها.');
+            }
+            $status = $data['status'];
+            $fields = ['status' => $status, 'status_reason' => $data['reason']];
+            if ($status === 'active') {
+                $ready = $this->queries->readiness($f)->where('s.dossier_id', $dossier)->first();
+                if (! $ready || ! in_array($ready->disposition, ['pathology_confirmed', 'pathology_not_required'])) {
+                    throw ValidationException::withMessages(['status' => 'التشخيص أو دليل التشريح الحالي غير جاهز لتفعيل العلاج.']);
+                }
+                $rev = DB::table('oncology_plan_revisions')->where('id', $plan->current_revision_id)->first();
+                $this->context->check($f, $rev->clinic_id, $rev->doctor_id, $rev->starts_on, 'doctor_id', false);
+                if ($ready->disposition === 'pathology_not_required') {
+                    if (! in_array('dossiers.treatment.override', $f['permissions'], true)) {
+                        abort(403);
+                    }
+                    if (blank($data['override_reason'] ?? null)) {
+                        throw ValidationException::withMessages(['override_reason' => 'الاستثناء يحتاج مبررًا سريريًا صريحًا لهذه الخطة.']);
+                    }
+                }
+                $fields += ['basis_key' => $ready->basis_key, 'basis_disposition' => $ready->disposition, 'activation_basis' => json_encode((array) $ready, JSON_THROW_ON_ERROR), 'override_reason' => $ready->disposition === 'pathology_not_required' ? $data['override_reason'] : null, 'reviewed_at' => now(), 'reviewed_by' => $r->user()->id];
+                if (! $plan->activated_at) {
+                    $fields += ['activated_at' => now(), 'activated_by' => $r->user()->id];
+                }
+            } else {
+                if ($plan->status === 'draft' && $status !== 'cancelled') {
+                    throw ValidationException::withMessages(['status' => 'المسودة يمكن تفعيلها أو إلغاؤها فقط.']);
+                }
+                $event = ['paused' => 'paused', 'completed' => 'completed', 'cancelled' => 'cancelled'][$status];
+                $fields += [$event.'_at' => now(), $event.'_by' => $r->user()->id];
+            }
+
+            return $this->persist($r, $f, 'oncology_plans', $plan, $fields);
+        });
+    }
+
+    public function schedule(Request $r, array $f, int $dossier, int $planId, array $data): int
+    {
+        $targets = $this->planTargets($f, $dossier, $planId);
+
+        return $this->writes->once($r, $f, $data, "oncology:schedule:$dossier:$planId", function () use ($r, $f, $dossier, $planId, $data, $targets) {
+            $this->context->lock($targets);
+            $plan = $this->plan($f, $dossier, $planId, $data['lock_version']);
+            $this->active($f, $dossier, $planId);
+            $revision = DB::table('oncology_plan_revisions')->where('id', $plan->current_revision_id)->first();
+            foreach ($data['sessions'] as $i => $session) {
+                $this->context->check($f, $revision->clinic_id, $revision->doctor_id, $session['planned_on'], "sessions.$i.planned_on", false);
+                if (DB::table('oncology_sessions')->where('plan_id', $planId)->where('session_number', $session['session_number'])->exists()) {
+                    throw ValidationException::withMessages(["sessions.$i.session_number" => 'رقم الجلسة محفوظ في هذه الخطة؛ عدّل الموعد بدل تكراره.']);
+                }
+                $this->persist($r, $f, 'oncology_sessions', null, Arr::only($session, ['cycle_number', 'session_number', 'planned_on', 'note']) + ['plan_id' => $planId, 'revision_id' => $revision->id, 'dossier_id' => $dossier, 'facility_id' => $f['id'], 'clinic_id' => $revision->clinic_id, 'doctor_id' => $revision->doctor_id, 'client_request_id' => (string) Str::uuid(), 'status' => 'scheduled']);
+            }
+            $this->persist($r, $f, 'oncology_plans', $plan, []);
+
+            return $planId;
+        });
+    }
+
+    public function session(Request $r, array $f, int $dossier, int $id, array $data): int
+    {
+        $target = DB::table('oncology_sessions')->where('id', $id)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->first();
+        abort_unless($target, 404);
+
+        return $this->writes->once($r, $f, $data, "oncology:session:$dossier:$id", function () use ($r, $f, $dossier, $id, $data, $target) {
+            $this->context->lock([[$target->doctor_id], [$target->clinic_id]]);
+            $this->writes->dossier($f, $dossier);
+            $s = DB::table('oncology_sessions')->where('id', $id)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
+            abort_unless($s, 404);
+            DossierWrites::version((array) $s, $data['lock_version']);
+            if ($s->status === 'completed') {
+                DossierWrites::conflict('هذه الجلسة لها واقعة فعلية؛ صحح الواقعة أو أبطلها ولا تعِد جدولتها.');
+            }
+            $plan = $this->plan($f, $dossier, $s->plan_id);
+            if (in_array($plan->status, ['completed', 'cancelled'])) {
+                DossierWrites::conflict('الخطة مغلقة.');
+            }
+            $fields = ['status' => $data['status'], 'reason' => $data['reason']];
+            if ($data['status'] === 'rescheduled') {
+                $this->active($f, $dossier, $s->plan_id);
+                $this->context->check($f, $s->clinic_id, $s->doctor_id, $data['planned_on'], 'planned_on', false);
+                $fields['planned_on'] = $data['planned_on'];
+            }
+
+            return $this->persist($r, $f, 'oncology_sessions', $s, $fields);
+        });
+    }
+
+    private function active(array $f, int $dossier, int $id): void
+    {
+        $effective = $this->queries->plans($f)->where('p.dossier_id', $dossier)->where('p.id', $id)->selectRaw(OncologyQueries::effectiveSql().' AS state')->first();
+        if ($effective?->state !== 'active') {
+            throw ValidationException::withMessages(['plan_id' => 'الخطة غير فعالة أو تحتاج مراجعة الدليل التشخيصي وإعادة الاعتماد قبل المتابعة.']);
+        }
+    }
+
+    private function planTargets(array $f, int $dossier, int $id): array
+    {
+        $row = DB::table('oncology_plans as p')->join('oncology_plan_revisions as r', 'r.id', '=', 'p.current_revision_id')->where('p.id', $id)->where('p.dossier_id', $dossier)->where('p.facility_id', $f['id'])->first(['r.doctor_id', 'r.clinic_id']);
+        abort_unless($row, 404);
+
+        // Staff then clinics then dossier, shared with directory linking writes.
+        // The subsequent locked plan version rejects a changed target revision.
+        return [[$row->doctor_id], [$row->clinic_id]];
+    }
+
+    private function period(array $f, int $id, string $date, ?int $old = null): void
+    {
+        $period = DB::table('reporting_periods')->where('facility_id', $f['id'])->where('id', $id)->lockForUpdate()->first();
+        if (! $period || $period->status !== 'open' || $date < $period->starts_on || $date > $period->ends_on) {
+            throw ValidationException::withMessages(['reporting_period_id' => 'اختر فترة مفتوحة في هذا المشفى تغطي تاريخ الواقعة الفعلي.']);
+        }
+        if ($old && $old !== $id && ! DB::table('reporting_periods')->where('facility_id', $f['id'])->where('id', $old)->where('status', 'open')->lockForUpdate()->exists()) {
+            throw ValidationException::withMessages(['reporting_period_id' => 'الفترة السابقة مغلقة؛ التصحيح غير متاح.']);
+        }
+    }
+
+    public function medication(array $item, ?object $old, string $field): array
+    {
+        if ($old && ! array_key_exists('medication_id', $item)) {
+            $item['medication_id'] = $old->medication_id;
+        }
+        if (! $old || ($old->medication_id ?? null) != ($item['medication_id'] ?? null)) {
+            if (! empty($item['medication_id'])) {
+                $med = DB::table('medications')->where('id', $item['medication_id'])->where('is_active', true)->first();
+                if (! $med) {
+                    throw ValidationException::withMessages([$field.'.medication_id' => 'اختر دواء فعالًا من الدليل.']);
+                }
+                $item['medication_name_snapshot'] = $med->name_ar;
+                $item['medication_code_snapshot'] = $med->code;
+            } elseif (blank($item['medication_name_snapshot'] ?? null)) {
+                throw ValidationException::withMessages([$field.'.medication_name_snapshot' => 'يلزم تعريف الدواء أو اسمه التاريخي الصريح.']);
+            }
+        } else {
+            $item['medication_name_snapshot'] = $old->medication_name_snapshot;
+            $item['medication_code_snapshot'] = $old->medication_code_snapshot;
+        }
+        if (! empty($item['funding_source_id']) && ($old?->funding_source_id ?? null) != $item['funding_source_id'] && ! DB::table('funding_sources')->where('id', $item['funding_source_id'])->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages([$field.'.funding_source_id' => 'اختر مصدر تمويل فعالًا.']);
+        }
+
+        return $item;
+    }
+
+    public function administer(Request $r, array $f, int $dossier, int $visit, array $data, ?int $id = null, bool $void = false): int
+    {
+        return $this->writes->once($r, $f, $data, "oncology:dose:$dossier:$visit:".($id ?? 'new').':'.($void ? 'void' : 'save'), function () use ($r, $f, $dossier, $visit, $data, $id, $void) {
+            $this->context->lock([array_filter([$data['supervising_staff_id'] ?? null, $data['administered_by'] ?? null]), []]);
+            $v = app(DossierPathology::class)->visit($f, $dossier, $visit, true);
+            $old = $id ? DB::table('dose_sessions')->where('id', $id)->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNotNull('oncology_session_id')->lockForUpdate()->first() : null;
+            if ($id) {
+                abort_unless($old, 404);
+                DossierWrites::version((array) $old, $data['lock_version']);
+                if ($old->voided_at) {
+                    DossierWrites::conflict('الواقعة مبطلة ومحفوظة تاريخيًا.');
+                }
+            }
+            if ($void) {
+                $this->period($f, $old->reporting_period_id, $old->administered_on);
+
+                return $this->persist($r, $f, 'dose_sessions', $old, ['voided_at' => now(), 'voided_by' => $r->user()->id, 'void_reason' => $data['reason']]);
+            }
+            if ($data['administered_on'] !== $v->visit_date || $data['administered_on'] > $f['today']) {
+                throw ValidationException::withMessages(['administered_on' => 'الإعطاء الفعلي يكون بتاريخ الزيارة الفعلية غير المستقبلي.']);
+            }
+            $this->period($f, $data['reporting_period_id'], $data['administered_on'], $old?->reporting_period_id);
+            $session = DB::table('oncology_sessions')->where('id', $old?->oncology_session_id ?? $data['session_id'])->where('dossier_id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
+            abort_unless($session, 404);
+            $plan = $this->plan($f, $dossier, $session->plan_id);
+            if (! $old) {
+                DossierWrites::version((array) $session, $data['session_lock_version']);
+                DossierWrites::version((array) $plan, $data['plan_lock_version']);
+                DossierWrites::version((array) $v, $data['visit_lock_version']);
+                $this->active($f, $dossier, $plan->id);
+                if (! in_array($session->status, ['scheduled', 'rescheduled']) || DB::table('dose_sessions')->where('oncology_session_id', $session->id)->exists()) {
+                    DossierWrites::conflict('الجلسة غير متاحة للإعطاء أو سُجل حضورها مسبقًا.');
+                }
+                if (DB::table('visit_outcomes as o')->join('visit_results as r', 'r.id', '=', 'o.result_id')->where('o.visit_id', $visit)->whereNull('o.voided_at')->where('r.code', 'DOS-REFER')->exists()) {
+                    throw ValidationException::withMessages(['visit_id' => 'الزيارة المحالة لا تسجّل جرعة معطاة؛ راجع النتيجة السريرية أولًا.']);
+                }
+            }
+            $this->context->check($f, $session->clinic_id, $data['supervising_staff_id'], $v->visit_date, 'supervising_staff_id', false);
+            if (! DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('s.id', $data['administered_by'])->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $v->visit_date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $v->visit_date))->exists()) {
+                throw ValidationException::withMessages(['administered_by' => 'اختر عضو كادر فعالًا له ارتباط في هذا المشفى يغطي تاريخ الإعطاء.']);
+            }
+            $fields = Arr::only($data, ['reporting_period_id', 'administered_on', 'supervising_staff_id', 'administered_by', 'session_label', 'note']);
+            if (! $old) {
+                $fields += ['visit_id' => $visit, 'facility_id' => $f['id'], 'dossier_id' => $dossier, 'oncology_session_id' => $session->id, 'plan_revision_id' => $session->revision_id, 'activation_basis' => $plan->activation_basis, 'client_request_id' => $data['request_id']];
+            }
+            $saved = $this->persist($r, $f, 'dose_sessions', $old, $fields);
+            foreach ($data['items'] as $i => $item) {
+                $prior = ! empty($item['id']) ? DB::table('dose_session_items')->where('id', $item['id'])->where('dose_session_id', $saved)->whereNull('voided_at')->lockForUpdate()->first() : null;
+                if (! empty($item['id'])) {
+                    abort_unless($prior, 404);
+                    DossierWrites::version((array) $prior, $item['lock_version']);
+                }
+                if (! empty($item['remove'])) {
+                    if (! $prior || blank($item['void_reason'] ?? null)) {
+                        throw ValidationException::withMessages(["items.$i.void_reason" => 'إبطال بند محفوظ يحتاج سببًا.']);
+                    }
+                    $this->persist($r, $f, 'dose_session_items', $prior, ['voided_at' => now(), 'voided_by' => $r->user()->id, 'void_reason' => $item['void_reason']]);
+                } else {
+                    $item = $this->medication($item, $prior, "items.$i");
+                    $this->persist($r, $f, 'dose_session_items', $prior, Arr::only($item, ['medication_id', 'medication_name_snapshot', 'medication_code_snapshot', 'funding_source_id', 'dose_text', 'dose_value', 'dose_unit', 'quantity', 'quantity_unit', 'route', 'note']) + ['dose_session_id' => $saved]);
+                }
+            }
+            if (! DB::table('dose_session_items')->where('dose_session_id', $saved)->whereNull('voided_at')->exists()) {
+                $modality = DB::table('oncology_plan_revisions')->where('id', $session->revision_id)->value('modality');
+                if ($modality !== 'radiotherapy' || blank($data['session_label'] ?? null) || blank($data['note'] ?? null)) {
+                    throw ValidationException::withMessages(['items' => 'وثّق الأدوية المعطاة فعليًا. الجلسة الشعاعية دون أدوية تحتاج عنوانًا ووصفًا صريحًا لما أُجري؛ الموعد وحده ليس إعطاءً.']);
+                }
+            }
+            if (! $old) {
+                $this->persist($r, $f, 'oncology_sessions', $session, ['status' => 'completed']);
+            }
+            if ($old) {
+                $this->writes->audit($r, $f, 'dose_sessions', $saved, null, ['correction_reason' => $data['reason']], 'corrected');
+            }
+
+            return $saved;
+        });
+    }
+
+    public function dispense(Request $r, array $f, int $dossier, int $visit, array $data, ?int $id = null, bool $void = false): int
+    {
+        return $this->writes->once($r, $f, $data, "oncology:dispense:$dossier:$visit:".($id ?? 'new').':'.($void ? 'void' : 'save'), function () use ($r, $f, $dossier, $visit, $data, $id, $void) {
+            $this->context->lock([array_filter([$data['prescribing_staff_id'] ?? null]), []]);
+            $v = app(DossierPathology::class)->visit($f, $dossier, $visit, true);
+            $old = $id ? DB::table('visit_medications')->where('id', $id)->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNotNull('dose_session_id')->lockForUpdate()->first() : null;
+            if ($id) {
+                abort_unless($old, 404);
+                DossierWrites::version((array) $old, $data['lock_version']);
+                if ($old->voided_at) {
+                    DossierWrites::conflict('الصرف مبطل ومحفوظ تاريخيًا.');
+                }
+            }
+            if ($void) {
+                $this->period($f, $old->reporting_period_id, $old->dispensed_on);
+
+                return $this->persist($r, $f, 'visit_medications', $old, ['voided_at' => now(), 'voided_by' => $r->user()->id, 'void_reason' => $data['reason']]);
+            }
+            if ($data['dispensed_on'] !== $v->visit_date || $data['dispensed_on'] > $f['today']) {
+                throw ValidationException::withMessages(['dispensed_on' => 'الصرف الفعلي يكون بتاريخ الزيارة غير المستقبلي.']);
+            }
+            $this->period($f, $data['reporting_period_id'], $data['dispensed_on'], $old?->reporting_period_id);
+            $dose = DB::table('dose_sessions')->where('id', $old?->dose_session_id ?? $data['dose_session_id'])->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->lockForUpdate()->first();
+            abort_unless($dose, 404);
+            $session = DB::table('oncology_sessions')->where('id', $dose->oncology_session_id)->first();
+            abort_unless($session, 404);
+            $this->context->check($f, $session->clinic_id, $data['prescribing_staff_id'], $v->visit_date, 'prescribing_staff_id', false);
+            $item = $this->medication($data, $old, 'medication');
+            $fields = Arr::only($item, ['dispensed_on', 'reporting_period_id', 'medication_id', 'medication_name_snapshot', 'medication_code_snapshot', 'funding_source_id', 'prescribing_staff_id', 'dose_text', 'quantity', 'quantity_unit', 'note', 'dispensing_purpose']);
+            if (! $old) {
+                $fields += ['visit_id' => $visit, 'facility_id' => $f['id'], 'dose_session_id' => $dose->id, 'client_request_id' => $data['request_id']];
+            }
+            $saved = $this->persist($r, $f, 'visit_medications', $old, $fields);
+            if ($old) {
+                $this->writes->audit($r, $f, 'visit_medications', $saved, null, ['correction_reason' => $data['reason']], 'corrected');
+            }
+
+            return $saved;
+        });
+    }
+}

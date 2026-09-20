@@ -6,6 +6,7 @@ use App\Services\Directory\DirectoryReport;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierReports;
 use App\Services\Dossiers\DossierWrites;
+use App\Services\Dossiers\OncologyReports;
 use App\Services\Dossiers\PatientCardInventory;
 use App\Support\TestDatabaseSafety;
 use Illuminate\Database\QueryException;
@@ -250,7 +251,8 @@ class PatientCardTest extends TestCase
             ->assertJsonPath('data.0.phone', '00963900123456')->assertJsonPath('data.0.paper_file_number', '000072');
         $this->callApi('GET', "/{$s['id']}?facility_id={$this->f['facility']}")->assertOk()->assertJsonPath('data.patient.paper_file_number', '000072');
         $this->callApi('GET', "/{$s['id']}?facility_id={$this->f['other']}")->assertForbidden();
-        $columns = array_keys(DossierReports::COLUMNS);
+        // This fixture has card/export access, but no new treatment-view grant.
+        $columns = array_keys(array_diff_key(DossierReports::COLUMNS, OncologyReports::COLUMNS));
         $bytes = $this->callApi('POST', '/export/xlsx', ['facility_id' => $this->f['facility'], 'search' => $s['code'], 'columns' => $columns])->assertOk()->getContent();
         $file = tempnam(storage_path('framework/testing'), 'card-columns-');
         file_put_contents($file, $bytes);

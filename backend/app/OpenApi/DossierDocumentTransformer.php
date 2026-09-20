@@ -53,6 +53,13 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
         $detail->addProperty('pathology_summary', $this->object(['disposition' => $text(), 'visit_id' => $integer(), 'fact_date' => $text()])->nullable(true));
         $row->addProperty('latest_visit_date', $nullable());
         $visit->addProperty('clinical', (new DossierCompletionDocument)->clinical());
+        $visit->addProperty('lock_version', $integer());
+        foreach (['treatment_count', 'active_treatment_count', 'review_treatment_count'] as $key) {
+            $row->addProperty($key, (new IntegerType)->nullable(true));
+        }
+        foreach (['treatment_modalities', 'next_dose_on', 'last_dose_on'] as $key) {
+            $row->addProperty($key, $nullable());
+        }
         $detail->addProperty('latest_visit', $visit->clone()->nullable(true));
         $row->addProperty('workflow', (new DossierWorkflowDocument)->workflow());
         $detail->addProperty('workflow', (new DossierWorkflowDocument)->workflow());
@@ -63,6 +70,11 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
             }
             foreach ($path->operations as $op) {
                 $op->security = [new SecurityRequirement(['bearerAuth' => []])];
+                if (preg_match('#/(treatment-options|treatment-plans|treatment-sessions|doses|dispensing)(/|$)#', $route)) {
+                    (new OncologyDocument)->operation($op, $route);
+
+                    continue;
+                }
                 if (str_contains($route, '/pathology') || str_ends_with($route, '/diagnostic-assessment')) {
                     (new DossierPathologyDocument)->operation($op, $route);
 

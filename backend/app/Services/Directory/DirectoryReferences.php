@@ -9,6 +9,7 @@ class DirectoryReferences
     // All restrictive FKs to staff/clinics. staff_specialties are intrinsic attributes,
     // removed only by a successful hard delete; clinic_staff is preserved history.
     public const DOCTOR = ['users' => ['staff_id'], 'staff_aliases' => ['staff_id'], 'staff_work_days' => ['staff_id'],
+        'oncology_plan_revisions' => ['doctor_id'], 'oncology_sessions' => ['doctor_id'],
         'visits' => ['attending_staff_id', 'resident_staff_id'], 'visit_diagnoses' => ['diagnosing_staff_id'],
         'visit_services' => ['performed_by'], 'visit_procedures' => ['specialist_id', 'nurse_id'],
         'dose_sessions' => ['supervising_staff_id', 'administered_by'], 'visit_medications' => ['prescribing_staff_id'],
@@ -16,7 +17,7 @@ class DirectoryReferences
         'cancer_case_diagnoses' => ['decided_by'], 'report_metric_catalog_items' => ['staff_id'],
         'blood_donors' => ['responsible_staff_id'], 'blood_recipients' => ['responsible_staff_id'], 'blood_bank_events' => ['responsible_staff_id']];
 
-    public const CLINIC = ['visit_pathologies' => ['clinic_id'], 'visit_diagnostic_assessments' => ['clinic_id'], 'visit_diagnoses' => ['clinic_id'], 'visit_services' => ['clinic_id'], 'visit_procedures' => ['clinic_id'], 'visit_outcomes' => ['clinic_id'], 'visit_prescriptions' => ['prescribing_clinic_id'], 'visits' => ['clinic_id'], 'staff_work_days' => ['clinic_id'], 'report_metric_catalog_items' => ['clinic_id'], 'blood_donors' => ['clinic_id'], 'blood_recipients' => ['clinic_id'], 'blood_bank_events' => ['clinic_id']];
+    public const CLINIC = ['oncology_plan_revisions' => ['clinic_id'], 'oncology_sessions' => ['clinic_id'], 'visit_pathologies' => ['clinic_id'], 'visit_diagnostic_assessments' => ['clinic_id'], 'visit_diagnoses' => ['clinic_id'], 'visit_services' => ['clinic_id'], 'visit_procedures' => ['clinic_id'], 'visit_outcomes' => ['clinic_id'], 'visit_prescriptions' => ['prescribing_clinic_id'], 'visits' => ['clinic_id'], 'staff_work_days' => ['clinic_id'], 'report_metric_catalog_items' => ['clinic_id'], 'blood_donors' => ['clinic_id'], 'blood_recipients' => ['clinic_id'], 'blood_bank_events' => ['clinic_id']];
 
     public function summary(bool $doctor, int $id, int $facilityId): array
     {

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Dossiers;
 
 use App\Services\Dossiers\DossierPathology;
+use App\Services\Dossiers\OncologyQueries;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,6 +22,10 @@ class DossierQueryRequest extends FormRequest
             'search' => ['nullable', 'string', 'max:200'],
             'oncology' => ['nullable', Rule::in(['yes', 'no'])],
             'pathology_status' => ['nullable', Rule::in(array_keys(DossierPathology::DISPOSITIONS))],
+            'treatment_status' => ['nullable', Rule::in(array_keys(OncologyQueries::STATUSES))],
+            'treatment_modality' => ['nullable', Rule::in(array_keys(OncologyQueries::MODALITIES))],
+            'dose_from' => ['nullable', 'date_format:Y-m-d'],
+            'dose_to' => ['nullable', 'date_format:Y-m-d', ...($this->filled('dose_from') ? ['after_or_equal:dose_from'] : [])],
             'visits' => ['nullable', Rule::in(['with', 'without'])],
             'from' => ['nullable', 'date_format:Y-m-d'],
             'to' => ['nullable', 'date_format:Y-m-d', ...($this->filled('from') ? ['after_or_equal:from'] : [])],

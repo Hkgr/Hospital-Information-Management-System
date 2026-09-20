@@ -1,0 +1,14 @@
+export const planStates: Record<string,string> = { draft:"مسودة",active:"فعالة",paused:"متوقفة مؤقتًا",needs_review:"تحتاج مراجعة",completed:"مكتملة",cancelled:"ملغاة" };
+export const sessionStates: Record<string,string> = { scheduled:"مجدولة",rescheduled:"أعيدت جدولتها",completed:"أُعطيت فعليًا",missed:"لم يحضر",cancelled:"ملغاة",referred:"محالة" };
+export const modalities: Record<string,string> = { chemotherapy:"علاج كيميائي",immunotherapy:"علاج مناعي",targeted:"علاج موجّه",hormone:"علاج هرموني",radiotherapy:"علاج شعاعي",supportive:"علاج داعم",other:"آخر" };
+export const intents: Record<string,string> = { curative:"شفائي",palliative:"تلطيفي",neoadjuvant:"قبل العلاج الأساسي",adjuvant:"مساعد",maintenance:"استمراري",supportive:"داعم",other:"آخر" };
+export type Values = Record<string,string|number|boolean|null>;
+export type TreatmentItem = Values & { id?:number; key?:string };
+export type TreatmentRevision = Values & { id:number; items:TreatmentItem[] };
+export type Plan = {id:number;plan_number:string;lock_version:number;effective_status:string;status:string;protocol_name?:string;modality?:string;starts_on?:string;revision_number?:number;revisions:TreatmentRevision[]};
+export type Session = Values & {id:number;lock_version:number;plan_id:number;clinic_id:number;doctor_id:number;plan_number:string;planned_on:string;status:string;dose_id:number|null;visit_id:number|null};
+export type Dose = Values & {id:number;lock_version:number;items:TreatmentItem[];oncology_session_id:number|null;voided_at:string|null};
+export type Dispensing = Values & {id:number;lock_version:number;dose_session_id:number|null;voided_at:string|null};
+export type TreatmentOptions = {doctors:{id:number;name_ar:string}[];funding_sources:{id:number;name_ar:string}[];periods:{id:number;starts_on:string;ends_on:string}[];staff:{id:number;name_ar:string}[];today:string};
+export type EditorKind = "plan"|"status"|"schedule"|"session"|"dose"|"dispense"|"void-dose"|"void-dispense";
+export const treatmentColumns = {treatment_count:"عدد الخطط",active_treatment_count:"الخطط الفعالة",review_treatment_count:"خطط تحتاج مراجعة",treatment_modalities:"أنماط العلاج الفعال",next_dose_on:"الجرعة المجدولة القادمة",last_dose_on:"آخر إعطاء فعلي"};

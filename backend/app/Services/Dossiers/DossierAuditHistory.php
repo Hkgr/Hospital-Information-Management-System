@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditHistory
 {
     public const ENTITIES = [
+        'oncology_plans' => 'الخطة العلاجية', 'oncology_plan_revisions' => 'نسخة الخطة', 'oncology_sessions' => 'الموعد العلاجي', 'dose_sessions' => 'الإعطاء الفعلي', 'dose_session_items' => 'الدواء المعطى', 'visit_medications' => 'صرف الدواء',
         'visit_pathologies' => 'التشريح المرضي', 'visit_diagnostic_assessments' => 'التقييم التشخيصي',
         'patient_dossier' => 'بطاقة المريض', 'patient' => 'بيانات الشخص', 'dossier_medical' => 'المعلومات الطبية والورمية',
         'dossier_visit' => 'الزيارة', 'visit_diagnosis' => 'التشخيص', 'visit_services' => 'الخدمة',
@@ -28,6 +29,13 @@ class DossierAuditHistory
         $subjects->unionAll($visits()->selectRaw('? AS entity_type, v.id AS entity_id, v.id AS visit_id', ['dossier_visit']));
         $tables = ['visit_diagnosis' => 'visit_diagnoses', 'visit_services' => 'visit_services', 'visit_procedures' => 'visit_procedures', 'visit_prescriptions' => 'visit_prescriptions', 'visit_outcomes' => 'visit_outcomes'];
         $tables += ['visit_pathologies' => 'visit_pathologies', 'visit_diagnostic_assessments' => 'visit_diagnostic_assessments'];
+        if ($f['capabilities']['treatment_view'] ?? false) {
+            $tables += ['dose_sessions' => 'dose_sessions', 'visit_medications' => 'visit_medications'];
+            foreach (['oncology_plans', 'oncology_plan_revisions', 'oncology_sessions'] as $table) {
+                $subjects->unionAll(DB::table($table.' as e')->where('e.dossier_id', $d['id'])->where('e.facility_id', $f['id'])->when($visit, fn ($q) => $q->whereRaw('1=0'))->selectRaw('? AS entity_type, e.id AS entity_id, NULL AS visit_id', [$table]));
+            }
+            $subjects->unionAll($visits()->join('dose_sessions as s', 's.visit_id', '=', 'v.id')->join('dose_session_items as e', 'e.dose_session_id', '=', 's.id')->where('s.facility_id', $f['id'])->selectRaw('? AS entity_type, e.id AS entity_id, v.id AS visit_id', ['dose_session_items']));
+        }
         if ($f['capabilities']['attachments_view']) {
             $tables += ['dossier_upload' => 'visit_attachment_uploads', 'visit_attachment' => 'visit_attachments'];
         }
@@ -110,6 +118,9 @@ class DossierAuditHistory
                     'reason' => $row->reason ?: (is_string($new['void_reason'] ?? null) ? $new['void_reason'] : null)];
             })->all();
             $entities = self::ENTITIES;
+            if (! ($f['capabilities']['treatment_view'] ?? false)) {
+                $entities = array_diff_key($entities, array_flip(['oncology_plans', 'oncology_plan_revisions', 'oncology_sessions', 'dose_sessions', 'dose_session_items', 'visit_medications']));
+            }
             if (! $f['capabilities']['attachments_view']) {
                 unset($entities['dossier_upload'], $entities['visit_attachment']);
             }
