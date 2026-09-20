@@ -1,0 +1,29 @@
+export const dispositionLabels: Record<string, string> = { not_assessed: "غير مقيّم", pathology_required: "التشريح المرضي مطلوب", pathology_pending: "بانتظار النتيجة", pathology_confirmed: "نتيجة التشريح المرضي متوفرة", pathology_not_required: "لا يتطلب تشريحًا مرضيًا", referred_out: "إحالة إلى جهة خارجية", unavailable: "التشريح المرضي غير متاح", cancelled: "أُلغيت متابعة التشريح المرضي" };
+export const pathologyLabels: Record<string, string> = { requested: "مطلوب", specimen_collected: "جُمعت العينة", pending_result: "بانتظار النتيجة", completed: "نتيجة متوفرة", unavailable: "غير متاح", cancelled: "ملغى" };
+export const pathologyFields: Record<string, string> = { source: "مصدر التقرير", status: "حالة التشريح المرضي", report_number: "رقم التقرير", external_organization: "المشفى أو المختبر الخارجي", specimen_type: "نوع العينة", anatomical_site: "الموقع التشريحي", requested_on: "تاريخ الطلب", collected_on: "تاريخ جمع العينة", result_on: "تاريخ النتيجة", conclusion: "الخلاصة النهائية", note: "ملاحظات", unavailable_reason: "سبب عدم الإتاحة أو الإلغاء", procedure_event_id: "الإجراء المرتبط", clinic_id: "العيادة المسؤولة", doctor_id: "الطبيب المسؤول" };
+export const assessmentFields: Record<string, string> = { disposition: "التقييم التشخيصي", assessed_on: "تاريخ التقييم", required_reason: "سبب طلب التشريح المرضي", not_required_reason: "سبب عدم الحاجة للتشريح المرضي", follow_up: "المتابعة المطلوبة", note: "ملاحظة سريرية", evidence_pathology_id: "التقرير المكتمل الداعم", clinic_id: "العيادة المسؤولة", doctor_id: "الطبيب المسؤول" };
+export type Assessment = { id: number; lock_version: number; disposition: string; effective_disposition: string; needs_review: boolean } & Record<string, string | number | boolean | null>;
+export type PathologyFile = { id: number; visit_id: number; title: string; original_filename: string; voided_at: string | null };
+export type Pathology = { id: number; visit_id: number; visit_no: string; visit_date: string; source: "internal" | "external"; status: string; lock_version: number; report_number: string | null; conclusion: string | null; voided_at: string | null; void_reason: string | null; capabilities: { update: boolean; void: boolean }; attachments: PathologyFile[] } & Record<string, unknown>;
+
+export function assessmentFieldApplies(field: string, disposition: string): boolean {
+  if (field === "not_required_reason") return disposition === "pathology_not_required";
+  if (field === "required_reason") return ["pathology_required", "pathology_pending", "pathology_confirmed", "referred_out"].includes(disposition);
+  if (field === "evidence_pathology_id") return disposition === "pathology_confirmed";
+  return true;
+}
+
+// UI draft cleanup only; Laravel independently enforces the same clinical invariants.
+export function normalizePathologyDraft(draft: Record<string, string>, assessment: boolean): Record<string, string> {
+  const next = { ...draft };
+  if (assessment) {
+    for (const field of ["not_required_reason", "required_reason", "evidence_pathology_id"]) {
+      if (!assessmentFieldApplies(field, next.disposition)) delete next[field];
+    }
+  } else {
+    if (next.source !== "external") delete next.external_organization;
+    if (!["unavailable", "cancelled"].includes(next.status)) delete next.unavailable_reason;
+    if (next.status !== "completed") { delete next.result_on; delete next.conclusion; }
+  }
+  return next;
+}

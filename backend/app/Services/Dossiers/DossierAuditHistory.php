@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditHistory
 {
     public const ENTITIES = [
+        'visit_pathologies' => 'التشريح المرضي', 'visit_diagnostic_assessments' => 'التقييم التشخيصي',
         'patient_dossier' => 'بطاقة المريض', 'patient' => 'بيانات الشخص', 'dossier_medical' => 'المعلومات الطبية والورمية',
         'dossier_visit' => 'الزيارة', 'visit_diagnosis' => 'التشخيص', 'visit_services' => 'الخدمة',
         'visit_procedures' => 'الإجراء', 'visit_prescriptions' => 'الوصفة', 'visit_prescription_items' => 'بند الوصفة',
@@ -26,6 +27,7 @@ class DossierAuditHistory
         $visits = fn () => DB::table('visits as v')->where('v.dossier_id', $d['id'])->where('v.patient_id', $d['patient_id'])->where('v.facility_id', $f['id'])->when($visit, fn ($q) => $q->where('v.id', $visit));
         $subjects->unionAll($visits()->selectRaw('? AS entity_type, v.id AS entity_id, v.id AS visit_id', ['dossier_visit']));
         $tables = ['visit_diagnosis' => 'visit_diagnoses', 'visit_services' => 'visit_services', 'visit_procedures' => 'visit_procedures', 'visit_prescriptions' => 'visit_prescriptions', 'visit_outcomes' => 'visit_outcomes'];
+        $tables += ['visit_pathologies' => 'visit_pathologies', 'visit_diagnostic_assessments' => 'visit_diagnostic_assessments'];
         if ($f['capabilities']['attachments_view']) {
             $tables += ['dossier_upload' => 'visit_attachment_uploads', 'visit_attachment' => 'visit_attachments'];
         }
@@ -49,6 +51,9 @@ class DossierAuditHistory
         $q = DB::table('audit_logs as a')->joinSub($this->subjects($f, $d, $visit), 'subject', function ($join) {
             $join->on('subject.entity_type', '=', 'a.entity_type')->on('subject.entity_id', '=', 'a.entity_id');
         })->where('a.facility_id', $f['id']);
+        if (! $f['capabilities']['attachments_view']) {
+            $q->where('a.event', '<>', 'attachment_linked');
+        }
         // Audit timestamps are stored in the application's timezone; filter by facility-local days.
         foreach (['from' => '>=', 'to' => '<'] as $field => $operator) {
             if (! empty($filters[$field])) {

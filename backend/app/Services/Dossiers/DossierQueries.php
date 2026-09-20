@@ -34,6 +34,11 @@ class DossierQueries
                 ->selectSub((clone $latest)->select('v.id'), 'latest_visit_id')
                 ->selectSub((clone $latest)->select('v.visit_date'), 'latest_visit_date')
                 ->selectSub((clone $latest)->select('v.status'), 'latest_visit_status');
+            $q->leftJoinSub(app(DossierPathology::class)->summaries($f), 'pathology_summary', 'pathology_summary.dossier_id', '=', 'd.id')
+                ->addSelect('pathology_summary.disposition as pathology_status', 'pathology_summary.visit_id as pathology_visit_id');
+            if (! empty($input['pathology_status'])) {
+                $q->whereRaw("COALESCE(pathology_summary.disposition, 'not_assessed') = ?", [$input['pathology_status']]);
+            }
             if (($input['status'] ?? 'all') !== 'all') {
                 $q->where('d.status', $input['status']);
             }
@@ -66,6 +71,7 @@ class DossierQueries
                 return ['id' => (int) $row->id, 'card_id' => (int) $row->card_id, 'code' => $row->code, 'legacy_without_visits' => (int) $row->saved_visit_count === 0, 'status' => $row->status, 'opening_date' => $row->opening_date, 'is_oncology' => (bool) $row->is_oncology,
                     'patient_code' => $row->patient_code, 'patient_name' => $row->patient_name, 'mother_name' => $row->mother_name, 'gender' => $row->gender, 'birth_date' => $row->birth_date, 'birth_date_accuracy' => $row->birth_date_accuracy, 'phone' => $row->phone, 'paper_file_number' => $row->paper_file_number,
                     'visit_count' => (int) $row->visit_count, 'procedure_count' => (int) $row->procedure_count, 'workflow' => $actions[$row->id]['workflow'],
+                    'pathology_status' => $row->pathology_status ?? 'not_assessed', 'pathology_visit_id' => $row->pathology_visit_id ? (int) $row->pathology_visit_id : null,
                     'latest_visit_id' => $row->latest_visit_id ? (int) $row->latest_visit_id : null, 'latest_visit_date' => $row->latest_visit_date, 'latest_visit_status' => $row->latest_visit_status, 'diagnoses' => $diagnoses[$row->latest_visit_id] ?? []];
             }));
 
@@ -104,6 +110,7 @@ class DossierQueries
                 'oncology' => $d->is_oncology ? ['previous_examinations' => $d->previous_examinations, 'medication_source' => $d->medication_source, 'other_organization' => $d->other_organization,
                     'selections' => DB::table('dossier_oncology_selections')->where('dossier_id', $id)->where('facility_id', $f['id'])->where('is_active', true)->orderBy('selection_group')->orderBy('code')->get(['selection_group', 'code'])->all()] : null,
                 'patient' => (array) $patient, 'visit_count' => $v->count(), 'latest_visit' => $latest ? $this->visit($f, $id, (int) $latest) : null,
+                'pathology_summary' => app(DossierPathology::class)->summaries($f)->where('dossier_id', $id)->first(['disposition', 'visit_id', 'fact_date']),
                 'workflow' => app(DossierWorkflowActions::class)->forDossiers($f, [$d])[$id]['workflow']];
         });
     }
@@ -151,6 +158,7 @@ class DossierQueries
             ->orderBy('s.administered_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 's.administered_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit'])->all();
 
         $result['clinical'] = app(DossierVisitSections::class)->read($f, $visit);
+        $result['diagnostic_assessment'] = app(DossierPathology::class)->assessment($f, $id, $visit);
 
         return $result;
     }

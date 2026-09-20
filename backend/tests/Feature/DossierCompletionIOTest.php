@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\Support\DossierCompletionCase;
+use Tests\Support\DossierWorkbookAssertions;
 
 class DossierCompletionIOTest extends DossierCompletionCase
 {
@@ -21,10 +22,10 @@ class DossierCompletionIOTest extends DossierCompletionCase
         foreach (['../../secret.pdf', 'report.php.pdf', 'bad.svg', 'bad.html'] as $name) {
             $this->callApi('POST', $this->path('/uploads'), ['lock_version' => 1, 'title' => 'اختبار', 'original_filename' => $name])->assertUnprocessable();
         }
-        $begin = ['lock_version' => 1, 'title' => 'مرفق اختبار خاص', 'original_filename' => 'clinical.png', 'request_id' => (string) Str::uuid()];
+        $begin = ['lock_version' => $this->s['visit']['lock_version'], 'title' => 'مرفق اختبار خاص', 'original_filename' => 'clinical.png', 'request_id' => (string) Str::uuid()];
         $ticket = $this->callApi('POST', $this->path('/uploads'), $begin)->assertCreated()->json('data.upload_id');
         $this->callApi('POST', $this->path('/uploads'), $begin)->assertCreated()->assertJsonPath('data.upload_id', $ticket);
-        $this->callApi('POST', $this->path('/review'), ['lock_version' => 1, 'confirmed' => true])->assertUnprocessable()->assertJsonValidationErrors('attachments');
+        $this->callApi('POST', $this->path('/review'), ['lock_version' => $this->s['visit']['lock_version'], 'confirmed' => true])->assertUnprocessable()->assertJsonValidationErrors('attachments');
         $this->app['auth']->forgetGuards();
         $url = '/api/dossiers'.$this->path('/uploads/'.$ticket).'?facility_id='.$this->f['facility'];
         $headers = ['Accept' => 'application/json', 'Authorization' => 'Bearer '.$this->token];
@@ -63,11 +64,17 @@ class DossierCompletionIOTest extends DossierCompletionCase
             $book = IOFactory::load($path);
             $sheet = $book->getSheet(0);
             $this->assertTrue($sheet->getRightToLeft());
-            $this->assertSame('s', $sheet->getCell('D9')->getDataType());
-            $this->assertStringStartsWith('=HYPERLINK', $sheet->getCell('D9')->getValue());
-            foreach (['A9', 'H9', 'I9', 'K9'] as $cell) {
-                $this->assertSame('n', $sheet->getCell($cell)->getDataType(), $cell);
+            $found = false;
+            foreach ($sheet->getCoordinates() as $coordinate) {
+                $cell = $sheet->getCell($coordinate);
+                $this->assertNotSame('f', $cell->getDataType());
+                if (str_starts_with((string) $cell->getValue(), '=HYPERLINK')) {
+                    $found = true;
+                    $this->assertSame('s', $cell->getDataType());
+                }
             }
+            $this->assertTrue($found, 'The exported patient name must remain literal text.');
+            DossierWorkbookAssertions::check($book, true);
         } finally {
             unlink($path);
         }
@@ -78,7 +85,7 @@ class DossierCompletionIOTest extends DossierCompletionCase
         $this->assertStringStartsWith('%PDF-', $pdf);
         $detail = $reports->document($r, $f, [], $this->s['id'], $this->s['visit']['id']);
         $this->assertStringContainsString('مسودة — غير مكتملة', $detail['metadata']['title']);
-        $this->assertStringContainsString('إضبارات المرضى', view('reports.blood-bank', $detail)->render());
+        $this->assertStringContainsString('بطاقات المرضى', view('reports.blood-bank', $detail)->render());
         $this->token = $this->f['viewer']->createToken('no-export', ['api'])->plainTextToken;
         $this->callApi('POST', $this->path('/report/pdf'))->assertForbidden();
     }

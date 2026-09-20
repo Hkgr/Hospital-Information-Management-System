@@ -10,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 class DossierClinicalContext
 {
     public const TABLES = [
+        'visit_pathologies' => ['clinic_id', 'doctor_id', 'pathology'],
+        'visit_diagnostic_assessments' => ['clinic_id', 'doctor_id', 'assessment'],
         'visit_diagnoses' => ['clinic_id', 'diagnosing_staff_id', 'diagnoses'],
         'visit_services' => ['clinic_id', 'performed_by', 'services'],
         'visit_procedures' => ['clinic_id', 'specialist_id', 'procedures'],
@@ -23,7 +25,7 @@ class DossierClinicalContext
         $staff = [];
         $clinics = [];
         foreach (self::TABLES as $table => [$clinic, $doctor]) {
-            foreach (DB::table($table)->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->get([$clinic, $doctor]) as $row) {
+            foreach (DB::table($table)->where('visit_id', $visit)->where('facility_id', $f['id'])->when($table !== 'visit_diagnostic_assessments', fn ($q) => $q->whereNull('voided_at'))->get([$clinic, $doctor]) as $row) {
                 $clinics[] = $row->$clinic;
                 $staff[] = $row->$doctor;
             }
@@ -67,7 +69,13 @@ class DossierClinicalContext
             if (! $diagnoses && $table === 'visit_diagnoses') {
                 continue;
             }
-            foreach (DB::table($table)->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->orderBy('id')->lockForUpdate()->get() as $index => $row) {
+            foreach (DB::table($table)->where('visit_id', $visit)->where('facility_id', $f['id'])->when($table !== 'visit_diagnostic_assessments', fn ($q) => $q->whereNull('voided_at'))->orderBy('id')->lockForUpdate()->get() as $index => $row) {
+                if (in_array($table, ['visit_pathologies', 'visit_diagnostic_assessments'])) {
+                    app(DossierPathology::class)->dates($f, (array) $row, $date);
+                }
+                if (in_array($table, ['visit_pathologies', 'visit_diagnostic_assessments']) && ! $row->$clinic && ! $row->$doctor) {
+                    continue;
+                }
                 // Legacy events without a dossier clinic retain their independent
                 // historical contract. Finalization still requires explicit review.
                 if (! $diagnoses && property_exists($row, 'dossier_managed') && ! $row->dossier_managed && ! $row->$clinic) {

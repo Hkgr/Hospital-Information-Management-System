@@ -2,6 +2,7 @@
 
 namespace App\OpenApi;
 
+use App\Services\Dossiers\DossierPathology;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\Response;
 use Dedoc\Scramble\Support\Generator\Schema;
@@ -46,6 +47,10 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
         $detail = $this->object(['id' => $integer(), 'card_id' => $integer(), 'legacy_without_visits' => new BooleanType, 'facility_id' => $integer(), 'code' => $text(), 'opening_date' => $text(), 'status' => $dossierStatus(), 'disability_text' => $nullable(), 'clinical_history' => $nullable(), 'is_oncology' => new BooleanType, 'patient' => $personal, 'oncology' => $oncology, 'visit_count' => $integer(), 'latest_visit' => $visit->clone()->nullable(true)]);
         $meta = $this->object(array_fill_keys(['page', 'per_page', 'total', 'last_page'], $integer()));
         $row->addProperty('procedure_count', $integer());
+        $row->addProperty('pathology_status', (new StringType)->enum(array_keys(DossierPathology::DISPOSITIONS)));
+        $row->addProperty('pathology_visit_id', (new IntegerType)->nullable(true));
+        $visit->addProperty('diagnostic_assessment', (new DossierPathologyDocument)->assessment()->nullable(true));
+        $detail->addProperty('pathology_summary', $this->object(['disposition' => $text(), 'visit_id' => $integer(), 'fact_date' => $text()])->nullable(true));
         $row->addProperty('latest_visit_date', $nullable());
         $visit->addProperty('clinical', (new DossierCompletionDocument)->clinical());
         $detail->addProperty('latest_visit', $visit->clone()->nullable(true));
@@ -58,6 +63,11 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
             }
             foreach ($path->operations as $op) {
                 $op->security = [new SecurityRequirement(['bearerAuth' => []])];
+                if (str_contains($route, '/pathology') || str_ends_with($route, '/diagnostic-assessment')) {
+                    (new DossierPathologyDocument)->operation($op, $route);
+
+                    continue;
+                }
                 if (str_ends_with($route, '/audit')) {
                     (new DossierAuditDocument)->operation($op);
 

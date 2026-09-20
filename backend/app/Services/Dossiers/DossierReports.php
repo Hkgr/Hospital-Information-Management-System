@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class DossierReports
 {
-    public const COLUMNS = ['sequence' => 'م', 'code' => 'كود المريض', 'name' => 'اسم المريض', 'mother_name' => 'اسم الأم', 'gender' => 'الجنس', 'birth_date' => 'الميلاد', 'phone' => 'الهاتف', 'paper_file_number' => 'رقم الملف الورقي', 'opening_date' => 'بداية الملف الطبي في المشفى', 'latest_visit_date' => 'تاريخ آخر زيارة', 'status' => 'حالة السياق الطبي', 'is_oncology' => 'الحالة الورمية', 'diagnoses' => 'تشخيصات آخر زيارة', 'clinics' => 'العيادات', 'doctors' => 'الأطباء المسؤولون', 'visit_count' => 'عدد الزيارات', 'procedure_count' => 'عدد الإجراءات'];
+    public const COLUMNS = ['pathology_status' => 'حالة التشريح المرضي', 'sequence' => 'م', 'code' => 'كود المريض', 'name' => 'اسم المريض', 'mother_name' => 'اسم الأم', 'gender' => 'الجنس', 'birth_date' => 'الميلاد', 'phone' => 'الهاتف', 'paper_file_number' => 'رقم الملف الورقي', 'opening_date' => 'بداية الملف الطبي في المشفى', 'latest_visit_date' => 'تاريخ آخر زيارة', 'status' => 'حالة السياق الطبي', 'is_oncology' => 'الحالة الورمية', 'diagnoses' => 'تشخيصات آخر زيارة', 'clinics' => 'العيادات', 'doctors' => 'الأطباء المسؤولون', 'visit_count' => 'عدد الزيارات', 'procedure_count' => 'عدد الإجراءات'];
 
     public const DEFAULT_COLUMNS = ['sequence', 'code', 'name', 'mother_name', 'gender', 'birth_date', 'phone', 'paper_file_number', 'opening_date', 'latest_visit_date', 'status', 'is_oncology'];
 
@@ -69,6 +69,7 @@ class DossierReports
                 foreach ($data['data'] as $i => $d) {
                     $rows[] = ['id' => $d['id'], 'sequence' => $i + 1, 'code' => $d['code'], 'patient_code' => $d['patient_code'], 'name' => $d['patient_name'], 'diagnoses' => implode('، ', array_column($d['diagnoses'], 'name')), 'clinics' => implode('، ', array_unique(array_filter(array_column($d['diagnoses'], 'clinic')))), 'doctors' => implode('، ', array_unique(array_filter(array_column($d['diagnoses'], 'doctor')))), 'visit_count' => $d['visit_count'], 'procedure_count' => $d['procedure_count'], 'status' => $d['status'] === 'draft' ? 'مسودة — غير مكتملة' : 'فعالة', 'latest_visit_date' => $d['latest_visit_date']];
                     $rows[array_key_last($rows)] += [
+                        'pathology_status' => DossierPathology::DISPOSITIONS[$d['pathology_status']],
                         'mother_name' => $d['mother_name'], 'gender' => ['male' => 'ذكر', 'female' => 'أنثى'][$d['gender']] ?? 'غير معروف',
                         'birth_date' => self::birthDate($d['birth_date'], $d['birth_date_accuracy']),
                         'phone' => $d['phone'], 'paper_file_number' => $d['paper_file_number'], 'opening_date' => $d['opening_date'], 'is_oncology' => $d['is_oncology'] ? 'ورمي' : 'غير ورمي',
@@ -118,6 +119,40 @@ class DossierReports
             $ids = $visits->pluck('id');
             $byId = $visits->keyBy('id');
             $total = $visits->count();
+            foreach (['visit_diagnostic_assessments' => 'التقييم التشخيصي', 'visit_pathologies' => 'تقارير التشريح المرضي'] as $table => $title) {
+                $rows = DB::table($table.' as e')->leftJoin('clinics as c', 'c.id', '=', 'e.clinic_id')->leftJoin('staff as s', 's.id', '=', 'e.doctor_id')->where('e.facility_id', $f['id'])->whereIn('e.visit_id', $ids)->orderBy('e.visit_id')->orderBy('e.id')->limit(config('dossiers.report_detail_limit') + 1)->get(['e.*', 'c.name_ar as clinic', 's.full_name as doctor']);
+                $total += $rows->count();
+                $this->limit($total, config('dossiers.report_detail_limit'));
+                $attachments = $table === 'visit_pathologies' ? app(DossierPathology::class)->attachmentMetadata($f, $rows->pluck('id')->all()) : [];
+                $data = $rows->map(function ($e) use ($table, $byId, $attachments) {
+                    $assessment = $table === 'visit_diagnostic_assessments';
+                    $notes = $assessment ? [$e->note, $e->required_reason, $e->not_required_reason, $e->follow_up, $e->evidence_pathology_id ? 'التقرير الداعم: '.$e->evidence_pathology_id.'؛ راجع حالته الحالية في قسم التقارير.' : null] : [$e->note, $e->unavailable_reason, $this->historicalState($e, $byId[$e->visit_id])];
+                    foreach ($attachments[$e->id] ?? [] as $file) {
+                        $notes[] = 'مرفق: '.$file->title.' · '.$file->original_filename.($file->voided_at ? ' (ملغى)' : '');
+                    }
+
+                    return ['id' => $e->id, 'code' => $byId[$e->visit_id]->visit_no, 'date' => $assessment ? $e->assessed_on : $e->result_on,
+                        'name' => $assessment ? DossierPathology::DISPOSITIONS[$e->disposition] : DossierPathology::STATUSES[$e->status],
+                        'source' => $assessment ? 'قرار سريري محفوظ' : ($e->source === 'external' ? 'من جهة خارجية · '.$e->external_organization : 'ضمن المشفى'),
+                        'report_number' => $assessment ? null : $e->report_number, 'requested_on' => $assessment ? null : $e->requested_on, 'collected_on' => $assessment ? null : $e->collected_on,
+                        'specimen' => $assessment ? null : implode(' · ', array_filter([$e->specimen_type, $e->anatomical_site])), 'conclusion' => $assessment ? null : $e->conclusion,
+                        'clinic' => $e->clinic, 'doctor' => $e->doctor, 'note' => implode("\n", array_filter($notes))];
+                })->all();
+                $labels = ['name' => 'الحالة المسجلة', 'date' => 'تاريخ النتيجة أو التقييم', 'source' => 'المصدر'];
+                if ($table === 'visit_pathologies') {
+                    $labels += ['report_number' => 'رقم التقرير', 'requested_on' => 'تاريخ الطلب', 'collected_on' => 'تاريخ جمع العينة', 'specimen' => 'العينة والموقع', 'conclusion' => 'الخلاصة النهائية'];
+                }
+                $facts = [];
+                foreach ($data as $row) {
+                    foreach ($labels + ['clinic' => 'العيادة', 'doctor' => 'الطبيب', 'note' => 'التفاصيل والتاريخ'] as $field => $label) {
+                        $value = $row[$field];
+                        $facts[] = ['id' => $row['id'], 'code' => $row['code'], 'name' => $title.' #'.$row['id'], 'field' => $label.' · #'.$row['id'], 'value' => $value === null || $value === '' ? 'غير مسجل' : $value, '_types' => $value && in_array($field, ['date', 'requested_on', 'collected_on']) ? ['value' => 'date'] : []];
+                    }
+                }
+                $total += count($facts);
+                $this->limit($total, config('dossiers.report_detail_limit'));
+                $sections[] = $this->section($title, ['code' => 'الزيارة المصدر', 'field' => 'البيان', 'value' => 'القيمة'], $facts, 'القرار التاريخي لا يضمن جاهزية حالية؛ التقرير الملغى لا يُعد دليلًا مؤكدًا. التواريخ غير المعروفة تبقى غير مسجلة.');
+            }
             $common = ['code' => 'كود الزيارة', 'date' => 'التاريخ', 'name' => 'البيان', 'clinic' => 'العيادة', 'doctor' => 'الطبيب', 'note' => 'التفاصيل'];
             $specs = [
                 ['التشخيصات', 'visit_diagnoses', 'diagnoses', 'diagnosis_id', 'diagnosing_staff_id', 'diagnosed_on'],
@@ -172,6 +207,9 @@ class DossierReports
         $meta['filters'] = $dossier ? 'تقرير فردي ضمن المنشأة المصرح بها' : implode(' | ', array_map(fn ($key) => ['search' => 'البحث', 'status' => 'الحالة', 'oncology' => 'ورمي', 'visits' => 'الزيارات', 'from' => 'من', 'to' => 'إلى', 'sort' => 'الترتيب', 'direction' => 'الاتجاه'][$key].': '.($filters[$key] ?? 'الكل'), ['search', 'status', 'oncology', 'visits', 'from', 'to', 'sort', 'direction']));
         if ($dossier && ! $visit) {
             $meta['filters'] .= '؛ تاريخ الزيارة الفعلي: '.($filters['from'] ?? 'البداية').' — '.($filters['to'] ?? 'اليوم').'؛ يشمل الوقائع المبطلة وأسبابها؛ كل واقعة تحتفظ بتاريخها الخاص. القيم السابقة للتصحيحات متاحة في سجل التغييرات بصلاحيته المستقلة.';
+        }
+        if (! $dossier && ! empty($filters['pathology_status'])) {
+            $meta['filters'] .= ' | حالة التشريح المرضي: '.DossierPathology::DISPOSITIONS[$filters['pathology_status']];
         }
 
         return ['metadata' => $meta, 'detail' => $dossier !== null, 'identity' => $identity, 'columns' => array_keys($sections[0]['labels']), 'sections' => $sections, 'moduleLabel' => 'بطاقات المرضى', 'printWidth' => $dossier ? 186 : 273, 'reportNote' => $draft ? 'مسودة — غير مكتملة؛ لا تمثل سجلًا طبيًا مكتملًا.' : 'معلومات بطاقة المريض الحالية مميزة عن وقائع زياراتها.'];
