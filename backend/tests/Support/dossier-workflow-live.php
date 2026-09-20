@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Support\TestDatabaseSafety;
+use Database\Seeders\DossierCompletionPermissionsSeeder;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\DossierWorkflowFixture;
@@ -18,6 +19,9 @@ if ($mode === 'prepare') {
         throw new RuntimeException('Cleanup prior workflow fixture first.');
     }
     $f = DB::transaction(fn () => DossierWorkflowFixture::make());
+    app(DossierCompletionPermissionsSeeder::class)->run();
+    DB::table('role_permissions')->insertOrIgnore(['role_id' => $f['dossier_role'], 'permission_id' => DB::table('permissions')->where('code', 'dossiers.export')->value('id')]);
+    DB::table('patients')->where('patient_code', $f['search_patient_code'])->update(['mother_name' => 'أم اختبار البطاقة', 'phone' => '00963900123456', 'paper_file_number' => '000072', 'birth_date' => '1980-01-01', 'birth_date_accuracy' => 'year_only']);
     $f['user_id'] = $f['user']->id;
     $f['viewer_id'] = $f['viewer']->id;
     $f['token'] = $f['user']->createToken('dossier-workflow-live', ['api'])->plainTextToken;

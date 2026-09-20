@@ -96,7 +96,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
             foreach (['search', 'status', 'oncology', 'visits', 'from', 'to', 'sort', 'direction'] as $key) {
                 $fields[$key] = $s();
             }$required = ['facility_id'];
-            $op->description .= ' POST requires dossiers.export. Authoritative complete filtered results, not visible page; safe limits 1000 dossiers / 5000 detail rows. Drafts marked incomplete. Private attachment metadata requires attachments.view; no binary embedding. Returns PDF or XLSX attachment; report generation assigns an audited report number. Individual dossier report is Full Patient Card history: includes saved and explicitly voided linked visits/facts and reasons, with current saved versions; prior correction values stay in separately authorized audit. Optional from/to select actual visit_date inclusively (never created_at); each selected fact retains its own date. Current personal/medical data are labelled current. List and individual-visit semantics stay unchanged.';
+            $op->description .= ' POST requires dossiers.export. Selected list columns can include mother_name, gender, birth_date (with saved precision), phone, paper_file_number, opening_date and is_oncology; legacy columns remain valid. Authoritative complete filtered results, not visible page; safe limits 1000 Patient Cards / 5000 detail rows. Drafts marked incomplete. Private attachment metadata requires attachments.view; no binary embedding. Returns PDF or XLSX attachment; report generation assigns an audited report number. Individual Patient Card report is Full Patient Card history: includes saved and explicitly voided linked visits/facts and reasons, with current saved versions; prior correction values stay in separately authorized audit. Optional from/to select actual visit_date inclusively (never created_at); each selected fact retains its own date. Current personal/medical data are labelled current. List and individual-visit semantics stay unchanged.';
             $op->responses = [];
             $report = Response::make(200)->setDescription('Private report');
             foreach (['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'] as $mime) {
@@ -104,7 +104,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
             }
             $op->addResponse($report);
         } elseif (str_ends_with($route, '/download')) {
-            $op->description .= ' Requires dossiers.attachments.download. Rechecks full dossier/visit/patient/facility scope, streams a private file with Content-Disposition attachment and X-Content-Type-Options nosniff. No storage key or Bearer URL.';
+            $op->description .= ' Requires dossiers.attachments.download. Rechecks full Patient Card context/visit/patient/facility scope, streams a private file with Content-Disposition attachment and X-Content-Type-Options nosniff. No storage key or Bearer URL.';
             $op->responses = [];
             $op->addResponse(Response::make(200)->setDescription('Private attachment')->setContent('application/octet-stream', Schema::fromType($s()->format('binary'))));
         } elseif (str_ends_with($route, '/attachments')) {
@@ -112,7 +112,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
             $op->responses = [];
             $op->addResponse(Response::make(200)->setDescription('Paginated scoped metadata')->setContent('application/json', Schema::fromType($this->object(['data' => $this->list($this->object(['id' => $i(), 'visit_id' => $i(), 'title' => $s(), 'original_filename' => $s(), 'mime_type' => $s(), 'extension' => $s(), 'size' => $i(), 'sha256' => $s(), 'uploaded_by' => $i(), 'uploaded_at' => $s(), 'lock_version' => $i(), 'visit_no' => $s(), 'visit_date' => $s()])), 'meta' => $this->object(array_fill_keys(['page', 'per_page', 'total', 'last_page'], $i()))]))));
         } else {
-            $op->description .= ' Subsequent visits require an active dossier and dossiers.visits.create. Reuse the visit/diagnosis request and selected-visit progress contract, independent initial/subsequent identity; GET visits/new creates nothing.';
+            $op->description .= ' Subsequent visits require an active facility medical context and dossiers.visits.create. Reuse the visit/diagnosis request and selected-visit progress contract, independent initial/subsequent identity; GET visits/new creates nothing.';
 
             return;
         }

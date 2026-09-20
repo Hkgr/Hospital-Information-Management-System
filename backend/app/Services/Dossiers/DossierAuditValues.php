@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditValues
 {
     private const FIELDS = [
-        'code' => 'معرّف السياق التاريخي (غير الكود الحالي)', 'opening_date' => 'تاريخ فتح بطاقة المريض', 'status' => 'الحالة',
+        'code' => 'معرّف السياق التاريخي (غير الكود الحالي)', 'opening_date' => 'بداية الملف الطبي في المشفى', 'status' => 'الحالة',
         'patient_code' => 'كود المريض', 'first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم',
         'birth_date' => 'الميلاد', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل',
         'governorate_id' => 'المحافظة', 'city_id' => 'المدينة', 'address_line' => 'عنوان السكن', 'displacement_status' => 'حالة النزوح',
@@ -127,7 +127,7 @@ class DossierAuditValues
         $enums = ['status' => ['draft' => 'مسودة', 'active' => 'فعالة', 'complete' => 'مكتملة', 'void' => 'ملغاة', 'voided' => 'ملغاة'],
             'gender' => ['male' => 'ذكر', 'female' => 'أنثى', 'unknown' => 'غير معروف'], 'birth_date_accuracy' => ['exact' => 'دقيق', 'year_only' => 'السنة فقط', 'estimated' => 'تقديري', 'unknown' => 'غير معروف'],
             'displacement_status' => ['resident' => 'مقيم', 'idp' => 'نازح', 'returnee' => 'عائد', 'unknown' => 'غير معروف'],
-            'dossier_visit_kind' => ['initial' => 'أولية', 'subsequent' => 'لاحقة'], 'state' => ['pending' => 'قيد الرفع', 'complete' => 'مكتمل', 'cancelled' => 'ملغى'],
+            'dossier_visit_kind' => ['initial' => 'أول زيارة مسجلة ضمن البطاقة', 'subsequent' => 'لاحقة'], 'state' => ['pending' => 'قيد الرفع', 'complete' => 'مكتمل', 'cancelled' => 'ملغى'],
             'medication_source' => ['ministry_of_health' => 'وزارة الصحة', 'al_rowad' => 'مؤسسة الرواد', 'other_organization' => 'جهة أخرى', 'personal_expense' => 'نفقة شخصية', 'none' => 'لا يوجد']];
 
         return $enums[$field][(string) $value] ?? (string) $value;

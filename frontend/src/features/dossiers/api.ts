@@ -2,10 +2,16 @@ import type { WorkflowActions } from "./wizard";
 export type DossierStatus = "draft" | "active";
 export type VisitStatus = "draft" | "complete";
 export type Diagnosis = { id: number; code: string; name: string; diagnosed_on: string | null; clinic: string | null; doctor: string | null };
-export type DossierRow = { card_id: number; legacy_without_visits: boolean; latest_visit_date: string | null; procedure_count: number; workflow: WorkflowActions; status: DossierStatus; latest_visit_status: VisitStatus | null; id: number; code: string; opening_date: string; patient_code: string; patient_name: string; is_oncology: boolean; visit_count: number; latest_visit_id: number | null; diagnoses: Diagnosis[] };
+export type DossierRow = { mother_name: string | null; gender: string; birth_date: string | null; birth_date_accuracy: string; phone: string | null; paper_file_number: string | null; card_id: number; legacy_without_visits: boolean; latest_visit_date: string | null; procedure_count: number; workflow: WorkflowActions; status: DossierStatus; latest_visit_status: VisitStatus | null; id: number; code: string; opening_date: string; patient_code: string; patient_name: string; is_oncology: boolean; visit_count: number; latest_visit_id: number | null; diagnoses: Diagnosis[] };
 export type ClinicalItem = { id: number; name: string; date: string; code?: string; quantity?: string | number | null; quantity_unit?: string | null; dose_text?: string | null };
 export type Visit = { clinical?: import("./clinical").ClinicalData; is_referred?: boolean | number; referring_hospital?: string | null; referral_date?: string | null; referral_reason?: string | null; status: VisitStatus; id: number; visit_no: string; visit_date: string; visit_clinic: string | null; attending_doctor: string | null; diagnoses: Diagnosis[]; services: ClinicalItem[]; procedures: ClinicalItem[]; outcomes: ClinicalItem[]; medications: ClinicalItem[]; administered_medications: ClinicalItem[] };
 export type Dossier = { card_id: number; legacy_without_visits: boolean; workflow: WorkflowActions; status: DossierStatus; id: number; facility_id: number; code: string; opening_date: string; disability_text: string | null; clinical_history: string | null; is_oncology: boolean; patient: Record<string, string | null>; visit_count: number; latest_visit: Visit | null; oncology: { previous_examinations: string | null; medication_source: string | null; other_organization: string | null; selections: { selection_group: string; code: string }[] } | null };
 export const historyLabels: Record<string, string> = { medical: "مرضية", surgical: "جراحية", medication: "دوائية", family: "عائلية" };
 export const treatmentLabels: Record<string, string> = { surgical: "جراحي", chemotherapy: "كيميائي", radiotherapy: "شعاعي", other: "آخر" };
 export const sourceLabels: Record<string, string> = { ministry_of_health: "وزارة الصحة", al_rowad: "مؤسسة الرواد", other_organization: "جهة أخرى", personal_expense: "نفقة شخصية", none: "لا يوجد" };
+
+export function patientBirthDate(date: string | null, accuracy: string | null) {
+  if (!date || accuracy === "unknown") return "غير مسجل";
+  if (accuracy === "year_only") return `${date.slice(0, 4)} (السنة فقط)`;
+  return accuracy === "estimated" ? `${date} (تقديري)` : date;
+}

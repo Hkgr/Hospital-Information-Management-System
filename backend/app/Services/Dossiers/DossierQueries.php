@@ -25,7 +25,7 @@ class DossierQueries
         return DB::transaction(function () use ($f, $input) {
             $visits = $this->actualVisits($f)->whereColumn('v.dossier_id', 'd.id')->whereColumn('v.patient_id', 'd.patient_id');
             $latest = (clone $visits)->orderByDesc('v.visit_date')->orderByDesc('v.id')->limit(1);
-            $q = $this->dossiers($f)->select('d.id', 'd.patient_id as card_id', 'p.patient_code as code', 'd.status', 'd.opening_date', 'd.is_oncology', 'p.patient_code')
+            $q = $this->dossiers($f)->select('d.id', 'd.patient_id as card_id', 'p.patient_code as code', 'd.status', 'd.opening_date', 'd.is_oncology', 'p.patient_code', 'p.mother_name', 'p.gender', 'p.birth_date', 'p.birth_date_accuracy', 'p.phone', 'p.paper_file_number')
                 ->selectRaw("CONCAT_WS(' ', p.first_name, p.family_name) as patient_name")
                 ->selectSub((clone $visits)->selectRaw('COUNT(*)'), 'visit_count')
                 ->selectSub(DB::table('visits as saved')->whereColumn('saved.dossier_id', 'd.id')->selectRaw('COUNT(*)'), 'saved_visit_count')
@@ -64,7 +64,8 @@ class DossierQueries
             $actions = app(DossierWorkflowActions::class)->forDossiers($f, $page->items());
             $page->setCollection($page->getCollection()->map(function ($row) use ($diagnoses, $actions) {
                 return ['id' => (int) $row->id, 'card_id' => (int) $row->card_id, 'code' => $row->code, 'legacy_without_visits' => (int) $row->saved_visit_count === 0, 'status' => $row->status, 'opening_date' => $row->opening_date, 'is_oncology' => (bool) $row->is_oncology,
-                    'patient_code' => $row->patient_code, 'patient_name' => $row->patient_name, 'visit_count' => (int) $row->visit_count, 'procedure_count' => (int) $row->procedure_count, 'workflow' => $actions[$row->id]['workflow'],
+                    'patient_code' => $row->patient_code, 'patient_name' => $row->patient_name, 'mother_name' => $row->mother_name, 'gender' => $row->gender, 'birth_date' => $row->birth_date, 'birth_date_accuracy' => $row->birth_date_accuracy, 'phone' => $row->phone, 'paper_file_number' => $row->paper_file_number,
+                    'visit_count' => (int) $row->visit_count, 'procedure_count' => (int) $row->procedure_count, 'workflow' => $actions[$row->id]['workflow'],
                     'latest_visit_id' => $row->latest_visit_id ? (int) $row->latest_visit_id : null, 'latest_visit_date' => $row->latest_visit_date, 'latest_visit_status' => $row->latest_visit_status, 'diagnoses' => $diagnoses[$row->latest_visit_id] ?? []];
             }));
 
@@ -94,7 +95,7 @@ class DossierQueries
             abort_unless($d, 404);
             $patient = DB::table('patients as p')->leftJoin('governorates as g', 'g.id', '=', 'p.governorate_id')
                 ->leftJoin('cities as c', fn ($j) => $j->on('c.id', '=', 'p.city_id')->on('c.governorate_id', '=', 'p.governorate_id'))
-                ->where('p.id', $d->patient_id)->first(['p.patient_code', 'p.first_name', 'p.family_name', 'p.father_name', 'p.mother_name', 'p.birth_date', 'p.birth_date_accuracy', 'p.gender', 'p.phone', 'p.alt_phone', 'g.name_ar as governorate', 'c.name_ar as city', 'p.address_line', 'p.displacement_status']);
+                ->where('p.id', $d->patient_id)->first(['p.patient_code', 'p.first_name', 'p.family_name', 'p.father_name', 'p.mother_name', 'p.birth_date', 'p.birth_date_accuracy', 'p.gender', 'p.phone', 'p.alt_phone', 'p.paper_file_number', 'g.name_ar as governorate', 'c.name_ar as city', 'p.address_line', 'p.displacement_status']);
             $v = $this->actualVisits($f)->where('v.dossier_id', $id);
             $latest = (clone $v)->orderByDesc('v.visit_date')->orderByDesc('v.id')->value('v.id');
 

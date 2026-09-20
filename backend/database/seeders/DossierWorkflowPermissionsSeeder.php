@@ -8,10 +8,10 @@ use Illuminate\Support\Facades\DB;
 class DossierWorkflowPermissionsSeeder extends Seeder
 {
     public const CODES = [
-        'dossiers.create' => 'إنشاء بطاقة مريض مسودة في المنشأة',
+        'dossiers.create' => 'تسجيل بطاقة مريض مسودة في المنشأة',
         'dossiers.personal.update' => 'تعديل البيانات الشخصية لبطاقة المريض في المنشأة',
         'dossiers.medical.update' => 'تعديل المعلومات الطبية لبطاقة المريض في المنشأة',
-        'dossiers.visits.create' => 'تسجيل الزيارة الأولية لبطاقة المريض في المنشأة',
+        'dossiers.visits.create' => 'تسجيل زيارات المريض في المنشأة',
         'dossiers.visits.update' => 'تعديل زيارة بطاقة المريض المسودة وتشخيصاتها',
         'patients.search' => 'البحث في سجل المرضى المشترك لبطاقات المرضى — تفويض عالمي',
         'patients.create' => 'إنشاء مريض في السجل المشترك — تفويض عالمي',

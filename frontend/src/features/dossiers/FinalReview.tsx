@@ -22,7 +22,7 @@ export default function FinalReview({facility,snapshot:s,caps,onSaved,onPending,
     const c=new AbortController();pending.current=c;setBusy(true);
     const body={facility_id:facility,lock_version:s.visit.lock_version,dossier_lock_version:s.lock_version,clinic_id:context.clinic?.id,attending_staff_id:context.doctor?.id,confirmed:true};
     const signature=JSON.stringify(body);if(reservation.current?.signature!==signature)reservation.current={signature,id:crypto.randomUUID()};
-    try{const saved=await apiRequest<Snapshot>(`dossiers/${s.id}/visits/${s.visit.id}/complete`,{method:"POST",signal:c.signal,body:JSON.stringify({...body,request_id:reservation.current.id})});if(!c.signal.aborted){onSaved(saved);setConfirm(false);router.push(`/dossiers/${s.id}?facility_id=${facility}&visit=${s.visit.id}`);}}
+    try{const saved=await apiRequest<Snapshot>(`dossiers/${s.id}/visits/${s.visit.id}/complete`,{method:"POST",signal:c.signal,body:JSON.stringify({...body,request_id:reservation.current.id})});if(!c.signal.aborted){onSaved(saved);setConfirm(false);router.push(`/patient-cards/${s.id}?facility_id=${facility}&visit=${s.visit.id}`);}}
     catch(e){if(!c.signal.aborted){setConfirm(false);onError(e instanceof AuthError?e:new AuthError(0,"FAILED","تعذّر الإكمال؛ البيانات والمسودة باقية."));}}
     finally{pending.current=null;if(!c.signal.aborted)setBusy(false);}
   }

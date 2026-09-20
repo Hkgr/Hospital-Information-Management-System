@@ -1,5 +1,7 @@
 # Unified Patient Cards — بطاقات المرضى
 
+See [Patient Card browser routes and presentation](patient-card-concept.md) for the current `/patient-cards` paths and presentation contract.
+
 ## Identity and facility ownership
 
 `patients` is the authoritative global Patient Card identity, not a separate

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\Directory\DirectoryReport;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierReports;
 use App\Services\Dossiers\DossierWrites;
@@ -235,6 +236,84 @@ class PatientCardTest extends TestCase
             } finally {
                 unlink($file);
             }
+        }
+    }
+
+    public function test_patient_card_list_fields_and_selected_export_are_scoped_and_typed(): void
+    {
+        $s = $this->callApi('POST', '', $this->input(['code' => '000'.Str::random(10), 'mother_name' => '=SUM(1,1)', 'gender' => 'female', 'birth_date' => '1980-02-03', 'birth_date_accuracy' => 'exact', 'phone' => '00963900123456']))->assertCreated()->json('data');
+        DB::table('patients')->where('id', $s['card_id'])->update(['paper_file_number' => '000072']);
+        $query = '?'.http_build_query(['facility_id' => $this->f['facility'], 'search' => $s['code']]);
+        $this->callApi('GET', $query)->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.mother_name', '=SUM(1,1)')->assertJsonPath('data.0.gender', 'female')
+            ->assertJsonPath('data.0.birth_date', '1980-02-03')->assertJsonPath('data.0.birth_date_accuracy', 'exact')
+            ->assertJsonPath('data.0.phone', '00963900123456')->assertJsonPath('data.0.paper_file_number', '000072');
+        $this->callApi('GET', "/{$s['id']}?facility_id={$this->f['facility']}")->assertOk()->assertJsonPath('data.patient.paper_file_number', '000072');
+        $this->callApi('GET', "/{$s['id']}?facility_id={$this->f['other']}")->assertForbidden();
+        $columns = array_keys(DossierReports::COLUMNS);
+        $bytes = $this->callApi('POST', '/export/xlsx', ['facility_id' => $this->f['facility'], 'search' => $s['code'], 'columns' => $columns])->assertOk()->getContent();
+        $file = tempnam(storage_path('framework/testing'), 'card-columns-');
+        file_put_contents($file, $bytes);
+        try {
+            $book = IOFactory::load($file);
+            $sheet = $book->getSheet(0);
+            $this->assertTrue($sheet->getRightToLeft());
+            $this->assertSame('Cairo', $book->getDefaultStyle()->getFont()->getName());
+            foreach (['code' => $s['code'], 'phone' => '00963900123456', 'paper_file_number' => '000072', 'mother_name' => '=SUM(1,1)'] as $key => $value) {
+                $cell = $sheet->getCell([array_search($key, $columns) + 1, 9]);
+                $this->assertSame($value, $cell->getValue());
+                $this->assertSame('s', $cell->getDataType());
+            }
+            foreach (['birth_date', 'opening_date', 'latest_visit_date'] as $key) {
+                $cell = $sheet->getCell([array_search($key, $columns) + 1, 9]);
+                $this->assertSame('n', $cell->getDataType());
+                $this->assertSame('yyyy-mm-dd', $cell->getStyle()->getNumberFormat()->getFormatCode());
+            }
+            $this->assertSame(1, $sheet->getPageSetup()->getFitToWidth());
+            $this->assertSame(0, $sheet->getPageSetup()->getFitToHeight());
+            $this->assertNotEmpty($sheet->getPageSetup()->getPrintArea());
+            $this->assertNotEmpty($sheet->getFreezePane());
+            $this->assertNotEmpty($sheet->getAutoFilter()->getRange());
+            $book->disconnectWorksheets();
+        } finally {
+            unlink($file);
+        }
+        $this->callApi('POST', '/export/xlsx', ['facility_id' => $this->f['facility'], 'columns' => ['patient_code', 'code', 'paper_file_number']])->assertOk();
+        $this->callApi('POST', '/export/xlsx', ['facility_id' => $this->f['facility'], 'columns' => ['password']])->assertUnprocessable();
+    }
+
+    public function test_birth_precision_is_not_upgraded_in_patient_card_reports(): void
+    {
+        $r = Request::create('/');
+        $r->setUserResolver(fn () => $this->f['user']);
+        $f = app(DossierAccess::class)->facility($this->f['user'], $this->f['facility']);
+        foreach (['year_only' => '1980 (السنة فقط)', 'estimated' => '1980-01-01 (تقديري)', 'unknown' => null] as $accuracy => $expected) {
+            $s = $this->callApi('POST', '', $this->input(['birth_date' => $accuracy === 'unknown' ? null : '1980-01-01', 'birth_date_accuracy' => $accuracy]))->assertCreated()->json('data');
+            $doc = app(DossierReports::class)->document($r, $f, ['search' => $s['code']]);
+            $this->assertSame($expected, $doc['sections'][0]['rows'][0]['birth_date']);
+            $this->assertSame([], $doc['sections'][0]['rows'][0]['_types']);
+            $this->assertSame(DossierReports::DEFAULT_COLUMNS, $doc['columns']);
+        }
+    }
+
+    public function test_individual_pdf_renders_one_canonical_code_and_the_new_title(): void
+    {
+        $s = $this->callApi('POST', '', $this->input())->assertCreated()->json('data');
+        $this->mock(DirectoryReport::class, function ($mock) use ($s) {
+            $mock->shouldReceive('pdf')->twice()->andReturnUsing(function ($doc, $view) use ($s) {
+                $html = view($view, $doc)->render();
+                $this->assertSame(1, substr_count($html, $s['code']));
+                $this->assertStringNotContainsString('إضبارة', $html);
+                $this->assertMatchesRegularExpression('/تقرير (بطاقة المريض|الزيارة)/u', $doc['metadata']['title']);
+
+                // Inspect the actual HTML passed to the renderer, then generate a real PDF.
+                return (new DirectoryReport)->pdf($doc, $view);
+            });
+        });
+        foreach (["/{$s['id']}/report/pdf", "/{$s['id']}/visits/{$s['visit']['id']}/report/pdf"] as $path) {
+            $response = $this->callApi('POST', $path, ['facility_id' => $this->f['facility']])->assertOk();
+            $this->assertStringStartsWith('%PDF-', $response->getContent());
+            $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
         }
     }
 }

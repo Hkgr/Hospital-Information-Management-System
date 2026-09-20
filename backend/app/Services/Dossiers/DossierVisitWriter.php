@@ -34,10 +34,10 @@ class DossierVisitWriter
                 $old = null;
                 if (! $subsequent && (DB::table('visits')->where('dossier_id', $dossier)->where('status', 'draft')->whereNull('voided_at')->exists()
                     || DB::table('dossier_section_progress')->where('dossier_id', $dossier)->whereNotNull('visit_id')->exists())) {
-                    DossierWrites::conflict('توجد زيارة أولية محفوظة؛ اجلب أحدث نسخة لاستكمالها بدل إنشاء زيارة أخرى.');
+                    DossierWrites::conflict('توجد أول زيارة محفوظة ضمن البطاقة؛ اجلب أحدث نسخة لاستكمالها بدل إنشاء زيارة أخرى.');
                 }
                 if ($d['status'] !== ($subsequent ? 'active' : 'draft')) {
-                    DossierWrites::conflict('إضافة الزيارة الأولية متاحة لبطاقة المريض المسودة فقط.');
+                    DossierWrites::conflict('إضافة أول زيارة مسجلة ضمن البطاقة متاحة لبطاقة المريض المسودة فقط.');
                 }
             }
             if ($input['visit_date'] > $f['today']) {

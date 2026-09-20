@@ -25,7 +25,7 @@ test('actual Next boundary rejects unauthorized and unknown paths',async()=>{
 
 test('resume, multiple clinical entries, prescription, outgoing referral, upload retry and explicit finalization at all widths',async()=>{
   for(const width of [390,768,1440]){
-    let d=await initial(width);const {page,context}=await open(width,`/dossiers/${d.id}/edit?section=3`);
+    let d=await initial(width);const {page,context}=await open(width,`/patient-cards/${d.id}/edit?section=3`);
     try{
       await page.getByRole('heading',{name:'الخدمات والإجراءات',exact:true}).waitFor();
       for(const [kind,title] of [['procedure','الإجراء'],['service','الخدمة']])for(let n=1;n<=2;n++){
@@ -56,21 +56,21 @@ test('dossier list and individual reports download through actual Next with sele
   for(const [name,path] of [['list','/export'],['dossier',`/${d.id}/report`],['visit',`/${d.id}/visits/${d.latest_visit_id}/report`]])for(const format of ['pdf','xlsx']){
     const r=await fetch(`${base}/hospital-api/dossiers${path}/${format}`,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json',Authorization:`Bearer ${f.token}`},body:JSON.stringify({facility_id:f.facility,search:`PH3-${f.tag}`})});assert.equal(r.status,200,await(r.ok?Promise.resolve(''):r.text()));assert.equal(r.headers.get('x-test-laravel'),'dossiers');const bytes=Buffer.from(await r.arrayBuffer());assert.ok(bytes.length>500);await writeFile(new URL(`${name}.${format}`,gallery),bytes);
   }
-  const {page,context}=await open(1440,`/dossiers?search=PH3-${f.tag}`);try{await page.getByRole('region',{name:'جدول بطاقات المرضى',exact:true}).waitFor();await page.getByRole('button',{name:'تصدير Excel',exact:true}).waitFor();const download=page.waitForEvent('download');await button(page,'تصدير Excel');assert.match((await download).suggestedFilename(),/\.xlsx$/);await capture(page,'list-1440');}finally{await context.close();}
+  const {page,context}=await open(1440,`/patient-cards?search=PH3-${f.tag}`);try{await page.getByRole('region',{name:'جدول بطاقات المرضى',exact:true}).waitFor();await page.getByRole('button',{name:'تصدير Excel',exact:true}).waitFor();const download=page.waitForEvent('download');await button(page,'تصدير Excel');assert.match((await download).suggestedFilename(),/\.xlsx$/);await capture(page,'list-1440');}finally{await context.close();}
 });
 
 test('later visit reuses visit-only steps, resumes independently and appears above the earlier complete visit',async()=>{
   const list=await api('GET','',{search:`PH3-${f.tag}-768`});const d=list.body.data[0];assert.ok(d);
-  const {page,context}=await open(768,`/dossiers/${d.id}`);
+  const {page,context}=await open(768,`/patient-cards/${d.id}`);
   try{
-    await page.getByRole('link',{name:'إضافة زيارة',exact:true}).click();await page.getByRole('heading',{name:'الزيارة والتشخيصات',exact:true}).waitFor();
+    await page.getByRole('link',{name:'إضافة زيارة للمريض',exact:true}).click();await page.getByRole('heading',{name:'الزيارة والتشخيصات',exact:true}).waitFor();
     const nav=page.getByRole('list',{name:'مراحل بطاقة المريض'});assert.equal(await nav.getByRole('button',{name:/البيانات الشخصية/}).isDisabled(),true);
     await page.locator('[name="visit_date"]').fill('2002-02-01');await page.locator('[name="visit_type_id"]').selectOption(String(f.visit_type));await page.locator('[name="is_referred"]').selectOption('no');
     await button(page,'إضافة تشخيص للزيارة');await choose(page,'التشخيص من الدليل 1','خباثات الاذن');await choose(page,'العيادة للتشخيص 1','عيادة التشخيص 1');await choose(page,'الطبيب المسؤول عن التشخيص 1','الطبيب المسؤول 1');
     let saved=await save(page,'/subsequent');const next=saved.visit.id;assert.notEqual(next,d.latest_visit_id);assert.equal(saved.visit.dossier_visit_kind,'subsequent');
     await capture(page,'subsequent-768');await button(page,'حفظ كمسودة والخروج');await page.getByRole('heading',{name:'بطاقات المرضى',exact:true,level:2}).waitFor();
     const detail=await api('GET',`/${d.id}`);assert.equal(detail.body.data.latest_visit.id,next);assert.equal(detail.body.data.visit_count,2);assert.equal(detail.body.data.status,'active');
-    await page.goto(`${base}/dossiers/${d.id}?facility_id=${f.facility}`);await page.getByRole('region',{name:'زيارات بطاقة المريض',exact:true}).waitFor();await button(page,'استعراض الزيارة');await page.getByRole('heading',{name:'الزيارة المختارة',exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('visit'),String(d.latest_visit_id));
+    await page.goto(`${base}/patient-cards/${d.id}?facility_id=${f.facility}`);await page.getByRole('region',{name:'زيارات بطاقة المريض',exact:true}).waitFor();await button(page,'استعراض الزيارة');await page.getByRole('heading',{name:'الزيارة المختارة',exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('visit'),String(d.latest_visit_id));
     await button(page,'العودة إلى آخر زيارة');await page.getByRole('link',{name:'استكمال هذه الزيارة المسودة',exact:true}).click();await page.getByRole('heading',{name:'الزيارة والتشخيصات',exact:true}).waitFor();assert.equal(await page.locator('[name="visit_date"]').inputValue(),'2002-02-01');
   }finally{await context.close();}
 });
@@ -78,7 +78,7 @@ test('later visit reuses visit-only steps, resumes independently and appears abo
 test('two editors review clinical conflicts explicitly and preserve another editor’s changes',async()=>{
   let d=await initial('conflict');const path=`/${d.id}/visits/${d.visit.id}`;const event={catalog_id:f.service,clinic_id:f.clinics[0],doctor_id:f.workflow_doctors[0],note:'الأصل'};
   let r=await api('PUT',path+'/clinical',{request_id:crypto.randomUUID(),lock_version:d.visit.lock_version,services:[event,event],procedures:[]});assert.equal(r.status,200);d=r.body.data;
-  const {page,context}=await open(1440,`/dossiers/${d.id}/edit?section=3`);
+  const {page,context}=await open(1440,`/patient-cards/${d.id}/edit?section=3`);
   try{
     await page.locator('[name="services.0.note"]').fill('مسودتي الباقية');const second={...d.clinical.services[1],note:'تعديل المستخدم الآخر'};
     r=await api('PUT',path+'/clinical',{request_id:crypto.randomUUID(),lock_version:d.visit.lock_version,services:[second],procedures:[]});assert.equal(r.status,200);
@@ -94,9 +94,9 @@ test('two editors review clinical conflicts explicitly and preserve another edit
 });
 
 test('browser Back cancellation retains the entire unsaved clinical draft',async()=>{
-  const d=await initial('navigation');const {page,context}=await open(768,`/dossiers/${d.id}`);
+  const d=await initial('navigation');const {page,context}=await open(768,`/patient-cards/${d.id}`);
   try{
-    await page.getByRole('link',{name:'استكمال بطاقة المريض',exact:true}).click();
+    await page.getByRole('link',{name:'استكمال بيانات البطاقة',exact:true}).click();
     await page.getByRole('heading',{name:'الخدمات والإجراءات',exact:true}).waitFor();
     await button(page,'إضافة الخدمة للزيارة');await page.locator('[name="services.0.note"]').fill('مسودة باقية بعد إلغاء الرجوع');
     const current=page.url();page.removeAllListeners('dialog');
@@ -108,11 +108,11 @@ test('browser Back cancellation retains the entire unsaved clinical draft',async
 });
 
  test('delayed real clinical doctor responses cannot revive a previous clinic or facility',async()=>{
-   const d=await initial('delay');const {page,context}=await open(390,`/dossiers/${d.id}/edit?section=3`);
+   const d=await initial('delay');const {page,context}=await open(390,`/patient-cards/${d.id}/edit?section=3`);
    try{
      await context.addInitScript(()=>{const original=window.fetch;window.fetch=async(...args)=>{const r=await original(...args);if(String(args[0]).includes('/options/doctors?'))await new Promise(resolve=>setTimeout(resolve,800));return r;};});
      await page.reload();await button(page,'إضافة الخدمة للزيارة');await choose(page,'الخدمة من الدليل 1',f.service_name);await choose(page,'العيادة · الخدمة 1','عيادة التشخيص 1');await choose(page,'العيادة · الخدمة 1','عيادة التشخيص 2');
      const picker=page.getByRole('group',{name:'الطبيب المسؤول · الخدمة 1',exact:true});await picker.getByRole('button',{name:/الطبيب المسؤول 2/}).waitFor();assert.equal(await picker.getByRole('button',{name:/الطبيب المسؤول 1/}).count(),0);
-     await choose(page,'العيادة · الخدمة 1','عيادة التشخيص 1');await page.goto(base+'/dossiers/'+d.id+'/edit?facility_id='+f.other);await page.getByRole('heading',{name:'تعذّر فتح بطاقة المريض',exact:true}).waitFor();assert.equal(await page.locator('[name="services.0.note"]').count(),0);
+     await choose(page,'العيادة · الخدمة 1','عيادة التشخيص 1');await page.goto(base+'/patient-cards/'+d.id+'/edit?facility_id='+f.other);await page.getByRole('heading',{name:'تعذّر فتح بطاقة المريض',exact:true}).waitFor();assert.equal(await page.locator('[name="services.0.note"]').count(),0);
    }finally{await context.close();}
  });

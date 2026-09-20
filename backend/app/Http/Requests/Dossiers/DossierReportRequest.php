@@ -18,6 +18,6 @@ class DossierReportRequest extends DossierQueryRequest
 
     public function rules(): array
     {
-        return parent::rules() + ['columns' => ['sometimes', 'array', 'min:1', 'max:11'], 'columns.*' => ['required', 'string', 'distinct', Rule::in(array_keys(DossierReports::COLUMNS))]];
+        return parent::rules() + ['columns' => ['sometimes', 'array', 'min:1', 'max:'.count(DossierReports::COLUMNS)], 'columns.*' => ['required', 'string', 'distinct', Rule::in(array_keys(DossierReports::COLUMNS))]];
     }
 }

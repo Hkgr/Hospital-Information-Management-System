@@ -17,7 +17,7 @@ async function api(method, path, fields = {}, token = f.token) {
   assert.match(r.headers.get('cache-control'), /no-store/);
   return { status: r.status, body: await r.json() };
 }
-async function pageAt(width, path = '/dossiers/new') { const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: 'reduce' }); await context.addInitScript(t => sessionStorage.setItem('hospital.bearer', t), f.token); const page = await context.newPage(); page.setDefaultTimeout(20000); page.on('dialog', d => d.accept()); await page.goto(`${base}${path}?facility_id=${f.facility}`); return { context, page }; }
+async function pageAt(width, path = '/patient-cards/new') { const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: 'reduce' }); await context.addInitScript(t => sessionStorage.setItem('hospital.bearer', t), f.token); const page = await context.newPage(); page.setDefaultTimeout(20000); page.on('dialog', d => d.accept()); await page.goto(`${base}${path}?facility_id=${f.facility}`); return { context, page }; }
 async function capture(page, name) { await page.waitForFunction(() => !Array.from(document.querySelectorAll('[role="status"]')).some(el => el.textContent.includes('جارٍ تحميل الخيارات'))); await page.evaluate(async () => { await document.fonts.ready; window.scrollTo(0, 0); await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, name); if (process.env.DOSSIER_GALLERY_FILTER && !name.startsWith(process.env.DOSSIER_GALLERY_FILTER)) return; await page.screenshot({ path: fileURLToPath(new URL(`${name}.jpg`, gallery)), fullPage: true, type: 'jpeg', quality: 78 }); }
 async function button(page, name) { await page.getByRole('button', { name, exact: true }).click(); }
 async function saveNext(page, path) { const response = page.waitForResponse(r => r.url().includes(`/hospital-api/dossiers${path}`) && ['POST', 'PUT'].includes(r.request().method())); await button(page, 'حفظ ومتابعة'); const r = await response; assert.ok(r.ok(), await r.text()); return (await r.json()).data; }
@@ -47,7 +47,7 @@ test('real three-section wizard, saved/resumed draft, diagnoses, validation and 
       await button(page, 'حفظ ومتابعة'); await page.locator('[name="code"][aria-invalid="true"]').waitFor(); assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('name')), 'code'); await capture(page, `personal-errors-${width}`);
       await page.locator('[name="code"]').fill(`WIZ-${f.tag}-${width}`); await page.locator('[name="opening_date"]').fill('1999-02-03'); await page.locator('[name="visit_date"]').fill('2000-03-04'); await page.locator('[name="visit_type_id"]').selectOption(String(f.visit_type)); await page.locator('[name="father_name"]').fill('اسم أب اختباري'); await page.locator('[name="birth_date"]').fill('1980-01-02'); await page.locator('[name="birth_date_accuracy"]').selectOption('exact'); await page.locator('[name="gender"]').selectOption('female'); await page.locator('[name="address_line"]').fill('عنوان اصطناعي للمراجعة فقط'); await capture(page, `new-patient-${width}`);
       await choose(page, 'المحافظة السورية', f.tag, `محافظة اختبار ${f.tag}`); await choose(page, 'المدينة التابعة للمحافظة', f.tag, `مدينة اختبار ${f.tag}`); await capture(page, `new-patient-${width}`);
-      let d = await saveNext(page, ''); assert.equal(Number(d.patient.city_id), f.city); await page.getByRole('heading', { name: 'المعلومات الطبية والورمية', exact: true }).waitFor(); assert.match(page.url(), new RegExp(`/dossiers/${d.id}/edit`));
+      let d = await saveNext(page, ''); assert.equal(Number(d.patient.city_id), f.city); await page.getByRole('heading', { name: 'المعلومات الطبية والورمية', exact: true }).waitFor(); assert.match(page.url(), new RegExp(`/patient-cards/${d.id}/edit`));
       await page.locator('[name="is_oncology"]').selectOption('no'); await capture(page, `medical-general-${width}`);
       await page.locator('[name="clinical_history"]').fill('قصة مرضية اصطناعية محفوظة للمراجعة'); await page.locator('[name="disability_text"]').fill('وصف اختباري فقط'); await page.locator('[name="is_oncology"]').selectOption('yes');
       await page.getByRole('checkbox', { name: 'مرضية', exact: true }).check(); await page.getByRole('checkbox', { name: 'عائلية', exact: true }).check(); await page.getByRole('checkbox', { name: 'كيميائي', exact: true }).check();
@@ -86,16 +86,16 @@ test('delayed old doctor response cannot replace a newer clinic or a changed fac
     // Delay delivery of an actual response, without mocking API bodies or page.route.
     await context.addInitScript(() => { const original = window.fetch; window.fetch = async (...args) => { const response = await original(...args); if (String(args[0]).includes('/options/doctors?')) await new Promise(r => setTimeout(r, 800)); return response; }; });
     const saved = await api('GET', '', { search: `WIZ-${f.tag}-1440` }); const id = saved.body.data[0].id;
-    await page.goto(`${base}/dossiers/${id}/edit?facility_id=${f.facility}&section=2`); await page.getByRole('heading', { name: 'الزيارة والتشخيصات', exact: true }).waitFor();
+    await page.goto(`${base}/patient-cards/${id}/edit?facility_id=${f.facility}&section=2`); await page.getByRole('heading', { name: 'الزيارة والتشخيصات', exact: true }).waitFor();
     await choose(page, 'العيادة للتشخيص 1', 'عيادة التشخيص 2', 'عيادة التشخيص 2');
     const doctors = page.getByRole('group', { name: 'الطبيب المسؤول عن التشخيص 1', exact: true }); await doctors.getByRole('button', { name: /الطبيب المسؤول 2/ }).waitFor(); assert.equal(await doctors.getByRole('button', { name: /الطبيب المسؤول 1/ }).count(), 0);
-    await page.goto(`${base}/dossiers/${id}/edit?facility_id=${f.other}`); await page.getByRole('heading', { name: 'تعذّر فتح بطاقة المريض', exact: true }).waitFor(); assert.equal(await page.locator('[name="referral_reason"]').count(), 0);
+    await page.goto(`${base}/patient-cards/${id}/edit?facility_id=${f.other}`); await page.getByRole('heading', { name: 'تعذّر فتح بطاقة المريض', exact: true }).waitFor(); assert.equal(await page.locator('[name="referral_reason"]').count(), 0);
   } finally { await context.close(); }
 });
 
 test('failed refresh, second conflict and saving a previous section never advance another dirty draft silently', async () => {
   const saved = await api('GET', '', { search: `WIZ-${f.tag}-1440` }); const id = saved.body.data[0].id;
-  const { page, context } = await pageAt(1440, `/dossiers/${id}/edit`);
+  const { page, context } = await pageAt(1440, `/patient-cards/${id}/edit`);
   try {
     const nav = page.getByRole('list', { name: 'مراحل بطاقة المريض' });
     await nav.getByRole('button', { name: /البيانات الشخصية/ }).click();
