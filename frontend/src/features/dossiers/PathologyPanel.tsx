@@ -7,7 +7,7 @@ import { DirectoryTable } from "../directory/DirectoryPrimitives";
 import { Pagination, LongText } from "../directory/Controls";
 import Modal from "../clinics/Modal";
 import PathologyEditor from "./PathologyEditor";
-import { dispositionLabels, pathologyLabels, type Pathology, type PathologyFile } from "./pathology";
+import { assessmentFieldApplies, dispositionLabels, pathologyLabels, type Pathology, type PathologyFile } from "./pathology";
 import type { Visit } from "./api";
 import styles from "../clinics/clinics.module.css";
 
@@ -37,7 +37,7 @@ export default function PathologyPanel({ facility, dossier, visit, caps, revisio
     finally { if (pending.current === c) pending.current = null; if (!c.signal.aborted) setBusy(false); }
   }
   return <section className={styles.detailPanel}><h2>{visit ? "التقييم التشخيصي والتشريح المرضي لهذه الزيارة" : "نظرة عامة على التشريح المرضي"}</h2>
-    {visit && <><h3>التقييم التشخيصي</h3><p><span className={styles.badge}>{dispositionLabels[assessment?.effective_disposition ?? "not_assessed"]}</span> · الزيارة {visit.visit_no}</p>{assessment?.needs_review && <p role="status">الدليل أو الإحالة لم يعد صالحًا؛ يلزم مراجعة القرار المحفوظ.</p>}{assessment && <dl className={styles.facts}>{["assessed_on", "required_reason", "not_required_reason", "follow_up", "note"].map((key, i) => <div key={key}><dt>{["تاريخ التقييم", "سبب الطلب", "سبب عدم الحاجة", "المتابعة", "الملاحظة"][i]}</dt><dd>{String(assessment[key] ?? "غير مسجل")}</dd></div>)}</dl>}
+    {visit && <><h3>التقييم التشخيصي</h3><p><span className={styles.badge}>{dispositionLabels[assessment?.effective_disposition ?? "not_assessed"]}</span> · الزيارة {visit.visit_no}</p>{assessment?.needs_review && <p role="status">الدليل أو الإحالة لم يعد صالحًا؛ يلزم مراجعة القرار المحفوظ.</p>}{assessment && <dl className={styles.facts}>{["assessed_on", "required_reason", "not_required_reason", "follow_up", "note"].map((key, i) => assessmentFieldApplies(key, assessment.disposition) && <div key={key}><dt>{["تاريخ التقييم", "سبب الطلب", "سبب عدم الحاجة", "المتابعة", "الملاحظة"][i]}</dt><dd>{String(assessment[key] ?? "غير مسجل")}</dd></div>)}</dl>}
       <div className={styles.actions}>{caps.assessment_update && <button className={styles.secondary} onClick={() => setEditor("assessment")}>تسجيل أو تعديل التقييم التشخيصي</button>}{caps.pathology_create && <button className={styles.primary} onClick={() => setEditor("new")}>إضافة تقرير تشريح مرضي</button>}{visit.status === "draft" && caps.clinical_update && <Link className={styles.secondary} href={`/patient-cards/${dossier}/edit?facility_id=${facility}&visit=${visit.id}&section=4`}>تسجيل الإحالة عبر نتيجة الزيارة</Link>}</div></>}
     <h3>تقارير التشريح المرضي</h3><label>حالة التقرير<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">الكل</option>{Object.entries(pathologyLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
     {list.loading && <p role="status">جارٍ تحميل تقارير التشريح المرضي…</p>}{list.error && <p role="alert">{list.error}<button className={styles.secondary} onClick={list.retry}>إعادة المحاولة</button></p>}{error && <p role="alert">{error}</p>}

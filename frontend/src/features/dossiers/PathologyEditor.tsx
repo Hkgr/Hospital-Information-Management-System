@@ -8,7 +8,7 @@ import { ClinicalContext } from "./ClinicalEditor";
 import { Pagination } from "../directory/Controls";
 import type { Context } from "./clinical";
 import type { Visit } from "./api";
-import { assessmentFields, dispositionLabels, pathologyFields, pathologyLabels, type Assessment, type Pathology, type PathologyFile } from "./pathology";
+import { assessmentFieldApplies, normalizePathologyDraft, assessmentFields, dispositionLabels, pathologyFields, pathologyLabels, type Assessment, type Pathology, type PathologyFile } from "./pathology";
 import styles from "../clinics/clinics.module.css";
 import layout from "./wizard.module.css";
 
@@ -16,7 +16,8 @@ type Saved = Pathology | Assessment;
 export default function PathologyEditor({ facility, dossier, visit, record, assessment = false, caps, onClose, onSaved, onRefresh }: { facility: number; dossier: number; visit: Visit; record: Saved | null; assessment?: boolean; caps: Record<string, boolean>; onClose: () => void; onSaved: () => void; onRefresh: () => void }) {
   const labels = assessment ? assessmentFields : pathologyFields;
   const strings = (row: Saved | null) => Object.fromEntries(Object.keys(labels).map(k => [k, String(row?.[k] ?? "")]));
-  const [draft, setDraft] = useState<Record<string, string>>(() => ({ ...strings(record), ...!record ? assessment ? { disposition: "not_assessed" } : { source: "internal", status: "requested" } : {} }));
+  const [draft, setDraft] = useState<Record<string, string>>(() => normalizePathologyDraft({ ...strings(record), ...!record ? assessment ? { disposition: "not_assessed" } : { source: "internal", status: "requested" } : {} }, assessment));
+  const [savedStatus, setSavedStatus] = useState(record?.status);
   const [version, setVersion] = useState(record?.lock_version ?? (assessment ? 0 : 1));
   const [context, setContext] = useState<Context>(() => ({ clinic: record?.clinic_id ? { id: Number(record.clinic_id), name_ar: "العيادة المحفوظة" } : null, doctor: record?.doctor_id ? { id: Number(record.doctor_id), name_ar: "الطبيب المحفوظ" } : null }));
   const [files, setFiles] = useState<PathologyFile[]>([]), [filePage, setFilePage] = useState(1);
@@ -27,7 +28,7 @@ export default function PathologyEditor({ facility, dossier, visit, record, asse
   useEffect(() => { const unsubscribe = subscribeSession(() => { pending.current?.abort(); close.current(); }); return () => { unsubscribe(); pending.current?.abort(); }; }, []);
   const path = `dossiers/${dossier}/visits/${visit.id}/${assessment ? "diagnostic-assessment" : `pathology${record ? `/${record.id}` : ""}`}`;
   const attachments = useClinicRequest<Page<PathologyFile>>(!assessment && caps.attachments_view ? `dossiers/${dossier}/attachments?facility_id=${facility}&visit_id=${visit.id}&page=${filePage}&per_page=10` : null, true);
-  function change(key: string, value: string) { setDraft(d => ({ ...d, [key]: value })); }
+  function change(key: string, value: string) { setDraft(d => normalizePathologyDraft({ ...d, [key]: value }, assessment)); }
   function fieldError(key: string) { return error?.fields[key] ? <small className={styles.fieldError} role="alert">{error.fields[key]}</small> : null; }
   async function refresh() {
     if (pending.current) return;
@@ -41,13 +42,14 @@ export default function PathologyEditor({ facility, dossier, visit, record, asse
     const current = strings(latest), next = { ...current };
     for (const key of Object.keys(labels)) if (choices[key]) next[key] = draft[key];
     if (choices.clinic_id || choices.doctor_id) { next.clinic_id = draft.clinic_id; next.doctor_id = draft.doctor_id; }
-    setDraft(next); setVersion(latest.lock_version); setLatest(null); setConflict(false); setError(null);
+    if (!assessment && latest.status === "completed") next.status = "completed";
+    setDraft(normalizePathologyDraft(next, assessment)); setSavedStatus(latest.status); setVersion(latest.lock_version); setLatest(null); setConflict(false); setError(null);
     setContext({ clinic: next.clinic_id ? { id: Number(next.clinic_id), name_ar: "العيادة المختارة بعد المراجعة" } : null, doctor: next.doctor_id ? { id: Number(next.doctor_id), name_ar: "الطبيب المختار بعد المراجعة" } : null });
   }
   async function save() {
     if (pending.current || conflict) return;
     const c = new AbortController(); pending.current = c; setBusy(true); setError(null);
-    const values = Object.fromEntries(Object.entries(draft).map(([k, v]) => [k, v === "" ? null : k.endsWith("_id") ? Number(v) : v]));
+    const values = Object.fromEntries(Object.entries(normalizePathologyDraft(draft, assessment)).map(([k, v]) => [k, v === "" ? null : k.endsWith("_id") ? Number(v) : v]));
     const body = JSON.stringify({ ...values, facility_id: facility, lock_version: version, ...!assessment ? { attachment_ids: files.map(f => f.id) } : {} });
     if (reservation.current?.body !== body) reservation.current = { body, id: crypto.randomUUID() };
     try { await apiRequest(path, { method: assessment || record ? "PUT" : "POST", signal: c.signal, body: JSON.stringify({ ...JSON.parse(body), request_id: reservation.current.id }) }); if (!c.signal.aborted) onSaved(); }
@@ -62,12 +64,12 @@ export default function PathologyEditor({ facility, dossier, visit, record, asse
     {conflict && <section className={layout.diagnosis}><h3>تغيّرت البيانات؛ راجع أحدث نسخة ومسودتك</h3><button type="button" className={styles.secondary} disabled={busy} onClick={() => void refresh()}>جلب أحدث نسخة</button>{latest && <><p>اختر الحقول التي تريد تطبيقها من مسودتك. الحقول الأخرى تبقى وفق أحدث نسخة. هذه المراجعة لا تحفظ تلقائيًا.</p>{Object.entries(labels).map(([key, label]) => <label key={key}><input type="checkbox" checked={!!choices[key]} onChange={e => setChoices(c => ({ ...c, [key]: e.target.checked }))} />{label}<small>الأحدث: {String(latest[key] ?? "غير مسجل")} · مسودتي: {draft[key] || "غير مسجل"}</small></label>)}<button type="button" className={styles.secondary} disabled={!!latest.voided_at} onClick={applyReview}>اعتماد الاختيارات للمراجعة قبل الحفظ</button>{!!latest.voided_at && <p>التقرير ملغى؛ تبقى مسودتك ظاهرة ولا يمكن تعديل هذا التقرير.</p>}</>}</section>}
     <fieldset disabled={busy || conflict} className={layout.diagnosis}><legend>{assessment ? "قرار الطبيب" : "بيانات التقرير"}</legend><div className={styles.fields}>
       {Object.entries(labels).filter(([key]) => !["clinic_id", "doctor_id", "procedure_event_id", "evidence_pathology_id"].includes(key)).map(([key, label]) => {
-        const options = key === "source" ? { internal: "ضمن المشفى", external: "من جهة خارجية" } : key === "status" ? pathologyLabels : key === "disposition" ? Object.fromEntries(Object.entries(dispositionLabels).filter(([k]) => !["unavailable", "cancelled"].includes(k))) : null;
+        const options = key === "source" ? { internal: "ضمن المشفى", external: "من جهة خارجية" } : key === "status" ? savedStatus === "completed" ? { completed: pathologyLabels.completed } : pathologyLabels : key === "disposition" ? Object.fromEntries(Object.entries(dispositionLabels).filter(([k]) => !["unavailable", "cancelled"].includes(k))) : null;
         if (key === "external_organization" && draft.source !== "external") return null;
-        if (key === "required_reason" && draft.disposition !== "pathology_required") return null;
-        if (key === "not_required_reason" && draft.disposition !== "pathology_not_required") return null;
+        if (assessment && !assessmentFieldApplies(key, draft.disposition)) return null;
         if (key === "unavailable_reason" && !["unavailable", "cancelled"].includes(draft.status)) return null;
-        return <label key={key} className={textarea.includes(key) ? styles.full : undefined}>{label}{options ? <select name={key} value={draft[key]} onChange={e => change(key, e.target.value)}>{Object.entries(options).map(([k, text]) => <option key={k} value={k}>{text}</option>)}</select> : textarea.includes(key) ? <textarea name={key} rows={3} value={draft[key]} onChange={e => change(key, e.target.value)} /> : <input name={key} type={dates.includes(key) ? "date" : "text"} value={draft[key]} onChange={e => change(key, e.target.value)} />}{fieldError(key)}</label>;
+        if (["result_on", "conclusion"].includes(key) && draft.status !== "completed") return null;
+        return <label key={key} className={textarea.includes(key) ? styles.full : undefined}>{label}{options ? <select name={key} value={draft[key] ?? ""} onChange={e => change(key, e.target.value)}>{Object.entries(options).map(([k, text]) => <option key={k} value={k}>{text}</option>)}</select> : textarea.includes(key) ? <textarea name={key} rows={3} value={draft[key] ?? ""} onChange={e => change(key, e.target.value)} /> : <input name={key} type={dates.includes(key) ? "date" : "text"} value={draft[key] ?? ""} onChange={e => change(key, e.target.value)} />}{fieldError(key)}</label>;
       })}
       {assessment && draft.disposition === "pathology_confirmed" && <div className={styles.full}><Picker name="evidence_pathology_id" label="التقرير المكتمل الداعم" path={`dossiers/${dossier}/pathology?facility_id=${facility}&evidence_only=1`} selected={draft.evidence_pathology_id ? { id: Number(draft.evidence_pathology_id), name_ar: `التقرير ${draft.evidence_pathology_id}` } : null} onSelect={r => change("evidence_pathology_id", String(r.id))} />{fieldError("evidence_pathology_id")}</div>}
       {assessment && draft.disposition === "referred_out" && <p className={styles.hint}>سجّل الوجهة وتاريخ الإحالة وسبب عدم توفر الفحص عبر نتيجة الزيارة الحالية؛ لا ينشئ هذا الاختيار إحالة ثانية.</p>}

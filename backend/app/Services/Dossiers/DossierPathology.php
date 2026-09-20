@@ -110,7 +110,7 @@ class DossierPathology
             ->orderBy('a.id')->get(['l.pathology_id', 'a.id', 'a.visit_id', 'a.title', 'a.original_filename', 'a.size', 'a.voided_at', 'a.void_reason'])->groupBy('pathology_id')->map(fn ($rows) => $rows->all())->all();
     }
 
-    private function dates(array $f, array $data): void
+    public function dates(array $f, array $data, string $visitDate): void
     {
         $last = null;
         foreach (['requested_on', 'collected_on', 'result_on', 'assessed_on'] as $field) {
@@ -118,11 +118,68 @@ class DossierPathology
             if (! $value) {
                 continue;
             }
-            if ($value > $f['today'] || ($last && $value < $last)) {
-                throw ValidationException::withMessages([$field => 'أدخل التاريخ الفعلي غير المستقبلي، مع ترتيب الطلب وجمع العينة والنتيجة عند معرفتها.']);
+            if ($value > $f['today']) {
+                throw ValidationException::withMessages([$field => 'تاريخ الواقعة لا يمكن أن يكون بعد اليوم بحسب توقيت المنشأة.']);
+            }
+            if (($field === 'assessed_on' || ($data['source'] ?? null) === 'internal') && $value < $visitDate) {
+                throw ValidationException::withMessages([$field => 'يجب أن يكون هذا التاريخ في يوم الزيارة المصدر أو بعده.']);
+            }
+            if ($last && $value < $last) {
+                throw ValidationException::withMessages([$field => 'يجب ترتيب التواريخ المعروفة: الطلب ثم جمع العينة ثم النتيجة.']);
             }
             $last = $value;
         }
+    }
+
+    private function requiredValue(array $fields, string $field): void
+    {
+        if (blank($fields[$field])) {
+            throw ValidationException::withMessages([$field => 'هذا الحقل مطلوب للحالة أو القرار المختار.']);
+        }
+    }
+
+    private function normalizePathology(array $fields, ?object $old): array
+    {
+        if ($old?->status === 'completed' && $fields['status'] !== 'completed') {
+            throw ValidationException::withMessages(['status' => 'لا يمكن خفض حالة تقرير مكتمل. صحّح نتيجته مع التدقيق أو ألغِ التقرير بسبب صريح ثم أضف التقرير الصحيح.']);
+        }
+        if ($fields['source'] === 'external') {
+            $this->requiredValue($fields, 'external_organization');
+        } else {
+            $fields['external_organization'] = null;
+        }
+        if (in_array($fields['status'], ['unavailable', 'cancelled'])) {
+            $this->requiredValue($fields, 'unavailable_reason');
+        } else {
+            $fields['unavailable_reason'] = null;
+        }
+        if ($fields['status'] === 'completed') {
+            $this->requiredValue($fields, 'result_on');
+            $this->requiredValue($fields, 'conclusion');
+        } else {
+            $fields['result_on'] = $fields['conclusion'] = null;
+        }
+
+        return $fields;
+    }
+
+    private function normalizeAssessment(array $fields): array
+    {
+        if ($fields['disposition'] !== 'pathology_not_required') {
+            $fields['not_required_reason'] = null;
+        } else {
+            $this->requiredValue($fields, 'not_required_reason');
+        }
+        if (in_array($fields['disposition'], ['not_assessed', 'pathology_not_required'])) {
+            $fields['required_reason'] = null;
+        } elseif ($fields['disposition'] === 'pathology_required') {
+            $this->requiredValue($fields, 'required_reason');
+        }
+        if ($fields['disposition'] !== 'pathology_confirmed') {
+            $fields['evidence_pathology_id'] = null;
+        }
+
+        return $fields;
     }
 
     private function responsible(array $f, object $v, array $data, ?object $old): void
@@ -166,7 +223,8 @@ class DossierPathology
                 return $this->persist($r, $f, $v, 'visit_pathologies', $old, ['voided_at' => now(), 'voided_by' => $r->user()->id, 'void_reason' => $data['void_reason']], $data);
             }
             $fields = array_replace(array_fill_keys(self::FIELDS, null), $old ? Arr::only((array) $old, self::FIELDS) : [], Arr::only($data, self::FIELDS));
-            $this->dates($f, $fields);
+            $fields = $this->normalizePathology($fields, $old);
+            $this->dates($f, $fields, $v->visit_date);
             $this->responsible($f, $v, $fields, $old);
             if ($fields['procedure_event_id'] && ! DB::table('visit_procedures')->where('id', $fields['procedure_event_id'])->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->exists()) {
                 throw ValidationException::withMessages(['procedure_event_id' => 'اختر إجراءً محفوظًا غير ملغى من هذه الزيارة.']);
@@ -200,7 +258,8 @@ class DossierPathology
             $old = DB::table('visit_diagnostic_assessments')->where('visit_id', $visit)->where('facility_id', $f['id'])->lockForUpdate()->first();
             DossierWrites::version(['lock_version' => $old?->lock_version ?? 0], $data['lock_version']);
             $fields = array_replace(array_fill_keys(self::ASSESSMENT_FIELDS, null), $old ? Arr::only((array) $old, self::ASSESSMENT_FIELDS) : [], Arr::only($data, self::ASSESSMENT_FIELDS));
-            $this->dates($f, $fields);
+            $fields = $this->normalizeAssessment($fields);
+            $this->dates($f, $fields, $v->visit_date);
             $this->responsible($f, $v, $fields, $old);
             if ($fields['disposition'] === 'pathology_confirmed') {
                 if (! $this->cases($f)->where('p.dossier_id', $dossier)->where('p.id', $fields['evidence_pathology_id'])->where('p.status', 'completed')->whereNull('p.voided_at')->where('p.result_on', '<=', $f['today'])->exists()) {

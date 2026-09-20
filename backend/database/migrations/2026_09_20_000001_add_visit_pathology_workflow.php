@@ -7,6 +7,25 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    public function stateConstraints(): array
+    {
+        return [
+            'visit_pathologies' => [
+                'pathology_internal' => "source = 'external' OR external_organization IS NULL",
+                'pathology_unavailable_reason' => "(status IN ('unavailable','cancelled') AND unavailable_reason IS NOT NULL AND CHAR_LENGTH(TRIM(unavailable_reason)) > 0) OR (status NOT IN ('unavailable','cancelled') AND unavailable_reason IS NULL)",
+                'pathology_final_fields' => "status = 'completed' OR (result_on IS NULL AND conclusion IS NULL)",
+                'pathology_date_order' => '(requested_on IS NULL OR collected_on IS NULL OR requested_on <= collected_on) AND (collected_on IS NULL OR result_on IS NULL OR collected_on <= result_on) AND (requested_on IS NULL OR result_on IS NULL OR requested_on <= result_on)',
+                'pathology_responsibility' => '(clinic_id IS NULL AND doctor_id IS NULL) OR (clinic_id IS NOT NULL AND doctor_id IS NOT NULL)',
+            ],
+            'visit_diagnostic_assessments' => [
+                'assessment_exclusive_reason' => "disposition = 'pathology_not_required' OR not_required_reason IS NULL",
+                'assessment_required_reason' => "(disposition NOT IN ('not_assessed','pathology_not_required') OR required_reason IS NULL) AND (disposition <> 'pathology_required' OR (required_reason IS NOT NULL AND CHAR_LENGTH(TRIM(required_reason)) > 0))",
+                'assessment_exclusive_evidence' => "disposition = 'pathology_confirmed' OR evidence_pathology_id IS NULL",
+                'assessment_responsibility' => '(clinic_id IS NULL AND doctor_id IS NULL) OR (clinic_id IS NOT NULL AND doctor_id IS NOT NULL)',
+            ],
+        ];
+    }
+
     private function scope(Blueprint $t, string $prefix): void
     {
         $t->id();
@@ -77,6 +96,11 @@ return new class extends Migration
             $t->foreign(['pathology_id', 'visit_id', 'facility_id'], 'pathology_attachment_case')->references(['id', 'visit_id', 'facility_id'])->on('visit_pathologies')->restrictOnDelete();
             $t->foreign(['attachment_id', 'visit_id', 'facility_id'], 'pathology_attachment_file')->references(['id', 'visit_id', 'facility_id'])->on('visit_attachments')->restrictOnDelete();
         });
+        foreach ($this->stateConstraints() as $table => $constraints) {
+            foreach ($constraints as $name => $expression) {
+                DB::statement("ALTER TABLE $table ADD CONSTRAINT $name CHECK ($expression)");
+            }
+        }
     }
 
     public function down(): void

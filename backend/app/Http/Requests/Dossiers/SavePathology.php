@@ -27,13 +27,13 @@ class SavePathology extends FormRequest
             'source' => ['required', 'in:internal,external'],
             'status' => ['required', 'in:requested,specimen_collected,pending_result,completed,unavailable,cancelled'],
             'report_number' => ['nullable', 'string', 'max:100'],
-            'external_organization' => ['nullable', 'required_if:source,external', 'string', 'max:200'],
+            'external_organization' => ['nullable', 'string', 'max:200'],
             'specimen_type' => ['nullable', 'string', 'max:200'], 'anatomical_site' => ['nullable', 'string', 'max:200'],
             'procedure_event_id' => ['nullable', 'integer', 'min:1'],
             'clinic_id' => ['nullable', 'required_with:doctor_id', 'integer', 'min:1'], 'doctor_id' => ['nullable', 'required_with:clinic_id', 'integer', 'min:1'],
-            'requested_on' => ['nullable', 'date_format:Y-m-d'], 'collected_on' => ['nullable', 'date_format:Y-m-d'], 'result_on' => ['nullable', 'required_if:status,completed', 'date_format:Y-m-d'],
-            'conclusion' => ['nullable', 'required_if:status,completed', 'string', 'max:20000'], 'note' => ['nullable', 'string', 'max:20000'],
-            'unavailable_reason' => ['nullable', 'required_if:status,unavailable,cancelled', 'string', 'max:2000'],
+            'requested_on' => ['nullable', 'date_format:Y-m-d'], 'collected_on' => ['nullable', 'date_format:Y-m-d'], 'result_on' => ['nullable', 'date_format:Y-m-d'],
+            'conclusion' => ['nullable', 'string', 'max:20000'], 'note' => ['nullable', 'string', 'max:20000'],
+            'unavailable_reason' => ['nullable', 'string', 'max:2000'],
             'attachment_ids' => ['sometimes', 'array', 'max:100'], 'attachment_ids.*' => ['integer', 'min:1', 'distinct'],
         ];
     }

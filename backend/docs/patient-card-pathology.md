@@ -25,6 +25,41 @@ Results may arrive after a visit completes: specific pathology/assessment permis
 allow these independent records to be updated without changing visit completion or
 unlocking other clinical sections.
 
+### Authoritative conditional fields and transitions
+
+Laravel merges omitted fields, then normalizes the current medical state before
+validation/persistence. Hidden browser inputs are not an integrity boundary.
+
+| Assessment disposition | Retained conditional fields |
+|---|---|
+| not_assessed | None: both decision reasons and evidence are cleared |
+| pathology_not_required | Required nonblank not_required_reason only |
+| pathology_required | Required nonblank required_reason only |
+| pathology_pending | Applicable required_reason; no not_required_reason/evidence |
+| pathology_confirmed | Valid completed nonvoided evidence; applicable required_reason may remain |
+| referred_out | Applicable required_reason may remain; no not_required_reason/evidence; requires the saved DOS-REFER outcome |
+
+Generic note, follow-up and responsible clinic/doctor remain omission-preserving. The
+editor clears incompatible local values on selection changes and after explicit conflict
+review; it never saves a selection change automatically. Details show only relevant fields.
+The audit still preserves previous decisions as history, not as current medical facts.
+
+Pathology normalization clears external_organization for internal source; clears
+unavailable_reason outside unavailable/cancelled; and clears result_on/conclusion for
+every non-completed state. Required values are checked after merging: omitted valid saved
+values remain, while an explicit null/blank required value is rejected.
+
+The minimal transition policy allows movement between non-completed states and direct
+historical entry into completed. A completed report stays completed during an authorized,
+locked, audited correction. Every completed → non-completed transition returns 422
+atomically. An erroneous completed report must be voided with a reason, then replaced by
+an explicitly created record. No additional workflow engine or automatic replacement exists.
+
+MariaDB CHECK constraints enforce current-row mutually exclusive fields, required reasons,
+final-result presence/absence, responsibility pairs and nullable chronological ordering.
+Transition checks and visit-relative/facility-local date validation require service-level
+knowledge and remain enforced under the existing locks; a CHECK is not a cross-row trigger.
+
 Confirmation explicitly references a completed nonvoided pathology in the **same facility
 medical context**, possibly from an earlier visit for follow-up. The report always shows
 its source visit. The recorded decision is preserved; effective_disposition becomes
@@ -37,6 +72,12 @@ cutoff. Known request <= collection <= result; actual event dates cannot exceed 
 today. External reports can predate medical-context opening and the hospital visit.
 No report creates a diagnosis, performed service/procedure or reporting period. An
 optional procedure_event_id references an existing same-visit performed procedure.
+
+Known assessment dates and every known internal request/collection/result date must be
+on or after the source visit date. A later result may arrive after visit completion, but
+not after facility-local today. External historical dates may predate the visit and file
+opening, with no September cutoff. Changing the visit date also validates its retained
+internal pathology/assessment facts; it cannot move the visit past their known dates.
 
 ## Referrals and attachments
 
@@ -125,7 +166,7 @@ Future treatment-plan validation will consume current pathology readiness. This 
 does not implement treatment plans, chemotherapy protocols/doses/schedules/administration,
 dispensing, Excel import, offline synchronization, or new directory CRUD.
 
-## Verification
+## Initial verification (reviewed fa37b717)
 
 Verification used `mysql`, MariaDB **10.11.18**, the existing isolated populated
 `blood_bank_cities_testing` database at `127.0.0.1:13416`. The connection safety guard
@@ -181,3 +222,63 @@ checks are programmatic and PDF review concerns the actual application-generated
 
 Synthetic responsive review images: [gallery](../../frontend/docs/pathology-review/README.md).
 No real patient data, access tokens, private files or storage keys are included.
+
+## State/date correction verification
+
+Final correction verification used the same guarded MariaDB 10.11.18 database above.
+The exact correction SHA is recorded in PR #26, which remains a draft.
+
+| Check | Actual result |
+|---|---|
+| Four new regression tests before changing logic | **4 failures, 25 assertions**: stale assessment reason, stale external organization, accepted pre-visit assessment date, and absent SQL constraint |
+| Final focused pathology tests (included in the affected run) | **13 passed, 3,849 assertions, zero skips** |
+| Final nine affected Laravel suites | **73 passed, 12,357 assertions, zero failures/skips** |
+| Seven real browser suites together | **34 cases: 33 passed, 1 failed**, zero skips; the new case selected a hidden status-filter option instead of the displayed pending-state paragraph |
+| Final pathology browser suite after correcting that test locator | **5 passed, zero failures/skips**; real API, concurrent connections, conflict review and 390/768/1440px checks |
+| TypeScript, ESLint, production build | Passed; a fresh standalone build/server used the isolated Laravel URL |
+| Pint on all eight changed/new PHP files; `git diff --check` | Passed |
+| PDF | All **13 pages** inspected with PDF.js: card (4), visit (4), list (1), normalized-state card (4); incompatible marker values absent, current note/reason retained |
+| XLSX | Four real downloads reopened: **14/14/1/14 sheets**; shared print, RTL/Cairo, type, formula and privacy assertions passed; normalized workbook excludes stale marker values |
+
+The six pre-existing browser suites passed in the combined run. The new pathology
+suite was then rerun in full; the 34-case batch was not rerun after its locator fix.
+No API mocking or interception was used. Browser authorization/isolation checks,
+UUID replay (one record) and competing corrections (200/409) passed. Production
+frontend code did not change after the successful build. Excel desktop/printer
+preview was not performed; the visual PDF review uses application-generated PDFs.
+
+Commands for the affected checks (from each respective project directory):
+
+```sh
+php artisan test-db:check --connect --env=testing
+php vendor/bin/phpunit --bootstrap tests/Support/preserve-database.php tests/Feature/DossierApiTest.php tests/Feature/DossierWorkflowTest.php tests/Feature/DossierCompletionTest.php tests/Feature/DossierCompletionIOTest.php tests/Feature/DossierCompletionSafetyTest.php tests/Feature/DossierReleaseVerificationTest.php tests/Feature/DossierClosureTest.php tests/Feature/PatientCardTest.php tests/Feature/DossierPathologyTest.php
+node --test --test-concurrency=1 tests/patient-card-live.test.mjs tests/dossiers-live.test.mjs tests/dossier-workflow-live.test.mjs tests/dossier-completion-live.test.mjs tests/dossier-review-live.test.mjs tests/dossier-closure-live.test.mjs tests/dossier-pathology-live.test.mjs
+node --test tests/dossier-pathology-live.test.mjs
+npx tsc --noEmit
+npm run lint
+npm run build
+git diff --check
+```
+
+See [base-versus-head directory comparison](pathology-baseline-comparison.md) for
+the serial comparison on the same retained database. The ten count failures are now
+established as baseline-equivalent; the base also has a schema-inventory-only failure
+because it predates the preserved Phase 2 tables. No new head failure was introduced.
+
+The existing unmerged Phase 2 migration was updated, without adding a production repair
+migration. The local populated test database had already run its original definition.
+The new nine CHECK clauses were applied additively after checking all existing rows;
+row digests and attachment links remained unchanged. Populated rollback was verified
+to refuse before DDL. The new guarded helper makes this check repeatable:
+
+```sh
+php artisan test-db:check --connect --env=testing
+php tests/Support/pathology-state-upgrade.php
+```
+
+This helper is for the existing isolated test database only, not an operator production
+upgrade command. A new environment applies the reviewed migration normally. Empty-table
+full up/down was checked for the initial implementation; it was not repeated by dropping
+these now-populated clinical tables. No rows were normalized, deleted or reset to install
+the checks. Visit-relative rules and completed-state transitions remain locked service
+validation because SQL CHECKs cannot validate a previous row state or another table.

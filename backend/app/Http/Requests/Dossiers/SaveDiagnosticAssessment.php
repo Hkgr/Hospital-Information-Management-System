@@ -22,11 +22,11 @@ class SaveDiagnosticAssessment extends FormRequest
             'facility_id' => ['required', 'integer', 'min:1'], 'request_id' => ['required', 'uuid'], 'lock_version' => ['required', 'integer', 'min:0'],
             'disposition' => ['required', 'in:not_assessed,pathology_required,pathology_pending,pathology_confirmed,pathology_not_required,referred_out'],
             'assessed_on' => ['nullable', 'date_format:Y-m-d'], 'note' => ['nullable', 'string', 'max:20000'],
-            'required_reason' => ['nullable', 'required_if:disposition,pathology_required', 'string', 'max:2000'],
-            'not_required_reason' => ['nullable', 'required_if:disposition,pathology_not_required', 'string', 'max:2000'],
+            'required_reason' => ['nullable', 'string', 'max:2000'],
+            'not_required_reason' => ['nullable', 'string', 'max:2000'],
             'follow_up' => ['nullable', 'string', 'max:2000'],
             'clinic_id' => ['nullable', 'required_with:doctor_id', 'integer', 'min:1'], 'doctor_id' => ['nullable', 'required_with:clinic_id', 'integer', 'min:1'],
-            'evidence_pathology_id' => ['nullable', 'required_if:disposition,pathology_confirmed', 'integer', 'min:1'],
+            'evidence_pathology_id' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

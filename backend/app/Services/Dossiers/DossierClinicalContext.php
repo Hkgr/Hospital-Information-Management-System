@@ -70,6 +70,9 @@ class DossierClinicalContext
                 continue;
             }
             foreach (DB::table($table)->where('visit_id', $visit)->where('facility_id', $f['id'])->when($table !== 'visit_diagnostic_assessments', fn ($q) => $q->whereNull('voided_at'))->orderBy('id')->lockForUpdate()->get() as $index => $row) {
+                if (in_array($table, ['visit_pathologies', 'visit_diagnostic_assessments'])) {
+                    app(DossierPathology::class)->dates($f, (array) $row, $date);
+                }
                 if (in_array($table, ['visit_pathologies', 'visit_diagnostic_assessments']) && ! $row->$clinic && ! $row->$doctor) {
                     continue;
                 }

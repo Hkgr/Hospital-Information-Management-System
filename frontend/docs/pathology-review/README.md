@@ -28,3 +28,26 @@ Three real XLSX downloads were reopened using PhpSpreadsheet and the existing sh
 workbook assertions. This is not a claim of Excel desktop or printer preview testing.
 See [backend verification and deployment notes](../../../backend/docs/patient-card-pathology.md)
 for exact results and the populated-database limitations of the broader directory tests.
+
+## State/date correction
+
+The real integration regression changes source/status and diagnostic disposition,
+preserves the draft after 409, explicitly reviews the latest version, and saves the
+chosen compatible fields. It checks both effective-state panels and absence of stale
+fields at every width. The following are synthetic screenshots from that passing run:
+
+| Width | Draft retained during conflicting save | Saved effective state |
+|---|---|---|
+| 390px | [Draft](correction-conflict-390.png) | [State](correction-state-390.png) |
+| 768px | [Draft](correction-conflict-768.png) | [State](correction-state-768.png) |
+| 1440px | [Draft](correction-conflict-1440.png) | [State](correction-state-1440.png) |
+
+The draft images capture the retained editor around the 409 response, before opening
+the explicit latest-version review. They are not screenshots of the review checklist.
+The full-page state images retain the existing fixed AppShell and shared tables;
+this correction does not redesign them.
+
+[Normalized PDF assessment and pathology page](normalized-page-2.png) shows the current
+pending decision and retained generic context. The report's four pages were inspected;
+the stale organization, unavailable reason, final conclusion and incompatible decision
+reason are absent. The corresponding XLSX passed the shared workbook checks.
