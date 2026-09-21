@@ -37,6 +37,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::post('/{dossier}/treatment-plans/{plan}/status', [$oncology, 'status'])->whereNumber(['dossier', 'plan'])->name('treatment.status');
         Route::post('/{dossier}/treatment-plans/{plan}/sessions', [$oncology, 'schedule'])->whereNumber(['dossier', 'plan'])->name('treatment.schedule');
         Route::get('/{dossier}/treatment-sessions', [$oncology, 'sessions'])->whereNumber('dossier')->name('treatment.sessions');
+        Route::post('/{dossier}/treatment-sessions', [$oncology, 'appointment'])->whereNumber('dossier')->name('treatment.appointment');
         Route::get('/{dossier}/treatment-sessions/{session}', [$oncology, 'session'])->whereNumber(['dossier', 'session'])->name('treatment.session');
         Route::put('/{dossier}/treatment-sessions/{session}', [$oncology, 'updateSession'])->whereNumber(['dossier', 'session'])->name('treatment.reschedule');
         Route::get('/{dossier}/visits/{visit}/doses', [$oncology, 'doses'])->whereNumber(['dossier', 'visit'])->name('treatment.doses');

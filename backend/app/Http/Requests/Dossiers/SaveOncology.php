@@ -31,6 +31,9 @@ class SaveOncology extends FormRequest
     public function operation(): string
     {
         $name = $this->route()?->getName() ?? '';
+        if (str_ends_with($name, '.appointment')) {
+            return 'appointment';
+        }
         if (str_ends_with($name, '.void')) {
             return 'void';
         }
@@ -72,11 +75,14 @@ class SaveOncology extends FormRequest
         if ($op === 'status') {
             return $rules + ['status' => ['required', 'in:active,paused,completed,cancelled'], 'reason' => ['required', 'string', 'max:2000'], 'override_reason' => ['nullable', 'string', 'max:2000']];
         }
+        if ($op === 'appointment') {
+            return $rules + ['planned_on' => $date, 'clinic_id' => $id, 'doctor_id' => $id, 'note' => $text];
+        }
         if ($op === 'schedule') {
             return $rules + ['sessions' => ['required', 'array', 'min:1', 'max:24'], 'sessions.*.planned_on' => $date, 'sessions.*.cycle_number' => $optionalId, 'sessions.*.session_number' => [...$id, 'distinct'], 'sessions.*.note' => $text];
         }
         if ($op === 'session') {
-            return $rules + ['status' => ['required', 'in:rescheduled,missed,cancelled,referred'], 'planned_on' => ['required_if:status,rescheduled', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:2000'], 'plan_lock_version' => $id, 'carry_forward' => ['sometimes', 'boolean']];
+            return $rules + ['status' => ['required', 'in:rescheduled,missed,cancelled,referred'], 'planned_on' => ['required_if:status,rescheduled', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:2000'], 'plan_lock_version' => $optionalId, 'carry_forward' => ['sometimes', 'boolean']];
         }
         if ($op === 'plan') {
             $rules += ['confirm_duplicate' => ['sometimes', 'boolean'], 'duplicate_reason' => ['required_if:confirm_duplicate,true', 'nullable', 'string', 'max:2000']];

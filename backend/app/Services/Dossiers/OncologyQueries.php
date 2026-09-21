@@ -51,8 +51,8 @@ class OncologyQueries
 
     public function scheduled(array $f): Builder
     {
-        return DB::table('oncology_sessions as s')->joinSub($this->plans($f)->select('p.id', 'p.current_revision_id')->selectRaw(self::effectiveSql().' AS effective_status'), 'plan', 'plan.id', '=', 's.plan_id')
-            ->where('s.facility_id', $f['id'])->where('plan.effective_status', 'active')->whereColumn('s.revision_id', 'plan.current_revision_id')->whereIn('s.status', ['scheduled', 'rescheduled'])
+        return DB::table('oncology_sessions as s')->leftJoinSub($this->plans($f)->select('p.id', 'p.current_revision_id')->selectRaw(self::effectiveSql().' AS effective_status'), 'plan', 'plan.id', '=', 's.plan_id')
+            ->where('s.facility_id', $f['id'])->where(fn ($q) => $q->whereNull('s.plan_id')->orWhere(fn ($p) => $p->where('plan.effective_status', 'active')->whereColumn('s.revision_id', 'plan.current_revision_id')))->whereIn('s.status', ['scheduled', 'rescheduled'])
             ->whereNotExists(fn ($q) => $q->from('dose_sessions as d')->selectRaw('1')->whereColumn('d.oncology_session_id', 's.id')->whereNull('d.voided_at'));
     }
 
@@ -122,7 +122,7 @@ class OncologyQueries
     public function sessions(array $f, int $dossier, array $input): array
     {
         app(DossierWrites::class)->dossier($f, $dossier, false);
-        $q = DB::table('oncology_sessions as s')->joinSub($this->plans($f)->select('p.id', 'p.plan_number', 'p.current_revision_id', 'p.lock_version')->selectRaw(self::effectiveSql().' AS effective_status'), 'p', 'p.id', '=', 's.plan_id')->leftJoin('dose_sessions as dose', fn ($j) => $j->on('dose.oncology_session_id', '=', 's.id')->whereNull('dose.voided_at'))->where('s.facility_id', $f['id'])->where('s.dossier_id', $dossier);
+        $q = DB::table('oncology_sessions as s')->leftJoinSub($this->plans($f)->select('p.id', 'p.plan_number', 'p.current_revision_id', 'p.lock_version')->selectRaw(self::effectiveSql().' AS effective_status'), 'p', 'p.id', '=', 's.plan_id')->leftJoin('dose_sessions as dose', fn ($j) => $j->on('dose.oncology_session_id', '=', 's.id')->whereNull('dose.voided_at'))->where('s.facility_id', $f['id'])->where('s.dossier_id', $dossier);
         foreach (['plan_id', 'status'] as $key) {
             if (! empty($input[$key])) {
                 $q->where('s.'.$key, $input[$key]);

@@ -187,7 +187,7 @@ class OncologyWriter
     {
         $target = DB::table('oncology_sessions')->where('id', $id)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->first();
         abort_unless($target, 404);
-        $targets = $this->planTargets($f, $dossier, $target->plan_id);
+        $targets = $target->plan_id ? $this->planTargets($f, $dossier, $target->plan_id) : [[], []];
 
         return $this->writes->once($r, $f, $data, "oncology:session:$dossier:$id", function () use ($r, $f, $dossier, $id, $data, $target, $targets) {
             $this->context->lock([array_merge($targets[0], [$target->doctor_id]), array_merge($targets[1], [$target->clinic_id])]);
@@ -198,9 +198,38 @@ class OncologyWriter
             if ($s->status === 'completed') {
                 DossierWrites::conflict('هذه الجلسة لها واقعة فعلية؛ صحح الواقعة أو أبطلها ولا تعِد جدولتها.');
             }
+            if (! $s->plan_id) {
+                if (! empty($data['carry_forward'])) {
+                    throw ValidationException::withMessages(['carry_forward' => 'الموعد مستقل ولا يملك نسخة خطة لنقلها.']);
+                }
+                $fields = Arr::only($data, ['status', 'reason']);
+                if ($data['status'] === 'rescheduled') {
+                    $this->context->check($f, $s->clinic_id, $s->doctor_id, $data['planned_on'], 'planned_on', false);
+                    $fields['planned_on'] = $data['planned_on'];
+                }
+
+                return $this->persist($r, $f, 'oncology_sessions', $s, $fields);
+            }
+            if (empty($data['plan_lock_version'])) {
+                throw ValidationException::withMessages(['plan_lock_version' => 'نسخة الخطة مطلوبة للموعد المرتبط بها.']);
+            }
             $plan = $this->plan($f, $dossier, $s->plan_id, $data['plan_lock_version']);
 
             return $this->resolveSession($r, $f, $s, $plan, $data);
+        });
+    }
+
+    public function appointment(Request $r, array $f, int $dossier, array $data): int
+    {
+        return $this->writes->once($r, $f, $data, "oncology:appointment:$dossier", function () use ($r, $f, $dossier, $data) {
+            $this->context->lock([[$data['doctor_id']], [$data['clinic_id']]]);
+            $this->writes->dossier($f, $dossier);
+            $this->context->check($f, $data['clinic_id'], $data['doctor_id'], $data['planned_on'], 'doctor_id', false);
+
+            return $this->persist($r, $f, 'oncology_sessions', null, Arr::only($data, ['clinic_id', 'doctor_id', 'planned_on', 'note']) + [
+                'dossier_id' => $dossier, 'facility_id' => $f['id'], 'plan_id' => null, 'revision_id' => null,
+                'session_number' => null, 'status' => 'scheduled', 'client_request_id' => $data['request_id'],
+            ]);
         });
     }
 
@@ -297,6 +326,9 @@ class OncologyWriter
         if (! $id) {
             $target = DB::table('oncology_sessions')->where('id', $data['session_id'])->where('dossier_id', $dossier)->where('facility_id', $f['id'])->first();
             abort_unless($target, 404);
+            if (! $target->plan_id) {
+                throw ValidationException::withMessages(['session_id' => 'هذا موعد مستقل فقط؛ تسجيل الإعطاء العلاجي يتطلب جلسة خطة معتمدة.']);
+            }
             $targets = $this->planTargets($f, $dossier, $target->plan_id);
             $targets[0][] = $target->doctor_id;
             $targets[1][] = $target->clinic_id;

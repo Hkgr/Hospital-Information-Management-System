@@ -60,7 +60,7 @@ class OncologyController extends Controller
     {
         $f = $this->scope($r);
         app(DossierWrites::class)->dossier($f, $dossier, false);
-        $row = DB::table('oncology_sessions as s')->joinSub(app(OncologyQueries::class)->plans($f)->select('p.id', 'p.current_revision_id', 'p.lock_version')->selectRaw(OncologyQueries::effectiveSql().' AS effective_status'), 'p', 'p.id', '=', 's.plan_id')->where('s.id', $session)->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->first(['s.*', 'p.current_revision_id', 'p.lock_version as plan_lock_version', 'p.effective_status', DB::raw(OncologyQueries::voidedDoseSql())]);
+        $row = DB::table('oncology_sessions as s')->leftJoinSub(app(OncologyQueries::class)->plans($f)->select('p.id', 'p.current_revision_id', 'p.lock_version')->selectRaw(OncologyQueries::effectiveSql().' AS effective_status'), 'p', 'p.id', '=', 's.plan_id')->where('s.id', $session)->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->first(['s.*', 'p.current_revision_id', 'p.lock_version as plan_lock_version', 'p.effective_status', DB::raw(OncologyQueries::voidedDoseSql())]);
         abort_unless($row, 404);
         $row->has_voided_dose = (bool) $row->has_voided_dose;
 
@@ -101,6 +101,13 @@ class OncologyController extends Controller
         $id = app(OncologyWriter::class)->session($r, $this->scope($r, 'schedule'), $dossier, $session, $r->validated());
 
         return response()->json(['data' => ['id' => $id]]);
+    }
+
+    public function appointment(SaveOncology $r, int $dossier)
+    {
+        $id = app(OncologyWriter::class)->appointment($r, $this->scope($r, 'schedule'), $dossier, $r->validated());
+
+        return response()->json(['data' => ['id' => $id]], 201);
     }
 
     public function administer(SaveOncology $r, int $dossier, int $visit, ?int $dose = null)
