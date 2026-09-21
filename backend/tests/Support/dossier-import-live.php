@@ -6,6 +6,7 @@ use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\Imports\ImportBatches;
 use App\Services\Dossiers\Imports\ImportWorkbook;
 use App\Support\TestDatabaseSafety;
+use Database\Seeders\DossierAuditPermissionsSeeder;
 use Database\Seeders\DossierImportPermissionsSeeder;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Http\Request;
@@ -26,6 +27,10 @@ $app->make(Kernel::class)->bootstrap();
 TestDatabaseSafety::assertAvailable($app);
 set_exception_handler(function (Throwable $e) {
     fwrite(STDERR, 'Import test fixture failed ('.get_class($e).'); no source values are logged.'.PHP_EOL);
+    fwrite(STDERR, 'At '.basename($e->getFile()).':'.$e->getLine().'; code '.(string) $e->getCode().PHP_EOL);
+    if ($e instanceof PDOException) {
+        fwrite(STDERR, 'Driver code '.(int) ($e->errorInfo[1] ?? 0).PHP_EOL);
+    }
     exit(1);
 });
 $path = storage_path('framework/testing/dossier-import-live.json');
@@ -48,6 +53,7 @@ function importSample(array $f, int $count, string $suffix, bool $duplicate = fa
         $p = 'P-'.$suffix.'-'.$i;
         $ambiguous = isset($f['ambiguous_alias']) && $i % 997 === 0;
         $append('Patients', ['source_record_id' => $f['tag'].'-'.($duplicate && $i === 2 ? 'P-'.$suffix.'-1' : $p), 'local_patient_ref' => $p, 'opening_date' => $existing ? $f['existing_opening'] : '1998-01-01',
+            ...($count === 21 && $i === 1 ? ['paper_file_number' => '000-'.$f['tag'].'-'.$suffix, 'legacy_code' => 'LEG-'.$f['tag'].'-'.$suffix] : []),
             ...$ambiguous ? ['legacy_code' => $f['ambiguous_alias']] : ($existing ? ['patient_code' => $f['existing_code']] : ['first_name' => 'مريض اصطناعي', 'family_name' => 'تجربة '.$suffix.' '.$i, 'phone' => '001234567', 'birth_date_accuracy' => $i % 3 === 0 ? 'year_only' : 'unknown', 'birth_date' => $i % 3 === 0 ? '1980' : null, 'gender' => 'unknown', 'displacement_status' => 'unknown', 'import_note' => '=ملاحظة مصدر اصطناعية؛ ليست واقعة علاجية'])]);
         // Include genuine pre-/post-cutover and same-day visits, plus invalid refs.
         if ($i % 3 !== 0) {
@@ -73,6 +79,8 @@ if ($mode === 'prepare') {
     }
     $f = DB::transaction(fn () => DossierCompletionFixture::make());
     app(DossierImportPermissionsSeeder::class)->run();
+    app(DossierAuditPermissionsSeeder::class)->run();
+    DB::table('role_permissions')->insertOrIgnore(['role_id' => $f['dossier_role'], 'permission_id' => DB::table('permissions')->where('code', 'dossiers.audit')->value('id')]);
     foreach (array_keys(DossierImportPermissionsSeeder::CODES) as $code) {
         DB::table('role_permissions')->insertOrIgnore(['role_id' => $f['dossier_role'], 'permission_id' => DB::table('permissions')->where('code', $code)->value('id')]);
     }
@@ -184,6 +192,41 @@ if ($mode === 'cleanup') {
     $metrics['counts'] = $result['counts'];
     $metrics['status'] = $result['status'];
     $metrics['peak_memory_bytes'] = memory_get_peak_usage(true);
+    $visitIds = DB::table('dossier_import_rows')->where('batch_id', $id)->where('sheet', 'Visits')->where('status', 'committed')->pluck('visit_id');
+    $serviceRows = DB::table('dossier_import_rows')->where('batch_id', $id)->where('sheet', 'Services')->where('status', 'committed')->count();
+    $metrics['clinical_counts'] = ['visit_sources' => $visitIds->count(), 'visits' => DB::table('visits')->whereIn('id', $visitIds)->count(), 'service_sources' => $serviceRows, 'services' => DB::table('visit_services')->whereIn('visit_id', $visitIds)->count()];
+    if ($metrics['clinical_counts']['visits'] !== $visitIds->count() || $metrics['clinical_counts']['services'] !== $serviceRows) {
+        throw new RuntimeException('Authoritative clinical counts differ from committed source facts.');
+    }
+    // A second workbook has different formatting, but identical parsed sources.
+    // Run the complete replay, not just a same-file hash shortcut.
+    $tables = ['patients', 'patient_dossiers', 'visits', 'visit_diagnoses', 'visit_services', 'visit_procedures', 'visit_prescriptions', 'visit_prescription_items', 'visit_outcomes'];
+    $counts = fn () => collect($tables)->mapWithKeys(fn ($table) => [$table => DB::table($table)->count()])->all();
+    $before = $counts();
+    $book = IOFactory::load($sample);
+    $book->getSheetByName('Patients')->getStyle('A1')->getFont()->setItalic(true);
+    $replayFile = storage_path('framework/testing/import-performance-replay-'.$f['tag'].'.xlsx');
+    (new Xlsx($book))->save($replayFile);
+    $book->disconnectWorksheets();
+    $replay = $service->upload($r, $facility, new UploadedFile($replayFile, 'replay.xlsx', test: true), 'legacy_migration', '2026-09-01');
+    if ($replay === $id) {
+        throw new RuntimeException('Replay must use a separate retained batch.');
+    }
+    $start = microtime(true);
+    foreach (['validate', 'commit'] as $op) {
+        do {
+            $b = $service->batch($facility, $replay);
+            if (! in_array($b->status, $op === 'validate' ? ['uploaded', 'validating'] : ['validated', 'committing'])) {
+                break;
+            }
+            $service->step($r, $facility, $replay, $b->lock_version, $op);
+        } while (true);
+    }
+    $replayed = $service->present($facility, $replay);
+    if ($before !== $counts() || ($replayed['counts']['skipped'] ?? 0) !== $metrics['counts']['committed'] || isset($replayed['counts']['committed'])) {
+        throw new RuntimeException('Full replay duplicated clinical data or misclassified source rows.');
+    }
+    $metrics['full_replay'] = ['seconds' => microtime(true) - $start, 'counts' => $replayed['counts'], 'clinical_counts_unchanged' => true];
     file_put_contents(storage_path('framework/testing/import-performance.json'), json_encode($metrics, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     echo json_encode($metrics, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)."\n";
 } elseif ($mode === 'metrics') {
@@ -254,6 +297,10 @@ if ($mode === 'cleanup') {
             }
             if (DB::table('dossier_import_rows')->where('batch_id', $id)->where('status', 'committed')->count() !== 5) {
                 throw new RuntimeException('Concurrency committed an unexpected number of source facts.');
+            }
+            $dossiers = DB::table('dossier_import_rows')->where('batch_id', $id)->where('sheet', 'Patients')->pluck('dossier_id');
+            if (DB::table('visits')->whereIn('dossier_id', $dossiers)->count() !== 2) {
+                throw new RuntimeException('Concurrent retries duplicated actual visits.');
             }
             echo "Concurrent import attempt $attempt: 200 / 409; five source rows committed once.\n";
         } finally {

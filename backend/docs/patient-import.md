@@ -68,6 +68,22 @@ Other modules' reporting-period rules are untouched.
 
 ## Safe processing and retries
 
+An unchanged source is reusable only with its retained facility, patient context,
+visit and prescription ownership. Validation resolves that graph before building
+clinical writer input, and commit repeats the same check under locks. Reusing an
+old child source beneath a new/different visit or prescription puts the entire
+patient bundle in `needs_review`; it neither duplicates the fact nor creates an
+incomplete visit with the child silently removed. Exact replays exclude every
+skipped clinical row from writers. A reused patient may still receive genuinely
+new visits with entirely new fact sources, including distinct same-day visits.
+
+Authorized Patient Card history displays the import batch, that card's source row
+IDs, purpose and cutover date. Paper-file assignment and historical alias assignment
+have separate before/after audit entries in the creation transaction. Canonical
+patient codes remain system-generated and unchanged; existing identities and
+contexts are never overwritten. Audit display uses the existing `dossiers.audit`
+permission and exposes no encrypted workbook payload, hash or private storage path.
+
 Upload validates structure and saves private source/provenance only. Validation
 performs no clinical writes. States: uploaded → validating → validated or
 needs_review → committing → completed/completed_with_errors; cancellation affects
@@ -187,13 +203,16 @@ php vendor/bin/phpunit --bootstrap tests/Support/preserve-database.php tests/Fea
 php tests/Support/dossier-import-live.php prepare
 node --test tests/dossier-import-live.test.mjs   # from frontend, fresh standalone Next → test Laravel
 php tests/Support/dossier-import-live.php concurrency
-php tests/Support/dossier-import-live.php performance
+php -d memory_limit=512M tests/Support/dossier-import-live.php performance
 php tests/Support/dossier-import-live.php verify
 php tests/Support/dossier-import-live.php cleanup
 ```
 
 The live fixture retains all synthetic clinical/import history and revokes only
 its own tokens. No reset, truncate, fresh migration or disposable empty database.
+The performance command also reopens/reformats the 5,000-patient workbook and
+replays it as a separate batch, asserting unchanged clinical table counts. Its
+explicit memory limit is for that combined test harness, not a production setting.
 Do not run older `*MigrationTest` classes that call `migrate:fresh` on this retained
 test database. The new migration has its own non-destructive preflight coverage.
 Exact final results and remaining limitations are recorded in the PR review notes.

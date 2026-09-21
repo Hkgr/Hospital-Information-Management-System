@@ -166,24 +166,16 @@ class ImportBatches
                 }
                 $adapter->prime($decoded->flatten(1)->all(), $f, $operation === 'commit');
                 $sourceMap = DB::table('dossier_import_sources')->where('facility_id', $f['id'])->whereIn('source_record_id', $decoded->flatten(1)->pluck('source_record_id'))->when($operation === 'commit', fn ($q) => $q->lockForUpdate())->get()->keyBy(fn ($s) => $s->sheet.':'.$s->source_record_id);
-                $sourceRows = DB::table('dossier_import_rows')->whereIn('id', $sourceMap->pluck('row_id'))->get()->keyBy('id');
+                $ownership = new ImportReplayOwnership($f, $sourceMap, $operation === 'commit');
                 foreach ($refs as $ref) {
                     $stored = $groups->get($ref);
                     $rows = $decoded->get($ref);
                     try {
-                        DB::transaction(function () use ($r, $f, $batch, $rows, $stored, $operation, $adapter, $sourceMap, $sourceRows) {
-                            $bundle = $adapter->prepare($r, $f, $rows, $operation === 'commit');
+                        DB::transaction(function () use ($r, $f, $batch, $rows, $stored, $operation, $adapter, $ownership) {
+                            [$skips, $writeRows] = $ownership->resolve($rows);
+                            $bundle = $adapter->prepare($r, $f, $writeRows, $operation === 'commit');
+                            $ownership->assertDossier($skips, $bundle);
                             $resolution = ['patient_id' => $bundle['patient']['id'] ?? null, 'patient_version' => $bundle['patient']['lock_version'] ?? null, 'dossier_id' => $bundle['dossier']['id'] ?? null, 'dossier_version' => $bundle['dossier']['lock_version'] ?? null, 'canonical_code' => $bundle['patient']['patient_code'] ?? null, 'match_type' => ! $bundle['patient'] ? 'new' : ($bundle['patient']['patient_code'] === $bundle['source_patient']['patient_code'] ? 'canonical' : 'alias_or_source'), 'pre_cutover' => $bundle['source_patient']['opening_date'] < $batch->cutover_date];
-                            $skips = [];
-                            foreach ($rows as $row) {
-                                $source = $sourceMap->get($row['sheet'].':'.$row['source_record_id']);
-                                if ($source && $source->fingerprint !== $row['fingerprint']) {
-                                    throw ValidationException::withMessages(['source_record_id' => 'سبق اعتماد معرّف المصدر بمحتوى مختلف؛ يلزم مراجعة صريحة ولا يُستبدل التاريخ.']);
-                                }
-                                if ($source) {
-                                    $skips[$row['id']] = $sourceRows->get($source->row_id);
-                                }
-                            }
                             if ($operation === 'validate') {
                                 foreach ($stored as $row) {
                                     DB::table('dossier_import_rows')->where('id', $row->id)->update(['status' => 'valid', 'action' => isset($skips[$row->id]) ? 'skip' : ($row->sheet === 'Patients' ? ($bundle['dossier'] ? 'reuse_dossier' : ($bundle['patient'] ? 'new_dossier' : 'new_patient')) : 'new_fact'), 'resolution' => json_encode($resolution), 'errors' => null, 'updated_at' => now()]);
@@ -195,23 +187,6 @@ class ImportBatches
                             $prior = json_decode($stored->first()->resolution, true);
                             if ($prior !== $resolution) {
                                 throw ValidationException::withMessages(['lock_version' => 'تغيرت الهوية أو البطاقة منذ المعاينة؛ أعد المراجعة في دفعة جديدة دون الكتابة فوق التعديل.']);
-                            }
-                            // A repeated patient source identifies the same retained dossier.
-                            foreach ($rows as $row) {
-                                if ($row['sheet'] === 'Patients' && isset($skips[$row['id']])) {
-                                    $d = DB::table('patient_dossiers')->where('id', $skips[$row['id']]->dossier_id)->where('facility_id', $f['id'])->first();
-                                    abort_unless($d, 409);
-                                    $bundle['dossier'] = (array) $d;
-                                }
-                                if ($row['sheet'] === 'Visits' && isset($skips[$row['id']])) {
-                                    // No appending facts to a previously committed visit via resubmission.
-                                    foreach ($rows as $child) {
-                                        if ($child['local_visit_ref'] === $row['local_visit_ref'] && ! isset($skips[$child['id']])) {
-                                            throw ValidationException::withMessages(['local_visit_ref' => 'إضافة حقائق إلى زيارة مستوردة سابقًا تحتاج مسار تعديل الزيارة، لا إعادة الاستيراد.']);
-                                        }
-                                    }
-                                    unset($bundle['visits'][$row['local_visit_ref']]);
-                                }
                             }
                             $result = $adapter->write($r, $f, $bundle);
                             foreach ($rows as $row) {

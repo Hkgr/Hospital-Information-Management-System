@@ -11,6 +11,7 @@ use App\Services\Dossiers\DossierClinicalWriter;
 use App\Services\Dossiers\DossierMedicalWriter;
 use App\Services\Dossiers\DossierPersonalWriter;
 use App\Services\Dossiers\DossierVisitWriter;
+use App\Services\Dossiers\DossierWrites;
 use App\Services\Dossiers\PatientCardCodes;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
@@ -265,11 +266,22 @@ class ImportBundle
             $dossier = app(DossierPersonalWriter::class)->save($r, $f, $p + ['request_id' => (string) Str::uuid()], null, withoutVisit: true);
             $patientId = DB::table('patient_dossiers')->where('id', $dossier)->value('patient_id');
             if ($p['person_mode'] === 'new' && $bundle['source_patient']['paper_file_number']) {
-                DB::table('patients')->where('id', $patientId)->update(['paper_file_number' => $bundle['source_patient']['paper_file_number']]);
+                $patient = DB::table('patients')->where('id', $patientId)->lockForUpdate()->first();
+                $this->require($patient->paper_file_number === null, 'paper_file_number', 'لا يستبدل الاستيراد رقم الملف الورقي المحفوظ.');
+                $before = ['paper_file_number' => $patient->paper_file_number];
+                $after = ['paper_file_number' => $bundle['source_patient']['paper_file_number']];
+                DB::table('patients')->where('id', $patientId)->update($after);
+                app(DossierWrites::class)->audit($r, $f, 'patient', $patientId, $before, $after);
             }
             if ($alias = $bundle['source_patient']['legacy_code']) {
                 $this->require(! DB::table('patient_dossiers')->where('code', $alias)->where('patient_id', '<>', $patientId)->exists() && ! DB::table('patients')->where('patient_code', $alias)->where('id', '<>', $patientId)->exists(), 'legacy_code', 'الاسم البديل محجوز لهوية أخرى.');
-                DB::table('patient_dossiers')->where('id', $dossier)->update(['code' => $alias]);
+                $context = DB::table('patient_dossiers')->where('id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
+                if ($context->code !== $alias) {
+                    $before = ['code' => $context->code];
+                    $after = ['code' => $alias];
+                    DB::table('patient_dossiers')->where('id', $dossier)->where('facility_id', $f['id'])->update($after);
+                    app(DossierWrites::class)->audit($r, $f, 'patient_dossier', $dossier, $before, $after);
+                }
             }
         }
         if ($bundle['medical']) {

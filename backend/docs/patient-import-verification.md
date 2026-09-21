@@ -129,3 +129,110 @@ automatic demographic merging remain excluded. Operator-reviewed permissions,
 backups, private storage, retention scheduling and deployment commands are in
 [patient-import.md](patient-import.md). No merge, deployment, FastAPI change or
 production access was performed.
+
+## PR #28 corrective review — replay ownership and audit
+
+Reviewed behavior: `50ac2e9861c994ede1f4f11f610b7757d86ecbde`. The correction
+stays on `feature/legacy-patient-import-and-offline-capture`; PR #28 remains a draft.
+
+The old code built clinical input before resolving source skips. Fingerprint
+equality did not establish parent ownership, so a skipped child could still be
+written beneath a new visit. The correction loads the retained source rows,
+their original parent rows and the authoritative dossier/visit FKs in bounded
+queries. It checks that graph during validation and again with commit locks,
+rejects the whole patient bundle on a mismatch, and removes every proven replay
+from clinical input *before* preparation. Patient identity resolution is checked
+against the retained dossier instead of replacing the resolved dossier afterward.
+New same-day visits with new source IDs remain valid.
+
+Import audit fields existed in the labels map but were missing from the entity
+allowlist. They now appear through the existing authorized history API and UI.
+Paper-file and legacy-alias assignments now lock their newly created authoritative
+rows, capture before/after values, and call `DossierWrites::audit()` in the same
+transaction. Creation, assignments and import provenance remain separate events;
+canonical patient codes and existing contexts are not overwritten.
+
+Before changing application logic, the preserving MySQL regression run on the
+reviewed behavior produced **13 tests, 184 assertions, 12 failures**: ten invalid
+ownership previews, a commit-time retained-source integrity case, and the empty
+audit provenance projection. Exact full clinical replay already passed. Invalid
+ownership cases were also sent through the old commit path: counts increased in
+`visits`, `visit_diagnoses`, `visit_services`, `visit_procedures`,
+`visit_prescriptions`, `visit_prescription_items`, and `visit_outcomes`. The
+regressions check all these tables plus patients/contexts and excluded
+dispensing/oncology/blood tables. A further test isolates a different dossier
+with an otherwise unchanged visit hierarchy.
+
+No corrective migration, new permission, workbook version, route, UI component or
+interactive registration contract is needed. The original additive migration and
+operator-reviewed seed/permission/private-storage requirements remain unchanged.
+
+### Corrective verification environment and measurements
+
+All database operations used the preserving safety-checked **mysql** connection
+to populated **blood_bank_cities_testing**, `127.0.0.1:13416`, **MariaDB 10.11.18**.
+No migration, reset, truncate or retained-history deletion was executed.
+
+The final corrected 5,000-patient measurement used 9,669 source rows (411,114
+bytes): 9,188 committed, 481 intentionally needing review. Authoritative tables
+contained exactly **3,761 visits for 3,761 visit sources** and **628 services for
+628 service sources**. A separately uploaded, reformatted workbook then replayed
+all source rows: 9,188 skipped, 481 still needing review, **zero new clinical
+rows** across all nine checked identity/context/clinical tables.
+
+To compare against current database/host conditions, the three changed existing
+application classes (`ImportBatches`, `ImportBundle`, `DossierAuditValues`) were
+extracted from exact reviewed SHA `50ac2e9` into ignored test storage and loaded
+with a process-local PHP `auto_prepend_file`. All other application classes were
+unchanged; the new resolver is not referenced by that original implementation.
+The same current measurement harness ran against new synthetic source identities
+for both versions. Neither the working branch nor the running Next/Laravel servers
+was switched to base code. These are sequential local measurements, not a load test.
+
+| Measurement | Corrected implementation | Exact reviewed implementation, remeasured |
+| --- | --- | --- |
+| Validation | 500 chunks; 32.783s; 24,695 queries | 500 chunks; 32.008s; 25,195 queries |
+| Commit | 480 chunks; 137.034s; 245,038 queries | 480 chunks; 148.374s; 245,518 queries |
+| Largest validation / commit chunk | 0.160s / 1.371s | 0.256s / 0.683s |
+| Full separate-batch replay | 68.938s; zero additional clinical rows | 87.282s; zero additional clinical rows for this exact-replay workload |
+| Initial workbook generation + import peak | 112 MiB | 112 MiB |
+
+No material throughput/query/memory regression was observed in this comparison;
+individual chunk timings vary. Corrected upload/parse was 2.516s/100 queries;
+parser-only recheck 0.834s; final detail 0.511s/8 queries and list 0.037s/6 queries.
+The unchanged 5,000-patient duplicate-source variant was rejected before storage.
+
+Earlier attempts are **not** counted as successful measurements. The first hit
+the local CLI's 128 MiB limit when generating the *second* large workbook after
+the initial import. The combined measurement was rerun with an explicit 512 MiB
+test-process limit, without changing application/server memory configuration.
+Another attempt stopped with a `PDOException`; the original safe handler recorded
+only its class, so its exact driver cause was not captured. The guard/connection
+passed afterward, its remaining 149 chunks resumed successfully, and the full
+fresh-source measurement above then passed without interruption. Test diagnostics
+now include safe file/line and numeric driver code, never SQL or source values.
+
+Independent-process concurrency ran **three times**, each yielding **200 / 409**,
+five committed source rows and exactly two actual visits. The real fresh standalone
+Next → Laravel → MariaDB import browser suite passed **4/4**, **85.136s**, no skips
+or API interception, at 390/768/1440px. It verifies audit field values, paper/alias
+assignments, the imported-action label/filter and real Laravel response headers.
+Its retained MariaDB source/context verification also passed. Existing UI components
+render the newly allowlisted values without a design or component change.
+
+TypeScript, full ESLint and production build passed. Pint passed for every changed
+PHP file. OpenAPI generation on both corrected code and the reviewed-class baseline
+produced **identical documents and the same nine JR001 warnings**, with no new
+warnings. `soffice` and the standard Windows LibreOffice installation remain absent:
+no LibreOffice or desktop Excel rendering is claimed. This correction changes no
+workbook formatting or print layout.
+
+Final preserving Laravel regression run: **143 tests, 16,785 assertions, zero
+failures/errors/skips**, 106.477s, 498 MiB peak with the documented ignored 1024M
+test-process config. The command is the same eleven-class affected-regression
+command above. It includes audit/history, registration and atomic saves, visit and
+clinical writers, pathology, oncology, release safeguards and Patient Card scope.
+`DossierImportTest` contributes **42 tests / 544 assertions**; the new replay/audit
+regressions contribute **15 tests / 266 assertions**, all passing. These include
+the original failing cases plus isolated dossier ownership and the valid textual
+local reference `0`. No broad-suite failure remained to attribute to the base.

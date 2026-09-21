@@ -80,6 +80,21 @@ for (const width of [390, 768, 1440]) test(`real upload, preview, explicit commi
     await (await download).saveAs(fileURLToPath(new URL(`errors-${width}.xlsx`, artifacts)));
     await page.getByRole('link', { name: 'فتح بطاقة المريض' }).first().click();
     await page.waitForURL(/patient-cards\/\d+/);
+    const history = page.locator('#dossier-change-history');
+    await history.getByRole('rowheader', { name: 'دفعة الاستيراد', exact: true }).waitFor();
+    for (const label of ['مراجع صفوف المصدر لهذه البطاقة', 'غرض الاستيراد', 'تاريخ الانتقال للنظام', 'رقم الملف الورقي', 'معرّف السياق التاريخي (غير الكود الحالي)']) {
+      await history.getByRole('rowheader', { name: label, exact: true }).first().waitFor();
+    }
+    assert.ok((await history.innerText()).includes(`000-${f.tag}-live${width}`));
+    assert.ok((await history.innerText()).includes(`LEG-${f.tag}-live${width}`));
+    const filtered = page.waitForResponse(r => r.url().includes('/audit?') && r.url().includes('action=imported'));
+    await history.getByRole('combobox', { name: 'نوع التغيير', exact: true }).selectOption('imported');
+    const auditReply = await filtered;
+    assert.equal(auditReply.status(), 200); assert.equal(auditReply.headers()['x-test-laravel'], 'dossiers');
+    const audit = await auditReply.json();
+    assert.equal(audit.meta.total, 1); assert.equal(audit.data[0].action_label, 'اعتماد استيراد');
+    assert.deepEqual(audit.data[0].changes.map(c => c.field), ['import_batch_id', 'source_rows', 'purpose', 'cutover_date']);
+    await history.getByRole('rowheader', { name: 'دفعة الاستيراد', exact: true }).waitFor();
     await page.goBack(); await page.getByRole('heading', { name: `٣. معاينة الدفعة ${id}`, exact: true }).waitFor();
     await page.locator('input[type=file]').setInputFiles(f.corrected[width]);
     const correctedReply = page.waitForResponse(r => r.url().endsWith('/hospital-api/dossiers/imports') && r.request().method() === 'POST');

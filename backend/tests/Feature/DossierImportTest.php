@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\Imports\ImportBundle;
 use App\Services\Dossiers\Imports\ImportWorkbook;
+use Database\Seeders\DossierAuditPermissionsSeeder;
 use Database\Seeders\DossierImportPermissionsSeeder;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Database\QueryException;
@@ -18,6 +19,7 @@ use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\DossierCompletionFixture;
 use Tests\TestCase;
 
@@ -84,6 +86,172 @@ class DossierImportTest extends TestCase
     private function step(array $batch, string $op): array
     {
         return $this->api('POST', '/imports/'.$batch['id'].'/'.$op, ['lock_version' => $batch['lock_version'], 'confirm' => true])->assertOk()->json('data');
+    }
+
+    private function replaySheets(): array
+    {
+        $context = ['local_visit_ref' => 'L1', 'clinic_id' => $this->f['clinics'][0], 'doctor_id' => $this->f['workflow_doctors'][0]];
+
+        return ['Patients' => [$this->patient()],
+            'Visits' => [['source_record_id' => 'V-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'L1', 'visit_date' => '2001-02-03', 'visit_type_id' => $this->f['visit_type'], 'is_referred' => 0]],
+            'Diagnoses' => [['source_record_id' => 'DX-'.$this->f['tag'], 'local_visit_ref' => 'L1', 'diagnosis_id' => $this->f['diagnosis'], 'clinic_id' => $context['clinic_id'], 'diagnosing_staff_id' => $context['doctor_id']]],
+            'Services' => [$context + ['source_record_id' => 'S-'.$this->f['tag'], 'catalog_id' => $this->f['service']]],
+            'Procedures' => [$context + ['source_record_id' => 'PR-'.$this->f['tag'], 'catalog_id' => $this->f['procedure']]],
+            'Prescriptions' => [['source_record_id' => 'RX-'.$this->f['tag'], 'local_visit_ref' => 'L1', 'prescribing_clinic_id' => $context['clinic_id'], 'prescribing_staff_id' => $context['doctor_id'], 'prescribed_on' => '2001-02-03']],
+            'Medications' => [['source_record_id' => 'M-'.$this->f['tag'], 'local_visit_ref' => 'L1', 'medication_id' => $this->f['medication'], 'display_order' => 1]],
+            'Outcomes' => [$context + ['source_record_id' => 'O-'.$this->f['tag'], 'code' => 'DOS-RX', 'outcome_on' => '2001-02-03']],
+        ];
+    }
+
+    private function clinicalCounts(): array
+    {
+        return collect(['patients', 'patient_dossiers', 'visits', 'visit_diagnoses', 'visit_services', 'visit_procedures', 'visit_prescriptions', 'visit_prescription_items', 'visit_outcomes', 'visit_medications', 'oncology_plans', 'blood_bank_events'])
+            ->mapWithKeys(fn ($table) => [$table => DB::table($table)->count()])->all();
+    }
+
+    public static function replayConflicts(): array
+    {
+        return array_map(fn ($case) => [$case], ['Diagnoses', 'Services', 'Procedures', 'Outcomes', 'Prescriptions', 'Medications', 'new-prescription', 'new-medication', 'other-patient', 'other-dossier', 'other-visit']);
+    }
+
+    #[DataProvider('replayConflicts')]
+    public function test_replay_ownership_conflicts_require_review_without_any_clinical_writes(string $case): void
+    {
+        $sheets = $this->replaySheets();
+        $first = $this->step($this->step($this->upload($sheets), 'validate'), 'commit');
+        $this->assertSame('completed', $first['status']);
+        $counts = $this->clinicalCounts();
+        if (in_array($case, ['new-prescription', 'new-medication'])) {
+            $sheets[$case === 'new-prescription' ? 'Prescriptions' : 'Medications'][0]['source_record_id'] .= '-new';
+        } elseif ($case === 'other-patient') {
+            $sheets['Patients'][0]['source_record_id'] .= '-other';
+            $sheets['Visits'][0]['source_record_id'] .= '-new';
+        } elseif ($case === 'other-dossier') {
+            $sheets['Patients'][0]['source_record_id'] .= '-other';
+        } elseif ($case === 'other-visit') {
+            $other = ['Patients' => $sheets['Patients'], 'Visits' => $sheets['Visits']];
+            $other['Visits'][0]['source_record_id'] .= '-other';
+            $this->assertSame('completed', $this->step($this->step($this->upload($other), 'validate'), 'commit')['status']);
+            $counts = $this->clinicalCounts();
+            $sheets['Visits'] = $other['Visits'];
+        } else {
+            $sheets['Visits'][0]['source_record_id'] .= '-new';
+            foreach ($sheets as $sheet => &$rows) {
+                if (! in_array($sheet, ['Patients', 'Visits', $case])) {
+                    $rows[0]['source_record_id'] .= '-new';
+                }
+            }
+            unset($rows);
+        }
+        $batch = $this->step($this->upload($sheets), 'validate');
+        $this->assertSame($counts, $this->clinicalCounts());
+        if ($batch['status'] === 'validated') {
+            // Exercise the reviewed behavior all the way through its writer, too.
+            $this->step($batch, 'commit');
+        }
+        $this->assertSame($counts, $this->clinicalCounts(), 'A replay conflict must never reach a clinical writer');
+        $this->assertSame('needs_review', $batch['status'], $case);
+        $this->assertSame(8, $batch['counts']['needs_review']);
+        $this->api('POST', '/imports/'.$batch['id'].'/commit', ['lock_version' => $batch['lock_version'], 'confirm' => true])->assertConflict();
+        $this->assertSame($counts, $this->clinicalCounts(), 'No partial person, visit or fact after rejected commit');
+    }
+
+    public static function replayReferences(): array
+    {
+        return [['L1'], ['0']];
+    }
+
+    #[DataProvider('replayReferences')]
+    public function test_replay_exact_clinical_hierarchy_skips_every_writer_but_new_same_day_sources_are_allowed(string $reference): void
+    {
+        $sheets = $this->replaySheets();
+        foreach ($sheets as $sheet => &$rows) {
+            if ($sheet !== 'Patients') {
+                $rows[0]['local_visit_ref'] = $reference;
+            }
+        }
+        unset($rows);
+        $first = $this->step($this->step($this->upload($sheets), 'validate'), 'commit');
+        $this->assertSame('completed', $first['status']);
+        $counts = $this->clinicalCounts();
+        // Different file bytes, identical parsed source values.
+        $sheets['Patients'][0]['phone'] = '';
+        $again = $this->step($this->step($this->upload($sheets), 'validate'), 'commit');
+        $this->assertSame('completed', $again['status'], json_encode($again));
+        $this->assertSame(8, $again['counts']['skipped']);
+        $this->assertSame($counts, $this->clinicalCounts());
+        foreach ($sheets as $sheet => &$rows) {
+            if ($sheet !== 'Patients') {
+                $rows[0]['source_record_id'] .= '-new';
+            }
+        }
+        unset($rows);
+        $next = $this->step($this->step($this->upload($sheets), 'validate'), 'commit');
+        $this->assertSame('completed', $next['status'], json_encode($next));
+        $this->assertSame(1, $next['counts']['skipped']);
+        foreach (['visits', 'visit_diagnoses', 'visit_services', 'visit_procedures', 'visit_prescriptions', 'visit_prescription_items', 'visit_outcomes'] as $table) {
+            $counts[$table]++;
+        }
+        $this->assertSame($counts, $this->clinicalCounts());
+    }
+
+    public function test_replay_commit_rechecks_authoritative_source_row_not_only_ledger_fingerprint(): void
+    {
+        $sheets = $this->replaySheets();
+        $first = $this->step($this->step($this->upload($sheets), 'validate'), 'commit');
+        $original = DB::table('dossier_import_rows')->where('batch_id', $first['id'])->where('sheet', 'Services')->first();
+        foreach ($sheets as $sheet => &$rows) {
+            if ($sheet !== 'Patients') {
+                $rows[0]['source_record_id'] .= '-new';
+            }
+        }
+        unset($rows);
+        $batch = $this->step($this->upload($sheets), 'validate');
+        $this->assertSame('validated', $batch['status']);
+        $counts = $this->clinicalCounts();
+        $current = DB::table('dossier_import_rows')->where('batch_id', $batch['id'])->where('sheet', 'Services')->first();
+        // Introduce unprovable ownership after preview. FK is valid, source identity is not.
+        DB::table('dossier_import_sources')->insert(['facility_id' => $this->f['facility'], 'sheet' => 'Services', 'source_record_id' => $current->source_record_id, 'fingerprint' => $current->fingerprint, 'row_id' => $original->id, 'created_at' => now(), 'updated_at' => now()]);
+        $batch = $this->step($batch, 'commit');
+        $this->assertSame($counts, $this->clinicalCounts());
+        $this->assertSame('completed_with_errors', $batch['status']);
+        $this->assertSame(8, $batch['counts']['needs_review']);
+    }
+
+    public function test_import_audit_api_exposes_allowlisted_provenance_and_separate_identity_assignments(): void
+    {
+        (new DossierAuditPermissionsSeeder)->run();
+        $permission = DB::table('permissions')->where('code', 'dossiers.audit')->value('id');
+        DB::table('role_permissions')->insertOrIgnore(['role_id' => $this->f['dossier_role'], 'permission_id' => $permission]);
+        $paper = '000-'.$this->f['tag'];
+        $alias = 'LEG-'.$this->f['tag'];
+        $batch = $this->step($this->step($this->upload(['Patients' => [$this->patient(['paper_file_number' => $paper, 'legacy_code' => $alias]), $this->patient(['source_record_id' => 'other-'.$this->f['tag'], 'local_patient_ref' => 'P2'])]]), 'validate'), 'commit');
+        $this->assertSame('completed', $batch['status']);
+        $row = $batch['rows']['data'][0];
+        $id = $row['dossier_id'];
+        $dossier = DB::table('patient_dossiers')->find($id);
+        $canonical = DB::table('patients')->where('id', $dossier->patient_id)->value('patient_code');
+        $this->assertStringStartsWith('PC-', $canonical);
+        $this->assertSame($alias, $dossier->code);
+        $audit = $this->api('GET', "/$id/audit", ['action' => 'imported'])->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.action_label', 'اعتماد استيراد')->json('data.0');
+        $changes = array_column($audit['changes'], 'after', 'field');
+        $this->assertSame(['import_batch_id' => (string) $batch['id'], 'source_rows' => (string) $row['id'], 'purpose' => 'legacy_migration', 'cutover_date' => '2026-09-01'], $changes);
+        $history = $this->api('GET', "/$id/audit", ['per_page' => 50])->assertOk()->json('data');
+        foreach (['paper_file_number' => $paper, 'code' => $alias] as $field => $value) {
+            $assignments = collect($history)->where('action', 'updated')->filter(fn ($event) => collect($event['changes'])->contains(fn ($change) => $change['field'] === $field && $change['after'] === $value && $change['before_recorded']));
+            $this->assertCount(1, $assignments, $field);
+        }
+        $created = collect($history)->where('action', 'created');
+        $this->assertCount(2, $created);
+        $this->assertTrue($created->contains(fn ($e) => collect($e['changes'])->contains(fn ($c) => $c['field'] === 'first_name' && $c['after'] === 'مريض اصطناعي')));
+        $this->assertSame($canonical, DB::table('patients')->where('id', $dossier->patient_id)->value('patient_code'));
+        foreach (['encrypted_payload', 'private_path', 'fingerprint', 'file_hash', 'storage_key'] as $hidden) {
+            $this->assertStringNotContainsString($hidden, json_encode($history));
+        }
+        $this->api('GET', "/$id/audit", ['facility_id' => $this->f['other']])->assertForbidden();
+        $this->api('GET', '/imports/'.$batch['id'], ['facility_id' => $this->f['other']])->assertForbidden();
+        DB::table('role_permissions')->where('role_id', $this->f['dossier_role'])->where('permission_id', $permission)->delete();
+        $this->api('GET', "/$id/audit")->assertForbidden();
     }
 
     public function test_legacy_onboarding_has_no_invented_visit_and_is_retry_safe(): void
