@@ -115,7 +115,7 @@ visit facts and independently recorded dispensing retain their existing meaning.
 Historical void attempts retain their own immutable revision even after a resolved
 appointment moves forward. Active/completed administrations cannot be moved.
 
-Normalized meaningful fields and ordered regimen items detect accidental duplicates.
+Normalized modality, intent, protocol text and the two clinic doctors detect accidental duplicates. Plans no longer store regimen lines, a date window, or cycle counts; each dose date is explicit.
 No-op amendment returns `422 ONCOLOGY_NO_CLINICAL_CHANGE`, without changing version
 or approval. An identical open plan in the same dossier/facility returns
 `409 ONCOLOGY_DUPLICATE_PLAN` and scoped `error.existing_plan_id`. Intentional
@@ -225,6 +225,9 @@ No old migration was changed. It adds `oncology_plans`, `oncology_plan_revisions
 `oncology_regimen_items`, `oncology_sessions`, and nullable scoped links/metadata to
 the three reused clinical tables. It preserves old data and infers no clinical
 backfill. Doctor/clinic reference inventories include the new FK references.
+`2026_09_22_000003_simplify_treatment_plan_fields.php` later drops the regimen table
+and the unused plan columns. Protocol text and the two doctor pairs stay required.
+Dropped values are not kept, and rollback refuses while any revision exists.
 
 The corrective follow-up is
 `2026_09_21_000001_preserve_voided_oncology_administrations.php`. It adds a nullable

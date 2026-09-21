@@ -43,23 +43,15 @@ class OncologyReports
         if (! $individualVisit) {
             $plans = app(OncologyQueries::class)->plans($f)->where('p.dossier_id', $dossier)->select('p.*')->selectRaw(OncologyQueries::effectiveSql().' AS effective_status')->limit($max + 1)->get()->keyBy('id');
             $check($plans->count());
-            $revisions = DB::table('oncology_plan_revisions as r')->join('clinics as c', 'c.id', '=', 'r.clinic_id')->join('staff as s', 's.id', '=', 'r.doctor_id')->whereIn('r.plan_id', $plans->keys())->orderBy('r.plan_id')->orderBy('r.revision_number')->limit($max + 1)->get(['r.*', 'c.name_ar as clinic', 's.full_name as doctor']);
+            $revisions = DB::table('oncology_plan_revisions as r')->join('clinics as pc', 'pc.id', '=', 'r.protocol_clinic_id')->join('staff as pd', 'pd.id', '=', 'r.protocol_doctor_id')->join('clinics as tc', 'tc.id', '=', 'r.treating_clinic_id')->join('staff as td', 'td.id', '=', 'r.treating_doctor_id')->whereIn('r.plan_id', $plans->keys())->orderBy('r.plan_id')->orderBy('r.revision_number')->limit($max + 1)->get(['r.*', 'pc.name_ar as protocol_clinic', 'pd.full_name as protocol_doctor', 'tc.name_ar as treating_clinic', 'td.full_name as treating_doctor']);
             $check($revisions->count());
             $rows = [];
             foreach ($revisions as $r) {
                 $p = $plans[$r->plan_id];
-                array_push($rows, ...$this->facts($p->plan_number.' / '.$r->revision_number, ['حالة الخطة الحالية' => OncologyQueries::STATUSES[$p->effective_status], 'النية' => OncologyQueries::INTENTS[$r->intent], 'النمط' => OncologyQueries::MODALITIES[$r->modality], 'البروتوكول' => $r->protocol_name, 'كود البروتوكول' => $r->protocol_code, 'التشخيص المحفوظ' => $r->diagnosis_snapshot, 'بداية مخططة' => $r->starts_on, 'نهاية مخططة' => $r->ends_on, 'عدد الدورات' => $r->planned_cycles, 'عدد الجلسات' => $r->planned_sessions, 'الفاصل بالأيام' => $r->interval_days, 'الطبيب' => $r->doctor, 'العيادة' => $r->clinic, 'مبرر التعديل' => $r->amendment_reason, 'ملاحظة' => $r->note, 'أساس الاعتماد الحالي' => DossierPathology::DISPOSITIONS[$p->basis_disposition] ?? 'غير معتمد', 'استثناء التشريح' => $p->override_reason, 'سبب آخر إجراء' => $p->status_reason, 'تاريخ المراجعة' => $p->reviewed_at], ['بداية مخططة' => 'date', 'نهاية مخططة' => 'date', 'عدد الدورات' => 'integer', 'عدد الجلسات' => 'integer', 'الفاصل بالأيام' => 'integer', 'تاريخ المراجعة' => 'datetime']));
+                array_push($rows, ...$this->facts($p->plan_number.' / '.$r->revision_number, ['حالة الخطة الحالية' => OncologyQueries::STATUSES[$p->effective_status], 'النية' => OncologyQueries::INTENTS[$r->intent], 'النمط' => OncologyQueries::MODALITIES[$r->modality], 'البروتوكول' => $r->protocol_text, 'طبيب البروتوكول' => $r->protocol_doctor, 'عيادة البروتوكول' => $r->protocol_clinic, 'الطبيب المعالج' => $r->treating_doctor, 'عيادة الطبيب المعالج' => $r->treating_clinic, 'أساس الاعتماد الحالي' => DossierPathology::DISPOSITIONS[$p->basis_disposition] ?? 'غير معتمد', 'استثناء التشريح' => $p->override_reason, 'سبب آخر إجراء' => $p->status_reason, 'تاريخ المراجعة' => $p->reviewed_at], ['تاريخ المراجعة' => 'datetime']));
             }
             $check(count($rows));
             $result[] = $this->section('الخطط العلاجية ونسخها', $rows);
-            $items = DB::table('oncology_regimen_items as i')->join('oncology_plan_revisions as r', 'r.id', '=', 'i.revision_id')->join('oncology_plans as p', 'p.id', '=', 'r.plan_id')->leftJoin('funding_sources as f', 'f.id', '=', 'i.funding_source_id')->where('p.dossier_id', $dossier)->where('p.facility_id', $f['id'])->orderBy('i.revision_id')->orderBy('i.display_order')->limit($max + 1)->get(['i.*', 'p.plan_number', 'r.revision_number', 'f.name_ar as funding']);
-            $check($items->count());
-            $rows = [];
-            foreach ($items as $i) {
-                array_push($rows, ...$this->facts($i->plan_number.' / '.$i->revision_number, ['دواء مخطط فقط' => $i->medication_name_snapshot, 'كود محفوظ' => $i->medication_code_snapshot, 'جرعة مخططة' => $i->dose_value, 'وحدة الجرعة' => $i->dose_unit, 'طريق الإعطاء' => $i->route, 'التعليمات' => $i->instructions, 'التمويل' => $i->funding, 'ملاحظة' => $i->note], ['جرعة مخططة' => 'decimal']));
-            }
-            $check(count($rows));
-            $result[] = $this->section('بنود النظام العلاجي المخططة', $rows);
             $sessions = DB::table('oncology_sessions as s')->leftJoin('oncology_plans as p', 'p.id', '=', 's.plan_id')->leftJoin('oncology_plan_revisions as r', 'r.id', '=', 's.revision_id')->leftJoin('dose_sessions as dose', fn ($j) => $j->on('dose.oncology_session_id', '=', 's.id')->whereNull('dose.voided_at'))->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->orderBy('s.planned_on')->orderBy('s.id')->limit($max + 1)->get(['s.*', 'p.plan_number', 'r.revision_number', 'dose.visit_id', 'dose.administered_on', DB::raw(OncologyQueries::voidedDoseSql())]);
             $check($sessions->count());
             $rows = [];
