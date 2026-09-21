@@ -32,7 +32,6 @@ class DossierWorkflowFixture
             DB::table('staff')->where('id', $id)->update(['staff_type_id' => $type]);
             DB::table('clinic_staff')->insert(['clinic_id' => $clinic, 'staff_id' => $id, 'starts_on' => '1990-01-01']);
         }
-        $f['visit_type'] = DB::table('visits')->where('id', $f['latest_visit'])->value('visit_type_id');
         $f['diagnosis'] = DB::table('diagnoses')->where('code', 'DOS-DX-01')->value('id');
 
         return $f;

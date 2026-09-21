@@ -17,7 +17,7 @@ class DossierWizardQueries
             $context = app(DossierWorkflowActions::class)->forDossiers($f, [$d])[$id];
             $progress = $context['progress'];
             $visitId = $newVisit ? null : ($selected ?? $context['initial_visit']?->id);
-            $visit = $visitId ? DB::table('visits')->where('id', $visitId)->where('dossier_id', $id)->where('patient_id', $d['patient_id'])->where('facility_id', $f['id'])->whereNull('voided_at')->first(['id', 'visit_no', 'visit_date', 'visit_type_id', 'dossier_visit_kind', 'clinic_id', 'attending_staff_id', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason', 'lock_version', 'status']) : null;
+            $visit = $visitId ? DB::table('visits')->where('id', $visitId)->where('dossier_id', $id)->where('patient_id', $d['patient_id'])->where('facility_id', $f['id'])->whereNull('voided_at')->first(['id', 'visit_no', 'visit_date', 'dossier_visit_kind', 'clinic_id', 'attending_staff_id', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason', 'lock_version', 'status']) : null;
             if ($selected) {
                 abort_unless($visit, 404);
             }

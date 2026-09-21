@@ -70,7 +70,7 @@ class DossierWizardController extends Controller
         $f = $this->scope($r);
         $caps = $f['capabilities'];
 
-        return response()->json(['data' => ['capabilities' => $caps, 'creation' => DossierWorkflowActions::creation($caps), 'today' => $f['today'], 'governorates' => DB::table('governorates')->where('country_code', 'SY')->orderBy('name_ar')->get(['id', 'name_ar']), 'visit_types' => DB::table('visit_types')->where('is_active', true)->orderBy('display_order')->orderBy('code')->get(['id', 'code', 'name_ar'])]]);
+        return response()->json(['data' => ['capabilities' => $caps, 'creation' => DossierWorkflowActions::creation($caps), 'today' => $f['today'], 'governorates' => DB::table('governorates')->where('country_code', 'SY')->orderBy('name_ar')->get(['id', 'name_ar'])]]);
     }
 
     public function lookup(Request $r): JsonResponse
@@ -116,7 +116,9 @@ class DossierWizardController extends Controller
         }
         $page = $q->orderBy('name_ar')->orderBy('id')->paginate(20);
 
-        return response()->json(['data' => $page->items(), 'meta' => CatalogQueries::meta($page)]);
+        return response()->json(['data' => $page->items(), 'meta' => CatalogQueries::meta($page)] + ($kind === 'doctors' ? [
+            'doctor_types_configured' => DB::table('staff_types')->whereIn('code', config('clinics.doctor_staff_types', []))->where('is_active', true)->exists(),
+        ] : []));
     }
 
     public function diagnosis(Request $r): JsonResponse

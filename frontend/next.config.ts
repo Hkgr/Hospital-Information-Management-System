@@ -58,6 +58,7 @@ const nextConfig: NextConfig = {
       "dossiers/:dossier(\\d+)/visits/:visit(\\d+)/uploads/:upload(\\d+)/cancel",
       "dossiers/:dossier(\\d+)/visits/:visit(\\d+)/attachments/:attachment(\\d+)/download",
       "dossiers/:dossier(\\d+)/visits/:visit(\\d+)/attachments/:attachment(\\d+)/void",
+      "dossiers/visits",
       "dossiers/options", "dossiers/options/patients", "dossiers/options/cities", "dossiers/options/clinics", "dossiers/options/doctors", "dossiers/options/diagnoses", "dossiers/diagnoses",
       "dossiers/:dossier(\\d+)/progress", "dossiers/:dossier(\\d+)/personal", "dossiers/:dossier(\\d+)/medical",
       "dossiers", "dossiers/:dossier(\\d+)", "dossiers/:dossier(\\d+)/visits", "dossiers/:dossier(\\d+)/visits/:visit(\\d+)",

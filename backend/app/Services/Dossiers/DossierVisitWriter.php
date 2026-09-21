@@ -43,10 +43,7 @@ class DossierVisitWriter
             if ($input['visit_date'] > $f['today']) {
                 throw ValidationException::withMessages(['visit_date' => 'لا يمكن تسجيل زيارة فعلية مستقبلية.']);
             }
-            if ((! $old || $old->visit_type_id != $input['visit_type_id']) && ! DB::table('visit_types')->where('id', $input['visit_type_id'])->where('is_active', true)->exists()) {
-                throw ValidationException::withMessages(['visit_type_id' => 'اختر نوع زيارة فعالًا من الدليل.']);
-            }
-            $fields = Arr::only($input, ['visit_date', 'visit_type_id', 'is_referred']) + ['referring_hospital' => $input['is_referred'] ? $input['referring_hospital'] : null, 'referral_date' => $input['is_referred'] ? $input['referral_date'] : null, 'referral_reason' => $input['is_referred'] ? $input['referral_reason'] : null, 'updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($old?->lock_version ?? 0) + 1];
+            $fields = Arr::only($input, ['visit_date', 'is_referred']) + ['referring_hospital' => $input['is_referred'] ? $input['referring_hospital'] : null, 'referral_date' => $input['is_referred'] ? $input['referral_date'] : null, 'referral_reason' => $input['is_referred'] ? $input['referral_reason'] : null, 'updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($old?->lock_version ?? 0) + 1];
             if ($id) {
                 DB::table('visits')->where('id', $id)->update($fields);
             } else {

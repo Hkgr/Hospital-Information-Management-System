@@ -9,11 +9,13 @@ import { apiRequest, AuthError } from "../auth/api";
 import { directoryFacility } from "../directory/facilityContext";
 import { DirectoryBack } from "../directory/DirectoryPrimitives";
 import { useClinicRequest } from "../clinics/api";
-import Picker from "../blood-bank/Picker";
+import Picker from "./DossierPicker";
 import ConflictReview from "../blood-bank/ConflictReview";
 import { type Choice, choices } from "../blood-bank/api";
 import { historyLabels, treatmentLabels, sourceLabels } from "./api";
 import { type Fields, type Snapshot, type WizardOptions, type DiagnosisDraft, personalFields, medicalFields, visitFields, diagnosisFields, diagnosisPayload, personalLabels, medicalLabels, visitLabels } from "./wizard";
+import ExistingCardChooser from "./ExistingCardChooser";
+import WorkspaceClinical from "./WorkspaceClinical";
 import DiagnosisEditor from "./DiagnosisEditor";
 import ClinicalEditor from "./ClinicalEditor";
 import ClinicalConflict from "./ClinicalConflict";
@@ -22,22 +24,25 @@ import { clinicalDraft, clinicalPayload } from "./clinical";
 import styles from "../clinics/clinics.module.css";
 import layout from "./wizard.module.css";
 
-const steps = ["البيانات الشخصية", "المعلومات الطبية والورمية", "الزيارة والتشخيصات", "الخدمات والإجراءات", "الأدوية والنتيجة", "المرفقات والمراجعة"];
+const steps = ["البيانات الشخصية", "المعلومات الطبية والورمية", "الزيارة والتشخيصات", "الخدمات والإجراءات", "الأدوية والنتيجة", "المرفقات والمراجعة", "التقييم والتشريح المرضي", "الخطة ومواعيد العلاج", "الإعطاء والصرف الفعلي"];
 const codes = ["personal", "medical", "visit", "clinical", "medications", "attachments"];
-export default function DossierWizard({ id }: { id?: string }) {
+export default function DossierWizard({ id: legacyId }: { id?: string }) {
   const { access, user } = useIdentity(); const params = useSearchParams();
+  const id = legacyId ?? params.get("card") ?? undefined;
+  const selectedVisit = params.get("visit");
   const { entry } = directoryFacility(access, "dossiers.view", params.get("facility_id"));
-  if (!entry || (id && !/^[1-9]\d*$/.test(id))) return <section className={styles.status}><h2>تعذّر فتح بطاقة المريض</h2><p role="alert">اختر رابطًا صحيحًا لمشفى تملك صلاحية بطاقات مرضاه، أو راجع مسؤول الصلاحيات.</p></section>;
+  if (!entry || (id && !/^[1-9]\d*$/.test(id)) || (selectedVisit && (selectedVisit !== "new" && !/^[1-9]\d*$/.test(selectedVisit) || !id))) return <section className={styles.status}><h2>تعذّر فتح بطاقة المريض</h2><p role="alert">اختر رابطًا صحيحًا لمشفى تملك صلاحية بطاقات مرضاه، أو راجع مسؤول الصلاحيات.</p></section>;
   return <div className={styles.screen}><div className={styles.context}><LuHospital aria-hidden="true" /><span>المشفى</span><strong>{entry.facility.name_ar}</strong></div><Loader key={`${user.id}:${entry.facility.id}:${id ?? "new"}`} facility={entry.facility.id} id={id} /></div>;
 }
 function Loader({ facility, id }: { facility: number; id?: string }) {
-  const selected=useSearchParams().get("visit");
+  const query=useSearchParams(); const selected=query.get("visit");
   const route=selected === "new" ? "visits/new" : selected && /^[1-9]\d*$/.test(selected) ? `visits/${selected}/progress` : "progress";
   const options = useClinicRequest<WizardOptions>(`dossiers/options?facility_id=${facility}`);
   const record = useClinicRequest<Snapshot>(id ? `dossiers/${id}/${route}?facility_id=${facility}` : null);
   if (options.error || record.error) return <p role="alert">{options.error ?? record.error} <button className={styles.secondary} onClick={() => { options.retry(); record.retry(); }}>إعادة المحاولة</button></p>;
   if (!options.data || (id && !record.data)) return <p role="status">جارٍ تحميل بطاقة المريض والخيارات…</p>;
-  if (!id && !options.data.creation.allowed) return <p role="alert">{options.data.creation.reason}</p>;
+  if (!id && query.get("intent") !== "visit" && !options.data.creation.allowed) return <p role="alert">{options.data.creation.reason}</p>;
+  if (!id && query.get("intent") === "visit") return <ExistingCardChooser facility={facility} />;
   return <WizardForm key={`${id??"new"}:${selected??"initial"}`} facility={facility} options={options.data} initial={record.data} />;
 }
 function WizardForm({ facility, options, initial }: { facility: number; options: WizardOptions; initial?: Snapshot }) {
@@ -45,17 +50,20 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
   const [base, setBase] = useState(initial); const [step, setStep] = useState(() => {
     if (!initial) return 0;
     const requested = params.get("section");
-    if (initial.visit?.dossier_visit_kind==="subsequent" || params.get("visit")==="new") return requested && /^[2-5]$/.test(requested)?Number(requested):2;
-    return requested && /^[0-5]$/.test(requested) ? Number(requested) : initial.workflow.resume_section ?? 0;
+    if (!initial.visit && requested && Number(requested) > 2) return 2;
+    if (initial.visit?.dossier_visit_kind==="subsequent" || params.get("visit")==="new") return requested && /^[2-8]$/.test(requested)?Number(requested):2;
+    return requested && /^[0-8]$/.test(requested) ? Number(requested) : initial.workflow.resume_section ?? 0;
   });
   const [sectionVersions, setSectionVersions] = useState([initial?.lock_version ?? 0, initial?.lock_version ?? 0, ...Array<number>(4).fill(initial?.visit?.lock_version ?? 0)]);
   const [clinical,setClinical]=useState(()=>clinicalDraft(initial));
+  const [tools,setTools]=useState<number[]>([]);
+  const [clinicalRevision,setClinicalRevision]=useState(0);
   const [uploadsPending,setUploadsPending]=useState(false);
   const [reviewed,setReviewed]=useState(false);
   const subsequent=initial?.visit?.dossier_visit_kind === "subsequent" || (params.get("visit")==="new" && initial?.status==="active");
   const [patientVersion, setPatientVersion] = useState(initial?.patient.lock_version ?? 0);
   const [personal, setPersonal] = useState(() => personalFields(initial)); const [medical, setMedical] = useState(() => medicalFields(initial)); const [visit, setVisit] = useState(() => visitFields(initial)); const [diagnoses, setDiagnoses] = useState(() => diagnosisFields(initial));
-  const [mode, setMode] = useState(options.capabilities.patients_search ? "existing" : "new"); const [patient, setPatient] = useState<(Choice & { dossier_id?: number | null }) | null>(null);
+  const [mode, setMode] = useState(options.capabilities.patients_create ? "new" : "existing"); const [patient, setPatient] = useState<(Choice & { dossier_id?: number | null }) | null>(null);
   const [busy, setBusy] = useState(false); const [saved, setSaved] = useState(""); const [dirty, setDirty] = useState<number[]>([]);
   const [error, setError] = useState<AuthError | null>(null); const [review, setReview] = useState<Snapshot | null>(null); const [reloadError, setReloadError] = useState("");
   const pending = useRef<AbortController | null>(null); const reservation = useRef<{ body: string; id: string } | null>(null); const form = useRef<HTMLFormElement>(null); const heading = useRef<HTMLHeadingElement>(null);
@@ -68,6 +76,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
     focusError.current = false;
     const key = Object.keys(error.fields)[0];
     const el = key ? form.current?.querySelector<HTMLElement>(`[name="${CSS.escape(key)}"]`) : null;
+    for(let parent=el?.parentElement;parent;parent=parent.parentElement){if(parent instanceof HTMLDetailsElement)parent.open=true;}
     (el ?? form.current?.querySelector<HTMLElement>('[role="alert"]'))?.focus(); el?.scrollIntoView({ block: "center", behavior: "instant" });
   }, [error]);
   useEffect(() => {
@@ -87,21 +96,21 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
   const touch = () => { setDirty(v => v.includes(step) ? v : [...v, step]); setSaved(""); };
   const fieldError = (key: string) => error?.fields[key] ? <small className={layout.error} role="alert">{error.fields[key]}</small> : null;
   const changed = (setter: React.Dispatch<React.SetStateAction<Fields>>, key: string, value: string) => { touch(); setter(d => ({ ...d, [key]: value })); setError(previous => { if (previous?.status !== 422 || !previous.fields[key]) return previous; const fields = Object.fromEntries(Object.entries(previous.fields).filter(([k]) => k !== key)); return Object.keys(fields).length ? new AuthError(previous.status, previous.code, previous.message, fields) : null; }); };
-  const go = (next: number) => { if (busy || (error?.status === 409) || review || (!base && next > 0) || next > 5 || (next>2&&!base?.visit) || (subsequent&&next<2)) return; setStep(next); setError(null); };
-  const back = new URLSearchParams(params.toString()); back.set("facility_id", String(facility)); back.delete("section"); back.delete("visit");
-  const listHref = `/patient-cards?${back}`;
+  const go = (next: number) => { if (busy || (error?.status === 409) || review || (!base && next > 0) || next > 8 || (next>2&&!base?.visit) || (subsequent&&next<2)) return; setStep(next); if(next>5)setTools(v=>v.includes(next)?v:[...v,next]); setError(null); };
+  const back = new URLSearchParams(params.toString()); back.set("facility_id", String(facility)); back.delete("section"); back.delete("visit"); back.delete("card"); back.delete("intent");
+  const listHref = `${params.get("return_to")==="visits"?"/visits":"/patient-cards"}?${back}`;
   const existingDossier = !base && mode === "existing" ? patient?.dossier_id ?? (error?.code === "DOSSIER_ALREADY_EXISTS" ? error.details.existing_dossier_id : null) : null;
   const chooseAnother = () => { setPatient(null); setError(null); reservation.current = null; touch(); };
   const allowed = step === 0 ? (base ? base.workflow.personal_update : options.creation.allowed && !existingDossier && (mode === "new" ? caps.patients_create : caps.patients_search)) : step === 1 ? base?.workflow.medical_update : step===2 ? !!base?.workflow.visit.action : !!base?.workflow.sections?.[step];
   const input = (fields: Fields, setter: React.Dispatch<React.SetStateAction<Fields>>, labels: Fields, key: string, type = "text", required = false) => <label key={key}>{labels[key]}{required && " *"}<input name={key} aria-label={labels[key]} aria-invalid={!!error?.fields[key]} type={type} value={fields[key] ?? ""} maxLength={type === "text" ? (key === "code" ? 40 : 200) : undefined} onChange={e => changed(setter, key, e.target.value)} />{fieldError(key)}</label>;
   async function save(exit: boolean) {
-    if (pending.current || !allowed || review || error?.status === 409 || uploadsPending || (step===5&&dirty.some(n=>n!==5))) return;
+    if (step>5 || pending.current || !allowed || review || error?.status === 409 || uploadsPending || (step===5&&dirty.some(n=>n!==5))) return;
     const controller = new AbortController(); pending.current = controller; setBusy(true); setError(null); setSaved("");
     let body: Record<string, unknown>={}; let path: string="";
     if (step === 0) {
       body = { opening_date: personal.opening_date };
       if (base || mode === "new") body.code = personal.code;
-      if (!base) Object.assign(body, { visit_date: visit.visit_date, visit_type_id: visit.visit_type_id || null });
+      if (!base) Object.assign(body, { visit_date: visit.visit_date });
       if (!base) { body.person_mode = mode; if (mode === "existing") body.patient_id = patient?.id; }
       if (base || mode === "new") for (const key of Object.keys(personalLabels).filter(k => !["code", "opening_date"].includes(k))) body[key] = personal[key] || null;
       if (base) { body.lock_version = sectionVersions[0]; body.patient_lock_version = patientVersion; }
@@ -111,7 +120,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
       if (medical.is_oncology === "yes") Object.assign(body, { history: JSON.parse(medical.history), treatment: JSON.parse(medical.treatment), previous_examinations: medical.previous_examinations || null, medication_source: medical.medication_source || null, other_organization: medical.medication_source === "other_organization" ? medical.other_organization || null : null });
       path = `dossiers/${base!.id}/medical`;
     } else if (step===2) {
-      body = { visit_date: visit.visit_date, visit_type_id: visit.visit_type_id || null, is_referred: visit.is_referred === "yes", diagnoses: diagnoses.map(diagnosisPayload) };
+      body = { visit_date: visit.visit_date, is_referred: visit.is_referred === "yes", diagnoses: diagnoses.map(diagnosisPayload) };
       if (visit.is_referred === "yes") Object.assign(body, { referring_hospital: visit.referring_hospital, referral_date: visit.referral_date, referral_reason: visit.referral_reason });
       if (base!.visit) body.lock_version = sectionVersions[2];
       path = `dossiers/${base!.id}/visits${base!.visit ? `/${base!.visit.id}` : subsequent ? "/subsequent" : ""}`;
@@ -130,8 +139,8 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
       if (step === 0) setPersonal(personalFields(result));
       if (step === 1) setMedical(medicalFields(result));
       if (step === 2) { setVisit(visitFields(result)); setDiagnoses(diagnosisFields(result)); }
-      const url = `/patient-cards/${result.id}/edit?${back}`;
-      if (!base) window.history.replaceState(null, "", url);
+      const url = `/patient-cards/new?${back}&card=${result.id}`;
+      if (!base) window.history.replaceState(null, "", `${url}&section=1`);
       if(subsequent&&!base?.visit)window.history.replaceState(null,"",`${url}&visit=${result.visit!.id}&section=3`);
       if (exit&&!dirty.some(n=>n!==step)) router.push(listHref);
       else if(exit)setSaved("حُفظ هذا القسم؛ احفظ التغييرات في الأقسام الأخرى قبل الخروج.");
@@ -156,31 +165,35 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
   }
   const state = (index: number) => index === step && error ? "error" : dirty.includes(index) ? "in_progress" : base?.progress.find(p => p.section === codes[index])?.state ?? "not_started";
   return <div className={layout.wizard}>
-    <DirectoryBack href={listHref}>العودة إلى بطاقات المرضى</DirectoryBack>
-    <header className={styles.heading}><div><h2>{base ? `استكمال بيانات البطاقة ${base.code}` : mode === "existing" ? "إضافة زيارة لمريض موجود" : "تسجيل بطاقة مريض"}</h2><p>احفظ كل قسم، وتابع عندما تكون جاهزًا.</p></div>{base && <span className={styles.badge}>{base.status === "draft" ? "مسودة" : "فعالة"}</span>}</header>
-    <ol className={layout.progress} aria-label="مراحل بطاقة المريض">{steps.map((label, i) => <li key={label}><button type="button" aria-current={i === step ? "step" : undefined} data-state={state(i)} disabled={(subsequent&&i<2) || (i>2&&!base?.visit) || (!base && i > 0) || busy || !!review || error?.status === 409} onClick={() => go(i)}><span aria-hidden="true">{state(i) === "saved" ? <LuCheck /> : i + 1}</span><strong>{label}</strong><small>{i === step ? "القسم الحالي" : state(i) === "saved" ? "محفوظ" : state(i) === "in_progress" ? "قيد الاستكمال" : "لم يبدأ بعد"}</small></button></li>)}</ol>
-    <div className={layout.summary}>{base ? <><div><strong>{base.patient.first_name} {base.patient.family_name}</strong><p>كود المريض <bdi>{base.patient.patient_code}</bdi> </p></div><span className={styles.hint}>هوية المريض مرتبطة؛ لا يمكن استبدالها من المعالج.</span></> : <p>{mode === "existing" ? "اختر بطاقة المريض الموجودة؛ تسجيل زيارته في هذا المشفى لا ينشئ هوية أو كودًا آخر." : "لم تُحفظ بطاقة بعد. الحفظ الأول يسجّل المريض وزيارته الفعلية المسودة معًا؛ أكمل التاريخ والنوع قبل الحفظ."}</p>}</div>
-    <form ref={form} className={`${styles.form} ${layout.form}`} noValidate onSubmit={e => { e.preventDefault(); void save(false); }}>
+    <DirectoryBack href={listHref}>{params.get("return_to")==="visits"?"العودة إلى الزيارات":"العودة إلى بطاقات المرضى"}</DirectoryBack>
+    <header className={styles.heading}><div><h2>{base ? `مساحة عمل المريض · ${base.code}` : "تسجيل بطاقة المريض وزيارته الأولى"}</h2><p>بيانات البطاقة ثابتة للمريض؛ التشخيص والخدمات والعلاج تخص الزيارة المحددة.</p></div>{base && <span className={styles.badge}>{base.status === "draft" ? "مسودة" : "فعالة"}</span>}</header>
+    {!base && <nav className={layout.entryModes} aria-label="عملية التسجيل"><span aria-current="page">بطاقة جديدة وزيارتها الأولى</span><Link href={`/patient-cards/new?facility_id=${facility}&intent=visit&return_to=visits`}>زيارة لبطاقة موجودة</Link></nav>}
+    <label className={layout.mobileStages}>القسم الحالي<select value={step} onChange={e=>go(Number(e.target.value))}>{steps.map((label,i)=>(!(subsequent&&i<2)&&(i<6||!!base?.visit&&(i===6||!!caps.treatment_view&&(!!base.medical.is_oncology||step===i))))&&<option key={i} value={i} disabled={(!base&&i>0)||(i>2&&!base?.visit)||(i>5&&(dirty.length>0||uploadsPending))}>{label}</option>)}</select></label>
+    <div className={layout.workbench}><nav className={layout.stageRail} aria-label="مراحل مساحة العمل">
+    {[{title:"بطاقة المريض",indices:[0,1],tone:"card"},{title:"الزيارة الحالية",indices:[2,3,4],tone:"visit"},{title:"التقييم والعلاج",indices:[6,...(caps.treatment_view&&(base?.medical.is_oncology||step>6)?[7,8]:[])],tone:"treatment"},{title:"المراجعة والحفظ",indices:[5],tone:"review"}].map(group=><section key={group.tone} data-tone={group.tone}><h3>{group.title}</h3><ol className={layout.progress} aria-label={group.title}>{group.indices.filter(i=>!(subsequent&&i<2)&&(!(i>5)||!!base?.visit)).map(i=><li key={i}><button type="button" aria-current={i===step?"step":undefined} data-state={state(i)} disabled={(i>2&&!base?.visit)||(!base&&i>0)||busy||!!review||error?.status===409||(i>5&&(dirty.length>0||uploadsPending))} onClick={()=>go(i)}><span aria-hidden="true">{state(i)==="saved"?<LuCheck/>:i>5?"＋":i+1}</span><strong>{steps[i]}</strong><small>{i===step?"القسم الحالي":dirty.includes(i)?"تعديلات غير محفوظة":state(i)==="saved"?"محفوظ":i>5?"حسب حاجة المريض":"متاح للاستكمال"}</small></button></li>)}</ol></section>)}
+    </nav><div className={layout.workContent}>
+    <div className={layout.summary}>{base ? <><div><strong>{base.patient.first_name} {base.patient.family_name}</strong><p>كود المريض <bdi>{base.patient.patient_code}</bdi> </p></div><div><strong>{base.visit?`الزيارة: ${String(base.visit.visit_date)}`:"زيارة جديدة لم تُحفظ"}</strong><p>{base.visit?.status==="complete"?"زيارة مكتملة":"مسودة زيارة"} · {base.medical.is_oncology?"مريض ورمي":"رعاية عامة"}</p></div></> : <p>{mode === "existing" ? "اختر بطاقة المريض الموجودة؛ تسجيل زيارته في هذا المشفى لا ينشئ هوية أو كودًا آخر." : "لم تُحفظ بطاقة بعد. الحفظ الأول يسجّل المريض وزيارته الفعلية المسودة معًا؛ أدخل تاريخ الزيارة الفعلي قبل الحفظ."}</p>}</div>
+    <form ref={form} className={`${styles.form} ${layout.form}`} hidden={step>5} noValidate onSubmit={e => { e.preventDefault(); void save(false); }}>
       {error && <div role="alert" tabIndex={-1} className={styles.conflict}><strong>{error.code === "DOSSIER_ALREADY_EXISTS" ? "للمريض بطاقة في هذا المشفى؛ مسودتك لم تُحفظ ولم تُفقد." : error.message}</strong>{error.status === 409 && error.code !== "DOSSIER_ALREADY_EXISTS" && <><p>لن تُستبدل البيانات تلقائيًا. اجلب النسخة الحالية لاختيار ما تريد تطبيقه من مسودتك.</p><button type="button" className={styles.secondary} disabled={busy} onClick={() => void reload()}>جلب أحدث نسخة</button></>}{reloadError && <p>{reloadError}</p>}</div>}
       {review && step<3 && <WizardConflict step={step} latest={review} personal={personal} medical={medical} visit={visit} diagnoses={diagnoses} onAccept={(fields, rows) => { setSectionVersions(v => v.map((version, i) => i === step ? (step<2?review.lock_version:review.visit?.lock_version??0) : version)); if (step === 0) setPatientVersion(review.patient.lock_version); if (step === 0) setPersonal(fields); else if (step === 1) setMedical(fields); else { setVisit(fields); setDiagnoses(rows ?? []); } setBase(previous => ({ ...review, ...(step === 2 && previous ? { lock_version: previous.lock_version } : {}), ...(step !== 2 && previous ? { visit: previous.visit, workflow: { ...review.workflow, visit: previous.workflow.visit } } : {}) })); setReview(null); setError(null); reservation.current = null; touch(); }} />}
       {review && step>=3 && step<5 && <ClinicalConflict step={step} latest={review} draft={clinical} onAccept={value=>{setClinical(old=>({...old,...(step===3?{services:value.services,procedures:value.procedures}:{prescription:value.prescription,outcome:value.outcome})}));setSectionVersions(v=>v.map((version,i)=>i===step?review.visit!.lock_version:version));setBase(review);setReview(null);setError(null);reservation.current=null;touch();}}/>}
       {review && step===5 && <div className={styles.conflict}><p>راجع البيانات الحالية في ملخص المراجعة قبل تأكيدها مجددًا.</p><button type="button" className={styles.secondary} onClick={()=>{acceptServer(review,5);setReview(null);setError(null);setReviewed(false);reservation.current=null;}}>جلب البيانات الحالية لإعادة المراجعة</button></div>}
-      <fieldset disabled={busy || !!review} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+      <fieldset disabled={busy || !!review || (!!base && !allowed)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <section className={layout.section}><div><h3 ref={heading} tabIndex={-1}>{steps[step]}</h3><p className={styles.hint}>الحقول المعلّمة بنجمة مطلوبة. تبقى الأقسام اللاحقة محفوظة عند العودة.</p></div>
           {step === 0 && <>
             <div className={styles.fields}>{base ? <label>كود المريض<input name="code" value={personal.code} readOnly /><small>الكود الموحد ثابت.</small></label> : mode === "new" && input(personal, setPersonal, personalLabels, "code", "text", true)}{input(personal, setPersonal, personalLabels, "opening_date", "date", true)}</div>
-            {!base && !existingDossier && <div className={styles.fields}><h4 className={layout.subheading}>أول زيارة مسجلة ضمن البطاقة</h4>{input(visit, setVisit, visitLabels, "visit_date", "date", true)}<label>نوع الزيارة *<select name="visit_type_id" value={visit.visit_type_id} onChange={e => changed(setVisit, "visit_type_id", e.target.value)}><option value="">اختر نوع الزيارة</option>{options.visit_types.map(t => <option key={t.id} value={t.id}>{t.name_ar}</option>)}</select>{fieldError("visit_type_id")}</label><p className={styles.hint}>تاريخ الواقعة الفعلي مطلوب؛ لا يُستنتج من تاريخ فتح الملف. لا يُحفظ أي تشخيص أو نتيجة تلقائيًا.</p></div>}
-            {!base && <><fieldset className={styles.picker}><legend>بيانات المريض</legend><div className={layout.checkGroup}>{[["existing", "إضافة زيارة لمريض موجود", caps.patients_search], ["new", "تسجيل بطاقة مريض جديدة", caps.patients_create]].map(([value, label, enabled]) => <label key={String(value)}><input type="radio" name="person_mode" disabled={!enabled} checked={mode === value} onChange={() => { setMode(String(value)); if (error?.code === "DOSSIER_ALREADY_EXISTS") setError(null); touch(); }} />{label}</label>)}</div></fieldset>{mode === "existing" && <><Picker name="patient_id" label="المريض الموجود" path={`dossiers/options/patients?facility_id=${facility}`} selected={patient} onSelect={p => { setPatient(p); if (error?.code === "DOSSIER_ALREADY_EXISTS") setError(null); touch(); }} />{fieldError("patient_id")}{existingDossier && <div className={styles.conflict}><p>للمريض ملف طبي في هذا المشفى. افتح بطاقته لاستكمال المسودة أو إضافة زيارة حسب الصلاحية.</p><div className={styles.actions}><Link className={styles.primary} href={`/patient-cards/${existingDossier}?${back}`}>فتح البطاقة / إضافة زيارة</Link><button type="button" className={styles.secondary} onClick={chooseAnother}>اختيار مريض آخر</button></div></div>}</>}</>}
-            {(base || mode === "new") && <div className={styles.fields}>
-              {["first_name", "family_name", "father_name", "mother_name"].map(k => input(personal, setPersonal, personalLabels, k, "text", ["first_name", "family_name"].includes(k)))}
-              {input(personal, setPersonal, personalLabels, "birth_date", "date")}
+            {!base && !existingDossier && <div className={styles.fields}><h4 className={layout.subheading}>أول زيارة مسجلة ضمن البطاقة</h4>{input(visit, setVisit, visitLabels, "visit_date", "date", true)}<p className={styles.hint}>تاريخ الواقعة الفعلي مطلوب؛ لا يُستنتج من تاريخ فتح الملف. لا يُحفظ أي تشخيص أو نتيجة تلقائيًا.</p></div>}
+            {!base && <><fieldset className={styles.picker}><legend>بيانات المريض</legend><div className={layout.checkGroup}>{[["existing", "ربط بطاقة موجودة من مشفى آخر", caps.patients_search], ["new", "تسجيل بطاقة مريض جديدة", caps.patients_create]].map(([value, label, enabled]) => <label key={String(value)}><input type="radio" name="person_mode" disabled={!enabled} checked={mode === value} onChange={() => { setMode(String(value)); if (error?.code === "DOSSIER_ALREADY_EXISTS") setError(null); touch(); }} />{label}</label>)}</div></fieldset>{mode === "existing" && <><Picker name="patient_id" label="المريض الموجود" path={`dossiers/options/patients?facility_id=${facility}`} selected={patient} onSelect={p => { setPatient(p); if (error?.code === "DOSSIER_ALREADY_EXISTS") setError(null); touch(); }} />{fieldError("patient_id")}{existingDossier && <div className={styles.conflict}><p>للمريض ملف طبي في هذا المشفى. افتح بطاقته لاستكمال المسودة أو إضافة زيارة حسب الصلاحية.</p><div className={styles.actions}><Link className={styles.primary} href={`/patient-cards/new?${back}&card=${existingDossier}&section=2`}>فتح البطاقة / إضافة زيارة</Link><button type="button" className={styles.secondary} onClick={chooseAnother}>اختيار مريض آخر</button></div></div>}</>}</>}
+            {(base || mode === "new") && <><div className={styles.fields}>
+              {["first_name", "family_name"].map(k => input(personal, setPersonal, personalLabels, k, "text", ["first_name", "family_name"].includes(k)))}
+              </div><details className={layout.optionalGroup}><summary>الأسرة والميلاد والجنس</summary><div className={styles.fields}>{["father_name","mother_name"].map(k=>input(personal,setPersonal,personalLabels,k))}{input(personal, setPersonal, personalLabels, "birth_date", "date")}
               {["birth_date_accuracy", "gender"].map(key => <label key={key}>{personalLabels[key]}<select name={key} value={personal[key]} onChange={e => changed(setPersonal, key, e.target.value)}>{Object.entries(choices[key]).map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select>{fieldError(key)}</label>)}
-              <h4 className={layout.subheading}>التواصل والسكن</h4>{["phone", "alt_phone"].map(k => input(personal, setPersonal, personalLabels, k, "tel"))}
+              </div></details><details className={layout.optionalGroup}><summary>التواصل والسكن</summary><div className={styles.fields}>{["phone", "alt_phone"].map(k => input(personal, setPersonal, personalLabels, k, "tel"))}
               <div><Picker name="governorate_id" label="المحافظة السورية" choices={options.governorates} selected={options.governorates.find(g => String(g.id) === personal.governorate_id)} onSelect={g => { touch(); setPersonal(p => ({ ...p, governorate_id: String(g.id), city_id: p.governorate_id === String(g.id) ? p.city_id : "" })); }} />{personal.governorate_id && <button type="button" className={styles.secondary} onClick={() => { touch(); setPersonal(p => ({ ...p, governorate_id: "", city_id: "" })); }}>إلغاء المحافظة والمدينة</button>}{fieldError("governorate_id")}</div>
               <div>{personal.governorate_id && <Picker key={personal.governorate_id} name="city_id" label="المدينة التابعة للمحافظة" path={`dossiers/options/cities?facility_id=${facility}&governorate_id=${personal.governorate_id}`} selected={personal.city_id ? { id: Number(personal.city_id), name_ar: "المدينة المحددة" } : null} onSelect={c => changed(setPersonal, "city_id", String(c.id))} />}{fieldError("city_id")}</div>
               <label className={styles.full}>عنوان السكن<input name="address_line" value={personal.address_line} onChange={e => changed(setPersonal, "address_line", e.target.value)} maxLength={255} /><small className={styles.hint}>للعنوان خارج سوريا، اكتب المحافظة والمدينة هنا واترك اختيارات الدليل فارغة.</small>{fieldError("address_line")}</label>
               <label>حالة النزوح<select name="displacement_status" value={personal.displacement_status} onChange={e => changed(setPersonal, "displacement_status", e.target.value)}>{Object.entries(choices.displacement_status).map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select></label>
-            </div>}
+            </div></details></>}
           </>}
           {step === 1 && <>
             <div className={styles.fields}><label>معلومات الإعاقة<textarea name="disability_text" value={medical.disability_text} onChange={e => changed(setMedical, "disability_text", e.target.value)} rows={4} />{fieldError("disability_text")}</label><label>القصة المرضية المختصرة<textarea name="clinical_history" value={medical.clinical_history} onChange={e => changed(setMedical, "clinical_history", e.target.value)} rows={4} />{fieldError("clinical_history")}</label></div>
@@ -190,7 +203,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
           </>}
           {step === 2 && <>
             <p className={styles.hint}>تُحفظ زيارة فعلية مسودة بتاريخها، دون اشتراط فترة تقارير. يمكن حفظها قبل إضافة التشخيصات.</p>
-            <div className={styles.fields}>{input(visit, setVisit, visitLabels, "visit_date", "date", true)}<label>نوع الزيارة *<select name="visit_type_id" value={visit.visit_type_id} onChange={e => changed(setVisit, "visit_type_id", e.target.value)}><option value="">اختر نوع الزيارة</option>{options.visit_types.map(t => <option key={t.id} value={t.id}>{t.name_ar}</option>)}{visit.visit_type_id && !options.visit_types.some(t => String(t.id) === visit.visit_type_id) && <option value={visit.visit_type_id}>نوع الزيارة المحفوظ سابقًا</option>}</select>{fieldError("visit_type_id")}</label></div>
+            <div className={styles.fields}>{input(visit, setVisit, visitLabels, "visit_date", "date", true)}</div>
             <label>هل المريض محال من مشفى آخر؟<select name="is_referred" value={visit.is_referred} onChange={e => changed(setVisit, "is_referred", e.target.value)}><option value="no">لا</option><option value="yes">نعم</option></select></label>
             {visit.is_referred === "yes" && <div className={styles.fields}>{input(visit, setVisit, visitLabels, "referring_hospital", "text", true)}{input(visit, setVisit, visitLabels, "referral_date", "date", true)}<label className={styles.full}>سبب الإحالة *<textarea name="referral_reason" rows={3} value={visit.referral_reason} onChange={e => changed(setVisit, "referral_reason", e.target.value)} />{fieldError("referral_reason")}</label></div>}
             <div><h4>التشخيصات</h4><p className={styles.hint}>لكل تشخيص عيادته وطبيبه؛ لا يوجد تشخيص رئيسي. الارتباط الجديد يجب أن يغطي تاريخ الزيارة.</p>{!diagnoses.length && <p>لم تُسجّل تشخيصات بعد؛ هذا القسم غير مكتمل.</p>}{fieldError("diagnoses")}</div>
@@ -204,6 +217,8 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
       <div className={layout.actions}><span role="status">{busy ? "جارٍ الحفظ أو جلب البيانات…" : saved || (dirty.includes(step) ? "توجد تغييرات لم تُحفظ." : "الحفظ لا يفعّل بطاقة المريض ولا يُكمل الزيارة.")}</span>{step > (subsequent?2:0) && <button type="button" className={styles.secondary} disabled={busy || !!review || error?.status === 409} onClick={() => go(step - 1)}>السابق</button>}<button type="button" className={styles.secondary} disabled={!allowed || busy || uploadsPending || !!review || error?.status === 409 || (step===5&&dirty.some(n=>n!==5))} onClick={() => void save(true)}>حفظ كمسودة والخروج</button><button type="submit" className={styles.primary} disabled={!allowed || busy || uploadsPending || !!review || error?.status === 409 || (step===5&&dirty.some(n=>n!==5))}><LuSave aria-hidden="true" />{step === 5 ? "حفظ المراجعة كمسودة" : "حفظ ومتابعة"}</button></div>
       {!allowed && !existingDossier && <p className={styles.hint}>لا تتوفر صلاحية حفظ هذا القسم أو أن حالته لا تسمح بالتعديل.</p>}
     </form>
+    {base?.visit&&(tools.length>0||step>5)&&<WorkspaceClinical facility={facility} snapshot={base} caps={caps} active={step} visited={tools} revision={clinicalRevision} onChanged={()=>setClinicalRevision(v=>v+1)}/>}
+    </div></div>
   </div>;
 }
 function WizardConflict({ step, latest, personal, medical, visit, diagnoses, onAccept }: { step: number; latest: Snapshot; personal: Fields; medical: Fields; visit: Fields; diagnoses: DiagnosisDraft[]; onAccept: (fields: Fields, rows?: DiagnosisDraft[]) => void }) {

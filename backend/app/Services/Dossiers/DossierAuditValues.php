@@ -20,7 +20,7 @@ class DossierAuditValues
         'governorate_id' => 'المحافظة', 'city_id' => 'المدينة', 'address_line' => 'عنوان السكن', 'displacement_status' => 'حالة النزوح',
         'is_oncology' => 'ملف ورمي', 'disability_text' => 'معلومات الإعاقة', 'clinical_history' => 'القصة المرضية',
         'previous_examinations' => 'الفحوص السابقة', 'medication_source' => 'مصدر الدواء', 'other_organization' => 'الجهة الأخرى', 'selections' => 'السوابق والعلاجات الورمية',
-        'visit_no' => 'كود الزيارة', 'visit_date' => 'تاريخ الزيارة', 'visit_type_id' => 'نوع الزيارة', 'dossier_visit_kind' => 'نوع زيارة بطاقة المريض',
+        'visit_no' => 'كود الزيارة', 'visit_date' => 'تاريخ الزيارة', 'dossier_visit_kind' => 'صلة الزيارة بالبطاقة',
         'is_referred' => 'إحالة واردة', 'referring_hospital' => 'المشفى المحيل', 'referral_date' => 'تاريخ الإحالة الواردة', 'referral_reason' => 'سبب الإحالة الواردة',
         'diagnosis_id' => 'التشخيص', 'diagnosed_on' => 'تاريخ التشخيص', 'clinic_id' => 'العيادة', 'attending_staff_id' => 'الطبيب المسؤول', 'diagnosing_staff_id' => 'الطبيب المشخّص',
         'service_id' => 'الخدمة', 'procedure_id' => 'الإجراء', 'performed_by' => 'الطبيب المسؤول', 'specialist_id' => 'الطبيب المختص', 'performed_on' => 'تاريخ التقديم',
@@ -44,7 +44,7 @@ class DossierAuditValues
         'patient_dossier' => ['code', 'opening_date', 'status', 'import_batch_id', 'source_rows', 'purpose', 'cutover_date'],
         'patient' => ['patient_code', 'paper_file_number', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status'],
         'dossier_medical' => ['is_oncology', 'disability_text', 'clinical_history', 'previous_examinations', 'medication_source', 'other_organization', 'selections'],
-        'dossier_visit' => ['visit_no', 'visit_date', 'visit_type_id', 'dossier_visit_kind', 'status', 'clinic_id', 'attending_staff_id', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason'],
+        'dossier_visit' => ['visit_no', 'visit_date', 'dossier_visit_kind', 'status', 'clinic_id', 'attending_staff_id', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason'],
         'visit_diagnosis' => ['diagnosis_id', 'diagnosed_on', 'clinic_id', 'diagnosing_staff_id'],
         'visit_services' => ['service_id', 'performed_on', 'performed_by', 'clinic_id', 'quantity', 'quantity_unit'],
         'visit_procedures' => ['procedure_id', 'performed_on', 'specialist_id', 'clinic_id', 'quantity', 'quantity_unit'],
@@ -55,7 +55,7 @@ class DossierAuditValues
         'visit_attachment' => ['title', 'original_filename', 'size'],
     ];
 
-    private const REFERENCES = ['governorate_id' => ['governorates', 'name_ar'], 'city_id' => ['cities', 'name_ar'], 'visit_type_id' => ['visit_types', 'name_ar'],
+    private const REFERENCES = ['governorate_id' => ['governorates', 'name_ar'], 'city_id' => ['cities', 'name_ar'],
         'diagnosis_id' => ['diagnoses', 'name_ar'], 'service_id' => ['services', 'name_ar'], 'procedure_id' => ['procedures', 'name_ar'], 'result_id' => ['visit_results', 'name_ar'],
         'clinic_id' => ['clinics', 'name_ar'], 'prescribing_clinic_id' => ['clinics', 'name_ar'],
         'attending_staff_id' => ['staff', 'full_name'], 'diagnosing_staff_id' => ['staff', 'full_name'], 'performed_by' => ['staff', 'full_name'], 'specialist_id' => ['staff', 'full_name'], 'prescribing_staff_id' => ['staff', 'full_name'], 'decided_by' => ['staff', 'full_name']];

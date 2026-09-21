@@ -3,7 +3,7 @@ import type { Choice } from "../blood-bank/api";
 export type Fields = Record<string, string>;
 export type DiagnosisDraft = { key: string; id?: number; lock_version?: number; diagnosis: Choice | null; clinic: Choice | null; doctor: Choice | null; diagnosed_on: string; remove?: boolean; void_reason?: string };
 export type WorkflowActions = { sections?: boolean[]; subsequent_create?: boolean; personal_update: boolean; medical_update: boolean; resume_section: number | null; visit: { id: number | null; action: "create" | "update" | null; label: string | null } };
-export type WizardOptions = { capabilities: Record<string, boolean>; creation: { allowed: boolean; reason: string | null }; today: string; governorates: Choice[]; visit_types: Choice[] };
+export type WizardOptions = { capabilities: Record<string, boolean>; creation: { allowed: boolean; reason: string | null }; today: string; governorates: Choice[] };
 export type Snapshot = {
   id: number; code: string; status: "draft" | "active"; opening_date: string; lock_version: number;
   workflow: WorkflowActions;
@@ -15,7 +15,7 @@ export type Snapshot = {
 };
 export const personalLabels: Fields = { code: "كود المريض", opening_date: "بداية الملف الطبي في المشفى", first_name: "الاسم الأول", family_name: "اسم العائلة", father_name: "اسم الأب", mother_name: "اسم الأم", birth_date: "تاريخ الميلاد", birth_date_accuracy: "دقة الميلاد", gender: "الجنس", phone: "الهاتف", alt_phone: "هاتف بديل", governorate_id: "المحافظة", city_id: "المدينة", address_line: "عنوان السكن", displacement_status: "حالة النزوح" };
 export const medicalLabels: Fields = { disability_text: "معلومات الإعاقة", clinical_history: "القصة المرضية المختصرة", is_oncology: "مريض ورمي", history: "أنواع السوابق", treatment: "أنواع العلاج السابق", previous_examinations: "الفحوص السابقة", medication_source: "مصدر الدواء", other_organization: "اسم الجهة الأخرى" };
-export const visitLabels: Fields = { visit_date: "تاريخ الزيارة الفعلي", visit_type_id: "نوع الزيارة", is_referred: "محال من مشفى آخر", referring_hospital: "المشفى المحيل", referral_date: "تاريخ الإحالة", referral_reason: "سبب الإحالة" };
+export const visitLabels: Fields = { visit_date: "تاريخ الزيارة الفعلي", is_referred: "محال من مشفى آخر", referring_hospital: "المشفى المحيل", referral_date: "تاريخ الإحالة", referral_reason: "سبب الإحالة" };
 const strings = (labels: Fields, value: Record<string, unknown> = {}): Fields => Object.fromEntries(Object.keys(labels).map(k => [k, String(value[k] ?? "")]));
 export function personalFields(s?: Snapshot): Fields { return { ...strings(personalLabels, s ? { ...s.patient, code: s.code, opening_date: s.opening_date } : {}), birth_date_accuracy: String(s?.patient.birth_date_accuracy ?? "unknown"), gender: String(s?.patient.gender ?? "unknown"), displacement_status: String(s?.patient.displacement_status ?? "unknown") }; }
 export function medicalFields(s?: Snapshot): Fields { return { ...strings(medicalLabels, s?.medical), is_oncology: s ? (s.medical.is_oncology ? "yes" : "no") : "", history: JSON.stringify(s?.medical.history ?? []), treatment: JSON.stringify(s?.medical.treatment ?? []) }; }

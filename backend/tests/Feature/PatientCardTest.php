@@ -38,7 +38,7 @@ class PatientCardTest extends TestCase
     private function input(array $extra = []): array
     {
         return $extra + ['facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid(), 'person_mode' => 'new',
-            'code' => 'CARD-'.Str::random(12), 'opening_date' => '2000-01-01', 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'],
+            'code' => 'CARD-'.Str::random(12), 'opening_date' => '2000-01-01', 'visit_date' => '2001-03-02',
             'first_name' => 'أحمد', 'family_name' => 'محمد', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
     }
 
@@ -74,7 +74,7 @@ class PatientCardTest extends TestCase
     public function test_invalid_first_save_leaves_no_partial_records(): void
     {
         $counts = app(PatientCardInventory::class)->report();
-        foreach ([['visit_date' => null], ['visit_date' => '2099-01-01'], ['visit_type_id' => 999999999], ['first_name' => null]] as $bad) {
+        foreach ([['visit_date' => null], ['visit_date' => '2099-01-01'], ['first_name' => null]] as $bad) {
             $this->callApi('POST', '', $this->input($bad))->assertUnprocessable();
             $this->assertSame($counts, app(PatientCardInventory::class)->report());
         }
@@ -93,7 +93,7 @@ class PatientCardTest extends TestCase
         $other = $this->f['other'];
         $this->callApi('GET', "/{$s['id']}?facility_id=$other")->assertForbidden();
         DB::table('facility_user_roles')->insert(['user_id' => $this->f['user']->id, 'facility_id' => $other, 'role_id' => $this->f['dossier_role']]);
-        $input = ['facility_id' => $other, 'person_mode' => 'existing', 'patient_id' => $s['patient']['id'], 'opening_date' => '2002-01-01', 'visit_date' => '2002-02-03', 'visit_type_id' => $this->f['visit_type'], 'request_id' => (string) Str::uuid()];
+        $input = ['facility_id' => $other, 'person_mode' => 'existing', 'patient_id' => $s['patient']['id'], 'opening_date' => '2002-01-01', 'visit_date' => '2002-02-03', 'request_id' => (string) Str::uuid()];
         $before = DB::table('patients')->count();
         $b = $this->callApi('POST', '', $input)->assertCreated()->json('data');
         $this->assertSame($before, DB::table('patients')->count());
@@ -171,7 +171,7 @@ class PatientCardTest extends TestCase
     public function test_registration_requires_visit_permission_and_personal_updates_cannot_change_code_or_visit(): void
     {
         $s = $this->callApi('POST', '', $this->input())->assertCreated()->json('data');
-        $update = array_diff_key($this->input(['code' => $s['code']]), array_flip(['person_mode', 'visit_date', 'visit_type_id']));
+        $update = array_diff_key($this->input(['code' => $s['code']]), array_flip(['person_mode', 'visit_date']));
         $update += ['lock_version' => $s['lock_version'], 'patient_lock_version' => $s['patient']['lock_version']];
         $this->callApi('PUT', "/{$s['id']}/personal", array_replace($update, ['code' => 'REPLACEMENT']))->assertUnprocessable();
         $this->callApi('PUT', "/{$s['id']}/personal", $update)->assertOk()->assertJsonPath('data.visit.id', $s['visit']['id'])->assertJsonPath('data.code', $s['code']);

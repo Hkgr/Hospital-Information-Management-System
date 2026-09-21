@@ -31,9 +31,6 @@ class DossierPersonalWriter
                     if (! $withoutVisit && $input['visit_date'] > $f['today']) {
                         throw ValidationException::withMessages(['visit_date' => 'لا يمكن تسجيل زيارة فعلية مستقبلية.']);
                     }
-                    if (! $withoutVisit && ! DB::table('visit_types')->where('id', $input['visit_type_id'])->where('is_active', true)->exists()) {
-                        throw ValidationException::withMessages(['visit_type_id' => 'اختر نوع زيارة فعالًا من الدليل.']);
-                    }
                     // Serialize canonical-code/legacy-code reservations across facilities.
                     app(PatientCardCodes::class)->reserve();
                 }
@@ -86,7 +83,7 @@ class DossierPersonalWriter
                     $id = DB::table('patient_dossiers')->insertGetId($values + ['code' => null, 'facility_id' => $f['id'], 'patient_id' => $patientId, 'status' => 'draft', 'entered_by' => $r->user()->id, 'created_at' => now()]);
                     if (! $withoutVisit) {
                         $visit = ['facility_id' => $f['id'], 'patient_id' => $patientId, 'dossier_id' => $id,
-                            'visit_date' => $input['visit_date'], 'visit_type_id' => $input['visit_type_id'],
+                            'visit_date' => $input['visit_date'],
                             'dossier_visit_kind' => 'initial', 'reporting_period_id' => null,
                             'visit_no' => 'V-'.Str::uuid(), 'client_request_id' => $input['request_id'],
                             'entered_by' => $r->user()->id, 'status' => 'draft', 'created_at' => now(), 'updated_at' => now()];

@@ -134,10 +134,9 @@ class DirectoryLifecycleTest extends TestCase
     private function visit(): int
     {
         $patient = DB::table('patients')->insertGetId(['patient_code' => 'SECRET', 'first_name' => 'اسم مريض سري', 'family_name' => 'خاص', 'search_name' => 'سري', 'identity_document_type' => 'unknown', 'created_by' => $this->user->id]);
-        $type = DB::table('visit_types')->insertGetId(['code' => 'TEST', 'name_ar' => 'اختبار']);
         $period = DB::table('reporting_periods')->insertGetId(['facility_id' => $this->facility, 'starts_on' => now()->startOfYear()->toDateString(), 'ends_on' => now()->endOfYear()->toDateString()]);
 
-        return DB::table('visits')->insertGetId(['visit_no' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid(), 'reporting_period_id' => $period, 'facility_id' => $this->facility, 'patient_id' => $patient, 'visit_type_id' => $type, 'clinic_id' => $this->clinic, 'attending_staff_id' => $this->doctor, 'visit_date' => now()->toDateString(), 'status' => 'complete', 'entered_by' => $this->user->id]);
+        return DB::table('visits')->insertGetId(['visit_no' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid(), 'reporting_period_id' => $period, 'facility_id' => $this->facility, 'patient_id' => $patient, 'clinic_id' => $this->clinic, 'attending_staff_id' => $this->doctor, 'visit_date' => now()->toDateString(), 'status' => 'complete', 'entered_by' => $this->user->id]);
     }
 
     #[DataProvider('directories')]

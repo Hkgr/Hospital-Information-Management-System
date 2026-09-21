@@ -6,6 +6,7 @@ use App\Services\BloodBank\BloodBankReports;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierReports;
 use App\Services\Dossiers\OncologyWriter;
+use Database\Seeders\DossierAuditPermissionsSeeder;
 use Database\Seeders\DossierPathologyPermissionsSeeder;
 use Database\Seeders\OncologyPermissionsSeeder;
 use Illuminate\Database\QueryException;
@@ -413,6 +414,9 @@ class OncologyTreatmentTest extends DossierCompletionCase
 
     public function test_multiple_plans_filtered_list_aggregates_do_not_issue_per_row_queries(): void
     {
+        // Sanctum only writes last_used_at when time changes; do not count a
+        // clock boundary as a query added by another treatment plan.
+        $this->freezeTime();
         $this->ready();
         $p = $this->activate($this->makePlan())->assertOk()->json('data');
         $this->schedule($p, '2090-01-01');
@@ -454,6 +458,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->callApi('POST', $this->path('/doses/'.$id.'/void'), ['lock_version' => 2, 'session_lock_version' => 2, 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'session_resolution' => 'cancelled', 'reason' => 'تصحيح الإعطاء'])->assertOk();
         $this->assertSame(2, DB::table('dose_session_items')->where('dose_session_id', $id)->count());
         $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertConflict();
+        $this->seed(DossierAuditPermissionsSeeder::class);
         $permission = DB::table('permissions')->where('code', 'dossiers.audit')->value('id');
         DB::table('role_permissions')->insertOrIgnore(['role_id' => $this->f['dossier_role'], 'permission_id' => $permission]);
         $this->callApi('GET', '/'.$this->s['id'].'/audit')->assertOk()->assertJsonFragment(['entity' => 'dose_sessions']);

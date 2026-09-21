@@ -14,7 +14,7 @@ use ZipArchive;
 
 class ImportWorkbook
 {
-    public const VERSION = 'patient-import-1';
+    public const VERSION = 'patient-import-2';
 
     public const MAX_BYTES = 10485760;
 
@@ -24,7 +24,7 @@ class ImportWorkbook
 
     public const SHEETS = [
         'Patients' => ['source_record_id', 'local_patient_ref', 'patient_code', 'legacy_code', 'opening_date', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status', 'paper_file_number', 'is_oncology', 'disability_text', 'clinical_history', 'previous_examinations', 'medication_source', 'other_organization', 'import_note'],
-        'Visits' => ['source_record_id', 'local_patient_ref', 'local_visit_ref', 'visit_date', 'visit_type_id', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason', 'import_note'],
+        'Visits' => ['source_record_id', 'local_patient_ref', 'local_visit_ref', 'visit_date', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason', 'import_note'],
         'Diagnoses' => ['source_record_id', 'local_visit_ref', 'diagnosis_id', 'diagnosed_on', 'clinic_id', 'diagnosing_staff_id'],
         'Services' => ['source_record_id', 'local_visit_ref', 'catalog_id', 'clinic_id', 'doctor_id', 'note'],
         'Procedures' => ['source_record_id', 'local_visit_ref', 'catalog_id', 'clinic_id', 'doctor_id', 'note'],
@@ -34,7 +34,7 @@ class ImportWorkbook
         'Outcomes' => ['source_record_id', 'local_visit_ref', 'code', 'clinic_id', 'doctor_id', 'outcome_on', 'referral_target', 'outgoing_referral_date', 'outgoing_referral_reason', 'note'],
     ];
 
-    private const LABELS = ['is_oncology' => 'ملف ورمي؟ 0 أو 1', 'disability_text' => 'معلومات الإعاقة', 'clinical_history' => 'قصة مرضية موثقة', 'previous_examinations' => 'الفحوص السابقة — وصف فقط', 'medication_source' => 'مصدر الدواء', 'other_organization' => 'اسم الجهة الأخرى', 'source_record_id' => 'معرّف المصدر الثابت *', 'local_patient_ref' => 'مرجع المريض داخل الملف *', 'local_visit_ref' => 'مرجع الزيارة داخل الملف *', 'patient_code' => 'كود مريض موجود فقط', 'legacy_code' => 'كود تاريخي / اسم بديل', 'opening_date' => 'بداية الملف الطبي الفعلية *', 'first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم', 'birth_date' => 'الميلاد حسب الدقة', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل', 'governorate_id' => 'معرّف المحافظة', 'city_id' => 'معرّف المدينة', 'address_line' => 'عنوان السكن', 'displacement_status' => 'حالة النزوح', 'paper_file_number' => 'رقم الملف الورقي', 'import_note' => 'ملاحظة مصدر غير سريرية', 'visit_date' => 'تاريخ الزيارة الفعلية *', 'visit_type_id' => 'معرّف نوع الزيارة *', 'is_referred' => 'محول؟ 0 أو 1 *', 'referring_hospital' => 'المشفى المحول', 'referral_date' => 'تاريخ التحويل', 'referral_reason' => 'سبب التحويل', 'diagnosis_id' => 'معرّف التشخيص *', 'diagnosed_on' => 'تاريخ التشخيص إن عُرف', 'clinic_id' => 'معرّف العيادة *', 'diagnosing_staff_id' => 'معرّف الطبيب المشخص *', 'catalog_id' => 'معرّف عنصر الدليل *', 'doctor_id' => 'معرّف الطبيب *', 'note' => 'ملاحظة موثقة', 'prescribing_clinic_id' => 'معرّف عيادة الوصفة *', 'prescribing_staff_id' => 'معرّف طبيب الوصفة *', 'prescribed_on' => 'تاريخ الوصفة الفعلي *', 'medication_id' => 'معرّف الدواء *', 'display_order' => 'الترتيب *', 'code' => 'كود المآل *', 'outcome_on' => 'تاريخ المآل *', 'referral_target' => 'جهة الإحالة', 'outgoing_referral_date' => 'تاريخ الإحالة', 'outgoing_referral_reason' => 'سبب الإحالة'];
+    private const LABELS = ['is_oncology' => 'ملف ورمي؟ 0 أو 1', 'disability_text' => 'معلومات الإعاقة', 'clinical_history' => 'قصة مرضية موثقة', 'previous_examinations' => 'الفحوص السابقة — وصف فقط', 'medication_source' => 'مصدر الدواء', 'other_organization' => 'اسم الجهة الأخرى', 'source_record_id' => 'معرّف المصدر الثابت *', 'local_patient_ref' => 'مرجع المريض داخل الملف *', 'local_visit_ref' => 'مرجع الزيارة داخل الملف *', 'patient_code' => 'كود مريض موجود فقط', 'legacy_code' => 'كود تاريخي / اسم بديل', 'opening_date' => 'بداية الملف الطبي الفعلية *', 'first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم', 'birth_date' => 'الميلاد حسب الدقة', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل', 'governorate_id' => 'معرّف المحافظة', 'city_id' => 'معرّف المدينة', 'address_line' => 'عنوان السكن', 'displacement_status' => 'حالة النزوح', 'paper_file_number' => 'رقم الملف الورقي', 'import_note' => 'ملاحظة مصدر غير سريرية', 'visit_date' => 'تاريخ الزيارة الفعلية *', 'is_referred' => 'محول؟ 0 أو 1 *', 'referring_hospital' => 'المشفى المحول', 'referral_date' => 'تاريخ التحويل', 'referral_reason' => 'سبب التحويل', 'diagnosis_id' => 'معرّف التشخيص *', 'diagnosed_on' => 'تاريخ التشخيص إن عُرف', 'clinic_id' => 'معرّف العيادة *', 'diagnosing_staff_id' => 'معرّف الطبيب المشخص *', 'catalog_id' => 'معرّف عنصر الدليل *', 'doctor_id' => 'معرّف الطبيب *', 'note' => 'ملاحظة موثقة', 'prescribing_clinic_id' => 'معرّف عيادة الوصفة *', 'prescribing_staff_id' => 'معرّف طبيب الوصفة *', 'prescribed_on' => 'تاريخ الوصفة الفعلي *', 'medication_id' => 'معرّف الدواء *', 'display_order' => 'الترتيب *', 'code' => 'كود المآل *', 'outcome_on' => 'تاريخ المآل *', 'referral_target' => 'جهة الإحالة', 'outgoing_referral_date' => 'تاريخ الإحالة', 'outgoing_referral_reason' => 'سبب الإحالة'];
 
     public static function isDate(string $key): bool
     {
@@ -110,7 +110,7 @@ class ImportWorkbook
         foreach (self::SHEETS as $name => $keys) {
             foreach ($keys as $i => $key) {
                 $kind = match ($key) {
-                    'visit_type_id' => 'visit_types', 'diagnosis_id' => 'diagnoses', 'medication_id' => 'medications',
+                    'diagnosis_id' => 'diagnoses', 'medication_id' => 'medications',
                     'clinic_id', 'prescribing_clinic_id' => 'clinics', 'doctor_id', 'diagnosing_staff_id', 'prescribing_staff_id' => 'doctors',
                     'governorate_id' => 'governorates', 'city_id' => 'cities', 'catalog_id' => strtolower($name), default => null,
                 };

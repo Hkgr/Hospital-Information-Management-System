@@ -59,7 +59,7 @@ function importSample(array $f, int $count, string $suffix, bool $duplicate = fa
         if ($i % 3 !== 0) {
             foreach ($i % 5 === 0 ? [1, 2] : [1] as $n) {
                 $v = 'V-'.$suffix.'-'.$i.'-'.$n;
-                $append('Visits', ['source_record_id' => $f['tag'].'-'.$v, 'local_patient_ref' => $p, 'local_visit_ref' => $v, 'visit_date' => $i % 2 === 0 ? '2026-09-02' : '2015-02-03', 'visit_type_id' => $i % 17 === 0 ? 999999999 : $f['visit_type'], 'is_referred' => 0]);
+                $append('Visits', ['source_record_id' => $f['tag'].'-'.$v, 'local_patient_ref' => $p, 'local_visit_ref' => $v, 'visit_date' => $i % 17 === 0 ? '2999-01-01' : ($i % 2 === 0 ? '2026-09-02' : '2015-02-03'), 'is_referred' => 0]);
                 if ($i % 10 === 0) {
                     $append('Services', ['source_record_id' => $f['tag'].'-S-'.$v, 'local_visit_ref' => $v, 'catalog_id' => $f['service'], 'clinic_id' => $f['clinics'][0], 'doctor_id' => $f['workflow_doctors'][0], 'note' => '=قيمة نصية اصطناعية']);
                 }
@@ -95,9 +95,13 @@ if ($mode === 'prepare') {
         $f['samples'][$width] = importSample($f, 21, 'live'.$width);
         $book = IOFactory::load($f['samples'][$width]);
         $sheet = $book->getSheetByName('Visits');
-        $column = array_search('visit_type_id', ImportWorkbook::SHEETS['Visits'], true) + 1;
+        $column = array_search('visit_date', ImportWorkbook::SHEETS['Visits'], true) + 1;
         for ($row = 3; $row <= $sheet->getHighestDataRow(); $row++) {
-            $sheet->setCellValueExplicit([$column, $row], $f['visit_type'], DataType::TYPE_NUMERIC);
+            if ($sheet->getCell([$column, $row])->getValue() === '2999-01-01') {
+                $parts = explode('-', (string) $sheet->getCell([3, $row])->getValue());
+                $i = (int) $parts[count($parts) - 2];
+                $sheet->setCellValueExplicit([$column, $row], $i % 2 === 0 ? '2026-09-02' : '2015-02-03', DataType::TYPE_STRING);
+            }
         }
         // Previously valid sources stay byte-for-byte equivalent after normalization.
         $f['corrected'][$width] = storage_path('framework/testing/import-corrected-'.$width.'.xlsx');

@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest, AuthError } from "../auth/api";
 import Modal from "../clinics/Modal";
-import Picker from "../blood-bank/Picker";
+import ClinicDoctorPicker from "./ClinicDoctorPicker";
+import Picker from "./DossierPicker";
 import type { Choice } from "../blood-bank/api";
 import type { DiagnosisDraft } from "./wizard";
 import styles from "../clinics/clinics.module.css";
@@ -17,7 +18,7 @@ export default function DiagnosisEditor({ row, index, facility, date, canCreate,
       <div><Picker key={revision} name={`diagnoses.${index}.diagnosis_id`} label={`التشخيص من الدليل ${index + 1}`} path={`${base}/diagnoses?${scope}`} selected={row.diagnosis} onSelect={diagnosis => change({ ...row, diagnosis })} />{error(`diagnoses.${index}.diagnosis_id`)}{canCreate && <button type="button" className={styles.secondary} onClick={() => setAdding(true)}>إضافة تشخيص إلى الدليل</button>}</div>
       <label>تاريخ التشخيص (اختياري)<input name={`diagnoses.${index}.diagnosed_on`} type="date" value={row.diagnosed_on} onChange={e => change({ ...row, diagnosed_on: e.target.value })} /><small className={styles.hint}>اتركه فارغًا إذا كان غير معروف.</small>{error(`diagnoses.${index}.diagnosed_on`)}</label>
       <div><Picker name={`diagnoses.${index}.clinic_id`} label={`العيادة للتشخيص ${index + 1}`} path={`${base}/clinics?${scope}`} selected={row.clinic} onSelect={clinic => change({ ...row, clinic, doctor: clinic.id === row.clinic?.id ? row.doctor : null })} />{error(`diagnoses.${index}.clinic_id`)}</div>
-      <div>{row.clinic && date ? <Picker key={`${row.clinic.id}:${date}`} name={`diagnoses.${index}.diagnosing_staff_id`} label={`الطبيب المسؤول عن التشخيص ${index + 1}`} path={`${base}/doctors?${scope}&clinic_id=${row.clinic.id}&visit_date=${date}`} selected={row.doctor} onSelect={doctor => change({ ...row, doctor })} /> : <p className={styles.hint}>حدد تاريخ الزيارة والعيادة أولًا لعرض الأطباء.</p>}{error(`diagnoses.${index}.diagnosing_staff_id`)}</div>
+      <div><ClinicDoctorPicker facility={facility} clinic={row.clinic} date={date} name={`diagnoses.${index}.diagnosing_staff_id`} label={`الطبيب المسؤول عن التشخيص ${index + 1}`} selected={row.doctor} onSelect={doctor=>change({...row,doctor})}/>{error(`diagnoses.${index}.diagnosing_staff_id`)}</div>
     </div>}
     {adding && <NewDirectoryEntry facility={facility} onClose={() => setAdding(false)} onSaved={diagnosis => { change({ ...row, diagnosis }); setRevision(x => x + 1); setAdding(false); }} />}
   </section>;

@@ -35,7 +35,6 @@ class CatalogFixture
         $category = DB::table('service_categories')->insertGetId(['code' => 'CAT-'.$tag, 'name_ar' => 'فئة اختبارية']);
         $type = DB::table('staff_types')->insertGetId(['code' => 'CAT-'.$tag, 'name_ar' => 'طبيب اختبار']);
         $staff = DB::table('staff')->insertGetId(['staff_code' => 'CAT-'.$tag, 'full_name' => 'طبيب اختبار', 'search_name' => 'طبيب اختبار', 'staff_type_id' => $type]);
-        $visitType = DB::table('visit_types')->insertGetId(['code' => 'CAT-'.$tag, 'name_ar' => 'زيارة اختبار']);
         $component = DB::table('blood_components')->insertGetId(['code' => 'CAT-'.$tag, 'name_ar' => 'مكون اختبار']);
         $today = now('Asia/Damascus')->toDateString();
         $periods = [];
@@ -53,9 +52,9 @@ class CatalogFixture
             $patients[$n] = DB::table('patients')->insertGetId(['patient_code' => $tag.'-P'.$n, 'first_name' => 'مستفيد', 'family_name' => 'اختبار '.$n, 'search_name' => 'مستفيد اختبار '.$n, 'identity_document_type' => 'unknown', 'created_by' => $user->id]);
         }
         $void = ['voided_at' => now(), 'voided_by' => $user->id, 'void_reason' => 'اختبار إلغاء'];
-        $visit = function (int $patient, int $f, string $status = 'complete') use ($visitType, $periods, $staff, $today, $user, $void) {
+        $visit = function (int $patient, int $f, string $status = 'complete') use ($periods, $staff, $today, $user, $void) {
             return DB::table('visits')->insertGetId(['visit_no' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid(), 'facility_id' => $f, 'patient_id' => $patient, 'reporting_period_id' => $periods[$f],
-                'visit_date' => $today, 'visit_type_id' => $visitType, 'attending_staff_id' => $staff, 'status' => $status, 'entered_by' => $user->id, ...($status === 'void' ? $void : [])]);
+                'visit_date' => $today, 'attending_staff_id' => $staff, 'status' => $status, 'entered_by' => $user->id, ...($status === 'void' ? $void : [])]);
         };
         $event = function (int $v, int $f, int $n = 1, bool $cancelled = false, bool $future = false) use ($items, $periods, $today, $user, $staff, $void) {
             foreach (['service', 'procedure'] as $kind) {

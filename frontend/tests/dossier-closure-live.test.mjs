@@ -21,11 +21,11 @@ async function api(method, path, data = {}, token = f.token) {
 async function write(method, path, data) { const r = await api(method, path, { request_id: crypto.randomUUID(), ...data }); assert.ok([200, 201].includes(r.status), JSON.stringify(r.body)); return r.body.data; }
 before(async () => {
   fixture('prepare'); f = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-closure-live.json', import.meta.url)));
-  browser = await chromium.launch(); await mkdir(gallery, { recursive: true });
-  dossier = await write('POST', '', { person_mode: 'new', code: `PH4-${f.tag}`, opening_date: '2001-01-01', visit_date: '2001-03-02', visit_type_id: f.visit_type, first_name: 'ليلى', family_name: 'مراجعة اصطناعية', birth_date_accuracy: 'unknown', gender: 'female', displacement_status: 'unknown' });
+  browser = await chromium.launch(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{}); await mkdir(gallery, { recursive: true });
+  dossier = await write('POST', '', { person_mode: 'new', code: `PH4-${f.tag}`, opening_date: '2001-01-01', visit_date: '2001-03-02', first_name: 'ليلى', family_name: 'مراجعة اصطناعية', birth_date_accuracy: 'unknown', gender: 'female', displacement_status: 'unknown' });
   dossier = await write('PUT', `/${dossier.id}/medical`, { lock_version: dossier.lock_version, is_oncology: false, clinical_history: 'قصة مرضية اصطناعية قبل التصحيح' });
   for (let i = 0; i < 12; i++) dossier = await write('PUT', `/${dossier.id}/medical`, { lock_version: dossier.lock_version, is_oncology: false, clinical_history: `قصة مرضية اصطناعية بعد التصحيح ${i + 1}` });
-  dossier = await write('PUT', `/${dossier.id}/visits/${dossier.visit.id}`, { lock_version: dossier.visit.lock_version, visit_date: '2001-03-02', visit_type_id: f.visit_type, is_referred: false, diagnoses: [{ diagnosis_id: f.diagnosis, diagnosed_on: null, clinic_id: f.clinics[0], diagnosing_staff_id: f.workflow_doctors[0] }] });
+  dossier = await write('PUT', `/${dossier.id}/visits/${dossier.visit.id}`, { lock_version: dossier.visit.lock_version, visit_date: '2001-03-02', is_referred: false, diagnoses: [{ diagnosis_id: f.diagnosis, diagnosed_on: null, clinic_id: f.clinics[0], diagnosing_staff_id: f.workflow_doctors[0] }] });
   const path = `/${dossier.id}/visits/${dossier.visit.id}`;
   dossier = await write('PUT', path + '/clinical', { lock_version: dossier.visit.lock_version, services: [{ catalog_id: f.service, clinic_id: f.clinics[0], doctor_id: f.workflow_doctors[0], note: '=ملاحظة اصطناعية آمنة' }], procedures: [] });
   const row = dossier.clinical.services[0];

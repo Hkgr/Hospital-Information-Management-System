@@ -93,7 +93,7 @@ class DossierImportTest extends TestCase
         $context = ['local_visit_ref' => 'L1', 'clinic_id' => $this->f['clinics'][0], 'doctor_id' => $this->f['workflow_doctors'][0]];
 
         return ['Patients' => [$this->patient()],
-            'Visits' => [['source_record_id' => 'V-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'L1', 'visit_date' => '2001-02-03', 'visit_type_id' => $this->f['visit_type'], 'is_referred' => 0]],
+            'Visits' => [['source_record_id' => 'V-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'L1', 'visit_date' => '2001-02-03', 'is_referred' => 0]],
             'Diagnoses' => [['source_record_id' => 'DX-'.$this->f['tag'], 'local_visit_ref' => 'L1', 'diagnosis_id' => $this->f['diagnosis'], 'clinic_id' => $context['clinic_id'], 'diagnosing_staff_id' => $context['doctor_id']]],
             'Services' => [$context + ['source_record_id' => 'S-'.$this->f['tag'], 'catalog_id' => $this->f['service']]],
             'Procedures' => [$context + ['source_record_id' => 'PR-'.$this->f['tag'], 'catalog_id' => $this->f['procedure']]],
@@ -287,7 +287,7 @@ class DossierImportTest extends TestCase
         $p = $this->patient();
         $visits = [];
         foreach ([1, 2] as $i) {
-            $visits[] = ['source_record_id' => 'V'.$i.'-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V'.$i, 'visit_date' => '2001-02-03', 'visit_type_id' => $this->f['visit_type'], 'is_referred' => 0];
+            $visits[] = ['source_record_id' => 'V'.$i.'-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V'.$i, 'visit_date' => '2001-02-03', 'is_referred' => 0];
         }
         $b = $this->step($this->upload(['Patients' => [$p], 'Visits' => $visits]), 'validate');
         $this->assertSame('validated', $b['status'], json_encode($b));
@@ -307,7 +307,7 @@ class DossierImportTest extends TestCase
 
     public function test_future_visit_blocks_its_entire_patient_bundle_but_other_patient_can_commit(): void
     {
-        $b = $this->upload(['Patients' => [$this->patient(), $this->patient(['source_record_id' => 'P2-'.$this->f['tag'], 'local_patient_ref' => 'P2'])], 'Visits' => [['source_record_id' => 'V-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V1', 'visit_date' => '2999-01-01', 'visit_type_id' => $this->f['visit_type'], 'is_referred' => 0]]]);
+        $b = $this->upload(['Patients' => [$this->patient(), $this->patient(['source_record_id' => 'P2-'.$this->f['tag'], 'local_patient_ref' => 'P2'])], 'Visits' => [['source_record_id' => 'V-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V1', 'visit_date' => '2999-01-01', 'is_referred' => 0]]]);
         $b = $this->step($b, 'validate');
         $this->assertSame(2, $b['counts']['needs_review']);
         $b = $this->step($b, 'commit');
@@ -350,7 +350,7 @@ class DossierImportTest extends TestCase
         foreach (['visit_medications', 'oncology_plans', 'blood_bank_events'] as $table) {
             $before[$table] = DB::table($table)->count();
         }
-        $v = ['source_record_id' => 'V-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V1', 'visit_date' => '2001-02-03', 'visit_type_id' => $this->f['visit_type'], 'is_referred' => 0];
+        $v = ['source_record_id' => 'V-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V1', 'visit_date' => '2001-02-03', 'is_referred' => 0];
         $context = ['local_visit_ref' => 'V1', 'clinic_id' => $this->f['clinics'][0], 'doctor_id' => $this->f['workflow_doctors'][0]];
         $sheets = ['Patients' => [$this->patient()], 'Visits' => [$v],
             'Diagnoses' => [['source_record_id' => 'DX-'.$this->f['tag'], 'local_visit_ref' => 'V1', 'diagnosis_id' => $this->f['diagnosis'], 'clinic_id' => $context['clinic_id'], 'diagnosing_staff_id' => $context['doctor_id']]],
@@ -377,12 +377,14 @@ class DossierImportTest extends TestCase
     public function test_references_are_rechecked_at_commit_and_bundle_is_atomic(): void
     {
         $patients = DB::table('patients')->count();
-        $b = $this->step($this->upload(['Patients' => [$this->patient()], 'Visits' => [['source_record_id' => 'V-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V1', 'visit_date' => '2001-02-03', 'visit_type_id' => $this->f['visit_type'], 'is_referred' => 0]]]), 'validate');
-        DB::table('visit_types')->where('id', $this->f['visit_type'])->update(['is_active' => false]);
+        $b = $this->step($this->upload(['Patients' => [$this->patient()], 'Visits' => [['source_record_id' => 'V-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V1', 'visit_date' => '2001-02-03', 'is_referred' => 0]],
+            'Diagnoses' => [['source_record_id' => 'DX-'.$this->f['tag'], 'local_visit_ref' => 'V1', 'diagnosis_id' => $this->f['diagnosis'], 'clinic_id' => $this->f['clinics'][0], 'diagnosing_staff_id' => $this->f['workflow_doctors'][0]]],
+        ]), 'validate');
+        DB::table('diagnoses')->where('id', $this->f['diagnosis'])->update(['is_active' => false]);
         $b = $this->step($b, 'commit');
         $this->assertSame('completed_with_errors', $b['status']);
         $this->assertSame($patients, DB::table('patients')->count());
-        $this->assertSame(2, $b['counts']['needs_review']);
+        $this->assertSame(3, $b['counts']['needs_review']);
     }
 
     public function test_existing_patient_is_reused_without_overwriting_fields(): void
@@ -471,7 +473,7 @@ class DossierImportTest extends TestCase
             $visits = [];
             for ($i = 1; $i <= $size; $i++) {
                 $people[] = $this->patient(['source_record_id' => "P$size-$i-".$this->f['tag'], 'local_patient_ref' => "P$i"]);
-                $visits[] = ['source_record_id' => "V$size-$i-".$this->f['tag'], 'local_patient_ref' => "P$i", 'local_visit_ref' => "V$i", 'visit_date' => '2001-02-03', 'visit_type_id' => $this->f['visit_type'], 'is_referred' => 0];
+                $visits[] = ['source_record_id' => "V$size-$i-".$this->f['tag'], 'local_patient_ref' => "P$i", 'local_visit_ref' => "V$i", 'visit_date' => '2001-02-03', 'is_referred' => 0];
             }
             $b = $this->upload(['Patients' => $people, 'Visits' => $visits]);
             $reads = 0;
@@ -578,7 +580,7 @@ class DossierImportTest extends TestCase
     public function test_failure_after_personal_write_rolls_back_the_bundle_and_does_not_reserve_its_paper_number(): void
     {
         $paper = 'PAPER-'.$this->f['tag'];
-        $b = $this->step($this->upload(['Patients' => [$this->patient(['paper_file_number' => $paper]), $this->patient(['source_record_id' => 'second-'.$this->f['tag'], 'local_patient_ref' => 'P2', 'paper_file_number' => $paper])], 'Visits' => [['source_record_id' => 'visit-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V1', 'visit_date' => '2001-02-03', 'visit_type_id' => $this->f['visit_type'], 'is_referred' => 0]]]), 'validate');
+        $b = $this->step($this->upload(['Patients' => [$this->patient(['paper_file_number' => $paper]), $this->patient(['source_record_id' => 'second-'.$this->f['tag'], 'local_patient_ref' => 'P2', 'paper_file_number' => $paper])], 'Visits' => [['source_record_id' => 'visit-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'local_visit_ref' => 'V1', 'visit_date' => '2001-02-03', 'is_referred' => 0]]]), 'validate');
         $this->mock(DossierVisitWriter::class)->shouldReceive('save')->once()->andThrow(ValidationException::withMessages(['visit_date' => 'Synthetic concurrent domain rejection.']));
         $b = $this->step($b, 'commit');
         $this->assertSame('completed_with_errors', $b['status']);
