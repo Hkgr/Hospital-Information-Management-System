@@ -30,6 +30,11 @@ class DossierController extends Controller
         return response()->json($this->queries->visits($this->facility($r), $dossier, $r->validated()));
     }
 
+    public function visitDirectory(DossierQueryRequest $r)
+    {
+        return response()->json($this->queries->visitDirectory($this->facility($r), $r->validated()));
+    }
+
     public function visit(DossierQueryRequest $r, int $dossier, int $visit)
     {
         return response()->json(['data' => $this->queries->visit($this->facility($r), $dossier, $visit)]);

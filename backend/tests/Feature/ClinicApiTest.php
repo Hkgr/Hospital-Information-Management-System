@@ -180,10 +180,9 @@ class ClinicApiTest extends TestCase
     {
         $clinic = $this->create();
         $period = DB::table('reporting_periods')->insertGetId(['facility_id' => $this->facility, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31']);
-        $visitType = DB::table('visit_types')->insertGetId(['code' => 'TEST', 'name_ar' => 'اختبار']);
         $patient = DB::table('patients')->insertGetId(['patient_code' => 'P-SECRET', 'first_name' => 'اسم سري', 'family_name' => 'خاص', 'search_name' => 'سري', 'identity_document_type' => 'unknown', 'created_by' => $this->user->id]);
         foreach (['complete', 'complete', 'draft', 'void'] as $status) {
-            DB::table('visits')->insert(['visit_no' => (string) Str::uuid(), 'facility_id' => $this->facility, 'patient_id' => $patient, 'reporting_period_id' => $period, 'visit_date' => '2026-09-11', 'visit_type_id' => $visitType, 'clinic_id' => $clinic['id'], 'attending_staff_id' => $this->doctor, 'status' => $status, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $this->user->id, 'voided_at' => $status === 'void' ? now() : null, 'voided_by' => $status === 'void' ? $this->user->id : null, 'void_reason' => $status === 'void' ? 'اختبار' : null]);
+            DB::table('visits')->insert(['visit_no' => (string) Str::uuid(), 'facility_id' => $this->facility, 'patient_id' => $patient, 'reporting_period_id' => $period, 'visit_date' => '2026-09-11', 'clinic_id' => $clinic['id'], 'attending_staff_id' => $this->doctor, 'status' => $status, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $this->user->id, 'voided_at' => $status === 'void' ? now() : null, 'voided_by' => $status === 'void' ? $this->user->id : null, 'void_reason' => $status === 'void' ? 'اختبار' : null]);
         }
         $this->callApi('GET', '/'.$clinic['id'])->assertJsonPath('data.patient_count', 1)->assertDontSee('P-SECRET')->assertDontSee('اسم سري');
         $this->create(['code' => 'EMPTY']);

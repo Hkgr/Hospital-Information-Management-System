@@ -33,7 +33,7 @@ class DossierWorkflowTest extends TestCase
 
     private function personal(array $overrides = []): array
     {
-        return $overrides + ['request_id' => (string) Str::uuid(), 'person_mode' => 'new', 'code' => ' HIST-2000 ', 'opening_date' => '2000-02-03', 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'first_name' => 'أحمد', 'family_name' => 'محمد %_', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
+        return $overrides + ['request_id' => (string) Str::uuid(), 'person_mode' => 'new', 'code' => ' HIST-2000 ', 'opening_date' => '2000-02-03', 'visit_date' => '2001-03-02', 'first_name' => 'أحمد', 'family_name' => 'محمد %_', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
     }
 
     private function legacyCard(): array
@@ -51,7 +51,7 @@ class DossierWorkflowTest extends TestCase
 
     private function visit(array $overrides = []): array
     {
-        return $overrides + ['request_id' => (string) Str::uuid(), 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'is_referred' => false, 'diagnoses' => []];
+        return $overrides + ['request_id' => (string) Str::uuid(), 'visit_date' => '2001-03-02', 'is_referred' => false, 'diagnoses' => []];
     }
 
     private function diagnosis(array $overrides = []): array
@@ -136,7 +136,7 @@ class DossierWorkflowTest extends TestCase
     {
         $d = $this->legacyCard();
         $before = DB::table('patient_dossiers')->orderBy('id')->get()->toJson();
-        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.code', 'DOSSIER_ALREADY_EXISTS')->assertJsonPath('error.existing_dossier_id', $d['id']);
+        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'visit_date' => '2001-03-02', 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.code', 'DOSSIER_ALREADY_EXISTS')->assertJsonPath('error.existing_dossier_id', $d['id']);
         $this->assertSame($before, DB::table('patient_dossiers')->orderBy('id')->get()->toJson());
     }
 
@@ -164,7 +164,7 @@ class DossierWorkflowTest extends TestCase
         }
         $this->callApi('GET', '/options/patients', ['search' => '%_'])->assertJsonCount(1, 'data');
         $this->callApi('GET', '/options/patients', ['search' => ''])->assertJsonCount(0, 'data');
-        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.existing_dossier_id', $d['id']);
+        $this->callApi('POST', '', ['request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $d['patient']['id'], 'visit_date' => '2001-03-02', 'opening_date' => '1990-01-01'])->assertConflict()->assertJsonPath('error.existing_dossier_id', $d['id']);
         $this->callApi('PUT', '/'.$d['id'].'/personal', ['patient_id' => $this->f['patients'][2]])->assertUnprocessable()->assertJsonValidationErrors('patient_id');
     }
 
@@ -194,7 +194,7 @@ class DossierWorkflowTest extends TestCase
         $beforePatients = DB::table('patients')->orderBy('id')->get()->toJson();
         $beforeBlood = DB::table('blood_transfusions')->orderBy('id')->get()->toJson();
         $this->assertTrue(DB::table('blood_transfusions')->where('patient_id', $patient)->exists());
-        $input = ['facility_id' => $facility, 'request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $patient, 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'opening_date' => '1990-01-02'];
+        $input = ['facility_id' => $facility, 'request_id' => (string) Str::uuid(), 'person_mode' => 'existing', 'patient_id' => $patient, 'visit_date' => '2001-03-02', 'opening_date' => '1990-01-02'];
         $d = $this->callApi('POST', '', $input)->assertCreated()->assertJsonPath('data.patient.id', $patient)->json('data');
         $this->callApi('POST', '', array_replace($input, ['request_id' => (string) Str::uuid()]))->assertConflict()->assertJsonPath('error.existing_dossier_id', $d['id']);
         $this->assertSame(1, DB::table('patient_dossiers')->where('facility_id', $facility)->where('patient_id', $patient)->count());

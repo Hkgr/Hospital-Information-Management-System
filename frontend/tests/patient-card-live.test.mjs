@@ -11,9 +11,9 @@ let browser, f, completed = false;
 const gallery = new URL('../.superdesign/tmp/patient-card-concept/', import.meta.url);
 function fixture(mode) {
   const r = spawnSync('php', ['tests/Support/dossier-workflow-live.php', mode], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: { ...process.env, APP_ENV: 'testing' }, encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stdout + r.stderr); process.stdout.write(r.stdout);
+  assert.equal(r.status, 0, r.stdout + r.stderr); assert.doesNotMatch(r.stdout+r.stderr,/In .+ line|Exception/); process.stdout.write(r.stdout);
 }
-before(async () => { fixture('prepare'); f = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-workflow-live.json', import.meta.url))); browser = await chromium.launch(); });
+before(async () => { fixture('prepare'); f = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-workflow-live.json', import.meta.url))); browser = await chromium.launch(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{}); });
 after(async () => { await browser?.close(); try { if (completed) fixture('verify'); } finally { fixture('cleanup'); } });
 async function request(method, path, body = {}, token = f.token) {
   const r = await fetch(`${base}/hospital-api/dossiers${path}`, { method, headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' }, ...(method === 'GET' ? {} : { body: JSON.stringify({ facility_id: f.facility, ...body }) }) });
@@ -31,11 +31,11 @@ test('opening unified Patient Cards creates nothing; no duplicate patient naviga
   const p = await c.newPage(); const writes = []; p.on('request', r => { if (['POST', 'PUT'].includes(r.method()) && r.url().includes('/hospital-api/dossiers')) writes.push(r.url()); });
   try {
     await p.goto(`${base}/patient-cards/new?facility_id=${f.facility}`);
-    await p.getByRole('heading', { name: 'إضافة زيارة لمريض موجود', exact: true }).waitFor();
+    await p.getByRole('heading', { name: 'تسجيل بطاقة المريض وزيارته الأولى', exact: true }).waitFor();
     assert.equal(await p.getByRole('link', { name: 'المرضى', exact: true }).count(), 0);
     assert.equal(await p.getByRole('heading', { name: 'أول زيارة مسجلة ضمن البطاقة', exact: true }).count(), 1);
     assert.equal(await p.locator('[name="visit_date"]').inputValue(), '');
-    assert.equal(await p.locator('[name="visit_type_id"]').inputValue(), '');
+    assert.equal(await p.locator('[name="visit_type_id"]').count(), 0);
     assert.equal(writes.length, 0); fixture('verify-empty');
   } finally { await c.close(); }
   for (const [token, facility, expected] of [['', f.facility, 401], [f.denied_token, f.facility, 403], [f.token, f.other, 403]]) {
@@ -58,8 +58,7 @@ test('atomic first save, explicit real date, same draft visit on section saves a
       await p.getByRole('button', { name: 'حفظ ومتابعة', exact: true }).click(); await rejected;
       await p.waitForFunction(() => document.activeElement?.getAttribute('name') === 'visit_date');
       assert.equal(await p.locator('[name="first_name"]').inputValue(), 'ليلى');
-      await p.locator('[name="visit_date"]').fill('2000-03-04'); await p.locator('[name="visit_type_id"]').selectOption(String(f.visit_type));
-      let s = await save(p); const visit = s.visit.id;
+      await p.locator('[name="visit_date"]').fill('2000-03-04'); let s = await save(p); const visit = s.visit.id;
       assert.equal(s.code, code); assert.equal(s.patient.patient_code, code); assert.equal(s.card_id, s.patient.id);
       assert.equal(s.visit.visit_date, '2000-03-04'); assert.equal(s.visit.status, 'draft'); assert.equal(s.visit.diagnoses.length, 0);
       await p.locator('[name="is_oncology"]').selectOption('no'); await p.locator('[name="clinical_history"]').fill('قصة اختبار محفوظة في المشفى الحالي');
@@ -88,8 +87,8 @@ test('legacy code lookup requires explicit person selection and opens existing c
   const p = await c.newPage(); p.on('dialog', d => d.accept());
   try {
     await p.goto(`${base}/patient-cards/new?facility_id=${f.facility}`);
-    await p.getByRole('radio', { name: 'إضافة زيارة لمريض موجود', exact: true }).check();
-    const picker = p.getByRole('group', { name: 'المريض الموجود', exact: true });
+    await p.getByRole('radio', { name: 'ربط بطاقة موجودة من مشفى آخر', exact: true }).check();
+    await p.getByRole('button',{name:'اختيار: المريض الموجود',exact:true}).click(); const picker = p.getByRole('group', { name: 'المريض الموجود', exact: true });
     await picker.getByRole('searchbox').fill(legacy);
     await picker.getByRole('button', { name: new RegExp(f.search_patient_code) }).click();
     const open = p.getByRole('link', { name: 'فتح البطاقة / إضافة زيارة', exact: true }); await open.waitFor();
@@ -172,7 +171,10 @@ test('patient identity columns, precision, actions and selected exports use real
       await p.locator('summary').filter({hasText:'الأعمدة'}).click();
       for(const [format,label] of [['xlsx','تصدير Excel'],['pdf','تصدير PDF']]) {
         const sent=p.waitForRequest(r=>r.method()==='POST'&&r.url().endsWith(`/dossiers/export/${format}`));
-        const downloaded=p.waitForEvent('download'); await p.getByRole('button',{name:label,exact:true}).click();
+        const report=p.waitForResponse(r=>r.request().method()==='POST'&&r.url().endsWith(`/dossiers/export/${format}`));
+        const downloaded=p.waitForEvent('download',{timeout:120000}); downloaded.catch(()=>{}); await p.getByRole('button',{name:label,exact:true}).click();
+        const response=await report;assert.equal(response.status(),200,`${format}: expected a real Laravel report; received ${response.status()}`);
+        assert.equal(response.headers()['x-test-laravel'],'dossiers');
         const data=(await sent).postDataJSON(); assert.equal(data.columns.includes('mother_name'),false); assert.ok(data.columns.includes('paper_file_number')); assert.equal(data.search,`DOS-${f.tag}-001`); assert.equal(data.page,undefined);
         await (await downloaded).saveAs(fileURLToPath(new URL(`list-${width}.${format}`,gallery)));
       }

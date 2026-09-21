@@ -233,13 +233,12 @@ class DoctorApiTest extends TestCase
         foreach ([$this->facility, $this->other] as $facility) {
             $periods[$facility] = DB::table('reporting_periods')->insertGetId(['facility_id' => $facility, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31']);
         }
-        $visitType = DB::table('visit_types')->insertGetId(['code' => 'TEST', 'name_ar' => 'اختبار']);
         $patients = [];
         foreach ([1, 2, 3] as $i) {
             $patients[] = DB::table('patients')->insertGetId(['patient_code' => 'SECRET-'.$i, 'first_name' => 'مريض سري', 'family_name' => 'خاص', 'search_name' => 'سري', 'identity_document_type' => 'unknown', 'created_by' => $this->user->id]);
         }
         foreach ([[$patients[0], 'complete', $doctor['id'], $this->facility], [$patients[0], 'complete', $doctor['id'], $this->facility], [$patients[1], 'draft', $doctor['id'], $this->facility], [$patients[1], 'complete', $otherDoctor['id'], $this->facility], [$patients[2], 'complete', $doctor['id'], $this->other]] as [$patient, $status, $staff, $facility]) {
-            DB::table('visits')->insert(['visit_no' => (string) Str::uuid(), 'facility_id' => $facility, 'patient_id' => $patient, 'reporting_period_id' => $periods[$facility], 'visit_date' => '2026-09-11', 'visit_type_id' => $visitType, 'clinic_id' => $facility === $this->facility ? $clinic : null, 'attending_staff_id' => $staff, 'resident_staff_id' => $otherDoctor['id'], 'status' => $status, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $this->user->id]);
+            DB::table('visits')->insert(['visit_no' => (string) Str::uuid(), 'facility_id' => $facility, 'patient_id' => $patient, 'reporting_period_id' => $periods[$facility], 'visit_date' => '2026-09-11', 'clinic_id' => $facility === $this->facility ? $clinic : null, 'attending_staff_id' => $staff, 'resident_staff_id' => $otherDoctor['id'], 'status' => $status, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $this->user->id]);
         }
         $this->callApi('GET', '/'.$doctor['id'])->assertJsonPath('data.patient_count', 1)->assertDontSee('SECRET')->assertDontSee('مريض سري');
         $voided = (array) DB::table('visits')->where('attending_staff_id', $doctor['id'])->where('facility_id', $this->facility)->first();

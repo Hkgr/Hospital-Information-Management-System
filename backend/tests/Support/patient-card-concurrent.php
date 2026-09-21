@@ -23,7 +23,7 @@ while (! is_file(storage_path('framework/testing/card-concurrent-'.$job['gate'])
     }
     usleep(10000);
 }
-$request = Request::create('/api/dossiers', 'POST', [], [], [], ['HTTP_AUTHORIZATION' => 'Bearer '.$f['token'], 'HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/json'], json_encode($job['body'] + ['facility_id' => $f['facility'], 'visit_type_id' => $f['visit_type']]));
+$request = Request::create('/api/dossiers', 'POST', [], [], [], ['HTTP_AUTHORIZATION' => 'Bearer '.$f['token'], 'HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/json'], json_encode($job['body'] + ['facility_id' => $f['facility']]));
 $response = $kernel->handle($request);
 echo json_encode(['status' => $response->getStatusCode(), 'id' => json_decode($response->getContent(), true)['data']['card_id'] ?? null], JSON_THROW_ON_ERROR)."\n";
 $kernel->terminate($request, $response);

@@ -118,6 +118,35 @@ class DossierQueries
         });
     }
 
+    public function visitDirectory(array $f, array $input): array
+    {
+        $q = $this->actualVisits($f)
+            ->join('patient_dossiers as d', fn ($j) => $j->on('d.id', '=', 'v.dossier_id')->on('d.facility_id', '=', 'v.facility_id')->on('d.patient_id', '=', 'v.patient_id'))
+            ->join('patients as p', 'p.id', '=', 'v.patient_id')->whereIn('d.status', ['draft', 'active']);
+        if (($input['status'] ?? 'all') !== 'all') {
+            $q->where('v.status', $input['status']);
+        }
+        foreach (['from' => '>=', 'to' => '<='] as $key => $op) {
+            if (! empty($input[$key])) {
+                $q->where('v.visit_date', $op, $input[$key]);
+            }
+        }
+        $search = trim(preg_replace('/\s+/u', ' ', $input['search'] ?? ''));
+        if ($search !== '') {
+            $like = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $search).'%';
+            $q->where(fn ($w) => $w->whereRaw("p.patient_code LIKE ? ESCAPE '!'", [$like])
+                ->orWhereRaw("v.visit_no LIKE ? ESCAPE '!'", [$like])
+                ->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', p.first_name, p.family_name), '[[:space:]]+', ' ') LIKE ? ESCAPE '!'", [$like]));
+        }
+        $sort = in_array($input['sort'] ?? '', ['visit_no', 'visit_date', 'status']) ? $input['sort'] : 'visit_date';
+        $page = $q->select('v.id', 'v.dossier_id', 'v.visit_no', 'v.visit_date', 'v.status', 'p.patient_code')
+            ->selectRaw("CONCAT_WS(' ', p.first_name, p.family_name) as patient_name")
+            ->orderBy('v.'.$sort, $input['direction'] ?? 'desc')->orderByDesc('v.id')
+            ->paginate($input['per_page'] ?? 20, ['*'], 'page', $input['page'] ?? 1);
+
+        return ['data' => $page->items(), 'meta' => CatalogQueries::meta($page), 'totals' => ['visits' => $page->total()]];
+    }
+
     public function visits(array $f, int $id, array $input): array
     {
         abort_unless($this->dossiers($f)->where('d.id', $id)->exists(), 404);

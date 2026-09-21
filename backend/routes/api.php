@@ -83,6 +83,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::put('/{dossier}/medical', [DossierWizardController::class, 'medical'])->whereNumber('dossier')->defaults('section', 'medical')->name('medical');
         Route::post('/{dossier}/visits', [DossierWizardController::class, 'visit'])->whereNumber('dossier')->defaults('section', 'visit')->name('visits.store');
         Route::put('/{dossier}/visits/{visit}', [DossierWizardController::class, 'visit'])->whereNumber(['dossier', 'visit'])->defaults('section', 'visit')->name('visits.update');
+        Route::get('/visits', [DossierController::class, 'visitDirectory'])->name('visit-directory');
         Route::get('/', [DossierController::class, 'index'])->name('index');
         Route::get('/{dossier}', [DossierController::class, 'show'])->whereNumber('dossier')->name('show');
         Route::get('/{dossier}/audit', [DossierController::class, 'audit'])->whereNumber('dossier')->name('audit');

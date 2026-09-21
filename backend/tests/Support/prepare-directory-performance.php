@@ -44,7 +44,6 @@ $fixture = DB::transaction(function () {
     }
     $type = DB::table('staff_types')->where('code', 'PERF_DOCTOR')->value('id') ?? DB::table('staff_types')->insertGetId(['code' => 'PERF_DOCTOR', 'name_ar' => 'طبيب أداء اصطناعي']);
     $specialty = DB::table('specialties')->insertGetId(['code' => $prefix, 'name_ar' => 'تخصص أداء اصطناعي']);
-    $visitType = DB::table('visit_types')->insertGetId(['code' => $prefix, 'name_ar' => 'زيارة أداء اصطناعية']);
     $procedure = DB::table('procedures')->insertGetId(['code' => $prefix, 'name_ar' => 'إجراء أداء اصطناعي']);
     $doctors = [];
     foreach (range(1, 400) as $n) {
@@ -78,7 +77,7 @@ $fixture = DB::transaction(function () {
                 $n = $month * 5000 + $batch * 1000 + $index;
                 $facility = $facilities[$n % 80 >= 64 ? 1 : 0];
                 foreach ([5, 12, 25] as $day) {
-                    $visits[] = ['visit_no' => $prefix.'-V'.$n.'-'.$day, 'facility_id' => $facility, 'patient_id' => $ids[$patient['patient_code']], 'reporting_period_id' => $periods[$facility], 'visit_date' => $date->format('Y-m-').$day, 'visit_type_id' => $visitType, 'clinic_id' => $clinics[$n % 80], 'attending_staff_id' => $doctors[$n % 400], 'status' => $n % 20 === 0 && $day === 25 ? 'draft' : 'complete', 'client_request_id' => $prefix.'-'.$n.'-'.$day, 'entered_by' => $users[0]['id']];
+                    $visits[] = ['visit_no' => $prefix.'-V'.$n.'-'.$day, 'facility_id' => $facility, 'patient_id' => $ids[$patient['patient_code']], 'reporting_period_id' => $periods[$facility], 'visit_date' => $date->format('Y-m-').$day, 'clinic_id' => $clinics[$n % 80], 'attending_staff_id' => $doctors[$n % 400], 'status' => $n % 20 === 0 && $day === 25 ? 'draft' : 'complete', 'client_request_id' => $prefix.'-'.$n.'-'.$day, 'entered_by' => $users[0]['id']];
                 }
             }
             foreach (array_chunk($visits, 500) as $chunk) {

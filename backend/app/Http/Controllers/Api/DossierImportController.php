@@ -73,7 +73,7 @@ class DossierImportController extends Controller
         $f = $this->scope($r, 'download');
         $this->metadata($r);
         $refs = [];
-        foreach (['visit_types', 'diagnoses', 'services', 'procedures', 'medications', 'visit_results'] as $table) {
+        foreach (['diagnoses', 'services', 'procedures', 'medications', 'visit_results'] as $table) {
             $q = DB::table($table)->where('is_active', true);
             if (in_array($table, ['services', 'procedures'])) {
                 $q->whereNull('archived_at');

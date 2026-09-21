@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import Picker from "../blood-bank/Picker";
+import ClinicDoctorPicker from "./ClinicDoctorPicker";
+import Picker from "./DossierPicker";
 import { NewDirectoryEntry } from "./DiagnosisEditor";
 import { type ClinicalDraft, type Context, type Occurrence, type SavedRow, outcomeLabels } from "./clinical";
 import styles from "../clinics/clinics.module.css";
@@ -8,7 +9,7 @@ import layout from "./wizard.module.css";
 
 type ErrorDisplay=(key:string)=>React.ReactNode;
 export function ClinicalContext({value,change,facility,date,prefix,doctorKey="doctor_id",clinicKey="clinic_id",label,error}: {value:Context;change:(v:Context)=>void;facility:number;date:string;prefix:string;doctorKey?:string;clinicKey?:string;label:string;error:ErrorDisplay}) {
-  return <><div><Picker name={`${prefix}${clinicKey}`} label={`العيادة · ${label}`} path={`dossiers/options/clinics?facility_id=${facility}`} selected={value.clinic} onSelect={clinic=>change({clinic,doctor:clinic.id===value.clinic?.id?value.doctor:null})}/>{error(`${prefix}${clinicKey}`)}</div><div>{value.clinic && date?<Picker key={`${value.clinic.id}:${date}`} name={`${prefix}${doctorKey}`} label={`الطبيب المسؤول · ${label}`} path={`dossiers/options/doctors?facility_id=${facility}&clinic_id=${value.clinic.id}&visit_date=${date}`} selected={value.doctor} onSelect={doctor=>change({...value,doctor})}/>:<p className={styles.hint}>حدد تاريخ الزيارة والعيادة أولًا لعرض الأطباء المؤهلين.</p>}{error(`${prefix}${doctorKey}`)}</div></>;
+  return <><div><Picker name={`${prefix}${clinicKey}`} label={`العيادة · ${label}`} path={`dossiers/options/clinics?facility_id=${facility}`} selected={value.clinic} onSelect={clinic=>change({clinic,doctor:clinic.id===value.clinic?.id?value.doctor:null})}/>{error(`${prefix}${clinicKey}`)}</div><div><ClinicDoctorPicker facility={facility} clinic={value.clinic} date={date} name={`${prefix}${doctorKey}`} label={`الطبيب المسؤول · ${label}`} selected={value.doctor} onSelect={doctor=>change({...value,doctor})}/>{error(`${prefix}${doctorKey}`)}</div></>;
 }
 function Removal({row,change,remove,label,prefix,error}:{row:SavedRow;change:(v:SavedRow)=>void;remove:()=>void;label:string;prefix:string;error:ErrorDisplay}) {
   return <><button type="button" className={`${styles.secondary} ${row.remove?"":styles.dangerText}`} onClick={()=>row.id?change({...row,remove:!row.remove}):remove()}>{row.remove?"التراجع عن الإزالة":`إزالة ${label}`}</button>{row.remove&&<label>سبب التصحيح والإزالة *<input name={`${prefix}.void_reason`} value={row.void_reason??""} onChange={e=>change({...row,void_reason:e.target.value})}/>{error(`${prefix}.void_reason`)}</label>}</>;

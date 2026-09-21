@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from "react";
 import {apiRequest,AuthError,subscribeSession} from "../auth/api";
 import {useClinicRequest} from "../clinics/api";
 import Modal from "../clinics/Modal";
-import Picker from "../blood-bank/Picker";
+import Picker from "./DossierPicker";
 import {ClinicalContext} from "./ClinicalEditor";
 import type {Context} from "./clinical";
 import type {Visit} from "./api";

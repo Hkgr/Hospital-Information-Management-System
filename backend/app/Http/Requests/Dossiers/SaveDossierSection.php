@@ -24,7 +24,6 @@ class SaveDossierSection extends FormRequest
                 'patient_id' => [$this->input('person_mode') === 'existing' ? 'required' : 'prohibited', 'integer', 'min:1'],
                 'patient_lock_version' => [$this->isMethod('PUT') ? 'required' : 'prohibited', 'integer', 'min:1']];
             $rules['visit_date'] = [$this->isMethod('POST') ? 'required' : 'prohibited', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'];
-            $rules['visit_type_id'] = [$this->isMethod('POST') ? 'required' : 'prohibited', 'integer', 'min:1'];
             foreach (SaveBloodProfile::PERSON as $key) {
                 $rules[$key] = $newPatient ? ['nullable'] : ['prohibited'];
             }
@@ -49,7 +48,7 @@ class SaveDossierSection extends FormRequest
             $rules += ['previous_examinations' => ['nullable', 'string', 'max:20000'], 'medication_source' => ['nullable', Rule::in(['ministry_of_health', 'al_rowad', 'other_organization', 'personal_expense', 'none'])],
                 'other_organization' => [Rule::requiredIf($this->boolean('is_oncology') && $this->input('medication_source') === 'other_organization'), Rule::prohibitedIf($this->input('medication_source') !== 'other_organization'), 'nullable', 'string', 'max:200']];
         } else {
-            $rules += ['visit_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'], 'visit_type_id' => ['required', 'integer', 'min:1'], 'is_referred' => ['required', 'boolean'],
+            $rules += ['visit_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'], 'is_referred' => ['required', 'boolean'],
                 'referring_hospital' => [$this->boolean('is_referred') ? 'required' : 'prohibited', 'nullable', 'string', 'max:200'],
                 'referral_date' => [$this->boolean('is_referred') ? 'required' : 'prohibited', 'nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-01', 'before_or_equal:visit_date'],
                 'referral_reason' => [$this->boolean('is_referred') ? 'required' : 'prohibited', 'nullable', 'string', 'max:10000'],

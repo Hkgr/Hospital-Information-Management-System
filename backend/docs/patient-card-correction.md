@@ -32,7 +32,7 @@ in both facilities. Clinical/attachment/audit queries retain their facility scop
 
 `POST /api/dossiers` remains the compatibility registration endpoint. A new person
 requires `person_mode=new`, manual `code`, personal fields, `opening_date`,
-explicit **actual** `visit_date`, active `visit_type_id`, facility and UUID
+explicit **actual** `visit_date`, facility and UUID (visit classification was removed by the patient-visit workspace migration)
 `request_id`. Existing-person mode sends only `patient_id`, opening/visit essentials
 and request context; it prohibits a second code and personal-field overwrites.
 

@@ -285,7 +285,7 @@ class DossierPathologyTest extends DossierCompletionCase
     {
         $id = $this->callApi('POST', $this->path('/pathology'), $this->report())->assertCreated()->json('data.id');
         foreach (range(1, 12) as $i) {
-            $this->callApi('POST', '', ['person_mode' => 'new', 'code' => 'PL-'.Str::random(12), 'opening_date' => '2001-01-01', 'visit_date' => '2001-03-02', 'visit_type_id' => $this->f['visit_type'], 'first_name' => 'اختبار', 'family_name' => 'الاستعلامات', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'])->assertCreated();
+            $this->callApi('POST', '', ['person_mode' => 'new', 'code' => 'PL-'.Str::random(12), 'opening_date' => '2001-01-01', 'visit_date' => '2001-03-02', 'first_name' => 'اختبار', 'family_name' => 'الاستعلامات', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'])->assertCreated();
         }
         DB::enableQueryLog();
         $this->callApi('GET', '', ['search' => $this->s['code'], 'pathology_status' => 'pathology_confirmed', 'per_page' => 10])->assertOk()->assertJsonPath('totals.dossiers', 1);

@@ -48,7 +48,7 @@ class ImportBundle
 
     public function prime(array $rows, array $f, bool $lock): void
     {
-        $fields = ['Visits' => ['visit_types', 'visit_type_id'], 'Diagnoses' => ['diagnoses', 'diagnosis_id'], 'Services' => ['services', 'catalog_id'], 'Procedures' => ['procedures', 'catalog_id'], 'Medications' => ['medications', 'medication_id']];
+        $fields = ['Diagnoses' => ['diagnoses', 'diagnosis_id'], 'Services' => ['services', 'catalog_id'], 'Procedures' => ['procedures', 'catalog_id'], 'Medications' => ['medications', 'medication_id']];
         foreach ($rows as $row) {
             if (isset($fields[$row['sheet']])) {
                 [$table, $field] = $fields[$row['sheet']];
@@ -151,7 +151,7 @@ class ImportBundle
         if (! $dossier) {
             $this->facilityPermission($r, $f, 'create');
             $rules = $this->rules(SaveDossierSection::class, 'personal', $personal, false);
-            unset($rules['visit_date'], $rules['visit_type_id']);
+            unset($rules['visit_date']);
             Validator::make($personal + ['facility_id' => $f['id'], 'request_id' => (string) Str::uuid()], $rules, (new SaveDossierSection)->messages())->validate();
             if (! $patient) {
                 $this->require(! $personal['birth_date'] || $personal['birth_date'] <= $f['today'], 'birth_date', 'الميلاد لا يكون في المستقبل.');
@@ -216,7 +216,6 @@ class ImportBundle
             }
             $this->validateSection(SaveDossierSection::class, 'visit', $v, $f, false);
             $this->require($v['visit_date'] >= $p['opening_date'] && $v['visit_date'] <= $f['today'], 'visit_date', 'تاريخ الزيارة يسبق بداية الملف أو يقع في المستقبل.');
-            $this->active('visit_types', $v['visit_type_id'], 'visit_type_id');
             foreach ($v['diagnoses'] as $x) {
                 $this->active('diagnoses', $x['diagnosis_id'], 'diagnosis_id');
                 $this->context($f, $x['clinic_id'], $x['diagnosing_staff_id'], $v['visit_date']);

@@ -14,7 +14,7 @@ function fixture(mode) {
   const result = spawnSync('php', ['tests/Support/dossier-pathology-live.php', mode], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: { ...process.env, APP_ENV: 'testing' }, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stdout + result.stderr); process.stdout.write(result.stdout); assert.ok(!/Exception|In .+ line|Missing saved/.test(result.stdout + result.stderr), result.stdout + result.stderr);
 }
-before(async () => { fixture('prepare'); f = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-pathology-live.json', import.meta.url))); browser = await chromium.launch(); mkdirSync(artifacts, { recursive: true }); });
+before(async () => { fixture('prepare'); f = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/dossier-pathology-live.json', import.meta.url))); browser = await chromium.launch(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{}); mkdirSync(artifacts, { recursive: true }); });
 after(async () => { await browser?.close(); fixture('cleanup'); });
 async function api(method, path, data = {}, token = f.token) {
   const q = method === 'GET' ? `${path.includes('?') ? '&' : '?'}facility_id=${data.facility_id ?? f.facility}` : '';
@@ -23,7 +23,7 @@ async function api(method, path, data = {}, token = f.token) {
   return { status: response.status, body: await response.json() };
 }
 async function create() {
-  const response = await api('POST', '', { person_mode: 'new', code: `PATH-${randomUUID().slice(0,18)}`, first_name: 'مريض', family_name: 'تشريح اصطناعي', opening_date: '1999-01-01', visit_date: '2000-02-03', visit_type_id: f.visit_type, birth_date_accuracy: 'unknown', gender: 'unknown', displacement_status: 'unknown' });
+  const response = await api('POST', '', { person_mode: 'new', code: `PATH-${randomUUID().slice(0,18)}`, first_name: 'مريض', family_name: 'تشريح اصطناعي', opening_date: '1999-01-01', visit_date: '2000-02-03', birth_date_accuracy: 'unknown', gender: 'unknown', displacement_status: 'unknown' });
   assert.equal(response.status, 201, JSON.stringify(response.body)); return response.body.data;
 }
 test('external completed pathology and validation preserve draft at 390, 768 and 1440; real reports', async () => {
@@ -32,7 +32,7 @@ test('external completed pathology and validation preserve draft at 390, 768 and
     await ctx.addInitScript(token => sessionStorage.setItem('hospital.bearer', token), f.token);
     const page = await ctx.newPage();
     try {
-      await page.goto(`${base}/patient-cards/${last.id}?facility_id=${f.facility}`);
+      await page.goto(`${base}/patient-cards/new?card=${last.id}&visit=${last.visit.id}&section=6&facility_id=${f.facility}`);
       await page.getByRole('button', { name: 'إضافة تقرير تشريح مرضي', exact: true }).click();
       const dialog = page.getByRole('dialog');
       await dialog.locator('[name="source"]').selectOption('external');
@@ -70,7 +70,7 @@ test('explicit latest-version review preserves other author changes and the loca
   const ctx = await browser.newContext(); await ctx.addInitScript(t => sessionStorage.setItem('hospital.bearer', t), f.token);
   const page = await ctx.newPage();
   try {
-    await page.goto(`${base}/patient-cards/${last.id}?facility_id=${f.facility}&visit=${last.visit.id}`);
+    await page.goto(`${base}/patient-cards/new?card=${last.id}&visit=${last.visit.id}&section=6&facility_id=${f.facility}`);
     await page.getByRole('button', { name: 'تعديل تقرير التشريح المرضي', exact: true }).click();
     const dialog = page.getByRole('dialog'); await dialog.locator('[name="note"]').fill('مسودتي المحلية');
     assert.equal((await api('PUT', `/${last.id}/visits/${last.visit.id}/pathology/${row.id}`, { ...row, request_id: randomUUID(), conclusion: 'تصحيح الطبيب الآخر' })).status, 200);
@@ -101,7 +101,7 @@ test('real authorization, cross-facility refusal, UUID replay and authoritative 
 test('diagnostic decision UI, optional column and filter use the saved pathology; read-only UI has no write actions', async () => {
   const ctx = await browser.newContext(); await ctx.addInitScript(t => sessionStorage.setItem('hospital.bearer', t), f.token); const page = await ctx.newPage();
   try {
-    await page.goto(`${base}/patient-cards/${last.id}?facility_id=${f.facility}`);
+    await page.goto(`${base}/patient-cards/new?card=${last.id}&visit=${last.visit.id}&section=6&facility_id=${f.facility}`);
     await page.getByRole('button', {name:'تسجيل أو تعديل التقييم التشخيصي',exact:true}).click();
     const dialog=page.getByRole('dialog'); await dialog.locator('[name="disposition"]').selectOption('pathology_not_required');
     await dialog.locator('[name="not_required_reason"]').fill('قرار سريري صريح');
@@ -128,7 +128,7 @@ test('diagnostic decision UI, optional column and filter use the saved pathology
     }
   } finally {await ctx.close();}
   const readonly=await browser.newContext(); await readonly.addInitScript(t=>sessionStorage.setItem('hospital.bearer',t),f.denied_token); const p=await readonly.newPage();
-  try {await p.goto(`${base}/patient-cards/${last.id}?facility_id=${f.facility}`);await p.getByRole('heading',{name:'تقارير التشريح المرضي',exact:true}).first().waitFor();assert.equal(await p.getByRole('button',{name:'إضافة تقرير تشريح مرضي',exact:true}).count(),0);}
+  try {await p.goto(`${base}/patient-cards/new?card=${last.id}&visit=${last.visit.id}&section=6&facility_id=${f.facility}`);await p.getByRole('heading',{name:'تقارير التشريح المرضي',exact:true}).first().waitFor();assert.equal(await p.getByRole('button',{name:'إضافة تقرير تشريح مرضي',exact:true}).count(),0);}
   finally {await readonly.close();}
 });
 
@@ -150,7 +150,7 @@ test('conditional drafts, conflict review and effective panels remain consistent
       return page.getByRole('dialog');
     };
     try {
-      await page.goto(`${base}/patient-cards/${card.id}?facility_id=${f.facility}`);
+      await page.goto(`${base}/patient-cards/new?card=${card.id}&visit=${card.visit.id}&section=6&facility_id=${f.facility}`);
       await page.getByRole('button',{name:'إضافة تقرير تشريح مرضي',exact:true}).click();
       let dialog = page.getByRole('dialog');
       await dialog.locator('[name="source"]').selectOption('external');
