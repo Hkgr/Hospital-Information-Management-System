@@ -39,10 +39,10 @@ else
   echo "    Composer already present"
 fi
 
-if ! python3 -m venv --help >/dev/null 2>&1; then
+if ! python3 -c 'import ensurepip' >/dev/null 2>&1; then
   echo "    installing python3-venv"
   sudo apt-get update
-  sudo apt-get install -y --no-install-recommends python3-venv python3-pip
+  sudo apt-get install -y --no-install-recommends python3-venv python3.12-venv python3-pip
 fi
 
 echo "==> api (FastAPI): python venv + requirements"
