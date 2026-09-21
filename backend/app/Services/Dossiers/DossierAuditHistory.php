@@ -17,7 +17,7 @@ class DossierAuditHistory
         'visit_outcomes' => 'النتيجة والإحالة', 'dossier_upload' => 'رفع المرفق', 'visit_attachment' => 'بيانات المرفق',
     ];
 
-    public const ACTIONS = ['created' => 'إنشاء', 'updated' => 'تعديل', 'activated' => 'تفعيل', 'completed' => 'إكمال', 'reviewed' => 'مراجعة', 'voided' => 'إلغاء', 'started' => 'بدء رفع', 'uploaded' => 'رفع', 'cancelled' => 'إلغاء رفع'];
+    public const ACTIONS = ['imported' => 'اعتماد استيراد', 'created' => 'إنشاء', 'updated' => 'تعديل', 'activated' => 'تفعيل', 'completed' => 'إكمال', 'reviewed' => 'مراجعة', 'voided' => 'إلغاء', 'started' => 'بدء رفع', 'uploaded' => 'رفع', 'cancelled' => 'إلغاء رفع'];
 
     /** Resolve ownership from authoritative FK-linked rows, never from audit JSON. */
     private function subjects(array $f, array $d, ?int $visit): Builder

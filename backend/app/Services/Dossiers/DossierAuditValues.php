@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditValues
 {
     private const FIELDS = [
+        'paper_file_number' => 'رقم الملف الورقي',
+        'import_batch_id' => 'دفعة الاستيراد', 'source_rows' => 'مراجع صفوف المصدر لهذه البطاقة', 'purpose' => 'غرض الاستيراد', 'cutover_date' => 'تاريخ الانتقال للنظام',
         'plan_number' => 'رقم الخطة', 'current_revision_id' => 'النسخة الحالية', 'revision_number' => 'رقم النسخة', 'basis_disposition' => 'أساس الاعتماد', 'override_reason' => 'مبرر الاستثناء', 'status_reason' => 'سبب تغيير الحالة', 'reviewed_at' => 'وقت المراجعة', 'reviewed_by' => 'المراجع', 'protocol_name' => 'البروتوكول', 'protocol_code' => 'كود البروتوكول', 'modality' => 'نمط العلاج', 'intent' => 'النية العلاجية', 'starts_on' => 'البداية', 'ends_on' => 'النهاية', 'planned_cycles' => 'عدد الدورات', 'planned_sessions' => 'عدد الجلسات', 'interval_days' => 'الفاصل بالأيام', 'amendment_reason' => 'سبب تعديل الخطة', 'diagnosis_snapshot' => 'التشخيص المحفوظ', 'planned_on' => 'الموعد المخطط', 'session_number' => 'رقم الجلسة', 'cycle_number' => 'رقم الدورة', 'reason' => 'السبب', 'administered_on' => 'تاريخ الإعطاء', 'supervising_staff_id' => 'الطبيب المشرف', 'administered_by' => 'القائم بالإعطاء', 'session_label' => 'عنوان الجلسة', 'dose_value' => 'قيمة الجرعة', 'dose_unit' => 'وحدة الجرعة', 'dose_text' => 'تعليمات الجرعة', 'route' => 'طريق الإعطاء', 'funding_source_id' => 'مصدر التمويل', 'dispensed_on' => 'تاريخ الصرف', 'dispensing_purpose' => 'غرض الصرف', 'correction_reason' => 'سبب التصحيح',
         'supporting_attachment_id' => 'المرفق الداعم',
         'source' => 'مصدر التقرير', 'report_number' => 'رقم التقرير', 'external_organization' => 'الجهة الخارجية', 'specimen_type' => 'نوع العينة', 'anatomical_site' => 'الموقع التشريحي', 'requested_on' => 'تاريخ الطلب', 'collected_on' => 'تاريخ جمع العينة', 'result_on' => 'تاريخ النتيجة', 'conclusion' => 'الخلاصة النهائية', 'unavailable_reason' => 'سبب عدم الإتاحة أو الإلغاء', 'procedure_event_id' => 'واقعة الإجراء', 'doctor_id' => 'الطبيب المسؤول', 'disposition' => 'التقييم التشخيصي', 'assessed_on' => 'تاريخ التقييم', 'required_reason' => 'سبب طلب التشريح', 'not_required_reason' => 'سبب عدم الحاجة للتشريح', 'follow_up' => 'المتابعة', 'evidence_pathology_id' => 'التقرير الداعم',
@@ -39,8 +41,8 @@ class DossierAuditValues
         'visit_medications' => ['dispensed_on', 'medication_name_snapshot', 'medication_code_snapshot', 'dispensing_purpose', 'quantity', 'quantity_unit', 'dose_text', 'prescribing_staff_id', 'funding_source_id', 'correction_reason'],
         'visit_pathologies' => ['source', 'status', 'report_number', 'external_organization', 'specimen_type', 'anatomical_site', 'requested_on', 'collected_on', 'result_on', 'conclusion', 'unavailable_reason', 'procedure_event_id', 'clinic_id', 'doctor_id', 'supporting_attachment_id'],
         'visit_diagnostic_assessments' => ['disposition', 'assessed_on', 'required_reason', 'not_required_reason', 'follow_up', 'evidence_pathology_id', 'clinic_id', 'doctor_id'],
-        'patient_dossier' => ['code', 'opening_date', 'status'],
-        'patient' => ['patient_code', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status'],
+        'patient_dossier' => ['code', 'opening_date', 'status', 'import_batch_id', 'source_rows', 'purpose', 'cutover_date'],
+        'patient' => ['patient_code', 'paper_file_number', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status'],
         'dossier_medical' => ['is_oncology', 'disability_text', 'clinical_history', 'previous_examinations', 'medication_source', 'other_organization', 'selections'],
         'dossier_visit' => ['visit_no', 'visit_date', 'visit_type_id', 'dossier_visit_kind', 'status', 'clinic_id', 'attending_staff_id', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason'],
         'visit_diagnosis' => ['diagnosis_id', 'diagnosed_on', 'clinic_id', 'diagnosing_staff_id'],
@@ -131,6 +133,9 @@ class DossierAuditValues
             sort($selected);
 
             return implode('، ', array_unique($selected)) ?: 'لا توجد اختيارات مسجلة';
+        }
+        if ($field === 'source_rows' && is_array($value)) {
+            return implode('، ', array_map('intval', $value));
         }
         if (! is_scalar($value)) {
             return 'قيمة غير قابلة للعرض';

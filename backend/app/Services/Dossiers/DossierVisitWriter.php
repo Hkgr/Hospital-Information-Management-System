@@ -13,14 +13,14 @@ class DossierVisitWriter
 {
     public function __construct(private DossierWrites $writes) {}
 
-    public function save(Request $r, array $f, int $dossier, array $input, ?int $id, bool $subsequent = false): int
+    public function save(Request $r, array $f, int $dossier, array $input, ?int $id, bool $subsequent = false, bool $import = false): int
     {
         // Read lock targets before entering the transaction, so it does not establish
         // a repeatable-read snapshot before waiting for concurrent assignment writers.
         // A changed visit/diagnosis context is rejected by the locked visit version.
         $targets = app(DossierClinicalContext::class)->targets($id ?? 0, $f, $input);
 
-        return $this->writes->once($r, $f, $input, "visit:$dossier:".($id ?? ($subsequent ? 'subsequent' : 'new')), function () use ($r, $f, $dossier, $input, $id, $targets, $subsequent) {
+        return $this->writes->once($r, $f, $input, "visit:$dossier:".($id ?? ($subsequent ? 'subsequent' : 'new')), function () use ($r, $f, $dossier, $input, $id, $targets, $subsequent, $import) {
             app(DossierClinicalContext::class)->lock($targets);
             $d = $this->writes->dossier($f, $dossier);
             if ($id) {
@@ -32,11 +32,11 @@ class DossierVisitWriter
                 }
             } else {
                 $old = null;
-                if (! $subsequent && (DB::table('visits')->where('dossier_id', $dossier)->where('status', 'draft')->whereNull('voided_at')->exists()
+                if (! $import && ! $subsequent && (DB::table('visits')->where('dossier_id', $dossier)->where('status', 'draft')->whereNull('voided_at')->exists()
                     || DB::table('dossier_section_progress')->where('dossier_id', $dossier)->whereNotNull('visit_id')->exists())) {
                     DossierWrites::conflict('توجد أول زيارة محفوظة ضمن البطاقة؛ اجلب أحدث نسخة لاستكمالها بدل إنشاء زيارة أخرى.');
                 }
-                if ($d['status'] !== ($subsequent ? 'active' : 'draft')) {
+                if (! $import && $d['status'] !== ($subsequent ? 'active' : 'draft')) {
                     DossierWrites::conflict('إضافة أول زيارة مسجلة ضمن البطاقة متاحة لبطاقة المريض المسودة فقط.');
                 }
             }

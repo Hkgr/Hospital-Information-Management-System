@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DoctorController;
 use App\Http\Controllers\Api\DossierCompletionController;
 use App\Http\Controllers\Api\DossierController;
+use App\Http\Controllers\Api\DossierImportController;
 use App\Http\Controllers\Api\DossierPathologyController;
 use App\Http\Controllers\Api\DossierWizardController;
 use App\Http\Controllers\Api\OncologyController;
@@ -18,6 +19,15 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
     Route::prefix('dossiers')->name('dossiers.')->group(function () {
+        $imports = DossierImportController::class;
+        Route::get('/import-template.xlsx', [$imports, 'template'])->name('imports.template');
+        Route::get('/imports', [$imports, 'index'])->name('imports.index');
+        Route::post('/imports', [$imports, 'upload'])->name('imports.upload');
+        Route::get('/imports/{batch}', [$imports, 'show'])->whereNumber('batch')->name('imports.show');
+        Route::get('/imports/{batch}/errors.xlsx', [$imports, 'errors'])->whereNumber('batch')->name('imports.errors');
+        foreach (['validate', 'commit', 'cancel'] as $operation) {
+            Route::post('/imports/{batch}/'.$operation, [$imports, 'step'])->whereNumber('batch')->defaults('operation', $operation)->name('imports.'.$operation);
+        }
         $oncology = OncologyController::class;
         Route::get('/treatment-options', [$oncology, 'options'])->name('treatment.options');
         Route::get('/{dossier}/treatment-plans', [$oncology, 'index'])->whereNumber('dossier')->name('treatment.index');

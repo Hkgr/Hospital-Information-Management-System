@@ -1,0 +1,19 @@
+.section { padding: 1.5rem; display: grid; gap: 1.2rem; min-width: 0; }
+.section h3, .section p { margin: 0; }
+.section p { line-height: 1.9; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; max-width: 48rem; }
+.fields label, .upload, .upload label, .filter { display: grid; gap: .6rem; }
+.fields input, .fields select, .filter select { width: 100%; padding: .7rem; border: 1px solid #d7e1df; border-radius: .5rem; background: white; color: inherit; font: inherit; }
+.upload { border: 1px dashed #a8c3bd; border-radius: .7rem; padding: 1.25rem; background: #f8fbfa; }
+.upload input { max-width: 100%; }
+.counts { display: flex; gap: .7rem; flex-wrap: wrap; }
+.counts span { padding: .5rem .8rem; border-radius: .5rem; background: #f0f6f4; }
+.confirm { display: grid; gap: 1rem; padding: 1.25rem; border: 1px solid #cbded8; border-radius: .6rem; }
+.confirm label { display: flex; align-items: flex-start; gap: .75rem; line-height: 1.9; }
+.confirm input { flex: 0 0 auto; margin-top: .5rem; }
+.filter { max-width: 20rem; }
+.results { min-width: 0; }
+.results > div { max-height: min(65vh, 36rem); overflow: auto; }
+.results thead { position: sticky; top: 0; z-index: 1; }
+.results small { display: block; margin-block-start: .35rem; }
+@media (max-width: 640px) { .section { padding: 1rem; } .fields { grid-template-columns: 1fr; } .confirm { padding: 1rem; } }
