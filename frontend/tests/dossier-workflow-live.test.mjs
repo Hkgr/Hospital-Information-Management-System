@@ -66,7 +66,7 @@ test('real three-section wizard, saved/resumed draft, diagnoses, validation and 
       const saved = page.waitForResponse(r => r.url().includes(`/dossiers/${d.id}/visits/${d.visit.id}`) && r.request().method() === 'PUT'); await button(page, 'حفظ ومتابعة'); const response = await saved; assert.equal(response.status(), 200, await response.text()); d = (await response.json()).data;
       assert.equal(d.visit.diagnoses.length, 2); assert.equal(d.visit.diagnoses[0].diagnosed_on, null); assert.notEqual(d.visit.diagnoses[0].clinic_id, d.visit.diagnoses[1].clinic_id);
       const before = await api('GET', `/${d.id}`); assert.equal(before.body.data.visit_count, 1); assert.equal(before.body.data.latest_visit.status, 'draft');
-      await capture(page, `saved-${width}`); const resumed=new URL(page.url());resumed.searchParams.set('section','not-a-step');await page.goto(resumed.href); await page.getByRole('heading', { name: 'المرفقات والمراجعة', exact: true }).waitFor();
+      await capture(page, `saved-${width}`); const resumed=new URL(page.url());resumed.searchParams.set('section','not-a-step');await page.goto(resumed.href); await page.getByRole('heading', { name: 'المرفقات ثم المراجعة', exact: true }).waitFor();
        await stage(page, 'الزيارة والتشخيصات'); assert.equal(await page.locator('[name="referral_reason"]').inputValue(), 'سبب إحالة اصطناعي'); await capture(page, `resumed-${width}`);
       await stage(page, 'المعلومات الطبية والورمية'); await page.locator('[name="clinical_history"]').fill('مسودتي المحلية لا تضيع');
       const current = (await api('GET', `/${d.id}/progress`)).body.data;

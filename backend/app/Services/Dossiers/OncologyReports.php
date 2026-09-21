@@ -60,21 +60,21 @@ class OncologyReports
             }
             $check(count($rows));
             $result[] = $this->section('بنود النظام العلاجي المخططة', $rows);
-            $sessions = DB::table('oncology_sessions as s')->join('oncology_plans as p', 'p.id', '=', 's.plan_id')->join('oncology_plan_revisions as r', 'r.id', '=', 's.revision_id')->leftJoin('dose_sessions as dose', fn ($j) => $j->on('dose.oncology_session_id', '=', 's.id')->whereNull('dose.voided_at'))->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->orderBy('s.planned_on')->orderBy('s.id')->limit($max + 1)->get(['s.*', 'p.plan_number', 'r.revision_number', 'dose.visit_id', 'dose.administered_on', DB::raw(OncologyQueries::voidedDoseSql())]);
+            $sessions = DB::table('oncology_sessions as s')->leftJoin('oncology_plans as p', 'p.id', '=', 's.plan_id')->leftJoin('oncology_plan_revisions as r', 'r.id', '=', 's.revision_id')->leftJoin('dose_sessions as dose', fn ($j) => $j->on('dose.oncology_session_id', '=', 's.id')->whereNull('dose.voided_at'))->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->orderBy('s.planned_on')->orderBy('s.id')->limit($max + 1)->get(['s.*', 'p.plan_number', 'r.revision_number', 'dose.visit_id', 'dose.administered_on', DB::raw(OncologyQueries::voidedDoseSql())]);
             $check($sessions->count());
             $rows = [];
             foreach ($sessions as $s) {
-                array_push($rows, ...$this->facts($s->plan_number.' / '.$s->session_number, ['النسخة' => $s->revision_number, 'موعد مخطط' => $s->planned_on, 'حالة الموعد' => OncologyQueries::SESSION_STATUSES[$s->status], 'سبب الحالة' => $s->reason, 'تاريخ إعطاء فعلي' => $s->administered_on, 'معرّف الزيارة الفعلية' => $s->visit_id, 'سجل الإعطاء المبطل' => $s->has_voided_dose ? 'توجد وقائع إعطاء مبطلة محفوظة تاريخيًا' : null, 'ملاحظة' => $s->note], ['النسخة' => 'integer', 'موعد مخطط' => 'date', 'تاريخ إعطاء فعلي' => 'date']));
+                array_push($rows, ...$this->facts(($s->plan_id ? $s->plan_number.' / '.$s->session_number : 'موعد مستقل #'.$s->id), ['النسخة' => $s->revision_number, 'موعد مخطط' => $s->planned_on, 'حالة الموعد' => OncologyQueries::SESSION_STATUSES[$s->status], 'سبب الحالة' => $s->reason, 'تاريخ إعطاء فعلي' => $s->administered_on, 'معرّف الزيارة الفعلية' => $s->visit_id, 'سجل الإعطاء المبطل' => $s->has_voided_dose ? 'توجد وقائع إعطاء مبطلة محفوظة تاريخيًا' : null, 'ملاحظة' => $s->note], ['النسخة' => 'integer', 'موعد مخطط' => 'date', 'تاريخ إعطاء فعلي' => 'date']));
             }
             $check(count($rows));
             $result[] = $this->section('سجل الجرعات المجدولة', $rows);
-            $history = DB::table('audit_logs as a')->join('oncology_sessions as s', 's.id', '=', 'a.entity_id')->join('oncology_plans as p', 'p.id', '=', 's.plan_id')->where('a.entity_type', 'oncology_sessions')->where('a.facility_id', $f['id'])->where('s.dossier_id', $dossier)->whereNotNull('a.old_values')->orderBy('a.id')->limit($max + 1)->get(['a.old_values', 'a.new_values', 'a.occurred_at', 'p.plan_number', 's.session_number']);
+            $history = DB::table('audit_logs as a')->join('oncology_sessions as s', 's.id', '=', 'a.entity_id')->leftJoin('oncology_plans as p', 'p.id', '=', 's.plan_id')->where('a.entity_type', 'oncology_sessions')->where('a.facility_id', $f['id'])->where('s.dossier_id', $dossier)->whereNotNull('a.old_values')->orderBy('a.id')->limit($max + 1)->get(['a.old_values', 'a.new_values', 'a.occurred_at', 'p.plan_number', 's.session_number', 's.id as session_id']);
             $check($history->count());
             $rows = [];
             foreach ($history as $h) {
                 $old = json_decode($h->old_values, true);
                 $new = json_decode($h->new_values, true);
-                array_push($rows, ...$this->facts($h->plan_number.' / '.$h->session_number, ['التاريخ السابق' => $old['planned_on'] ?? null, 'التاريخ الجديد' => $new['planned_on'] ?? null, 'الحالة' => OncologyQueries::SESSION_STATUSES[$new['status']] ?? '', 'السبب' => $new['reason'] ?? null, 'وقت التسجيل' => $h->occurred_at], ['التاريخ السابق' => 'date', 'التاريخ الجديد' => 'date', 'وقت التسجيل' => 'datetime']));
+                array_push($rows, ...$this->facts(($h->plan_number ? $h->plan_number.' / '.$h->session_number : 'موعد مستقل #'.$h->session_id), ['التاريخ السابق' => $old['planned_on'] ?? null, 'التاريخ الجديد' => $new['planned_on'] ?? null, 'الحالة' => OncologyQueries::SESSION_STATUSES[$new['status']] ?? '', 'السبب' => $new['reason'] ?? null, 'وقت التسجيل' => $h->occurred_at], ['التاريخ السابق' => 'date', 'التاريخ الجديد' => 'date', 'وقت التسجيل' => 'datetime']));
             }
             $check(count($rows));
             $result[] = $this->section('تصحيحات المواعيد', $rows);
