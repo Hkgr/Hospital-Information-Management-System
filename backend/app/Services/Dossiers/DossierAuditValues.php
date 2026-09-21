@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditValues
 {
     private const FIELDS = [
+        'import_batch_id' => 'دفعة الاستيراد', 'source_rows' => 'مراجع صفوف المصدر لهذه البطاقة', 'purpose' => 'غرض الاستيراد', 'cutover_date' => 'تاريخ الانتقال للنظام',
         'plan_number' => 'رقم الخطة', 'current_revision_id' => 'النسخة الحالية', 'revision_number' => 'رقم النسخة', 'basis_disposition' => 'أساس الاعتماد', 'override_reason' => 'مبرر الاستثناء', 'status_reason' => 'سبب تغيير الحالة', 'reviewed_at' => 'وقت المراجعة', 'reviewed_by' => 'المراجع', 'protocol_name' => 'البروتوكول', 'protocol_code' => 'كود البروتوكول', 'modality' => 'نمط العلاج', 'intent' => 'النية العلاجية', 'starts_on' => 'البداية', 'ends_on' => 'النهاية', 'planned_cycles' => 'عدد الدورات', 'planned_sessions' => 'عدد الجلسات', 'interval_days' => 'الفاصل بالأيام', 'amendment_reason' => 'سبب تعديل الخطة', 'diagnosis_snapshot' => 'التشخيص المحفوظ', 'planned_on' => 'الموعد المخطط', 'session_number' => 'رقم الجلسة', 'cycle_number' => 'رقم الدورة', 'reason' => 'السبب', 'administered_on' => 'تاريخ الإعطاء', 'supervising_staff_id' => 'الطبيب المشرف', 'administered_by' => 'القائم بالإعطاء', 'session_label' => 'عنوان الجلسة', 'dose_value' => 'قيمة الجرعة', 'dose_unit' => 'وحدة الجرعة', 'dose_text' => 'تعليمات الجرعة', 'route' => 'طريق الإعطاء', 'funding_source_id' => 'مصدر التمويل', 'dispensed_on' => 'تاريخ الصرف', 'dispensing_purpose' => 'غرض الصرف', 'correction_reason' => 'سبب التصحيح',
         'supporting_attachment_id' => 'المرفق الداعم',
         'source' => 'مصدر التقرير', 'report_number' => 'رقم التقرير', 'external_organization' => 'الجهة الخارجية', 'specimen_type' => 'نوع العينة', 'anatomical_site' => 'الموقع التشريحي', 'requested_on' => 'تاريخ الطلب', 'collected_on' => 'تاريخ جمع العينة', 'result_on' => 'تاريخ النتيجة', 'conclusion' => 'الخلاصة النهائية', 'unavailable_reason' => 'سبب عدم الإتاحة أو الإلغاء', 'procedure_event_id' => 'واقعة الإجراء', 'doctor_id' => 'الطبيب المسؤول', 'disposition' => 'التقييم التشخيصي', 'assessed_on' => 'تاريخ التقييم', 'required_reason' => 'سبب طلب التشريح', 'not_required_reason' => 'سبب عدم الحاجة للتشريح', 'follow_up' => 'المتابعة', 'evidence_pathology_id' => 'التقرير الداعم',
@@ -131,6 +132,9 @@ class DossierAuditValues
             sort($selected);
 
             return implode('، ', array_unique($selected)) ?: 'لا توجد اختيارات مسجلة';
+        }
+        if ($field === 'source_rows' && is_array($value)) {
+            return implode('، ', array_map('intval', $value));
         }
         if (! is_scalar($value)) {
             return 'قيمة غير قابلة للعرض';

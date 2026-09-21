@@ -70,6 +70,11 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
             }
             foreach ($path->operations as $op) {
                 $op->security = [new SecurityRequirement(['bearerAuth' => []])];
+                if (str_starts_with($route, 'dossiers/imports') || $route === 'dossiers/import-template.xlsx') {
+                    (new DossierImportDocument)->operation($op, $route);
+
+                    continue;
+                }
                 if (preg_match('#/(treatment-options|treatment-plans|treatment-sessions|doses|dispensing)(/|$)#', $route)) {
                     (new OncologyDocument)->operation($op, $route);
 
