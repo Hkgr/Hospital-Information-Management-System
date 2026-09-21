@@ -1,3 +1,7 @@
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.choice { display: grid; gap: 8px; justify-items: start; text-align: start; padding: 16px; border: 1px solid #dce7eb; border-radius: 12px; background: #f7fafb; }
+.choice small { font-weight: 400; line-height: 1.5; }
+.protocol { min-block-size: 8rem; resize: vertical; }
 .fields { align-items: start; }
 .fields > label { align-content: start; }
 .fields input:not([type="checkbox"]), .fields select { min-block-size: 42px; }
