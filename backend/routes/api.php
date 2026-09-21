@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\DossierController;
 use App\Http\Controllers\Api\DossierPathologyController;
 use App\Http\Controllers\Api\DossierWizardController;
 use App\Http\Controllers\Api\OncologyController;
+use App\Http\Controllers\Api\PeriodController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
@@ -48,6 +49,9 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::post('/{dossier}/report/{format}', [$completion, 'report'])->whereNumber('dossier')->whereIn('format', ['pdf', 'xlsx'])->name('report');
         Route::post('/{dossier}/visits/{visit}/report/{format}', [$completion, 'report'])->whereNumber(['dossier', 'visit'])->whereIn('format', ['pdf', 'xlsx'])->name('visits.report');
         Route::post('/medications', [$completion, 'medication'])->name('medications.store');
+        Route::get('/services/pending', [$completion, 'pendingServices'])->name('services.pending');
+        Route::post('/{dossier}/visits/{visit}/services/{service}/complete', [$completion, 'completeService'])->whereNumber(['dossier', 'visit', 'service'])->name('visits.services.complete');
+        Route::post('/{dossier}/visits/{visit}/services/{service}/cancel', [$completion, 'cancelService'])->whereNumber(['dossier', 'visit', 'service'])->name('visits.services.cancel');
         Route::get('/{dossier}/visits/new', [$completion, 'newVisit'])->whereNumber('dossier')->name('visits.new');
         Route::post('/{dossier}/visits/subsequent', [$completion, 'subsequent'])->whereNumber('dossier')->defaults('section', 'visit')->name('visits.subsequent');
         Route::get('/{dossier}/visits/{visit}/progress', [$completion, 'progress'])->whereNumber(['dossier', 'visit'])->name('visits.progress');
@@ -169,6 +173,14 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
     });
     Route::get('/dashboards', [DashboardController::class, 'index'])->name('dashboards');
     Route::get('/dashboards/{key}', [DashboardController::class, 'show'])->name('dashboards.show');
+    Route::prefix('periods')->name('periods.')->group(function () {
+        Route::get('/', [PeriodController::class, 'index'])->name('index');
+        Route::post('/', [PeriodController::class, 'store'])->name('store');
+        Route::get('/unassigned', [PeriodController::class, 'unassigned'])->name('unassigned');
+        Route::post('/{period}/submit', [PeriodController::class, 'submit'])->whereNumber('period')->name('submit');
+        Route::post('/{period}/lock', [PeriodController::class, 'lock'])->whereNumber('period')->name('lock');
+        Route::post('/{period}/reopen', [PeriodController::class, 'reopen'])->whereNumber('period')->name('reopen');
+    });
 });
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {

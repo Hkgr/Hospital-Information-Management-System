@@ -3,6 +3,7 @@
 namespace App\Services\Dossiers;
 
 use App\Services\Clinics\ClinicCounts;
+use App\Services\Support\PeriodResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -46,11 +47,11 @@ class DossierVisitWriter
             if ((! $old || $old->visit_type_id != $input['visit_type_id']) && ! DB::table('visit_types')->where('id', $input['visit_type_id'])->where('is_active', true)->exists()) {
                 throw ValidationException::withMessages(['visit_type_id' => 'اختر نوع زيارة فعالًا من الدليل.']);
             }
-            $fields = Arr::only($input, ['visit_date', 'visit_type_id', 'is_referred']) + ['referring_hospital' => $input['is_referred'] ? $input['referring_hospital'] : null, 'referral_date' => $input['is_referred'] ? $input['referral_date'] : null, 'referral_reason' => $input['is_referred'] ? $input['referral_reason'] : null, 'updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($old?->lock_version ?? 0) + 1];
+            $fields = Arr::only($input, ['visit_date', 'visit_type_id', 'is_referred']) + ['referring_hospital' => $input['is_referred'] ? $input['referring_hospital'] : null, 'referral_date' => $input['is_referred'] ? $input['referral_date'] : null, 'referral_reason' => $input['is_referred'] ? $input['referral_reason'] : null, 'reporting_period_id' => app(PeriodResolver::class)->resolve($f['id'], $input['visit_date']), 'updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($old?->lock_version ?? 0) + 1];
             if ($id) {
                 DB::table('visits')->where('id', $id)->update($fields);
             } else {
-                $id = DB::table('visits')->insertGetId($fields + ['facility_id' => $f['id'], 'patient_id' => $d['patient_id'], 'dossier_id' => $dossier, 'dossier_visit_kind' => $subsequent ? 'subsequent' : 'initial', 'phase_three' => $subsequent, 'reporting_period_id' => null, 'visit_no' => 'V-'.Str::uuid(), 'client_request_id' => $input['request_id'], 'entered_by' => $r->user()->id, 'status' => 'draft', 'created_at' => now()]);
+                $id = DB::table('visits')->insertGetId($fields + ['facility_id' => $f['id'], 'patient_id' => $d['patient_id'], 'dossier_id' => $dossier, 'dossier_visit_kind' => $subsequent ? 'subsequent' : 'initial', 'phase_three' => $subsequent, 'visit_no' => 'V-'.Str::uuid(), 'client_request_id' => $input['request_id'], 'entered_by' => $r->user()->id, 'status' => 'draft', 'created_at' => now()]);
             }
             $rows = DB::table('visit_diagnoses')->where('visit_id', $id)->where('facility_id', $f['id'])->whereNull('voided_at')->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $dateChanged = $old && $old->visit_date !== $input['visit_date'];
@@ -79,13 +80,13 @@ class DossierVisitWriter
                     if (! $unchanged && ! app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $input['visit_date']]))->where('c.id', $row['clinic_id'])->where('s.id', $row['diagnosing_staff_id'])->exists()) {
                         throw ValidationException::withMessages(["diagnoses.$index.diagnosing_staff_id" => 'اختر طبيبًا فعالًا من العيادة وله ارتباط يغطي تاريخ الزيارة.']);
                     }
-                    $values = Arr::only($row, ['diagnosis_id', 'clinic_id', 'diagnosing_staff_id']) + ['diagnosed_on' => $row['diagnosed_on'] ?? null, 'updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($previous?->lock_version ?? 0) + 1];
+                    $values = Arr::only($row, ['diagnosis_id', 'clinic_id', 'diagnosing_staff_id']) + ['diagnosed_on' => $row['diagnosed_on'] ?? null, 'reporting_period_id' => app(PeriodResolver::class)->resolve($f['id'], $row['diagnosed_on'] ?? null), 'updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($previous?->lock_version ?? 0) + 1];
                 }
                 if ($previous) {
                     $rowId = $previous->id;
                     DB::table('visit_diagnoses')->where('id', $rowId)->update($values);
                 } else {
-                    $rowId = DB::table('visit_diagnoses')->insertGetId($values + ['visit_id' => $id, 'facility_id' => $f['id'], 'reporting_period_id' => null, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $r->user()->id, 'is_primary' => false, 'created_at' => now()]);
+                    $rowId = DB::table('visit_diagnoses')->insertGetId($values + ['visit_id' => $id, 'facility_id' => $f['id'], 'client_request_id' => (string) Str::uuid(), 'entered_by' => $r->user()->id, 'is_primary' => false, 'created_at' => now()]);
                 }
                 $this->writes->audit($r, $f, 'visit_diagnosis', $rowId, $previous ? (array) $previous : null, $values, ! empty($row['remove']) ? 'voided' : 'saved');
             }
@@ -99,7 +100,13 @@ class DossierVisitWriter
                 }
                 foreach (['visit_services', 'visit_procedures'] as $table) {
                     foreach (DB::table($table)->where('visit_id', $id)->where('facility_id', $f['id'])->where('dossier_managed', true)->whereNull('voided_at')->lockForUpdate()->get() as $event) {
-                        $changed = ['performed_on' => $input['visit_date'], 'lock_version' => $event->lock_version + 1, 'updated_by' => $r->user()->id, 'updated_at' => now()];
+                        if ($table === 'visit_services' && $event->status !== 'completed') {
+                            continue;
+                        }
+                        $changed = ['performed_on' => $input['visit_date'], 'reporting_period_id' => app(PeriodResolver::class)->resolve($f['id'], $input['visit_date']), 'lock_version' => $event->lock_version + 1, 'updated_by' => $r->user()->id, 'updated_at' => now()];
+                        if ($table === 'visit_services') {
+                            $changed['requested_on'] = $input['visit_date'];
+                        }
                         DB::table($table)->where('id', $event->id)->update($changed);
                         $this->writes->audit($r, $f, $table, $event->id, (array) $event, $changed);
                     }

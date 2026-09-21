@@ -81,7 +81,11 @@ class CatalogWorkflowTest extends TestCase
             $path = "/$kind/$id/events";
             $row = DB::table('visit_'.$kind.'s')->where($kind.'_id', $id)->orderBy('id')->first();
             $yesterday = now('Asia/Damascus')->subDay()->toDateString();
-            DB::table('visit_'.$kind.'s')->where('id', $row->id)->update(['performed_on' => $yesterday]);
+            $update = ['performed_on' => $yesterday];
+            if ($kind === 'service') {
+                $update['requested_on'] = $yesterday;
+            }
+            DB::table('visit_'.$kind.'s')->where('id', $row->id)->update($update);
             $result = $this->api('GET', $path)->assertOk()->assertJsonPath('totals.presentations', $count)->assertJsonPath('totals.unique_patients', $kind === 'service' ? 2 : 3)->json('data');
             $this->assertCount($count, array_unique(array_column($result, 'key')));
             $this->assertSame($yesterday, collect($result)->firstWhere('key', 'visit_'.$kind.':'.$row->id)['performed_on']);
@@ -94,7 +98,7 @@ class CatalogWorkflowTest extends TestCase
             $this->api('GET', $path, ['sort' => 'sql', 'per_page' => 500])->assertUnprocessable();
             for ($n = 0; $n < 23; $n++) {
                 $copy = (array) $row;
-                unset($copy['id']);
+                unset($copy['id'], $copy['open_request_key']);
                 $copy['client_request_id'] = (string) Str::uuid();
                 DB::table('visit_'.$kind.'s')->insert($copy);
             }

@@ -53,7 +53,7 @@ class DossierFixture
         }
         foreach (['visit_services', 'visit_procedures'] as $table) {
             $row = (array) DB::table($table)->where('visit_id', $base->id)->first();
-            unset($row['id']);
+            unset($row['id'], $row['open_request_key']);
             $row['visit_id'] = $f['latest_visit'];
             $row['client_request_id'] = (string) Str::uuid();
             DB::table($table)->insert($row);

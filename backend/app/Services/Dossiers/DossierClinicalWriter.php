@@ -2,6 +2,10 @@
 
 namespace App\Services\Dossiers;
 
+use App\Exceptions\DossierException;
+use App\Services\Catalog\CatalogQueries;
+use App\Services\Support\PeriodResolver;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -52,8 +56,21 @@ class DossierClinicalWriter
                         if ((! $old || $row['catalog_id'] != $old->$catalog) && ! DB::table($kind)->where('id', $row['catalog_id'])->where('is_active', true)->whereNull('archived_at')->exists()) {
                             throw ValidationException::withMessages(["$kind.$i.catalog_id" => 'اختر عنصرًا فعالًا غير مؤرشف من الدليل.']);
                         }
-                        $fields = [$catalog => $row['catalog_id'], 'clinic_id' => $row['clinic_id'], $doctor => $row['doctor_id'], 'note' => $row['note'] ?? null, 'performed_on' => $v->visit_date, 'dossier_managed' => true];
-                        $this->persist($r, $f, $table, $old, $fields, ['visit_id' => $visit, 'facility_id' => $f['id'], 'reporting_period_id' => null, 'client_request_id' => (string) Str::uuid()]);
+                        $performedOn = $kind === 'services' && $row['status'] === 'pending' ? null : $v->visit_date;
+                        $fields = [$catalog => $row['catalog_id'], 'clinic_id' => $row['clinic_id'], $doctor => $row['doctor_id'], 'note' => $row['note'] ?? null, 'performed_on' => $performedOn, 'reporting_period_id' => app(PeriodResolver::class)->resolve($f['id'], $performedOn), 'dossier_managed' => true];
+                        if ($kind === 'services') {
+                            $fields += ['status' => $row['status'], 'requested_on' => $v->visit_date, 'patient_id' => $v->patient_id];
+                        }
+                        $create = ['visit_id' => $visit, 'facility_id' => $f['id'], 'client_request_id' => (string) Str::uuid()];
+                        try {
+                            $this->persist($r, $f, $table, $old, $fields, $create);
+                        } catch (QueryException $e) {
+                            if ($kind === 'services' && ! $old && ($e->errorInfo[1] ?? null) === 1062 && str_contains($e->getMessage(), 'visit_services_one_open_request')) {
+                                $existing = DB::table('visit_services')->where('patient_id', $v->patient_id)->where('service_id', $row['catalog_id'])->where('status', 'pending')->whereNull('voided_at')->first();
+                                throw ValidationException::withMessages(["services.$i.catalog_id" => "المريض مسجّل على هذه الخدمة منذ {$existing->requested_on} وما زال ينتظر. سجّل انتهاءها أو ألغِها أولاً."]);
+                            }
+                            throw $e;
+                        }
                     }
                 }
             } else {
@@ -71,6 +88,61 @@ class DossierClinicalWriter
 
             return $visit;
         });
+    }
+
+    public function complete(Request $r, array $f, int $dossier, int $visit, int $service, array $data): int
+    {
+        return $this->writes->once($r, $f, $data, "service-complete:$dossier:$visit:$service", function () use ($r, $f, $dossier, $visit, $service, $data) {
+            $row = $this->pendingRow($f, $dossier, $visit, $service);
+            DossierWrites::version((array) $row, $data['lock_version']);
+            if ($data['performed_on'] < $row->requested_on) {
+                throw ValidationException::withMessages(['performed_on' => 'تاريخ تقديم الخدمة لا يسبق تاريخ طلبها.']);
+            }
+            if ($data['performed_on'] > $f['today']) {
+                throw ValidationException::withMessages(['performed_on' => 'تاريخ تقديم الخدمة لا يكون في المستقبل.']);
+            }
+            $fields = ['status' => 'completed', 'performed_on' => $data['performed_on'], 'performed_by' => $data['performed_by'] ?? null, 'reporting_period_id' => app(PeriodResolver::class)->resolve($f['id'], $data['performed_on']), 'lock_version' => $row->lock_version + 1, 'updated_by' => $r->user()->id, 'updated_at' => now()];
+            DB::table('visit_services')->where('id', $row->id)->update($fields);
+            $this->writes->audit($r, $f, 'visit_services', $row->id, (array) $row, $fields);
+
+            return $row->id;
+        });
+    }
+
+    public function cancel(Request $r, array $f, int $dossier, int $visit, int $service, array $data): int
+    {
+        return $this->writes->once($r, $f, $data, "service-cancel:$dossier:$visit:$service", function () use ($r, $f, $dossier, $visit, $service, $data) {
+            $row = $this->pendingRow($f, $dossier, $visit, $service);
+            DossierWrites::version((array) $row, $data['lock_version']);
+            $fields = ['status' => 'cancelled', 'cancelled_reason' => $data['cancelled_reason'], 'lock_version' => $row->lock_version + 1, 'updated_by' => $r->user()->id, 'updated_at' => now()];
+            DB::table('visit_services')->where('id', $row->id)->update($fields);
+            $this->writes->audit($r, $f, 'visit_services', $row->id, (array) $row, $fields);
+
+            return $row->id;
+        });
+    }
+
+    public function pending(array $f, array $input): array
+    {
+        $page = DB::table('visit_services as s')->join('visits as v', 'v.id', '=', 's.visit_id')->join('patients as p', 'p.id', '=', 's.patient_id')->join('services as n', 'n.id', '=', 's.service_id')
+            ->where('s.facility_id', $f['id'])->where('s.status', 'pending')->whereNull('s.voided_at')
+            ->select('s.id', 's.visit_id', 'v.dossier_id', DB::raw("CONCAT_WS(' ', p.first_name, p.family_name) as patient_name"), 's.service_id', 'n.name_ar', 's.requested_on', DB::raw("DATEDIFF('{$f['today']}', s.requested_on) as days_waiting"))
+            ->orderBy('s.requested_on')->orderBy('s.id')
+            ->paginate(25, ['*'], 'page', $input['page'] ?? 1);
+
+        return ['data' => $page->items(), 'meta' => CatalogQueries::meta($page)];
+    }
+
+    private function pendingRow(array $f, int $dossier, int $visit, int $service): object
+    {
+        abort_unless(DB::table('visits')->where('id', $visit)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->exists(), 404);
+        $row = DB::table('visit_services')->where('id', $service)->where('visit_id', $visit)->where('facility_id', $f['id'])->lockForUpdate()->first();
+        abort_unless($row, 404);
+        if ($row->status !== 'pending') {
+            throw new DossierException('SERVICE_NOT_PENDING', 'هذه الخدمة ليست معلّقة.', 409);
+        }
+
+        return $row;
     }
 
     private function row(string $table, array $row, array $scope): ?object
@@ -169,7 +241,7 @@ class DossierClinicalWriter
             throw ValidationException::withMessages(['outcome.code' => 'تعريف النتيجة غير متاح؛ راجع مسؤول الدليل.']);
         }
         $ref = $row['code'] === 'DOS-REFER';
-        $fields = ['result_id' => $result->id, 'clinic_id' => $row['clinic_id'], 'decided_by' => $row['doctor_id'], 'outcome_on' => $row['outcome_on'], 'note' => $row['note'] ?? null, 'dossier_managed' => true, 'referral_target' => $ref ? $row['referral_target'] : null, 'outgoing_referral_date' => $ref ? $row['outgoing_referral_date'] : null, 'outgoing_referral_reason' => $ref ? $row['outgoing_referral_reason'] : null];
-        $this->persist($r, $f, 'visit_outcomes', $old, $fields, ['visit_id' => $v->id, 'facility_id' => $f['id'], 'reporting_period_id' => null, 'client_request_id' => (string) Str::uuid()]);
+        $fields = ['result_id' => $result->id, 'clinic_id' => $row['clinic_id'], 'decided_by' => $row['doctor_id'], 'outcome_on' => $row['outcome_on'], 'note' => $row['note'] ?? null, 'dossier_managed' => true, 'referral_target' => $ref ? $row['referral_target'] : null, 'outgoing_referral_date' => $ref ? $row['outgoing_referral_date'] : null, 'outgoing_referral_reason' => $ref ? $row['outgoing_referral_reason'] : null, 'reporting_period_id' => app(PeriodResolver::class)->resolve($f['id'], $row['outcome_on'])];
+        $this->persist($r, $f, 'visit_outcomes', $old, $fields, ['visit_id' => $v->id, 'facility_id' => $f['id'], 'client_request_id' => (string) Str::uuid()]);
     }
 }

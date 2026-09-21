@@ -69,6 +69,32 @@ class DossierCompletionController extends Controller
         return $this->snapshot($f, $dossier, $visit);
     }
 
+    public function completeService(Request $r, int $dossier, int $visit, int $service)
+    {
+        $f = $this->scope($r, 'clinical.update');
+        $data = $r->validate(['request_id' => ['required', 'uuid'], 'lock_version' => ['required', 'integer', 'min:1'], 'performed_on' => ['required', 'date'], 'performed_by' => ['nullable', 'integer']]);
+        app(DossierClinicalWriter::class)->complete($r, $f, $dossier, $visit, $service, $data);
+
+        return $this->snapshot($f, $dossier, $visit);
+    }
+
+    public function cancelService(Request $r, int $dossier, int $visit, int $service)
+    {
+        $f = $this->scope($r, 'clinical.update');
+        $data = $r->validate(['request_id' => ['required', 'uuid'], 'lock_version' => ['required', 'integer', 'min:1'], 'cancelled_reason' => ['required', 'string', 'max:255']]);
+        app(DossierClinicalWriter::class)->cancel($r, $f, $dossier, $visit, $service, $data);
+
+        return $this->snapshot($f, $dossier, $visit);
+    }
+
+    public function pendingServices(Request $r)
+    {
+        $f = $this->scope($r);
+        $filters = $r->validate(['page' => ['sometimes', 'integer', 'min:1']]);
+
+        return response()->json(app(DossierClinicalWriter::class)->pending($f, $filters));
+    }
+
     public function review(Request $r, int $dossier, int $visit)
     {
         $f = $this->scope($r);

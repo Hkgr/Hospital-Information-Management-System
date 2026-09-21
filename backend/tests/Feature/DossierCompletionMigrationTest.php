@@ -16,9 +16,20 @@ class DossierCompletionMigrationTest extends TestCase
     {
         $uploads = require database_path('migrations/2026_09_18_000002_add_dossier_upload_reservations.php');
         $migration = require database_path('migrations/2026_09_18_000001_extend_dossier_visit_workflow.php');
-        $uploads->down();
-        $migration->down();
         try {
+            foreach ([
+                '2026_09_22_000001_add_service_requests_and_period_stamping.php',
+                '2026_09_21_000002_constrain_active_oncology_revision.php',
+                '2026_09_21_000001_preserve_voided_oncology_administrations.php',
+                '2026_09_20_000002_keep_context_codes_as_legacy_aliases.php',
+                '2026_09_20_000002_add_oncology_plans_and_sessions.php',
+                '2026_09_20_000001_protect_patient_card_registration_visit.php',
+                '2026_09_20_000001_add_visit_pathology_workflow.php',
+            ] as $file) {
+                (require database_path('migrations/'.$file))->down();
+            }
+            $uploads->down();
+            $migration->down();
             DossierWorkflowFixture::make();
             $before = [];
             foreach (['visit_services', 'visit_procedures', 'visit_outcomes'] as $table) {

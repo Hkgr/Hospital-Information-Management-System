@@ -5,6 +5,7 @@ namespace Tests\Support;
 use App\Models\User;
 use Database\Seeders\CatalogPermissionsSeeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class CatalogFixture
@@ -59,8 +60,10 @@ class CatalogFixture
         };
         $event = function (int $v, int $f, int $n = 1, bool $cancelled = false, bool $future = false) use ($items, $periods, $today, $user, $staff, $void) {
             foreach (['service', 'procedure'] as $kind) {
-                DB::table('visit_'.$kind.'s')->insert(['visit_id' => $v, 'facility_id' => $f, 'reporting_period_id' => $periods[$f], $kind.'_id' => $items[$kind][$n], 'performed_on' => $future ? now()->addDays(3)->toDateString() : $today,
-                    'client_request_id' => (string) Str::uuid(), 'entered_by' => $user->id, ...($kind === 'procedure' ? ['specialist_id' => $staff] : []), ...($cancelled ? $void : [])]);
+                $performed = $future ? now()->addDays(3)->toDateString() : $today;
+                $row = ['visit_id' => $v, 'facility_id' => $f, 'reporting_period_id' => $periods[$f], $kind.'_id' => $items[$kind][$n], 'performed_on' => $performed,
+                    'client_request_id' => (string) Str::uuid(), 'entered_by' => $user->id, ...($kind === 'procedure' ? ['specialist_id' => $staff] : (Schema::hasColumn('visit_services', 'requested_on') ? ['requested_on' => $performed, 'patient_id' => DB::table('visits')->where('id', $v)->value('patient_id')] : [])), ...($cancelled ? $void : [])];
+                DB::table('visit_'.$kind.'s')->insert($row);
             }
         };
         $v1 = $visit($patients[1], $facility);

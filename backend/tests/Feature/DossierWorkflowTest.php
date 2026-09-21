@@ -72,9 +72,9 @@ class DossierWorkflowTest extends TestCase
             DB::table('visit_procedures')->insert(array_replace($procedure, ['visit_id' => $visit, 'performed_on' => '2001-03-02', 'client_request_id' => (string) Str::uuid()]));
         }
         $service = (array) DB::table('visit_services')->where('facility_id', $this->f['facility'])->whereNull('voided_at')->first();
-        unset($service['id']);
+        unset($service['id'], $service['open_request_key']);
         for ($n = 0; $n < 2; $n++) {
-            DB::table('visit_services')->insert(array_replace($service, ['visit_id' => $v['id'], 'performed_on' => '2001-03-02', 'client_request_id' => (string) Str::uuid()]));
+            DB::table('visit_services')->insert(array_replace($service, ['visit_id' => $v['id'], 'performed_on' => '2001-03-02', 'requested_on' => '2001-03-02', 'client_request_id' => (string) Str::uuid()]));
         }
         DB::table('visit_procedures')->insert(array_replace($procedure, ['visit_id' => $second, 'client_request_id' => (string) Str::uuid(), 'voided_at' => now(), 'voided_by' => $this->f['user']->id, 'void_reason' => 'اختبار']));
         DB::table('visit_procedures')->insert(array_replace($procedure, ['visit_id' => $second, 'client_request_id' => (string) Str::uuid(), 'performed_on' => '2099-01-01']));
@@ -227,7 +227,7 @@ class DossierWorkflowTest extends TestCase
         $this->callApi('POST', "/$id/visits", $this->visit(['visit_date' => '2099-01-01']))->assertUnprocessable();
         $input = $this->visit(['is_referred' => true, 'referral_date' => '2000-01-01', 'referral_reason' => 'سبب', 'referring_hospital' => 'مشفى اختبار']);
         $v = $this->callApi('POST', "/$id/visits", $input)->assertCreated()->assertJsonPath('data.visit.status', 'draft')->assertJsonPath('data.progress.2.state', 'in_progress')->json('data.visit');
-        $this->assertDatabaseHas('visits', ['id' => $v['id'], 'reporting_period_id' => null]);
+        $this->assertDatabaseHas('visits', ['id' => $v['id'], 'reporting_period_id' => DB::table('reporting_periods')->where('facility_id', $this->f['facility'])->where('starts_on', '<=', '2001-03-02')->where('ends_on', '>=', '2001-03-02')->value('id')]);
         $this->callApi('POST', "/$id/visits", $input)->assertCreated()->assertJsonPath('data.visit.id', $v['id']);
         $this->callApi('POST', "/$id/visits", $this->visit())->assertConflict();
         $this->callApi('PUT', "/$id/visits/{$v['id']}", $this->visit(['lock_version' => 1, 'visit_date' => '1991-01-01']))->assertOk()->assertJsonPath('data.visit.referral_date', null);
@@ -294,7 +294,7 @@ class DossierWorkflowTest extends TestCase
         DB::table('visits')->where('id', $v->id)->update(['dossier_id' => $id, 'status' => 'draft']);
         DB::table('reporting_periods')->where('id', $v->reporting_period_id)->update(['status' => 'locked']);
         $this->callApi('PUT', "/$id/visits/{$v->id}", $this->visit(['lock_version' => 1, 'visit_date' => '1991-01-01']))->assertOk();
-        $this->assertDatabaseHas('visits', ['id' => $v->id, 'reporting_period_id' => $v->reporting_period_id, 'visit_date' => '1991-01-01']);
+        $this->assertDatabaseHas('visits', ['id' => $v->id, 'reporting_period_id' => null, 'visit_date' => '1991-01-01']);
         $this->assertDatabaseHas('reporting_periods', ['id' => $v->reporting_period_id, 'status' => 'locked']);
     }
 }

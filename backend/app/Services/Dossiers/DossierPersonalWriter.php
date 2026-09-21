@@ -3,6 +3,7 @@
 namespace App\Services\Dossiers;
 
 use App\Http\Requests\BloodBank\SaveBloodProfile;
+use App\Services\Support\PeriodResolver;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -87,7 +88,7 @@ class DossierPersonalWriter
                     $id = DB::table('patient_dossiers')->insertGetId($values + ['code' => null, 'facility_id' => $f['id'], 'patient_id' => $patientId, 'status' => 'draft', 'entered_by' => $r->user()->id, 'created_at' => now()]);
                     $visit = ['facility_id' => $f['id'], 'patient_id' => $patientId, 'dossier_id' => $id,
                         'visit_date' => $input['visit_date'], 'visit_type_id' => $input['visit_type_id'],
-                        'dossier_visit_kind' => 'initial', 'reporting_period_id' => null,
+                        'dossier_visit_kind' => 'initial', 'reporting_period_id' => app(PeriodResolver::class)->resolve($f['id'], $input['visit_date']),
                         'visit_no' => 'V-'.Str::uuid(), 'client_request_id' => $input['request_id'],
                         'entered_by' => $r->user()->id, 'status' => 'draft', 'created_at' => now(), 'updated_at' => now()];
                     $visitId = DB::table('visits')->insertGetId($visit);

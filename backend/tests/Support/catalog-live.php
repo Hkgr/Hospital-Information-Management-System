@@ -43,8 +43,13 @@ if (($argv[1] ?? '') === 'prepare') {
         foreach (['service', 'procedure'] as $kind) {
             $table = 'visit_'.$kind.'s';
             $row = (array) DB::table($table)->where($kind.'_id', $f['items'][$kind][1])->orderBy('id')->first();
-            DB::table($table)->where('id', $row['id'])->update(['performed_on' => now('Asia/Damascus')->subDay()->toDateString()]);
-            unset($row['id']);
+            $yesterday = now('Asia/Damascus')->subDay()->toDateString();
+            $update = ['performed_on' => $yesterday];
+            if ($kind === 'service') {
+                $update['requested_on'] = $yesterday;
+            }
+            DB::table($table)->where('id', $row['id'])->update($update);
+            unset($row['id'], $row['open_request_key']);
             for ($n = 0; $n < 23; $n++) {
                 $row['client_request_id'] = (string) Str::uuid();
                 DB::table($table)->insert($row);

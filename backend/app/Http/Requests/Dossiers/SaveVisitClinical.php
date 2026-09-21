@@ -25,6 +25,7 @@ class SaveVisitClinical extends FormRequest
                 }
                 $rules["$section.*.id"][] = 'distinct';
             }
+            $rules['services.*.status'] = ['required', Rule::in(['pending', 'completed'])];
         } else {
             $rules['prescription'] = ['present', 'nullable', 'array'];
             $rules['outcome'] = ['present', 'nullable', 'array'];

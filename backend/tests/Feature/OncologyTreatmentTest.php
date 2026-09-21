@@ -6,6 +6,7 @@ use App\Services\BloodBank\BloodBankReports;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierReports;
 use App\Services\Dossiers\OncologyWriter;
+use Database\Seeders\DossierAuditPermissionsSeeder;
 use Database\Seeders\DossierPathologyPermissionsSeeder;
 use Database\Seeders\OncologyPermissionsSeeder;
 use Illuminate\Database\QueryException;
@@ -25,6 +26,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
     protected function setUp(): void
     {
         parent::setUp();
+        (new DossierAuditPermissionsSeeder)->run();
         foreach ([OncologyPermissionsSeeder::class, DossierPathologyPermissionsSeeder::class] as $seeder) {
             $this->seed($seeder);
             foreach (DB::table('permissions')->whereIn('code', array_keys($seeder::CODES))->pluck('id') as $permission) {

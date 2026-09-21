@@ -60,6 +60,10 @@ abstract class DossierCompletionCase extends TestCase
 
     protected function saveSection(string $section, array $data)
     {
+        if ($section === 'clinical' && isset($data['services'])) {
+            $data['services'] = array_map(fn ($row) => $row + ['status' => $row['status'] ?? 'completed'], $data['services']);
+        }
+
         return $this->callApi('PUT', $this->path('/'.$section), $data + ['lock_version' => $this->s['visit']['lock_version']]);
     }
 }
