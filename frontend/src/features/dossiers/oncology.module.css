@@ -1,0 +1,7 @@
+.fields { align-items: start; }
+.fields > label { align-content: start; }
+.fields input:not([type="checkbox"]), .fields select { min-block-size: 42px; }
+.fields fieldset > div:has(> button[aria-pressed]) { grid-auto-rows: max-content; align-content: start; }
+.review { display: grid; gap: 12px; }
+.review label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.review small { grid-column: 2; overflow-wrap: anywhere; }

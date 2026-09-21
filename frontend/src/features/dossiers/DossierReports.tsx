@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { apiRequest, AuthError } from "../auth/api";
 import styles from "../clinics/clinics.module.css";
 
-export const reportColumns={pathology_status:"حالة التشريح المرضي",sequence:"م",code:"كود المريض",name:"اسم المريض",mother_name:"اسم الأم",gender:"الجنس",birth_date:"الميلاد",phone:"الهاتف",paper_file_number:"رقم الملف الورقي",opening_date:"بداية الملف الطبي في المشفى",latest_visit_date:"تاريخ آخر زيارة",status:"حالة السياق الطبي",is_oncology:"الحالة الورمية",diagnoses:"تشخيصات آخر زيارة",clinics:"العيادات",doctors:"الأطباء المسؤولون",visit_count:"عدد الزيارات",procedure_count:"عدد الإجراءات"};
+import {treatmentColumns} from "./oncology";
+export const reportColumns={...treatmentColumns,pathology_status:"حالة التشريح المرضي",sequence:"م",code:"كود المريض",name:"اسم المريض",mother_name:"اسم الأم",gender:"الجنس",birth_date:"الميلاد",phone:"الهاتف",paper_file_number:"رقم الملف الورقي",opening_date:"بداية الملف الطبي في المشفى",latest_visit_date:"تاريخ آخر زيارة",status:"حالة السياق الطبي",is_oncology:"الحالة الورمية",diagnoses:"تشخيصات آخر زيارة",clinics:"العيادات",doctors:"الأطباء المسؤولون",visit_count:"عدد الزيارات",procedure_count:"عدد الإجراءات"};
 export const defaultColumns: (keyof typeof reportColumns)[] = ["sequence","code","name","mother_name","gender","birth_date","phone","paper_file_number","opening_date","latest_visit_date","status","is_oncology"];
 export default function DossierReports({path,filters,ready,allowed}:{path:string;filters:string;ready:boolean;allowed:boolean}){
   const pending=useRef<AbortController|null>(null);const [busy,setBusy]=useState(false),[error,setError]=useState("");

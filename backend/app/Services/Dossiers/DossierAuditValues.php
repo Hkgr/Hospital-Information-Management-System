@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditValues
 {
     private const FIELDS = [
+        'plan_number' => 'رقم الخطة', 'current_revision_id' => 'النسخة الحالية', 'revision_number' => 'رقم النسخة', 'basis_disposition' => 'أساس الاعتماد', 'override_reason' => 'مبرر الاستثناء', 'status_reason' => 'سبب تغيير الحالة', 'reviewed_at' => 'وقت المراجعة', 'reviewed_by' => 'المراجع', 'protocol_name' => 'البروتوكول', 'protocol_code' => 'كود البروتوكول', 'modality' => 'نمط العلاج', 'intent' => 'النية العلاجية', 'starts_on' => 'البداية', 'ends_on' => 'النهاية', 'planned_cycles' => 'عدد الدورات', 'planned_sessions' => 'عدد الجلسات', 'interval_days' => 'الفاصل بالأيام', 'amendment_reason' => 'سبب تعديل الخطة', 'diagnosis_snapshot' => 'التشخيص المحفوظ', 'planned_on' => 'الموعد المخطط', 'session_number' => 'رقم الجلسة', 'cycle_number' => 'رقم الدورة', 'reason' => 'السبب', 'administered_on' => 'تاريخ الإعطاء', 'supervising_staff_id' => 'الطبيب المشرف', 'administered_by' => 'القائم بالإعطاء', 'session_label' => 'عنوان الجلسة', 'dose_value' => 'قيمة الجرعة', 'dose_unit' => 'وحدة الجرعة', 'dose_text' => 'تعليمات الجرعة', 'route' => 'طريق الإعطاء', 'funding_source_id' => 'مصدر التمويل', 'dispensed_on' => 'تاريخ الصرف', 'dispensing_purpose' => 'غرض الصرف', 'correction_reason' => 'سبب التصحيح',
         'supporting_attachment_id' => 'المرفق الداعم',
         'source' => 'مصدر التقرير', 'report_number' => 'رقم التقرير', 'external_organization' => 'الجهة الخارجية', 'specimen_type' => 'نوع العينة', 'anatomical_site' => 'الموقع التشريحي', 'requested_on' => 'تاريخ الطلب', 'collected_on' => 'تاريخ جمع العينة', 'result_on' => 'تاريخ النتيجة', 'conclusion' => 'الخلاصة النهائية', 'unavailable_reason' => 'سبب عدم الإتاحة أو الإلغاء', 'procedure_event_id' => 'واقعة الإجراء', 'doctor_id' => 'الطبيب المسؤول', 'disposition' => 'التقييم التشخيصي', 'assessed_on' => 'تاريخ التقييم', 'required_reason' => 'سبب طلب التشريح', 'not_required_reason' => 'سبب عدم الحاجة للتشريح', 'follow_up' => 'المتابعة', 'evidence_pathology_id' => 'التقرير الداعم',
         'code' => 'معرّف السياق التاريخي (غير الكود الحالي)', 'opening_date' => 'بداية الملف الطبي في المشفى', 'status' => 'الحالة',
@@ -30,6 +31,12 @@ class DossierAuditValues
     ];
 
     private const GROUPS = [
+        'oncology_plans' => ['plan_number', 'current_revision_id', 'status', 'basis_disposition', 'override_reason', 'status_reason', 'reviewed_at', 'reviewed_by'],
+        'oncology_plan_revisions' => ['revision_number', 'protocol_name', 'protocol_code', 'modality', 'intent', 'starts_on', 'ends_on', 'planned_cycles', 'planned_sessions', 'interval_days', 'amendment_reason', 'diagnosis_snapshot', 'clinic_id', 'doctor_id'],
+        'oncology_sessions' => ['session_number', 'cycle_number', 'planned_on', 'status', 'reason', 'clinic_id', 'doctor_id'],
+        'dose_sessions' => ['administered_on', 'supervising_staff_id', 'administered_by', 'session_label', 'correction_reason'],
+        'dose_session_items' => ['medication_name_snapshot', 'medication_code_snapshot', 'dose_value', 'dose_unit', 'dose_text', 'quantity', 'quantity_unit', 'route', 'funding_source_id'],
+        'visit_medications' => ['dispensed_on', 'medication_name_snapshot', 'medication_code_snapshot', 'dispensing_purpose', 'quantity', 'quantity_unit', 'dose_text', 'prescribing_staff_id', 'funding_source_id', 'correction_reason'],
         'visit_pathologies' => ['source', 'status', 'report_number', 'external_organization', 'specimen_type', 'anatomical_site', 'requested_on', 'collected_on', 'result_on', 'conclusion', 'unavailable_reason', 'procedure_event_id', 'clinic_id', 'doctor_id', 'supporting_attachment_id'],
         'visit_diagnostic_assessments' => ['disposition', 'assessed_on', 'required_reason', 'not_required_reason', 'follow_up', 'evidence_pathology_id', 'clinic_id', 'doctor_id'],
         'patient_dossier' => ['code', 'opening_date', 'status'],

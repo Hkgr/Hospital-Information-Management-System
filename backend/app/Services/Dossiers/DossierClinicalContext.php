@@ -65,6 +65,12 @@ class DossierClinicalContext
 
     public function retained(array $f, int $visit, string $date, bool $diagnoses = true): void
     {
+        // A visit-date edit must not silently move separately documented treatment facts.
+        foreach (['dose_sessions' => 'administered_on', 'visit_medications' => 'dispensed_on'] as $table => $field) {
+            if (DB::table($table)->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->whereNotNull($table === 'dose_sessions' ? 'oncology_session_id' : 'dose_session_id')->where($field, '<>', $date)->lockForUpdate()->exists()) {
+                throw ValidationException::withMessages(['visit_date' => 'توجد جرعة أو أدوية مصروفة بتاريخ الزيارة الحالي؛ يلزم تصحيح الوقائع صراحة قبل تغيير تاريخ الزيارة.']);
+            }
+        }
         foreach (self::TABLES as $table => [$clinic, $doctor, $field]) {
             if (! $diagnoses && $table === 'visit_diagnoses') {
                 continue;

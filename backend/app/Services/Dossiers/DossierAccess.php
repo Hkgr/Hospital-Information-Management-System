@@ -33,6 +33,9 @@ class DossierAccess
     private function capabilities(User $user, array $permissions): array
     {
         $caps = [];
+        foreach (['view', 'create', 'update', 'activate', 'override', 'status', 'schedule', 'administer', 'dispense', 'correct', 'void'] as $action) {
+            $caps['treatment_'.$action] = in_array('dossiers.treatment.view', $permissions, true) && in_array('dossiers.treatment.'.$action, $permissions, true);
+        }
         foreach (['create', 'personal.update', 'medical.update', 'visits.create', 'visits.update', 'clinical.update', 'attachments.view', 'attachments.upload', 'attachments.download', 'attachments.void', 'finalize', 'visits.complete', 'export', 'audit', 'assessment.update', 'pathology.create', 'pathology.update', 'pathology.void'] as $code) {
             $caps[str_replace('.', '_', $code)] = in_array('dossiers.'.$code, $permissions, true);
         }

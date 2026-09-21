@@ -11,12 +11,30 @@ use App\Http\Controllers\Api\DossierCompletionController;
 use App\Http\Controllers\Api\DossierController;
 use App\Http\Controllers\Api\DossierPathologyController;
 use App\Http\Controllers\Api\DossierWizardController;
+use App\Http\Controllers\Api\OncologyController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
     Route::prefix('dossiers')->name('dossiers.')->group(function () {
+        $oncology = OncologyController::class;
+        Route::get('/treatment-options', [$oncology, 'options'])->name('treatment.options');
+        Route::get('/{dossier}/treatment-plans', [$oncology, 'index'])->whereNumber('dossier')->name('treatment.index');
+        Route::post('/{dossier}/treatment-plans', [$oncology, 'savePlan'])->whereNumber('dossier')->name('treatment.create');
+        Route::get('/{dossier}/treatment-plans/{plan}', [$oncology, 'show'])->whereNumber(['dossier', 'plan'])->name('treatment.show');
+        Route::put('/{dossier}/treatment-plans/{plan}', [$oncology, 'savePlan'])->whereNumber(['dossier', 'plan'])->name('treatment.update');
+        Route::post('/{dossier}/treatment-plans/{plan}/status', [$oncology, 'status'])->whereNumber(['dossier', 'plan'])->name('treatment.status');
+        Route::post('/{dossier}/treatment-plans/{plan}/sessions', [$oncology, 'schedule'])->whereNumber(['dossier', 'plan'])->name('treatment.schedule');
+        Route::get('/{dossier}/treatment-sessions', [$oncology, 'sessions'])->whereNumber('dossier')->name('treatment.sessions');
+        Route::get('/{dossier}/treatment-sessions/{session}', [$oncology, 'session'])->whereNumber(['dossier', 'session'])->name('treatment.session');
+        Route::put('/{dossier}/treatment-sessions/{session}', [$oncology, 'updateSession'])->whereNumber(['dossier', 'session'])->name('treatment.reschedule');
+        Route::get('/{dossier}/visits/{visit}/doses', [$oncology, 'doses'])->whereNumber(['dossier', 'visit'])->name('treatment.doses');
+        foreach (['doses' => ['administer', 'dose'], 'dispensing' => ['dispense', 'dispensing']] as $segment => [$handler, $parameter]) {
+            Route::post('/{dossier}/visits/{visit}/'.$segment, [$oncology, $handler])->whereNumber(['dossier', 'visit'])->name('treatment.'.$segment.'.create');
+            Route::put('/{dossier}/visits/{visit}/'.$segment.'/{'.$parameter.'}', [$oncology, $handler])->whereNumber(['dossier', 'visit', $parameter])->name('treatment.'.$segment.'.correct');
+            Route::post('/{dossier}/visits/{visit}/'.$segment.'/{'.$parameter.'}/void', [$oncology, $handler])->whereNumber(['dossier', 'visit', $parameter])->name('treatment.'.$segment.'.void');
+        }
         Route::get('/{dossier}/pathology', [DossierPathologyController::class, 'index'])->whereNumber('dossier')->name('pathology.history');
         Route::get('/{dossier}/visits/{visit}/pathology', [DossierPathologyController::class, 'index'])->whereNumber(['dossier', 'visit'])->name('pathology.index');
         Route::post('/{dossier}/visits/{visit}/pathology', [DossierPathologyController::class, 'save'])->whereNumber(['dossier', 'visit'])->name('pathology.create');
