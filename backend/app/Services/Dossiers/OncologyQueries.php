@@ -114,6 +114,11 @@ class OncologyQueries
         return (array) $row + ['unresolved_session_count' => DB::table('oncology_sessions')->where('plan_id', $id)->where('revision_id', '<>', $row->current_revision_id)->whereIn('status', ['scheduled', 'rescheduled'])->count(), 'revisions' => $revisions->map(fn ($r) => (array) $r + ['items' => ($items[$r->id] ?? collect())->all()])->all()];
     }
 
+    public static function voidedDoseSql(): string
+    {
+        return 'EXISTS (SELECT 1 FROM dose_sessions AS history WHERE history.oncology_session_id = s.id AND history.voided_at IS NOT NULL) AS has_voided_dose';
+    }
+
     public function sessions(array $f, int $dossier, array $input): array
     {
         app(DossierWrites::class)->dossier($f, $dossier, false);
@@ -123,7 +128,10 @@ class OncologyQueries
                 $q->where('s.'.$key, $input[$key]);
             }
         }
-        $page = $q->orderBy('s.planned_on')->orderBy('s.id')->paginate($input['per_page'] ?? 10, ['s.*', 'p.plan_number', 'p.effective_status', 'p.current_revision_id', 'p.lock_version as plan_lock_version', 'dose.id as dose_id', 'dose.visit_id', 'dose.voided_at as dose_voided_at'], 'page', $input['page'] ?? 1);
+        $page = $q->orderBy('s.planned_on')->orderBy('s.id')->paginate($input['per_page'] ?? 10, ['s.*', 'p.plan_number', 'p.effective_status', 'p.current_revision_id', 'p.lock_version as plan_lock_version', 'dose.id as dose_id', 'dose.visit_id', DB::raw(self::voidedDoseSql())], 'page', $input['page'] ?? 1);
+        $page->getCollection()->each(function ($row) {
+            $row->has_voided_dose = (bool) $row->has_voided_dose;
+        });
 
         return ['data' => $page->items(), 'meta' => CatalogQueries::meta($page)];
     }

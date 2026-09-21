@@ -94,6 +94,24 @@ start/end dates and planned session/cycle counts, with a date-valid doctor/clini
 assignment. Neither boundaries nor counts expand implicitly. Session PUT requires
 `plan_lock_version` alongside its own `lock_version`. Carry-forward copies the
 current revision's clinic/doctor; audit retains the entire prior appointment.
+`carry_forward=true` is valid only for an obsolete session in an effectively active
+plan, with `status=rescheduled` and an explicit `planned_on`. Every reschedule
+requires a submitted date, even when carrying forward; the old date is never used
+as a server fallback. Current-revision carry and carry combined with a terminal
+status return `422 ONCOLOGY_INVALID_CARRY_FORWARD`. Terminal resolution without
+carry changes only status/reason (plus normal actor/version/audit metadata), retaining
+the original revision, clinic, doctor and planned date. Both direct session writes
+and full-dose void enforce these rules in the writer; invalid void resolution rolls
+back dose, session and audit changes together. A missing reschedule date is a field
+validation error; direct writer callers receive `ONCOLOGY_RESCHEDULE_DATE_REQUIRED`.
+The editor shows carry only for obsolete reschedules, clears it on terminal choices,
+and reapplies that rule during conflict review and payload construction.
+
+Session lists expose current active `dose_id` / `visit_id` separately from boolean
+`has_voided_dose`. The former are null when no active dose exists; the latter remains
+true for retained attempts, including after replacement. Correlated existence avoids
+multiplying session rows. Card appointment history uses the same indicator; effective
+visit facts and independently recorded dispensing retain their existing meaning.
 Historical void attempts retain their own immutable revision even after a resolved
 appointment moves forward. Active/completed administrations cannot be moved.
 

@@ -25,7 +25,7 @@ class SaveOncology extends FormRequest
 
     public function messages(): array
     {
-        return ['required' => 'هذا الحقل مطلوب.', 'present' => 'أرسل بيانات القسم ولو كانت فارغة.', 'integer' => 'أدخل عددًا صحيحًا صالحًا.', 'numeric' => 'أدخل قيمة رقمية صالحة.', 'gt' => 'يجب أن تكون القيمة موجبة.', 'date_format' => 'أدخل تاريخًا صالحًا.', 'after_or_equal' => 'تاريخ النهاية لا يسبق تاريخ البداية.', 'in' => 'اختر قيمة متاحة من القائمة.', 'max' => 'القيمة تتجاوز الحد المسموح.', 'uuid' => 'معرّف إعادة الطلب غير صالح.', 'decimal' => 'تقبل القيمة أربع منازل عشرية كحد أقصى.'];
+        return ['planned_on.required_if' => 'حدد تاريخًا صريحًا لإعادة الجدولة.', 'required' => 'هذا الحقل مطلوب.', 'present' => 'أرسل بيانات القسم ولو كانت فارغة.', 'integer' => 'أدخل عددًا صحيحًا صالحًا.', 'numeric' => 'أدخل قيمة رقمية صالحة.', 'gt' => 'يجب أن تكون القيمة موجبة.', 'date_format' => 'أدخل تاريخًا صالحًا.', 'after_or_equal' => 'تاريخ النهاية لا يسبق تاريخ البداية.', 'in' => 'اختر قيمة متاحة من القائمة.', 'max' => 'القيمة تتجاوز الحد المسموح.', 'uuid' => 'معرّف إعادة الطلب غير صالح.', 'decimal' => 'تقبل القيمة أربع منازل عشرية كحد أقصى.'];
     }
 
     public function operation(): string
@@ -76,7 +76,7 @@ class SaveOncology extends FormRequest
             return $rules + ['sessions' => ['required', 'array', 'min:1', 'max:24'], 'sessions.*.planned_on' => $date, 'sessions.*.cycle_number' => $optionalId, 'sessions.*.session_number' => [...$id, 'distinct'], 'sessions.*.note' => $text];
         }
         if ($op === 'session') {
-            return $rules + ['status' => ['required', 'in:rescheduled,missed,cancelled,referred'], 'planned_on' => [Rule::requiredIf(fn () => $this->input('status') === 'rescheduled' && ! $this->boolean('carry_forward')), 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:2000'], 'plan_lock_version' => $id, 'carry_forward' => ['sometimes', 'boolean']];
+            return $rules + ['status' => ['required', 'in:rescheduled,missed,cancelled,referred'], 'planned_on' => ['required_if:status,rescheduled', 'date_format:Y-m-d'], 'reason' => ['required', 'string', 'max:2000'], 'plan_lock_version' => $id, 'carry_forward' => ['sometimes', 'boolean']];
         }
         if ($op === 'plan') {
             $rules += ['confirm_duplicate' => ['sometimes', 'boolean'], 'duplicate_reason' => ['required_if:confirm_duplicate,true', 'nullable', 'string', 'max:2000']];

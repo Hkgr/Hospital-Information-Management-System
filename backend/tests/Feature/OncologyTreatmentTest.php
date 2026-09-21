@@ -5,9 +5,11 @@ namespace Tests\Feature;
 use App\Services\BloodBank\BloodBankReports;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierReports;
+use App\Services\Dossiers\OncologyWriter;
 use Database\Seeders\DossierPathologyPermissionsSeeder;
 use Database\Seeders\OncologyPermissionsSeeder;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -88,6 +90,115 @@ class OncologyTreatmentTest extends DossierCompletionCase
     private function resolve(array $s, array $extra = [])
     {
         return $this->callApi('PUT', '/'.$this->s['id'].'/treatment-sessions/'.$s['id'], $extra + ['lock_version' => $s['lock_version'], 'plan_lock_version' => DB::table('oncology_plans')->where('id', $s['plan_id'])->value('lock_version'), 'status' => 'rescheduled', 'planned_on' => '2001-03-02', 'reason' => 'تصحيح موعد الحضور']);
+    }
+
+    private function obsoleteSession(bool $administer = false): array
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $s = $this->historicalSession($p);
+        $dose = $administer ? $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id') : null;
+        $p = $this->callApi('PUT', $this->planPath($p['id']), $this->planData(['lock_version' => $this->dose($s)['plan_lock_version'], 'clinic_id' => $this->f['clinics'][1], 'doctor_id' => $this->f['workflow_doctors'][1], 'note' => 'تصحيح النسخة', 'amendment_reason' => 'اعتماد طبيب وعيادة جديدين']))->assertOk()->json('data');
+        $p = $this->activate($p)->assertOk()->json('data');
+
+        return [$p, (array) DB::table('oncology_sessions')->find($s['id']), $dose];
+    }
+
+    private function writerResolutionRejected(array $s, array $changes, string $code = 'ONCOLOGY_INVALID_CARRY_FORWARD'): void
+    {
+        $r = Request::create('/testing/oncology-resolution');
+        $r->setUserResolver(fn () => $this->f['user']);
+        $f = app(DossierAccess::class)->facility($this->f['user'], $this->f['facility']);
+        $data = $changes + ['request_id' => (string) Str::uuid(), 'lock_version' => $s['lock_version'], 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'reason' => 'قرار صريح'];
+        $audit = DB::table('audit_logs')->count();
+        try {
+            app(OncologyWriter::class)->session($r, $f, $this->s['id'], $s['id'], $data);
+            $this->fail('The writer itself must reject invalid resolution without relying on FormRequest');
+        } catch (HttpResponseException $e) {
+            $this->assertSame(422, $e->getResponse()->getStatusCode());
+            $this->assertSame($code, json_decode($e->getResponse()->getContent(), true)['error']['code']);
+        }
+        $this->assertSame($s, (array) DB::table('oncology_sessions')->find($s['id']));
+        $this->assertSame($audit, DB::table('audit_logs')->count());
+    }
+
+    public function test_resolution_terminal_states_preserve_obsolete_clinical_context(): void
+    {
+        [, $s] = $this->obsoleteSession();
+        foreach (['cancelled', 'missed', 'referred'] as $status) {
+            $this->resolve($s, ['status' => $status, 'planned_on' => '2002-01-01'])->assertOk();
+            $next = (array) DB::table('oncology_sessions')->find($s['id']);
+            foreach (['revision_id', 'clinic_id', 'doctor_id', 'planned_on'] as $key) {
+                $this->assertSame($s[$key], $next[$key], $status.' preserves '.$key);
+            }
+            $this->assertSame($status, $next['status']);
+            $s = $next;
+        }
+    }
+
+    public function test_resolution_terminal_carry_is_rejected_centrally_and_by_api(): void
+    {
+        [, $s] = $this->obsoleteSession();
+        foreach (['cancelled', 'missed', 'referred'] as $status) {
+            $data = ['status' => $status, 'carry_forward' => true, 'planned_on' => '2001-03-02'];
+            $this->writerResolutionRejected($s, $data);
+            $this->resolve($s, $data)->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_CARRY_FORWARD');
+            $this->assertSame($s, (array) DB::table('oncology_sessions')->find($s['id']));
+        }
+    }
+
+    public function test_resolution_current_revision_cannot_be_carried_forward(): void
+    {
+        $this->ready();
+        $s = $this->historicalSession($this->activate($this->makePlan())->assertOk()->json('data'));
+        $this->writerResolutionRejected($s, ['status' => 'rescheduled', 'carry_forward' => true, 'planned_on' => '2001-03-02']);
+        $this->resolve($s, ['carry_forward' => true])->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_CARRY_FORWARD');
+    }
+
+    public function test_resolution_carry_requires_explicit_date_in_writer_and_request(): void
+    {
+        [, $s] = $this->obsoleteSession();
+        $this->writerResolutionRejected($s, ['status' => 'rescheduled', 'carry_forward' => true]);
+        $this->writerResolutionRejected($s, ['status' => 'rescheduled'], 'ONCOLOGY_RESCHEDULE_DATE_REQUIRED');
+        $this->resolve($s, ['carry_forward' => true, 'planned_on' => null])->assertUnprocessable()->assertJsonValidationErrors('planned_on')->assertJsonPath('errors.planned_on.0', 'حدد تاريخًا صريحًا لإعادة الجدولة.');
+        $this->resolve($s, ['planned_on' => null])->assertUnprocessable()->assertJsonValidationErrors('planned_on');
+        $this->resolve($s)->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_OBSOLETE_SESSION_REVISION');
+        $this->resolve($s, ['carry_forward' => true])->assertOk();
+    }
+
+    public function test_resolution_invalid_atomic_void_keeps_dose_session_and_audit_unchanged(): void
+    {
+        [$p, $s, $dose] = $this->obsoleteSession(true);
+        $before = (array) DB::table('dose_sessions')->find($dose);
+        $audit = DB::table('audit_logs')->count();
+        foreach (['cancelled', 'missed', 'referred'] as $status) {
+            $this->callApi('POST', $this->path('/doses/'.$dose.'/void'), ['lock_version' => 1, 'session_lock_version' => $s['lock_version'], 'plan_lock_version' => $p['lock_version'], 'session_resolution' => $status, 'carry_forward' => true, 'reason' => 'قرار إبطال غير صالح'])->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_CARRY_FORWARD');
+            $this->assertSame($before, (array) DB::table('dose_sessions')->find($dose));
+            $this->assertSame($s, (array) DB::table('oncology_sessions')->find($s['id']));
+            $this->assertSame($audit, DB::table('audit_logs')->count());
+        }
+    }
+
+    public function test_resolution_session_history_is_independent_of_active_dose_without_fanout(): void
+    {
+        $this->ready();
+        $s = $this->historicalSession($this->activate($this->makePlan())->assertOk()->json('data'));
+        $this->callApi('GET', '/'.$this->s['id'].'/treatment-sessions')->assertJsonPath('data.0.has_voided_dose', false)->assertJsonPath('data.0.dose_id', null);
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $dose = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
+            $this->callApi('POST', $this->path('/doses/'.$dose.'/void'), ['lock_version' => 1, 'session_lock_version' => $s['lock_version'] + 1, 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'session_resolution' => 'rescheduled', 'planned_on' => '2001-03-02', 'reason' => 'إبطال واقعة مسجلة خطأ'])->assertOk();
+            $this->callApi('GET', '/'.$this->s['id'].'/treatment-sessions')->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.dose_id', null)->assertJsonPath('data.0.visit_id', null)->assertJsonPath('data.0.has_voided_dose', true);
+            $s = (array) DB::table('oncology_sessions')->find($s['id']);
+        }
+        $dose = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
+        $this->callApi('GET', '/'.$this->s['id'].'/treatment-sessions')->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.dose_id', $dose)->assertJsonPath('data.0.visit_id', $this->s['visit']['id'])->assertJsonPath('data.0.has_voided_dose', true);
+        $f = app(DossierAccess::class)->facility($this->f['user'], $this->f['facility'], 'export');
+        $r = Request::create('/api/dossiers');
+        $r->setUserResolver(fn () => $this->f['user']);
+        $doc = app(DossierReports::class)->document($r, $f, [], $this->s['id']);
+        $section = collect($doc['sections'])->firstWhere('title', 'سجل الجرعات المجدولة');
+        $this->assertNotNull($section);
+        $this->assertContains('توجد وقائع إعطاء مبطلة محفوظة تاريخيًا', array_column($section['rows'], 'value'));
     }
 
     public function test_integrity_future_appointment_requires_explicit_historical_reschedule(): void

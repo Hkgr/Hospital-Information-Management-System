@@ -206,6 +206,13 @@ class OncologyWriter
 
     private function resolveSession(Request $r, array $f, object $s, object $plan, array $data): int
     {
+        if (($data['carry_forward'] ?? false) && ($data['status'] !== 'rescheduled'
+            || $s->revision_id == $plan->current_revision_id || empty($data['planned_on']))) {
+            OncologyIntegrity::reject('ONCOLOGY_INVALID_CARRY_FORWARD', 'نقل النسخة متاح فقط لموعد من نسخة سابقة، مع إعادة جدولة وتاريخ صريح.');
+        }
+        if ($data['status'] === 'rescheduled' && empty($data['planned_on'])) {
+            OncologyIntegrity::reject('ONCOLOGY_RESCHEDULE_DATE_REQUIRED', 'حدد تاريخًا صريحًا لإعادة الجدولة.', ['fields' => ['planned_on' => ['تاريخ إعادة الجدولة مطلوب.']]]);
+        }
         if (DB::table('dose_sessions')->where('oncology_session_id', $s->id)->whereNull('voided_at')->exists()) {
             DossierWrites::conflict('للموعد إعطاء فعال؛ صحح الواقعة أو أبطلها مع معالجة الموعد.');
         }
@@ -220,7 +227,7 @@ class OncologyWriter
             if (($fields['revision_id'] ?? $s->revision_id) != $revision->id) {
                 OncologyIntegrity::reject('ONCOLOGY_OBSOLETE_SESSION_REVISION', 'نسخة علاجية سابقة — تحتاج معالجة قبل الإعطاء. أكد النقل إلى النسخة الحالية صراحة.');
             }
-            $fields['planned_on'] = $data['planned_on'] ?? $s->planned_on;
+            $fields['planned_on'] = $data['planned_on'];
             OncologyIntegrity::boundaries($revision, $fields + (array) $s);
             $this->context->check($f, $fields['clinic_id'] ?? $s->clinic_id, $fields['doctor_id'] ?? $s->doctor_id, $fields['planned_on'], 'planned_on', false);
         }

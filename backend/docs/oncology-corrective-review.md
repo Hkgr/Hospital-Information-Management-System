@@ -1,5 +1,7 @@
 # PR #27 corrective review
 
+This records the preceding corrective pass. See the [latest resolution follow-up](oncology-resolution-review.md) for verification after review of SHA 34c87ca.
+
 Reviewed starting SHA: `a0b233a33557c45c155b320d107fe885ea10f518`.
 Branch: `feature/oncology-treatment-plans-and-doses`. The PR remains a draft.
 The PR description identifies the final tested/pushed SHA.

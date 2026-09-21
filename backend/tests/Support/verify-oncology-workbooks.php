@@ -44,6 +44,7 @@ foreach (['card', 'visit', 'list'] as $kind) {
         Assert::assertGreaterThan(0, $leadingZero);
         Assert::assertGreaterThan(0, $injection);
         Assert::assertContains('إعطاء مبطل — محفوظ تاريخيًا', $values);
+        Assert::assertContains('توجد وقائع إعطاء مبطلة محفوظة تاريخيًا', $values);
         Assert::assertContains('إعطاء اصطناعي مسجل خطأ', $values);
     }
     if ($kind === 'visit') {

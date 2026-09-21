@@ -13,8 +13,9 @@ class CatalogFixture
     public static function make(): array
     {
         $tag = Str::lower(Str::random(8));
-        $user = User::factory()->create(['username' => 'catalog-'.$tag]);
-        $viewer = User::factory()->create(['username' => 'catalog-viewer-'.$tag]);
+        // Faker uniqueness is process-local; live fixtures retain earlier users.
+        $user = User::factory()->create(['username' => 'catalog-'.$tag, 'email' => 'catalog-'.$tag.'@example.test']);
+        $viewer = User::factory()->create(['username' => 'catalog-viewer-'.$tag, 'email' => 'catalog-viewer-'.$tag.'@example.test']);
         $facility = DB::table('facilities')->insertGetId(['code' => 'CAT-'.$tag, 'name_ar' => 'منشأة اختبار الخدمات', 'timezone' => 'Asia/Damascus']);
         $other = DB::table('facilities')->insertGetId(['code' => 'OTHER-'.$tag, 'name_ar' => 'منشأة محجوبة', 'timezone' => 'Asia/Damascus']);
         app(CatalogPermissionsSeeder::class)->run();

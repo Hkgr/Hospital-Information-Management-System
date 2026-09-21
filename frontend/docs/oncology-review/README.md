@@ -1,6 +1,26 @@
 # Oncology workflow — actual browser review
 
-## Corrective pass for PR #27
+## Latest resolution follow-up (review of 34c87ca)
+
+Current real Next standalone ? Laravel ? MariaDB captures, synthetic records only.
+Carry-forward is available only for obsolete reschedules, never terminal resolution.
+The comparison workflow preserves the reason draft while accepting the other
+operator's terminal status; a subsequent explicit carry/reschedule remains possible.
+
+| State | 390 px | 768 px | 1440 px |
+| --- | --- | --- | --- |
+| Required explicit date, Arabic error and focus with draft retained | [Image](resolution-date-required-390.png) | [Image](resolution-date-required-768.png) | [Image](resolution-date-required-1440.png) |
+| Terminal state after conflict review, without carry/date controls | [Image](resolution-terminal-conflict-390.png) | [Image](resolution-terminal-conflict-768.png) | [Image](resolution-terminal-conflict-1440.png) |
+| One session row with active replacement and retained void indicator | [Full page](resolution-history-390.png) | [Full page](resolution-history-768.png) | [Full page](resolution-history-1440.png) |
+
+[Card PDF scheduled-session history](resolution-card-page-7.png) shows retained
+voided attempts independently of the current active administration/visit.
+[Exact current verification](../../../backend/docs/oncology-resolution-review.md).
+The older galleries below document prior review passes; use this section for the
+latest validation and conflict states. No PDF/XLSX binary or private storage key is
+included in this gallery.
+
+## Preceding corrective pass for PR #27
 
 These are the current synthetic real-browser captures after date/revision guards,
 explicit carry-forward, atomic dose void/resolution and replacement administration.

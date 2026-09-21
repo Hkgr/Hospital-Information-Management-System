@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 use Tests\Support\DossierCompletionFixture;
+use Tests\Support\OncologyProcess;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -101,11 +102,12 @@ if ($mode === 'prepare') {
                     $worker->setTimeout(30);
                     $worker->start();
                     $workers[] = $worker;
-                    if (! $worker->waitUntil(fn ($type, $output) => str_contains($output, 'READY'))) {
-                        throw new RuntimeException('Worker did not become ready: '.$worker->getErrorOutput());
-                    }
+                    echo "$op: waiting for worker $n READY\n";
+                    OncologyProcess::waitUntilReady($worker);
+                    echo "$op: worker $n READY observed\n";
                 }
                 DB::commit();
+                echo "$op: parent dossier lock released\n";
                 $rows = [];
                 foreach ($workers as $worker) {
                     if ($worker->wait() !== 0) {

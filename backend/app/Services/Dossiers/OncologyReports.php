@@ -60,11 +60,11 @@ class OncologyReports
             }
             $check(count($rows));
             $result[] = $this->section('بنود النظام العلاجي المخططة', $rows);
-            $sessions = DB::table('oncology_sessions as s')->join('oncology_plans as p', 'p.id', '=', 's.plan_id')->join('oncology_plan_revisions as r', 'r.id', '=', 's.revision_id')->leftJoin('dose_sessions as dose', fn ($j) => $j->on('dose.oncology_session_id', '=', 's.id')->whereNull('dose.voided_at'))->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->orderBy('s.planned_on')->orderBy('s.id')->limit($max + 1)->get(['s.*', 'p.plan_number', 'r.revision_number', 'dose.visit_id', 'dose.administered_on', 'dose.voided_at as dose_voided_at']);
+            $sessions = DB::table('oncology_sessions as s')->join('oncology_plans as p', 'p.id', '=', 's.plan_id')->join('oncology_plan_revisions as r', 'r.id', '=', 's.revision_id')->leftJoin('dose_sessions as dose', fn ($j) => $j->on('dose.oncology_session_id', '=', 's.id')->whereNull('dose.voided_at'))->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->orderBy('s.planned_on')->orderBy('s.id')->limit($max + 1)->get(['s.*', 'p.plan_number', 'r.revision_number', 'dose.visit_id', 'dose.administered_on', DB::raw(OncologyQueries::voidedDoseSql())]);
             $check($sessions->count());
             $rows = [];
             foreach ($sessions as $s) {
-                array_push($rows, ...$this->facts($s->plan_number.' / '.$s->session_number, ['النسخة' => $s->revision_number, 'موعد مخطط' => $s->planned_on, 'حالة الموعد' => OncologyQueries::SESSION_STATUSES[$s->status], 'سبب الحالة' => $s->reason, 'تاريخ إعطاء فعلي' => $s->administered_on, 'معرّف الزيارة الفعلية' => $s->visit_id, 'إبطال الإعطاء' => $s->dose_voided_at ? 'واقعة مبطلة محفوظة تاريخيًا' : null, 'ملاحظة' => $s->note], ['النسخة' => 'integer', 'موعد مخطط' => 'date', 'تاريخ إعطاء فعلي' => 'date']));
+                array_push($rows, ...$this->facts($s->plan_number.' / '.$s->session_number, ['النسخة' => $s->revision_number, 'موعد مخطط' => $s->planned_on, 'حالة الموعد' => OncologyQueries::SESSION_STATUSES[$s->status], 'سبب الحالة' => $s->reason, 'تاريخ إعطاء فعلي' => $s->administered_on, 'معرّف الزيارة الفعلية' => $s->visit_id, 'سجل الإعطاء المبطل' => $s->has_voided_dose ? 'توجد وقائع إعطاء مبطلة محفوظة تاريخيًا' : null, 'ملاحظة' => $s->note], ['النسخة' => 'integer', 'موعد مخطط' => 'date', 'تاريخ إعطاء فعلي' => 'date']));
             }
             $check(count($rows));
             $result[] = $this->section('سجل الجرعات المجدولة', $rows);
