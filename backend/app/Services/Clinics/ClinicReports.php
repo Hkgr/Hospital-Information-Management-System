@@ -3,6 +3,7 @@
 namespace App\Services\Clinics;
 
 use App\Exceptions\ClinicException;
+use App\Services\Directory\DirectoryPatientTable;
 use App\Services\Directory\DirectoryReport;
 use App\Services\Directory\ReportMetadata;
 use Illuminate\Http\Request;
@@ -36,17 +37,23 @@ class ClinicReports
                 throw new ClinicException('EXPORT_LIMIT_EXCEEDED', 'عدد الارتباطات أكبر من الحد الآمن للتقرير. ضيّق النطاق.', 422);
             }
             $byClinic = $doctors->groupBy('clinic_id');
+            $patients = $this->counts->roster($facility, $rows->pluck('id')->all())->limit(config('clinics.export_patient_limit') + 1)->get();
+            if ($patients->count() > config('clinics.export_patient_limit')) {
+                throw new ClinicException('EXPORT_LIMIT_EXCEEDED', 'عدد المرضى أكبر من الحد الآمن للتقرير. ضيّق النطاق.', 422);
+            }
+            $byPatients = $patients->groupBy('owner_id');
 
-            return $rows->map(function ($row) use ($byClinic) {
+            return $rows->map(function ($row) use ($byClinic, $byPatients) {
                 $links = $byClinic->get($row->id, collect())->map(fn ($d) => ['code' => $d->staff_code, 'name' => $d->full_name, 'starts_on' => $d->starts_on])->all();
 
                 return (array) $row + ['doctors' => implode('، ', array_map(fn ($d) => $d['name'].' ('.$d['code'].')', $links)), 'links' => $links,
+                    'patients' => DirectoryPatientTable::report($byPatients->get($row->id, collect())),
                     'details' => ['الحالة' => $row->archived_at ? 'مؤرشفة' : ($row->is_active ? 'فعالة' : 'غير فعالة'), 'التخصص' => $row->specialty_name ?? 'غير محدد', 'عدد الأطباء' => $row->doctor_count, 'عدد المرضى' => $row->patient_count]];
             })->all();
         });
         $columns = $id === null ? ($filters['columns'] ?? array_keys(self::COLUMNS)) : array_keys(self::COLUMNS);
         $metadata = $this->metadata->make($request, $facility, $filters, self::COLUMNS, 'clinic', $id !== null, ClinicCounts::PATIENT_DEFINITION);
-        $response = $this->renderer->response(['rows' => $rows, 'columns' => $columns, 'labels' => self::COLUMNS, 'metadata' => $metadata, 'detail' => $id !== null, 'descriptionTitle' => 'توصيف العيادة', 'linkTitle' => 'الأطباء الحاليون'], $format);
+        $response = $this->renderer->response(['rows' => $rows, 'columns' => $columns, 'labels' => self::COLUMNS, 'metadata' => $metadata, 'detail' => $id !== null, 'descriptionTitle' => 'توصيف العيادة', 'linkTitle' => 'الأطباء الحاليون', 'patientTitle' => DirectoryPatientTable::TITLE], $format);
         $this->audit->record($request, $facility['id'], $id ?? 0, 'exported', null, ['report_number' => $metadata['number'], 'format' => $format, 'row_count' => count($rows), 'filters' => $filters, 'columns' => $columns]);
 
         return $response;

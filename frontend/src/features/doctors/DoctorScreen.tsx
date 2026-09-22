@@ -14,6 +14,7 @@ import RelationFilter from "../directory/RelationFilter";
 import DoctorClinics, { ClinicList } from "./DoctorClinics";
 import { columns, columnKeys, downloadReport, useDirectoryRequest, type Capabilities, type Column, type Doctor, type Options, type Page } from "./api";
 import { DirectoryTable, DirectoryRowActions, DirectoryBack } from "../directory/DirectoryPrimitives";
+import DirectoryPatients from "../directory/DirectoryPatients";
 import { directoryFacility } from "../directory/facilityContext";
 import styles from "../clinics/clinics.module.css";
 
@@ -109,7 +110,8 @@ function DoctorDetail({ id, facilityId, cap, onAction, exports, returnPath }: { 
   if (!result.data) return <p role="status" className={styles.status}>جارٍ تحميل الطبيب…</p>;
   const doctor = result.data;
   return <><DirectoryBack href={returnPath}>العودة إلى قائمة الأطباء</DirectoryBack><div className={styles.heading}><div><p className={styles.eyebrow}>بطاقة الطبيب · <bdi>{doctor.code}</bdi></p><h2>{doctor.name}</h2><p>{doctor.staff_type.name_ar} · {doctor.archived_at ? "مؤرشف" : doctor.is_active ? "فعال" : "غير فعال"}</p></div><div className={styles.actions}>{cap.update && !doctor.archived_at && <button className={styles.primary} onClick={() => onAction("edit", doctor)}><LuSquarePen aria-hidden="true" />تعديل الطبيب</button>}{cap.link && !cap.update && !doctor.archived_at && <button className={styles.primary} onClick={() => onAction("links", doctor)}><LuLink aria-hidden="true" />إدارة العيادات</button>}{cap.delete && <button className={styles.secondary} onClick={() => onAction("delete", doctor)} aria-label={`حذف ${doctor.name}`}>حذف أو أرشفة</button>}<LifecycleActions record={doctor} name={doctor.name} canUpdate={cap.update} onAction={action => onAction(action, doctor)} />{exports}</div></div>
-    <section className={styles.detailPanel}><h3>الملف المهني</h3><div className={styles.badges}>{doctor.specialties.map(s => <span className={styles.badge} key={s.id}>{s.name_ar}</span>)}</div><p className={styles.description}>{doctor.description || "لا يوجد توصيف مسجل."}</p><dl className={styles.facts}><div><dt>رقم الترخيص</dt><dd><bdi>{doctor.license_no || "—"}</bdi></dd></div><div><dt>الهاتف</dt><dd><bdi>{doctor.phone || "—"}</bdi></dd></div><div><dt>العيادات الحالية</dt><dd>{doctor.clinic_count}</dd></div><div><dt>المرضى المختلفون</dt><dd>{doctor.patient_count}</dd></div></dl><p className={styles.hint}>{doctor.patient_count_definition}</p></section>
+    <section className={styles.detailPanel}><h3>الملف المهني</h3><div className={styles.badges}>{doctor.specialties.map(s => <span className={styles.badge} key={s.id}>{s.name_ar}</span>)}</div><p className={styles.description}>{doctor.description || "لا يوجد توصيف مسجل."}</p><dl className={styles.facts}><div><dt>رقم الترخيص</dt><dd><bdi>{doctor.license_no || "—"}</bdi></dd></div><div><dt>الهاتف</dt><dd><bdi>{doctor.phone || "—"}</bdi></dd></div><div><dt>العيادات الحالية</dt><dd>{doctor.clinic_count}</dd></div><div><dt>المرضى المختلفون</dt><dd>{doctor.patient_count}</dd></div></dl></section>
     <LinkHistory kind="doctors" id={doctor.id} facilityId={facilityId} />
-    <section className={styles.detailPanel}><h3>العيادات الحالية</h3><ClinicList doctor={doctor} facilityId={facilityId} /></section></>;
+    <section className={styles.detailPanel}><h3>العيادات الحالية</h3><ClinicList doctor={doctor} facilityId={facilityId} /></section>
+    <section className={styles.detailPanel}><h3>جدول المرضى</h3><DirectoryPatients path={`doctors/${doctor.id}/patients`} facilityId={facilityId} definition={doctor.patient_count_definition} /></section></>;
 }

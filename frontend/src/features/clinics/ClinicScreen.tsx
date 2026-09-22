@@ -14,6 +14,7 @@ import ClinicDoctors, { DoctorList } from "./ClinicDoctors";
 import useClinicSearch from "./useClinicSearch";
 import { ColumnMenu, LongText, Pagination } from "../directory/Controls";
 import { DirectoryTable, DirectoryRowActions, DirectoryBack } from "../directory/DirectoryPrimitives";
+import DirectoryPatients from "../directory/DirectoryPatients";
 import { directoryFacility } from "../directory/facilityContext";
 import styles from "./clinics.module.css";
 
@@ -136,9 +137,10 @@ function ClinicDetail({ id, facilityId, can, onAction, returnPath, exports }: { 
   if (!result.data) return <p role="status" className={styles.status}>جارٍ تحميل العيادة…</p>;
   const clinic = result.data;
   return <><DirectoryBack href={returnPath}>العودة إلى قائمة العيادات</DirectoryBack><div className={styles.heading}><div><p className={styles.eyebrow}>بطاقة العيادة · <bdi>{clinic.code}</bdi></p><h2>{clinic.name_ar}</h2><p>{clinic.specialty?.name_ar || "دون تخصص محدد"} · {clinic.archived_at ? "مؤرشفة" : clinic.is_active ? "فعالة" : "غير فعالة"}</p></div><div className={styles.actions}>{can("update") && !clinic.archived_at && <button className={styles.primary} onClick={() => onAction("edit", clinic)}><LuSquarePen aria-hidden="true" />تعديل العيادة</button>}{can("delete") && <button className={styles.secondary} onClick={() => onAction("delete", clinic)} aria-label={`حذف ${clinic.name_ar}`}>حذف أو أرشفة</button>}<LifecycleActions record={clinic} name={clinic.name_ar} canUpdate={can("update")} onAction={action => onAction(action, clinic)} />{exports}</div></div>
-    <section className={styles.detailPanel}><h3>توصيف العيادة</h3><p className={styles.description}>{clinic.description || "لا يوجد توصيف مسجل لهذه العيادة."}</p><div className={styles.metrics}><div><span>الأطباء الحاليون</span><strong>{clinic.doctor_count}</strong></div><div><span>المرضى المختلفون</span><strong>{clinic.patient_count}</strong></div></div><p className={styles.hint}>{clinic.patient_count_definition}</p></section>
+    <section className={styles.detailPanel}><h3>توصيف العيادة</h3><p className={styles.description}>{clinic.description || "لا يوجد توصيف مسجل لهذه العيادة."}</p><div className={styles.metrics}><div><span>الأطباء الحاليون</span><strong>{clinic.doctor_count}</strong></div><div><span>المرضى المختلفون</span><strong>{clinic.patient_count}</strong></div></div></section>
     <LinkHistory kind="clinics" id={clinic.id} facilityId={facilityId} />
     <section className={styles.detailPanel}><h3>أطباء العيادة الحاليون</h3><DoctorList clinic={clinic} /></section>
+    <section className={styles.detailPanel}><h3>جدول المرضى</h3><DirectoryPatients path={`clinics/${clinic.id}/patients`} facilityId={facilityId} definition={clinic.patient_count_definition} /></section>
   </>;
 }
 

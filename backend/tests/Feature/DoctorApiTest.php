@@ -8,6 +8,7 @@ use Database\Seeders\DoctorPermissionsSeeder;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\Support\AssertsOpenApi;
@@ -241,6 +242,19 @@ class DoctorApiTest extends TestCase
             DB::table('visits')->insert(['visit_no' => (string) Str::uuid(), 'facility_id' => $facility, 'patient_id' => $patient, 'reporting_period_id' => $periods[$facility], 'visit_date' => '2026-09-11', 'clinic_id' => $facility === $this->facility ? $clinic : null, 'attending_staff_id' => $staff, 'resident_staff_id' => $otherDoctor['id'], 'status' => $status, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $this->user->id]);
         }
         $this->callApi('GET', '/'.$doctor['id'])->assertJsonPath('data.patient_count', 1)->assertDontSee('SECRET')->assertDontSee('مريض سري');
+        $listed = $this->callApi('GET', '/'.$doctor['id'].'/patients')->assertOk()->assertJsonPath('meta.total', 1)->json('data');
+        $this->assertSame('SECRET-1', $listed[0]['patient_code']);
+        $this->assertSame('مريض سري خاص', $listed[0]['patient_name']);
+        $this->assertSame(2, $listed[0]['visit_count']);
+        $this->callApi('GET', '/'.$doctor['id'].'/patients', ['search' => 'سري'])->assertJsonPath('meta.total', 1);
+        $this->callApi('GET', '/'.$otherDoctor['id'].'/patients')->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.patient_code', 'SECRET-2');
+        $document = null;
+        View::composer('reports.directory', function ($view) use (&$document) {
+            $document = $view->getData();
+        });
+        $this->callApi('GET', '/'.$doctor['id'].'/report')->assertOk();
+        $this->assertSame('SECRET-1', $document['rows'][0]['patients'][0]['code']);
+        $this->assertStringContainsString('جدول المرضى', view('reports.directory', $document)->render());
         $voided = (array) DB::table('visits')->where('attending_staff_id', $doctor['id'])->where('facility_id', $this->facility)->first();
         unset($voided['id']);
         DB::table('visits')->insert(array_replace($voided, ['visit_no' => (string) Str::uuid(), 'client_request_id' => (string) Str::uuid(), 'patient_id' => $patients[1], 'status' => 'void', 'voided_at' => now(), 'voided_by' => $this->user->id, 'void_reason' => 'اختبار إلغاء']));
@@ -370,9 +384,10 @@ class DoctorApiTest extends TestCase
             $this->assertTrue($sheet->getRightToLeft());
             $this->assertSame(0, $sheet->getPageSetup()->getFitToHeight());
             $this->assertSame($doctor['description'], $sheet->getCell('C9')->getValue());
-            $this->assertSame(2, $book->getSheetCount());
+            $this->assertSame(3, $book->getSheetCount());
+            $this->assertNotNull($book->getSheetByName('المرضى'));
             $allText = '';
-            foreach ($book->getSheet(1)->toArray() as $index => $row) {
+            foreach ($book->getSheetByName('النصوص للطباعة')->toArray() as $index => $row) {
                 if ($index > 1) {
                     $allText .= $row[3];
                 }
@@ -418,7 +433,7 @@ class DoctorApiTest extends TestCase
     {
         $doctor = $this->create(['clinic_add_ids' => [$this->clinic()]]);
         $document = $this->getJson('/docs/api.json')->assertOk()->json();
-        foreach (['' => '/api/doctors', '/options' => '/api/doctors/options', '/options/clinics' => '/api/doctors/options/clinics', '/'.$doctor['id'] => '/api/doctors/{doctor}', '/'.$doctor['id'].'/clinics' => '/api/doctors/{doctor}/clinics'] as $suffix => $path) {
+        foreach (['' => '/api/doctors', '/options' => '/api/doctors/options', '/options/clinics' => '/api/doctors/options/clinics', '/'.$doctor['id'] => '/api/doctors/{doctor}', '/'.$doctor['id'].'/clinics' => '/api/doctors/{doctor}/clinics', '/'.$doctor['id'].'/patients' => '/api/doctors/{doctor}/patients'] as $suffix => $path) {
             $operation = $document['paths'][$path]['get'];
             $this->assertSame([['bearerAuth' => []]], $operation['security']);
             $this->assertMatchesSchema($document, $operation['responses'][200]['content']['application/json']['schema'], $this->callApi('GET', $suffix)->assertOk()->json());

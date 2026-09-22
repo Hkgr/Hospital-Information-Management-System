@@ -9,6 +9,7 @@ use Database\Seeders\ClinicPermissionsSeeder;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 use Mpdf\Mpdf;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -185,6 +186,21 @@ class ClinicApiTest extends TestCase
             DB::table('visits')->insert(['visit_no' => (string) Str::uuid(), 'facility_id' => $this->facility, 'patient_id' => $patient, 'reporting_period_id' => $period, 'visit_date' => '2026-09-11', 'clinic_id' => $clinic['id'], 'attending_staff_id' => $this->doctor, 'status' => $status, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $this->user->id, 'voided_at' => $status === 'void' ? now() : null, 'voided_by' => $status === 'void' ? $this->user->id : null, 'void_reason' => $status === 'void' ? 'اختبار' : null]);
         }
         $this->callApi('GET', '/'.$clinic['id'])->assertJsonPath('data.patient_count', 1)->assertDontSee('P-SECRET')->assertDontSee('اسم سري');
+        $listed = $this->callApi('GET', '/'.$clinic['id'].'/patients')->assertOk()->assertJsonPath('meta.total', 1)->json('data');
+        $this->assertSame('P-SECRET', $listed[0]['patient_code']);
+        $this->assertSame('اسم سري خاص', $listed[0]['patient_name']);
+        $this->assertSame(2, $listed[0]['visit_count']);
+        $this->callApi('GET', '/'.$clinic['id'].'/patients', ['search' => 'سري'])->assertJsonPath('meta.total', 1);
+        $this->callApi('GET', '/'.$clinic['id'].'/patients', ['search' => 'MISSING'])->assertJsonPath('meta.total', 0);
+        $document = null;
+        View::composer('reports.directory', function ($view) use (&$document) {
+            $document = $view->getData();
+        });
+        $this->callApi('GET', '/'.$clinic['id'].'/report')->assertOk();
+        $this->assertSame('P-SECRET', $document['rows'][0]['patients'][0]['code']);
+        $html = view('reports.directory', $document)->render();
+        $this->assertStringContainsString('جدول المرضى', $html);
+        $this->assertStringContainsString('P-SECRET', $html);
         $this->create(['code' => 'EMPTY']);
         $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'desc', 'per_page' => 1])->assertJsonPath('meta.total', 2)->assertJsonPath('data.0.id', $clinic['id'])->assertJsonPath('data.0.patient_count', 1);
         $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'asc', 'per_page' => 1])->assertJsonPath('data.0.patient_count', 0);
@@ -269,6 +285,7 @@ class ClinicApiTest extends TestCase
             $this->assertSame(10, $sheet->getHighestDataRow());
             $this->assertSame($this->user->name, $book->getProperties()->getCreator());
             $this->assertCount(1, $sheet->getDrawingCollection());
+            $this->assertNotNull($book->getSheetByName('المرضى'));
             $book->disconnectWorksheets();
             unset($sheet, $book);
         } finally {
@@ -306,7 +323,7 @@ class ClinicApiTest extends TestCase
     {
         $clinic = $this->create(['doctor_add_ids' => [$this->doctor]]);
         $document = $this->getJson('/docs/api.json')->assertOk()->json();
-        foreach (['' => '/api/clinics', '/'.$clinic['id'] => '/api/clinics/{clinic}', '/'.$clinic['id'].'/doctors' => '/api/clinics/{clinic}/doctors', '/options/doctors' => '/api/clinics/options/doctors', '/options/specialties' => '/api/clinics/options/specialties'] as $suffix => $path) {
+        foreach (['' => '/api/clinics', '/'.$clinic['id'] => '/api/clinics/{clinic}', '/'.$clinic['id'].'/doctors' => '/api/clinics/{clinic}/doctors', '/'.$clinic['id'].'/patients' => '/api/clinics/{clinic}/patients', '/options/doctors' => '/api/clinics/options/doctors', '/options/specialties' => '/api/clinics/options/specialties'] as $suffix => $path) {
             $operation = $document['paths'][$path]['get'];
             $this->assertSame([['bearerAuth' => []]], $operation['security']);
             $body = $this->callApi('GET', $suffix)->assertOk()->json();

@@ -40,6 +40,12 @@ th { background: #155c56; color: #fff; font-weight: bold; font-size: 10pt; }
     @forelse ($row['links'] as $i => $link)<tr class="{{ $i % 2 ? 'stripe' : '' }}"><td class="ltr">{{ $link['code'] }}</td><td>{{ $link['name'] }}</td><td class="ltr">{{ $link['starts_on'] }}</td></tr>
     @empty<tr><td colspan="3">لا توجد ارتباطات حالية في المنشأة المحددة.</td></tr>@endforelse
     </tbody></table>
+    @if (array_key_exists('patients', $row))
+      <h2>{{ $patientTitle ?? 'جدول المرضى' }}</h2><table class="data" autosize="1"><thead><tr><th width="22%">كود المريض</th><th width="38%">اسم المريض</th><th width="18%">{{ $patientVisitLabel ?? 'عدد الزيارات' }}</th><th width="22%">{{ $patientDateLabel ?? 'آخر زيارة' }}</th></tr></thead><tbody>
+      @forelse ($row['patients'] as $i => $patient)<tr class="{{ $i % 2 ? 'stripe' : '' }}"><td class="ltr">{{ $patient['code'] }}</td><td>{{ $patient['name'] }}</td><td class="center">{{ $patient['visits'] }}</td><td class="ltr">{{ $patient['last_on'] ?: '—' }}</td></tr>
+      @empty<tr><td colspan="4">لا يوجد مرضى مطابقون لاحتساب هذا التقرير.</td></tr>@endforelse
+      </tbody></table>
+    @endif
   @endforeach
   <p class="note"><strong>احتساب المرضى:</strong> {{ $metadata['definition'] }}</p>
 @else
@@ -56,6 +62,17 @@ th { background: #155c56; color: #fff; font-weight: bold; font-size: 10pt; }
     @endforeach</tr>
   @empty<tr><td colspan="{{ count($columns) }}">لا توجد نتائج مطابقة.</td></tr>@endforelse
   </tbody></table>
+  @if (collect($rows)->contains(fn ($row) => array_key_exists('patients', $row)))
+    <h2>{{ $patientTitle ?? 'جدول المرضى' }}</h2><table class="data" autosize="1"><thead><tr><th width="14%">كود العنصر</th><th width="22%">الاسم</th><th width="16%">كود المريض</th><th width="22%">اسم المريض</th><th width="12%">{{ $patientVisitLabel ?? 'عدد الزيارات' }}</th><th width="14%">{{ $patientDateLabel ?? 'آخر زيارة' }}</th></tr></thead><tbody>
+    @php($patientIndex = 0)
+    @foreach ($rows as $row)
+      @foreach ($row['patients'] as $patient)
+        <tr class="{{ $patientIndex++ % 2 ? 'stripe' : '' }}"><td class="ltr">{{ $row['code'] }}</td><td>{{ $row['name'] ?? $row['name_ar'] }}</td><td class="ltr">{{ $patient['code'] }}</td><td>{{ $patient['name'] }}</td><td class="center">{{ $patient['visits'] }}</td><td class="ltr">{{ $patient['last_on'] ?: '—' }}</td></tr>
+      @endforeach
+    @endforeach
+    @if ($patientIndex === 0)<tr><td colspan="6">لا يوجد مرضى مطابقون لاحتساب هذا التقرير.</td></tr>@endif
+    </tbody></table>
+  @endif
   <p class="note"><strong>احتساب المرضى:</strong> {{ $metadata['definition'] }}</p>
   @if ($appendix)
     @foreach ($appendix as $index => $item)<h2>النصوص الكاملة · ملحق {{ $index + 1 }} · {{ $item['label'] }}</h2><p class="reference">{{ $item['name'] }} · <span dir="ltr">{{ $item['code'] }}</span></p><div class="fulltext">{{ $item['text'] }}</div>@endforeach

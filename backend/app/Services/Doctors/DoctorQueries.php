@@ -3,6 +3,7 @@
 namespace App\Services\Doctors;
 
 use App\Exceptions\DoctorException;
+use App\Services\Directory\DirectoryPatientTable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -117,6 +118,15 @@ class DoctorQueries
         return ['data' => $page->getCollection()->map(fn ($c) => ['id' => (int) $c->id, 'code' => $c->code, 'name_ar' => $c->name_ar,
             'starts_on' => $c->starts_on ?? null, 'is_linked' => $doctorId !== null || in_array($c->id, $linked),
             'can_view' => in_array('clinics.view', $facility['permissions'], true)])->all(), 'meta' => $this->meta($page)] + ($doctorId === null ? ['unavailable' => $unavailable] : []);
+    }
+
+    public function patients(array $facility, int $doctorId, array $filters): array
+    {
+        $this->requireDoctor($doctorId);
+        $query = DirectoryPatientTable::search($this->counts->patientVisits($facility['id'])->where('v.attending_staff_id', $doctorId), $filters['search'] ?? '');
+        $page = $this->counts->summarize($query)->paginate($filters['per_page'] ?? 20, ['*'], 'page', $filters['page'] ?? 1);
+
+        return DirectoryPatientTable::present($page, fn ($rows) => $this->meta($rows));
     }
 
     private function requireDoctor(int $id): void

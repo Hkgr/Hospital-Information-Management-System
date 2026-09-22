@@ -33,4 +33,23 @@ class ClinicCounts
             ->where('status', 'complete')->whereNull('voided_at')->whereColumn('clinic_id', 'clinics.id')
             ->selectRaw('COUNT(DISTINCT patient_id)');
     }
+
+    public function patientVisits(int $facilityId): Builder
+    {
+        return DB::table('visits as v')->join('patients as p', 'p.id', '=', 'v.patient_id')
+            ->where('v.facility_id', $facilityId)->where('v.status', 'complete')->whereNull('v.voided_at')->whereNotNull('v.clinic_id');
+    }
+
+    public function summarize(Builder $query): Builder
+    {
+        return $query->groupBy('v.clinic_id', 'p.id', 'p.patient_code', 'p.first_name', 'p.family_name')
+            ->select('v.clinic_id as owner_id', 'p.id as patient_id', 'p.patient_code', 'p.first_name', 'p.family_name')
+            ->selectRaw('COUNT(*) as visit_count')->selectRaw('MAX(v.visit_date) as last_on')
+            ->orderBy('p.patient_code')->orderBy('p.id');
+    }
+
+    public function roster(array $facility, array $clinicIds): Builder
+    {
+        return $this->summarize($this->patientVisits($facility['id'])->whereIn('v.clinic_id', $clinicIds));
+    }
 }

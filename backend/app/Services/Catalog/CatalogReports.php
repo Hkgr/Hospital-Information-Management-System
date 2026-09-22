@@ -4,6 +4,7 @@ namespace App\Services\Catalog;
 
 use App\Exceptions\CatalogException;
 use App\Services\Clinics\ClinicAudit;
+use App\Services\Directory\DirectoryPatientTable;
 use App\Services\Directory\DirectoryReport;
 use App\Services\Directory\ReportMetadata;
 use Illuminate\Http\Request;
@@ -33,19 +34,27 @@ class CatalogReports
                 'service' => 'خدمات', 'procedure' => 'إجراءات', 'medication' => 'أدوية', default => 'الكل'
             }.' | جميع النتائج المطابقة، لا الصفحة الحالية';
         }
+        $patients = app(CatalogBeneficiaries::class)->reportPatients($facility, $rows);
+        if ($patients->count() > config('clinics.export_patient_limit')) {
+            throw new CatalogException('EXPORT_LIMIT_EXCEEDED', 'عدد المرضى أكبر من الحد الآمن للتقرير. ضيّق الفلاتر وأعد المحاولة.', 422);
+        }
+        $byItem = $patients->groupBy(fn ($row) => $row->kind.':'.$row->owner_id);
         foreach ($rows as &$row) {
+            $nativeKind = $row['kind'];
             $row['kind'] = match ($row['kind']) {
                 'service' => 'خدمة', 'procedure' => 'إجراء', 'medication' => 'دواء', default => $row['kind'],
             };
             $row['is_active'] = $row['archived_at'] ? 'مؤرشف' : ($row['is_active'] ? 'فعال' : 'غير فعال');
             $row['details'] = ['الكود' => $row['code'], 'الاسم' => $row['name_ar'], 'النوع' => $row['kind'], 'الحالة' => $row['is_active'], 'عدد المستفيدين' => $row['patient_count']];
             $row['links'] = [];
+            $row['patients'] = DirectoryPatientTable::report($byItem->get($nativeKind.':'.$row['id'], collect()));
         }
         unset($row);
         $response = app(DirectoryReport::class)->response(['rows' => $rows, 'columns' => $filters['columns'] ?? array_keys($labels), 'labels' => $labels,
             'metadata' => $metadata, 'detail' => $id !== null, 'descriptionTitle' => match ($kind) {
                 'service' => 'وصف الخدمة', 'medication' => 'وصف الدواء', default => 'وصف الإجراء',
-            }, 'linkTitle' => 'لا توجد ارتباطات تعريف مباشرة بالعيادات في المخطط الحالي'], $format);
+            }, 'linkTitle' => 'لا توجد ارتباطات تعريف مباشرة بالعيادات في المخطط الحالي',
+            'patientTitle' => DirectoryPatientTable::TITLE, 'patientVisitLabel' => 'عدد مرات التقديم', 'patientDateLabel' => 'آخر تقديم'], $format);
         app(ClinicAudit::class)->record($request, $facility['id'], $id ?? 0, 'exported', null, ['report_number' => $metadata['number'], 'format' => $format, 'row_count' => count($rows)], $kind ?? 'catalog');
 
         return $response;

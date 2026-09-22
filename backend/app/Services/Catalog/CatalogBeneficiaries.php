@@ -3,13 +3,14 @@
 namespace App\Services\Catalog;
 
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class CatalogBeneficiaries
 {
     public const DEFINITION = 'مرضى فريدون لكل نوع ومعرّف ضمن المنشأة: أحداث منفذة حتى تاريخ المنشأة وغير ملغاة في زيارات مكتملة؛ تشمل الإجراءات أيضًا أحداث متلقي الدم غير الملغاة لمريض معروف، مع اشتراط اكتمال الزيارة إن ارتبطت بها. للأدوية يُحسب الصرف بتاريخ dispensed_on وجلسات الجرعة عبر dose_sessions حيث الإلغاء على الجلسة لا على البند. تُستبعد المسودات والملغى والمستقبل، ويُزال التكرار بين المصدرين.';
 
-    /** One shared relation for the count, patients list and reports; no patient data loaded per directory row. */
+    /** One shared relation for the count, patients list and reports. */
     private function events(array $facility, bool $includeEventDetails = false): Builder
     {
         $visit = function (string $kind) use ($facility, $includeEventDetails) {
@@ -111,5 +112,24 @@ class CatalogBeneficiaries
         $page = $query->orderBy('patient_code')->orderBy('id')->paginate($filters['per_page'] ?? 20, ['*'], 'page', $filters['page'] ?? 1);
 
         return ['data' => $page->items(), 'meta' => CatalogQueries::meta($page)];
+    }
+
+    public function reportPatients(array $facility, array $rows): Collection
+    {
+        if ($rows === []) {
+            return collect();
+        }
+        $query = $this->events($facility, true)->join('patients as p', 'p.id', '=', 'benefit.patient_id');
+        $query->where(function ($q) use ($rows) {
+            foreach (collect($rows)->groupBy('kind') as $kind => $items) {
+                $q->orWhere(fn ($w) => $w->where('kind', $kind)->whereIn('item_id', $items->pluck('id')));
+            }
+        });
+
+        return $query->groupBy('benefit.kind', 'benefit.item_id', 'p.id', 'p.patient_code', 'p.first_name', 'p.family_name')
+            ->select('benefit.kind', 'benefit.item_id as owner_id', 'p.id as patient_id', 'p.patient_code', 'p.first_name', 'p.family_name')
+            ->selectRaw('COUNT(*) as visit_count')->selectRaw('MAX(benefit.performed_on) as last_on')
+            ->orderBy('p.patient_code')->orderBy('p.id')
+            ->limit(config('clinics.export_patient_limit') + 1)->get();
     }
 }

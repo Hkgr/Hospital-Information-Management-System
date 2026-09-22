@@ -114,7 +114,7 @@ class ClinicDocumentTransformer
                         $parameter->setSchema(Schema::fromType((new StringType)->enum(['xlsx', 'pdf'])));
                     }
                 }
-                $operation->description .= "\nRequires auth:sanctum → active account → api ability, then clinics.view and the operation permission in the SAME active facility. Deactivated accounts lose all tokens (403 ACCOUNT_INACTIVE). Every response is private, no-store. Staff is a global directory; eligible doctors have active staff/type and an explicitly configured staff_types.code. Current intervals are [starts_on, ends_on) in the facility timezone. Edits use lock_version plus doctor_add_ids/doctor_remove_ids, never replacement sync. Doctor/patient counts are distinct. Exports include ALL filtered rows, selected columns, server issuer/number/timezone; caps 1000 clinics / 5000 current links, 422 instead of truncation. Long texts continue in explicit appendices; Cairo is embedded in PDF and named in XLSX. Relationship writes also increment staff.lock_version and lock staff before clinics. Report bytes are never public.";
+                $operation->description .= "\nRequires auth:sanctum → active account → api ability, then clinics.view and the operation permission in the SAME active facility. Deactivated accounts lose all tokens (403 ACCOUNT_INACTIVE). Every response is private, no-store. Staff is a global directory; eligible doctors have active staff/type and an explicitly configured staff_types.code. Current intervals are [starts_on, ends_on) in the facility timezone. Edits use lock_version plus doctor_add_ids/doctor_remove_ids, never replacement sync. Doctor/patient counts are distinct. Exports include ALL filtered rows, selected columns, the matching patients table, server issuer/number/timezone; caps 1000 clinics / 5000 current links / 5000 patient rows, 422 instead of truncation. Long texts continue in explicit appendices; Cairo is embedded in PDF and named in XLSX. Relationship writes also increment staff.lock_version and lock staff before clinics. Report bytes are never public.";
                 $operation->description .= $this->lifecycleDescription();
                 if ($operation->method === 'delete') {
                     $operation->addResponse(Response::make(204)->setDescription('Unreferenced clinic deleted and audited. No content.'));
@@ -129,9 +129,11 @@ class ClinicDocumentTransformer
                 } else {
                     $options = str_ends_with($route, 'options/doctors');
                     $doctors = str_ends_with($route, '/doctors');
+                    $patients = str_ends_with($route, '/patients');
                     $isList = $route === 'clinics' && $operation->method === 'get';
-                    $fields = ['data' => $doctors ? $this->list($doctor) : (str_ends_with($route, '/specialties') ? $this->list($specialty) : ($isList ? $this->list($clinic) : $clinic))];
-                    if ($doctors || $isList) {
+                    $patient = $this->object(['id' => new IntegerType, 'patient_code' => new StringType, 'patient_name' => new StringType, 'visit_count' => new IntegerType, 'last_visit_on' => (new StringType)->nullable(true)]);
+                    $fields = ['data' => $doctors ? $this->list($doctor) : ($patients ? $this->list($patient) : (str_ends_with($route, '/specialties') ? $this->list($specialty) : ($isList ? $this->list($clinic) : $clinic)))];
+                    if ($doctors || $patients || $isList) {
                         $fields['meta'] = $meta;
                     }
                     if ($options) {

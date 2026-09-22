@@ -127,9 +127,52 @@ class DirectorySpreadsheet
             // the print representation, since a 32767-unit cell cannot fit one row.
             $extra->setSheetState(Worksheet::SHEETSTATE_HIDDEN);
         }
+        if (collect($document['rows'])->contains(fn ($row) => array_key_exists('patients', $row))) {
+            $this->patientsSheet($book, $document);
+        }
         $book->setActiveSheetIndex(0);
 
         return $book;
+    }
+
+    private function patientsSheet(Spreadsheet $book, array $document): void
+    {
+        $detail = $document['detail'] ?? false;
+        $visitLabel = $document['patientVisitLabel'] ?? 'عدد الزيارات';
+        $dateLabel = $document['patientDateLabel'] ?? 'آخر زيارة';
+        $headers = $detail
+            ? ['كود المريض', 'اسم المريض', $visitLabel, $dateLabel]
+            : ['كود العنصر', 'الاسم', 'كود المريض', 'اسم المريض', $visitLabel, $dateLabel];
+        $widths = $detail ? [22, 42, 18, 22] : [16, 28, 18, 32, 16, 18];
+        $sheet = $book->createSheet()->setTitle('المرضى')->setRightToLeft(true);
+        foreach ($widths as $col => $width) {
+            $sheet->getColumnDimensionByColumn($col + 1)->setWidth(ReportLayout::excelWidth($width));
+        }
+        $this->mergedText($sheet, 1, count($headers), 1, ($document['patientTitle'] ?? 'جدول المرضى').' · '.$document['metadata']['title'].' · '.$document['metadata']['number']);
+        $sheet->getStyle([1, 1, count($headers), 1])->getFont()->setBold(true)->setSize(14)->getColor()->setARGB('FF155C56');
+        $sheet->getRowDimension(1)->setRowHeight(33);
+        foreach ($headers as $col => $label) {
+            $this->text($sheet, $col + 1, 2, $label);
+        }
+        $line = 3;
+        foreach ($document['rows'] as $row) {
+            foreach ($row['patients'] as $patient) {
+                $values = $detail
+                    ? [$patient['code'], $patient['name'], $patient['visits'], $patient['last_on'] ?: '—']
+                    : [$row['code'], $row['name'] ?? $row['name_ar'], $patient['code'], $patient['name'], $patient['visits'], $patient['last_on'] ?: '—'];
+                foreach ($values as $col => $value) {
+                    $sheet->setCellValueExplicit([$col + 1, $line], $value, is_int($value) ? DataType::TYPE_NUMERIC : DataType::TYPE_STRING);
+                }
+                $sheet->getRowDimension($line)->setRowHeight(26);
+                $line++;
+            }
+        }
+        if ($line === 3) {
+            $this->mergedText($sheet, 1, count($headers), 3, 'لا يوجد مرضى مطابقون لاحتساب هذا التقرير.');
+            $line = 4;
+        }
+        $this->table($sheet, 2, $line - 1, count($headers));
+        $this->printSetup($sheet, count($headers), $line - 1, 2, $document['metadata'], ! $detail);
     }
 
     public function bytes(Spreadsheet $book): string

@@ -106,11 +106,16 @@ class CatalogApiTest extends TestCase
             $path = tempnam(sys_get_temp_dir(), 'catalog-xlsx-');
             file_put_contents($path, $bytes);
             try {
-                $sheet = IOFactory::load($path)->getActiveSheet();
+                $book = IOFactory::load($path);
+                $sheet = $book->getActiveSheet();
                 $this->assertSame($this->f['tag'].$suffix, $sheet->getCell('A9')->getValue());
                 $this->assertSame('s', $sheet->getCell('A9')->getDataType());
                 $this->assertSame($count, $sheet->getCell('C9')->getValue());
                 $this->assertSame('n', $sheet->getCell('C9')->getDataType());
+                $patientsSheet = $book->getSheetByName('المرضى');
+                $this->assertNotNull($patientsSheet);
+                $this->assertSame($this->f['tag'].'-P1', $patientsSheet->getCell('C3')->getValue());
+                $book->disconnectWorksheets();
             } finally {
                 unlink($path);
             }
