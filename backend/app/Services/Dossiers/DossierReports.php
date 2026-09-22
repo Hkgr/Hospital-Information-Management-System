@@ -219,7 +219,7 @@ class DossierReports
         if (! $dossier && ! empty($filters['pathology_status'])) {
             $meta['filters'] .= ' | حالة التشريح المرضي: '.DossierPathology::DISPOSITIONS[$filters['pathology_status']];
         }
-        foreach (['treatment_status' => 'حالة الخطة', 'treatment_modality' => 'نمط العلاج', 'dose_from' => 'مواعيد مؤهلة من', 'dose_to' => 'مواعيد مؤهلة إلى'] as $key => $label) {
+        foreach (['treatment_modality' => 'نمط العلاج', 'dose_from' => 'مواعيد مؤهلة من', 'dose_to' => 'مواعيد مؤهلة إلى'] as $key => $label) {
             if (! $dossier && ! empty($filters[$key])) {
                 $meta['filters'] .= ' | '.$label.': '.(OncologyQueries::STATUSES[$filters[$key]] ?? OncologyQueries::MODALITIES[$filters[$key]] ?? $filters[$key]);
             }

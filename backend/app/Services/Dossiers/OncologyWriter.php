@@ -45,9 +45,6 @@ class OncologyWriter
             $d = $this->writes->dossier($f, $dossier);
             $old = $id ? $this->plan($f, $dossier, $id, $data['lock_version']) : null;
             $priorRevision = $old ? DB::table('oncology_plan_revisions')->where('id', $old->current_revision_id)->first() : null;
-            if ($old && in_array($old->status, ['completed', 'cancelled'])) {
-                DossierWrites::conflict('الخطة مغلقة؛ لا تُعدّل نسخها أو تاريخها.');
-            }
             $this->context->check($f, $data['protocol_clinic_id'], $data['protocol_doctor_id'], $f['today'], 'protocol_doctor_id', false);
             $this->context->check($f, $data['treating_clinic_id'], $data['treating_doctor_id'], $f['today'], 'treating_doctor_id', false);
             $fields = Arr::only($data, ['modality', 'intent', 'protocol_text', 'protocol_clinic_id', 'protocol_doctor_id', 'treating_clinic_id', 'treating_doctor_id']);
@@ -57,7 +54,7 @@ class OncologyWriter
             }
             $duplicate = null;
             if (! $old) {
-                $candidates = DB::table('oncology_plans as p')->join('oncology_plan_revisions as r', 'r.id', '=', 'p.current_revision_id')->where('p.dossier_id', $dossier)->where('p.facility_id', $f['id'])->whereNotIn('p.status', ['completed', 'cancelled'])->select('r.*')->get();
+                $candidates = DB::table('oncology_plans as p')->join('oncology_plan_revisions as r', 'r.id', '=', 'p.current_revision_id')->where('p.dossier_id', $dossier)->where('p.facility_id', $f['id'])->select('r.*')->get();
                 foreach ($candidates as $candidate) {
                     if ($content === OncologyIntegrity::content((array) $candidate)) {
                         $duplicate = $candidate->plan_id;
@@ -72,7 +69,7 @@ class OncologyWriter
                 }
             }
             $number = $old ? DB::table('oncology_plan_revisions')->where('plan_id', $id)->max('revision_number') + 1 : 1;
-            $plan = $old ?? (object) ['id' => $this->persist($r, $f, 'oncology_plans', null, ['dossier_id' => $dossier, 'facility_id' => $f['id'], 'client_request_id' => $data['request_id'], 'status' => 'draft'])];
+            $plan = $old ?? (object) ['id' => $this->persist($r, $f, 'oncology_plans', null, ['dossier_id' => $dossier, 'facility_id' => $f['id'], 'client_request_id' => $data['request_id'], 'status' => 'active'])];
             $revision = DB::table('oncology_plan_revisions')->insertGetId($fields + ['plan_id' => $plan->id, 'dossier_id' => $dossier, 'facility_id' => $f['id'], 'revision_number' => $number, 'client_request_id' => $data['request_id'], 'entered_by' => $r->user()->id, 'created_at' => now()]);
             if ($duplicate) {
                 $this->writes->audit($r, $f, 'oncology_plans', $plan->id, null, ['existing_plan_id' => $duplicate, 'duplicate_reason' => $data['duplicate_reason']], 'duplicate_confirmed');
@@ -80,7 +77,7 @@ class OncologyWriter
             $this->writes->audit($r, $f, 'oncology_plan_revisions', $revision, null, $fields + ['plan_id' => $plan->id, 'revision_number' => $number]);
             // Initial allocation is inside the transaction; no competing patient identity.
             $current = DB::table('oncology_plans')->where('id', $plan->id)->first();
-            $this->persist($r, $f, 'oncology_plans', $current, ['current_revision_id' => $revision, 'plan_number' => $old?->plan_number ?? 'TP-'.str_pad((string) $plan->id, 8, '0', STR_PAD_LEFT), 'status' => ! $old || $old->status === 'draft' ? 'draft' : 'needs_review']);
+            $this->persist($r, $f, 'oncology_plans', $current, ['current_revision_id' => $revision, 'plan_number' => $old?->plan_number ?? 'TP-'.str_pad((string) $plan->id, 8, '0', STR_PAD_LEFT), 'status' => 'active']);
 
             return (int) $plan->id;
         });
@@ -93,40 +90,11 @@ class OncologyWriter
         return $this->writes->once($r, $f, $data, "oncology:status:$dossier:$id", function () use ($r, $f, $dossier, $id, $data, $targets) {
             $this->context->lock($targets);
             $plan = $this->plan($f, $dossier, $id, $data['lock_version']);
-            if (in_array($plan->status, ['completed', 'cancelled'])) {
-                DossierWrites::conflict('الخطة مغلقة؛ تبقى للقراءة مع كامل تاريخها.');
-            }
-            $status = $data['status'];
-            $fields = ['status' => $status, 'status_reason' => $data['reason']];
-            if ($status === 'active') {
-                $ready = $this->queries->readiness($f)->where('s.dossier_id', $dossier)->first();
-                if (! $ready || ! in_array($ready->disposition, ['pathology_confirmed', 'pathology_not_required'])) {
-                    throw ValidationException::withMessages(['status' => 'التشخيص أو دليل التشريح الحالي غير جاهز لتفعيل العلاج.']);
-                }
-                $rev = DB::table('oncology_plan_revisions')->where('id', $plan->current_revision_id)->first();
-                $this->context->check($f, $rev->protocol_clinic_id, $rev->protocol_doctor_id, $f['today'], 'protocol_doctor_id', false);
-                $this->context->check($f, $rev->treating_clinic_id, $rev->treating_doctor_id, $f['today'], 'treating_doctor_id', false);
-                if ($ready->disposition === 'pathology_not_required') {
-                    if (! in_array('dossiers.treatment.override', $f['permissions'], true)) {
-                        abort(403);
-                    }
-                    if (blank($data['override_reason'] ?? null)) {
-                        throw ValidationException::withMessages(['override_reason' => 'الاستثناء يحتاج مبررًا سريريًا صريحًا لهذه الخطة.']);
-                    }
-                }
-                $fields += ['basis_key' => $ready->basis_key, 'basis_disposition' => $ready->disposition, 'activation_basis' => json_encode((array) $ready, JSON_THROW_ON_ERROR), 'override_reason' => $ready->disposition === 'pathology_not_required' ? $data['override_reason'] : null, 'reviewed_at' => now(), 'reviewed_by' => $r->user()->id];
-                if (! $plan->activated_at) {
-                    $fields += ['activated_at' => now(), 'activated_by' => $r->user()->id];
-                }
-            } else {
-                if ($plan->status === 'draft' && $status !== 'cancelled') {
-                    throw ValidationException::withMessages(['status' => 'المسودة يمكن تفعيلها أو إلغاؤها فقط.']);
-                }
-                $event = ['paused' => 'paused', 'completed' => 'completed', 'cancelled' => 'cancelled'][$status];
-                $fields += [$event.'_at' => now(), $event.'_by' => $r->user()->id];
+            if ($data['status'] !== 'active') {
+                throw ValidationException::withMessages(['status' => 'كل الخطط العلاجية تبقى فعالة، ولا تُوقف أو تُكمل أو تُلغى.']);
             }
 
-            return $this->persist($r, $f, 'oncology_plans', $plan, $fields);
+            return $this->persist($r, $f, 'oncology_plans', $plan, ['status' => 'active']);
         });
     }
 
@@ -279,7 +247,7 @@ class OncologyWriter
     {
         $effective = $this->queries->plans($f)->where('p.dossier_id', $dossier)->where('p.id', $id)->selectRaw(OncologyQueries::effectiveSql().' AS state')->first();
         if ($effective?->state !== 'active') {
-            throw ValidationException::withMessages(['plan_id' => 'الخطة غير فعالة أو تحتاج مراجعة الدليل التشخيصي وإعادة الاعتماد قبل المتابعة.']);
+            throw ValidationException::withMessages(['plan_id' => 'تعذّر متابعة هذه الخطة.']);
         }
     }
 
