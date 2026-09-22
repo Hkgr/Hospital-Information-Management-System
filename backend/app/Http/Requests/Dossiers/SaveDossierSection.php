@@ -8,6 +8,8 @@ use Illuminate\Validation\Rule;
 
 class SaveDossierSection extends FormRequest
 {
+    public const PERSON = [...SaveBloodProfile::PERSON, 'marital_status', 'permanent_address', 'occupation', 'smoking_status', 'alcohol_status'];
+
     public function authorize(): bool
     {
         return true;
@@ -24,17 +26,21 @@ class SaveDossierSection extends FormRequest
                 'patient_id' => [$this->input('person_mode') === 'existing' ? 'required' : 'prohibited', 'integer', 'min:1'],
                 'patient_lock_version' => [$this->isMethod('PUT') ? 'required' : 'prohibited', 'integer', 'min:1']];
             $rules['visit_date'] = [$this->isMethod('POST') ? 'required' : 'prohibited', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'];
-            foreach (SaveBloodProfile::PERSON as $key) {
+            foreach (self::PERSON as $key) {
                 $rules[$key] = $newPatient ? ['nullable'] : ['prohibited'];
             }
             if ($newPatient) {
-                foreach (['first_name' => 80, 'family_name' => 80, 'father_name' => 80, 'mother_name' => 120, 'phone' => 30, 'alt_phone' => 30, 'address_line' => 255] as $key => $max) {
+                foreach (['first_name' => 80, 'family_name' => 80, 'father_name' => 80, 'mother_name' => 120, 'phone' => 30, 'alt_phone' => 30, 'address_line' => 255, 'permanent_address' => 255, 'occupation' => 120] as $key => $max) {
                     $rules[$key] = [in_array($key, ['first_name', 'family_name']) ? 'required' : 'nullable', 'string', 'max:'.$max];
                 }
                 $rules['birth_date'] = ['nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'];
                 $rules['birth_date_accuracy'] = ['required', Rule::in(['exact', 'year_only', 'estimated', 'unknown'])];
                 $rules['gender'] = ['required', Rule::in(['male', 'female', 'unknown'])];
                 $rules['displacement_status'] = ['required', Rule::in(['resident', 'idp', 'unknown'])];
+                $rules['marital_status'] = ['nullable', Rule::in(['single', 'married', 'divorced', 'widowed', 'unknown'])];
+                foreach (['smoking_status', 'alcohol_status'] as $key) {
+                    $rules[$key] = ['nullable', Rule::in(['yes', 'no', 'former', 'unknown'])];
+                }
                 foreach (['governorate_id', 'city_id'] as $key) {
                     $rules[$key] = ['nullable', 'integer', 'min:1'];
                 }

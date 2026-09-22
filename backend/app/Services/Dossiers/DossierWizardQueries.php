@@ -2,7 +2,7 @@
 
 namespace App\Services\Dossiers;
 
-use App\Http\Requests\BloodBank\SaveBloodProfile;
+use App\Http\Requests\Dossiers\SaveDossierSection;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
@@ -13,7 +13,7 @@ class DossierWizardQueries
         return DB::transaction(function () use ($f, $id, $selected, $newVisit) {
             $d = app(DossierWrites::class)->dossier($f, $id, false);
             $d['is_oncology'] = (bool) $d['is_oncology'];
-            $p = DB::table('patients')->where('id', $d['patient_id'])->first(['id', 'patient_code', 'lock_version', ...SaveBloodProfile::PERSON]);
+            $p = DB::table('patients')->where('id', $d['patient_id'])->first(['id', 'patient_code', 'lock_version', ...SaveDossierSection::PERSON]);
             $context = app(DossierWorkflowActions::class)->forDossiers($f, [$d])[$id];
             $progress = $context['progress'];
             $visitId = $newVisit ? null : ($selected ?? $context['initial_visit']?->id);

@@ -71,6 +71,35 @@ class PatientCardTest extends TestCase
         $this->callApi('GET', "/{$s['id']}/progress?facility_id={$this->f['facility']}")->assertOk()->assertJsonPath('data.visit.id', $s['visit']['id']);
     }
 
+    public function test_personal_data_stores_family_habits_and_displaced_home_address(): void
+    {
+        $s = $this->callApi('POST', '', $this->input([
+            'displacement_status' => 'idp', 'permanent_address' => 'حمص، حي الإنشاءات',
+            'marital_status' => 'married', 'occupation' => 'معلم', 'smoking_status' => 'former', 'alcohol_status' => 'no',
+        ]))->assertCreated()->json('data');
+        $this->assertSame('idp', $s['patient']['displacement_status']);
+        $this->assertSame('حمص، حي الإنشاءات', $s['patient']['permanent_address']);
+        $this->assertSame('married', $s['patient']['marital_status']);
+        $this->assertSame('معلم', $s['patient']['occupation']);
+        $this->assertSame('former', $s['patient']['smoking_status']);
+        $this->assertSame('no', $s['patient']['alcohol_status']);
+        $this->callApi('GET', "/{$s['id']}?facility_id={$this->f['facility']}")->assertOk()
+            ->assertJsonPath('data.patient.permanent_address', 'حمص، حي الإنشاءات')
+            ->assertJsonPath('data.patient.marital_status', 'married');
+        $this->callApi('POST', '', $this->input(['marital_status' => 'engaged']))->assertUnprocessable()->assertJsonValidationErrors('marital_status');
+        $update = array_diff_key($this->input([
+            'code' => $s['code'], 'displacement_status' => 'resident', 'permanent_address' => 'يجب ألا تُحفظ',
+            'marital_status' => 'widowed', 'occupation' => 'متقاعد', 'smoking_status' => 'yes', 'alcohol_status' => 'former',
+        ]), array_flip(['person_mode', 'visit_date']));
+        $update += ['lock_version' => $s['lock_version'], 'patient_lock_version' => $s['patient']['lock_version']];
+        $saved = $this->callApi('PUT', "/{$s['id']}/personal", $update)->assertOk()->json('data');
+        $this->assertSame('resident', $saved['patient']['displacement_status']);
+        $this->assertNull($saved['patient']['permanent_address']);
+        $this->assertSame('widowed', $saved['patient']['marital_status']);
+        $this->assertSame('yes', $saved['patient']['smoking_status']);
+        $this->assertSame('former', $saved['patient']['alcohol_status']);
+    }
+
     public function test_invalid_first_save_leaves_no_partial_records(): void
     {
         $counts = app(PatientCardInventory::class)->report();

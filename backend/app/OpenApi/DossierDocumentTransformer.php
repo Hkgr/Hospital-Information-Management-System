@@ -42,7 +42,7 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
         foreach (['gender', 'birth_date_accuracy'] as $field) {
             $row->addProperty($field, $text());
         }
-        $personal = $this->object(array_fill_keys(['patient_code', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'paper_file_number', 'governorate', 'city', 'address_line', 'displacement_status'], $nullable()));
+        $personal = $this->object(array_fill_keys(['patient_code', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'paper_file_number', 'governorate', 'city', 'address_line', 'displacement_status', 'marital_status', 'permanent_address', 'occupation', 'smoking_status', 'alcohol_status'], $nullable()));
         $oncology = $this->object(['previous_examinations' => $nullable(), 'medication_source' => $nullable(), 'other_organization' => $nullable(), 'selections' => $this->list($this->object(['selection_group' => $text(), 'code' => $text()]))])->nullable(true);
         $detail = $this->object(['id' => $integer(), 'card_id' => $integer(), 'legacy_without_visits' => new BooleanType, 'facility_id' => $integer(), 'code' => $text(), 'opening_date' => $text(), 'status' => $dossierStatus(), 'disability_text' => $nullable(), 'clinical_history' => $nullable(), 'is_oncology' => new BooleanType, 'patient' => $personal, 'oncology' => $oncology, 'visit_count' => $integer(), 'latest_visit' => $visit->clone()->nullable(true)]);
         $meta = $this->object(array_fill_keys(['page', 'per_page', 'total', 'last_page'], $integer()));

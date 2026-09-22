@@ -14,7 +14,7 @@ use ZipArchive;
 
 class ImportWorkbook
 {
-    public const VERSION = 'patient-import-2';
+    public const VERSION = 'patient-import-3';
 
     public const MAX_BYTES = 10485760;
 
@@ -23,7 +23,7 @@ class ImportWorkbook
     public const MAX_PATIENTS = 5000;
 
     public const SHEETS = [
-        'Patients' => ['source_record_id', 'local_patient_ref', 'patient_code', 'legacy_code', 'opening_date', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status', 'paper_file_number', 'is_oncology', 'disability_text', 'clinical_history', 'previous_examinations', 'medication_source', 'other_organization', 'import_note'],
+        'Patients' => ['source_record_id', 'local_patient_ref', 'patient_code', 'legacy_code', 'opening_date', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status', 'permanent_address', 'marital_status', 'occupation', 'smoking_status', 'alcohol_status', 'paper_file_number', 'is_oncology', 'disability_text', 'clinical_history', 'previous_examinations', 'medication_source', 'other_organization', 'import_note'],
         'Visits' => ['source_record_id', 'local_patient_ref', 'local_visit_ref', 'visit_date', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason', 'import_note'],
         'Diagnoses' => ['source_record_id', 'local_visit_ref', 'diagnosis_id', 'diagnosed_on', 'clinic_id', 'diagnosing_staff_id'],
         'Services' => ['source_record_id', 'local_visit_ref', 'catalog_id', 'clinic_id', 'doctor_id', 'note'],
@@ -34,7 +34,7 @@ class ImportWorkbook
         'Outcomes' => ['source_record_id', 'local_visit_ref', 'code', 'clinic_id', 'doctor_id', 'outcome_on', 'referral_target', 'outgoing_referral_date', 'outgoing_referral_reason', 'note'],
     ];
 
-    private const LABELS = ['is_oncology' => 'ملف ورمي؟ 0 أو 1', 'disability_text' => 'معلومات الإعاقة', 'clinical_history' => 'قصة مرضية موثقة', 'previous_examinations' => 'الفحوص السابقة — وصف فقط', 'medication_source' => 'مصدر الدواء', 'other_organization' => 'اسم الجهة الأخرى', 'source_record_id' => 'معرّف المصدر الثابت *', 'local_patient_ref' => 'مرجع المريض داخل الملف *', 'local_visit_ref' => 'مرجع الزيارة داخل الملف *', 'patient_code' => 'كود مريض موجود فقط', 'legacy_code' => 'كود تاريخي / اسم بديل', 'opening_date' => 'بداية الملف الطبي الفعلية *', 'first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم', 'birth_date' => 'الميلاد حسب الدقة', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل', 'governorate_id' => 'معرّف المحافظة', 'city_id' => 'معرّف المدينة', 'address_line' => 'عنوان السكن', 'displacement_status' => 'حالة النزوح', 'paper_file_number' => 'رقم الملف الورقي', 'import_note' => 'ملاحظة مصدر غير سريرية', 'visit_date' => 'تاريخ الزيارة الفعلية *', 'is_referred' => 'محول؟ 0 أو 1 *', 'referring_hospital' => 'المشفى المحول', 'referral_date' => 'تاريخ التحويل', 'referral_reason' => 'سبب التحويل', 'diagnosis_id' => 'معرّف التشخيص *', 'diagnosed_on' => 'تاريخ التشخيص إن عُرف', 'clinic_id' => 'معرّف العيادة *', 'diagnosing_staff_id' => 'معرّف الطبيب المشخص *', 'catalog_id' => 'معرّف عنصر الدليل *', 'doctor_id' => 'معرّف الطبيب *', 'note' => 'ملاحظة موثقة', 'prescribing_clinic_id' => 'معرّف عيادة الوصفة *', 'prescribing_staff_id' => 'معرّف طبيب الوصفة *', 'prescribed_on' => 'تاريخ الوصفة الفعلي *', 'medication_id' => 'معرّف الدواء *', 'display_order' => 'الترتيب *', 'code' => 'كود المآل *', 'outcome_on' => 'تاريخ المآل *', 'referral_target' => 'جهة الإحالة', 'outgoing_referral_date' => 'تاريخ الإحالة', 'outgoing_referral_reason' => 'سبب الإحالة'];
+    private const LABELS = ['is_oncology' => 'ملف ورمي؟ 0 أو 1', 'disability_text' => 'معلومات الإعاقة', 'clinical_history' => 'قصة مرضية موثقة', 'previous_examinations' => 'الفحوص السابقة — وصف فقط', 'medication_source' => 'مصدر الدواء', 'other_organization' => 'اسم الجهة الأخرى', 'source_record_id' => 'معرّف المصدر الثابت *', 'local_patient_ref' => 'مرجع المريض داخل الملف *', 'local_visit_ref' => 'مرجع الزيارة داخل الملف *', 'patient_code' => 'كود مريض موجود فقط', 'legacy_code' => 'كود تاريخي / اسم بديل', 'opening_date' => 'بداية الملف الطبي الفعلية *', 'first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم', 'birth_date' => 'الميلاد حسب الدقة', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل', 'governorate_id' => 'معرّف المحافظة', 'city_id' => 'معرّف المدينة', 'address_line' => 'عنوان السكن', 'displacement_status' => 'حالة النزوح', 'permanent_address' => 'عنوان الإقامة الدائم عند النزوح', 'marital_status' => 'الوضع العائلي', 'occupation' => 'المهنة', 'smoking_status' => 'التدخين', 'alcohol_status' => 'الكحول', 'paper_file_number' => 'رقم الملف الورقي', 'import_note' => 'ملاحظة مصدر غير سريرية', 'visit_date' => 'تاريخ الزيارة الفعلية *', 'is_referred' => 'محول؟ 0 أو 1 *', 'referring_hospital' => 'المشفى المحول', 'referral_date' => 'تاريخ التحويل', 'referral_reason' => 'سبب التحويل', 'diagnosis_id' => 'معرّف التشخيص *', 'diagnosed_on' => 'تاريخ التشخيص إن عُرف', 'clinic_id' => 'معرّف العيادة *', 'diagnosing_staff_id' => 'معرّف الطبيب المشخص *', 'catalog_id' => 'معرّف عنصر الدليل *', 'doctor_id' => 'معرّف الطبيب *', 'note' => 'ملاحظة موثقة', 'prescribing_clinic_id' => 'معرّف عيادة الوصفة *', 'prescribing_staff_id' => 'معرّف طبيب الوصفة *', 'prescribed_on' => 'تاريخ الوصفة الفعلي *', 'medication_id' => 'معرّف الدواء *', 'display_order' => 'الترتيب *', 'code' => 'كود المآل *', 'outcome_on' => 'تاريخ المآل *', 'referral_target' => 'جهة الإحالة', 'outgoing_referral_date' => 'تاريخ الإحالة', 'outgoing_referral_reason' => 'سبب الإحالة'];
 
     public static function isDate(string $key): bool
     {
@@ -53,7 +53,7 @@ class ImportWorkbook
             'المراجع' => 'اكتب مراجع محلية ومعرّفات مصدر ثابتة لا تتغير عند إعادة رفع الملف. كل سطر فرعي يشير إلى local_visit_ref، وليس اسم المريض.',
             'الزيارات' => 'وجود بطاقة لا يعني حدوث زيارة. أضف الزيارات الواقعة صراحة فقط. لا تعني الحقول الممتلئة اكتمال الزيارة أو تفعيل البطاقة.',
             'الميلاد' => 'exact / year_only / estimated / unknown. لا تحوّل السنة وحدها إلى تاريخ دقيق. اكتب السنة نصًا عند year_only.',
-            'القيم' => 'الجنس: male / female / unknown. النزوح: resident / idp / unknown. التواريخ الأخرى تواريخ Excel أو YYYY-MM-DD.',
+            'القيم' => 'الجنس: male / female / unknown. النزوح: resident / idp / unknown. الوضع العائلي: single / married / divorced / widowed / unknown. التدخين والكحول: yes / no / former / unknown. عنوان الإقامة الدائم يُحفظ عند النزوح فقط. التواريخ الأخرى تواريخ Excel أو YYYY-MM-DD.',
             'الأدوية' => 'Medications عناصر الوصفة المسجلة في Prescriptions؛ ليست صرف أدوية ولا جلسة علاج أورام.',
             'خارج النطاق' => 'لا تستورد التشريح المرضي أو خطط وجلسات وجرعات الأورام أو الدم أو المرفقات. تُسجل لاحقًا في مساراتها المعتمدة.',
             'الحدود' => '5000 مريض، 30000 سطر إجمالي، 10 MiB ملف مضغوط. لا صيغ ولا وحدات ماكرو ولا روابط خارجية.'];
@@ -76,9 +76,10 @@ class ImportWorkbook
                 $s->getColumnDimension($col)->setWidth(str_contains($key, 'note') ? 38 : 24);
                 $numeric = str_ends_with($key, '_id') && $key !== 'source_record_id' || in_array($key, ['is_referred', 'display_order']);
                 $s->getStyle($col.':'.$col)->getNumberFormat()->setFormatCode(self::isDate($key) && $key !== 'birth_date' ? 'yyyy-mm-dd' : ($numeric ? '0' : '@'));
-                if (in_array($key, ['birth_date_accuracy', 'gender', 'displacement_status', 'is_referred'])) {
+                if (in_array($key, ['birth_date_accuracy', 'gender', 'displacement_status', 'marital_status', 'smoking_status', 'alcohol_status', 'is_referred'])) {
                     $choices = match ($key) {
-                        'birth_date_accuracy' => 'exact,year_only,estimated,unknown', 'gender' => 'male,female,unknown', 'displacement_status' => 'resident,idp,unknown', default => '0,1'
+                        'birth_date_accuracy' => 'exact,year_only,estimated,unknown', 'gender' => 'male,female,unknown', 'displacement_status' => 'resident,idp,unknown',
+                        'marital_status' => 'single,married,divorced,widowed,unknown', 'smoking_status', 'alcohol_status' => 'yes,no,former,unknown', default => '0,1'
                     };
                     $v = $s->getCell($col.'3')->getDataValidation();
                     $v->setType(DataValidation::TYPE_LIST)->setFormula1('"'.$choices.'"')->setAllowBlank(true)->setShowDropDown(true)->setShowErrorMessage(true)->setSqref($col.'3:'.$col.'5002');

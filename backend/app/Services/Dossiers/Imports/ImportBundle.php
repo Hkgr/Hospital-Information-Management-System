@@ -2,7 +2,6 @@
 
 namespace App\Services\Dossiers\Imports;
 
-use App\Http\Requests\BloodBank\SaveBloodProfile;
 use App\Http\Requests\Dossiers\SaveDossierSection;
 use App\Http\Requests\Dossiers\SaveVisitClinical;
 use App\Services\Dossiers\DossierAccess;
@@ -135,7 +134,7 @@ class ImportBundle
         }
         if ($patient) {
             $this->globalPermission($r, 'patients.search');
-            foreach ([...SaveBloodProfile::PERSON, 'paper_file_number'] as $key) {
+            foreach ([...SaveDossierSection::PERSON, 'paper_file_number'] as $key) {
                 $this->require(($personal[$key] ?? null) === null || (string) $personal[$key] === (string) $patient->$key, $key, 'تختلف قيمة مصدر عن الهوية المحفوظة؛ لا يكتب الاستيراد فوقها. صحح الهوية خارج الدفعة.');
             }
             if ($dossier) {

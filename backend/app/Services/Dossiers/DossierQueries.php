@@ -104,7 +104,7 @@ class DossierQueries
             abort_unless($d, 404);
             $patient = DB::table('patients as p')->leftJoin('governorates as g', 'g.id', '=', 'p.governorate_id')
                 ->leftJoin('cities as c', fn ($j) => $j->on('c.id', '=', 'p.city_id')->on('c.governorate_id', '=', 'p.governorate_id'))
-                ->where('p.id', $d->patient_id)->first(['p.patient_code', 'p.first_name', 'p.family_name', 'p.father_name', 'p.mother_name', 'p.birth_date', 'p.birth_date_accuracy', 'p.gender', 'p.phone', 'p.alt_phone', 'p.paper_file_number', 'g.name_ar as governorate', 'c.name_ar as city', 'p.address_line', 'p.displacement_status']);
+                ->where('p.id', $d->patient_id)->first(['p.patient_code', 'p.first_name', 'p.family_name', 'p.father_name', 'p.mother_name', 'p.birth_date', 'p.birth_date_accuracy', 'p.gender', 'p.phone', 'p.alt_phone', 'p.paper_file_number', 'g.name_ar as governorate', 'c.name_ar as city', 'p.address_line', 'p.displacement_status', 'p.marital_status', 'p.permanent_address', 'p.occupation', 'p.smoking_status', 'p.alcohol_status']);
             $v = $this->actualVisits($f)->where('v.dossier_id', $id);
             $latest = (clone $v)->orderByDesc('v.visit_date')->orderByDesc('v.id')->value('v.id');
 
