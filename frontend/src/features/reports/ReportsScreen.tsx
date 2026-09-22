@@ -27,8 +27,10 @@ export default function ReportsScreen() {
   const router = useRouter();
   const { entry, allowed } = directoryFacility(access, null, params.get("facility_id"));
   const period = periods.some(item => item.key === params.get("period")) ? params.get("period")! : "day";
-  const from = params.get("from") ?? "";
-  const to = params.get("to") ?? "";
+  const [customFrom, setCustomFrom] = useState(params.get("from") ?? "");
+  const [customTo, setCustomTo] = useState(params.get("to") ?? "");
+  const from = period === "custom" ? customFrom : "";
+  const to = period === "custom" ? customTo : "";
   const ready = !!entry && (period !== "custom" || (!!from && !!to));
   const path = ready && entry ? reportsPath(entry.facility.id, period, from, to) : null;
   const report = useClinicRequest<FacilityReport>(path, false);
@@ -40,6 +42,11 @@ export default function ReportsScreen() {
       if (value) q.set(key, value); else q.delete(key);
     }
     router.replace(`${pathname}?${q}`, { scroll: false });
+  }
+  function setCustom(nextFrom: string, nextTo: string) {
+    setCustomFrom(nextFrom);
+    setCustomTo(nextTo);
+    setQuery({ period: "custom", from: nextFrom, to: nextTo });
   }
   return <div className={styles.screen}>
     <Reveal>
@@ -58,11 +65,11 @@ export default function ReportsScreen() {
       <section className={styles.controls} aria-label="نطاق التقرير">
         <div role="radiogroup" aria-label="الفترة الزمنية" className={styles.switch}>
           {periods.map(item => <button key={item.key} type="button" role="radio" aria-checked={period === item.key}
-            onClick={() => setQuery({ period: item.key, ...(item.key === "custom" ? { from, to } : { from: "", to: "" }) })}>{item.label}</button>)}
+            onClick={() => setQuery({ period: item.key, from: item.key === "custom" ? customFrom : "", to: item.key === "custom" ? customTo : "" })}>{item.label}</button>)}
         </div>
         {period === "custom" && <div className={styles.custom}>
-          <label>من تاريخ<input type="date" value={from} onChange={e => setQuery({ period: "custom", from: e.target.value, to })} /></label>
-          <label>إلى تاريخ<input type="date" value={to} onChange={e => setQuery({ period: "custom", from, to: e.target.value })} /></label>
+          <label>من تاريخ<input type="date" value={customFrom} onChange={e => setCustom(e.target.value, customTo)} /></label>
+          <label>إلى تاريخ<input type="date" value={customTo} onChange={e => setCustom(customFrom, e.target.value)} /></label>
         </div>}
         <ExportButton path={path} ready={!!path && !!report.data && !report.loading && !report.error} />
       </section>
