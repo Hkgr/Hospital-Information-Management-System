@@ -2,6 +2,7 @@
 
 namespace App\Services\Audit;
 
+use App\Models\User;
 use App\Services\Auth\UserAccessContext;
 use App\Services\Dossiers\DossierAuditHistory;
 use App\Services\Dossiers\DossierAuditValues;
@@ -33,7 +34,7 @@ class SystemLogHistory
         'oncology_plans' => 'الخطة العلاجية', 'oncology_plan_revisions' => 'نسخة الخطة', 'oncology_sessions' => 'الموعد العلاجي',
         'oncology_session_doses' => 'الجرعة العلاجية', 'dose_sessions' => 'الإعطاء الفعلي', 'dose_session_items' => 'الدواء المعطى',
         'visit_medications' => 'صرف الدواء', 'visit_pathologies' => 'التشريح المرضي', 'visit_diagnostic_assessments' => 'التقييم التشخيصي',
-        'clinic' => 'العيادة', 'doctor' => 'الطبيب', 'medication_store' => 'مخزن الأدوية', 'medication_supplier' => 'المورّد',
+        'clinic' => 'العيادة', 'doctor' => 'الطبيب', 'facility_report' => 'تقرير المنشأة', 'medication_store' => 'مخزن الأدوية', 'medication_supplier' => 'المورّد',
         'medication_receipt' => 'إيصال المخزون', 'blood_bank' => 'بنك الدم', 'blood_bank_event' => 'واقعة بنك الدم',
         'blood_bank_person' => 'شخص بنك الدم', 'auth_session' => 'جلسة الدخول', 'system_error' => 'خطأ تقني',
     ];
@@ -59,14 +60,14 @@ class SystemLogHistory
         'oncology_plans' => 'treatment', 'oncology_plan_revisions' => 'treatment', 'oncology_sessions' => 'treatment',
         'oncology_session_doses' => 'treatment', 'dose_sessions' => 'treatment', 'dose_session_items' => 'treatment',
         'visit_medications' => 'treatment',
-        'clinic' => 'directory', 'doctor' => 'directory', 'service' => 'directory', 'procedure' => 'directory',
+        'clinic' => 'directory', 'doctor' => 'directory', 'facility_report' => 'other', 'service' => 'directory', 'procedure' => 'directory',
         'medication' => 'directory', 'diagnosis' => 'directory',
         'medication_store' => 'stock', 'medication_supplier' => 'stock', 'medication_receipt' => 'stock',
         'blood_bank' => 'blood_bank', 'blood_bank_event' => 'blood_bank', 'blood_bank_person' => 'blood_bank',
         'auth_session' => 'accounts', 'system_error' => 'technical',
     ];
 
-    public function facility(\App\Models\User $user, int $id): array
+    public function facility(User $user, int $id): array
     {
         foreach (app(UserAccessContext::class)->forUser($user) as $entry) {
             if ($entry['facility']['id'] === $id) {

@@ -15,6 +15,7 @@
     "test:directory-routing": "node --test tests/directory-lifecycle-routing.test.mjs",
     "test:catalog": "node --test tests/catalog.test.mjs",
     "test:stock": "node --test tests/stock.test.mjs",
+    "test:reports": "node --test tests/reports.test.mjs",
     "test:catalog-live": "node --test tests/catalog-live.test.mjs"
   },
   "dependencies": {

@@ -11,7 +11,7 @@ class PrivateClinicResponse
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit', 'api/audit/*')) {
+        if (! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit', 'api/audit/*', 'api/reports', 'api/reports/*')) {
             return $next($request);
         }
         try {
@@ -45,6 +45,10 @@ class PrivateClinicResponse
         if ($request->is('api/audit', 'api/audit/*') && in_array($response->getStatusCode(), [404, 500], true)) {
             $status = $response->getStatusCode();
             $response = response()->json(['error' => ['code' => $status === 404 ? 'AUDIT_NOT_FOUND' : 'AUDIT_UNAVAILABLE', 'message' => $status === 404 ? 'الحركة غير موجودة في سجل المنشأة المحددة.' : 'تعذّر تحميل سجل الحركة. حاول مجددًا.']], $status);
+        }
+        if ($request->is('api/reports', 'api/reports/*') && in_array($response->getStatusCode(), [404, 500], true)) {
+            $status = $response->getStatusCode();
+            $response = response()->json(['error' => ['code' => $status === 404 ? 'REPORTS_NOT_FOUND' : 'REPORTS_UNAVAILABLE', 'message' => $status === 404 ? 'مسار التقارير غير موجود.' : 'تعذّر تحميل التقارير. حاول مجددًا.']], $status);
         }
         $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->set('Vary', 'Authorization');
