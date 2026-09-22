@@ -30,18 +30,22 @@ class CatalogReports
         $metadata = app(ReportMetadata::class)->make($request, $facility, $filters, $labels, 'catalog', $id !== null, CatalogBeneficiaries::DEFINITION);
         if ($id === null) {
             $metadata['filters'] .= ' | النوع: '.match ($filters['kind'] ?? '') {
-                'service' => 'خدمات', 'procedure' => 'إجراءات', default => 'الكل'
+                'service' => 'خدمات', 'procedure' => 'إجراءات', 'medication' => 'أدوية', default => 'الكل'
             }.' | جميع النتائج المطابقة، لا الصفحة الحالية';
         }
         foreach ($rows as &$row) {
-            $row['kind'] = $row['kind'] === 'service' ? 'خدمة' : 'إجراء';
+            $row['kind'] = match ($row['kind']) {
+                'service' => 'خدمة', 'procedure' => 'إجراء', 'medication' => 'دواء', default => $row['kind'],
+            };
             $row['is_active'] = $row['archived_at'] ? 'مؤرشف' : ($row['is_active'] ? 'فعال' : 'غير فعال');
             $row['details'] = ['الكود' => $row['code'], 'الاسم' => $row['name_ar'], 'النوع' => $row['kind'], 'الحالة' => $row['is_active'], 'عدد المستفيدين' => $row['patient_count']];
             $row['links'] = [];
         }
         unset($row);
         $response = app(DirectoryReport::class)->response(['rows' => $rows, 'columns' => $filters['columns'] ?? array_keys($labels), 'labels' => $labels,
-            'metadata' => $metadata, 'detail' => $id !== null, 'descriptionTitle' => $kind === 'service' ? 'وصف الخدمة' : 'وصف الإجراء', 'linkTitle' => 'لا توجد ارتباطات تعريف مباشرة بالعيادات في المخطط الحالي'], $format);
+            'metadata' => $metadata, 'detail' => $id !== null, 'descriptionTitle' => match ($kind) {
+                'service' => 'وصف الخدمة', 'medication' => 'وصف الدواء', default => 'وصف الإجراء',
+            }, 'linkTitle' => 'لا توجد ارتباطات تعريف مباشرة بالعيادات في المخطط الحالي'], $format);
         app(ClinicAudit::class)->record($request, $facility['id'], $id ?? 0, 'exported', null, ['report_number' => $metadata['number'], 'format' => $format, 'row_count' => count($rows)], $kind ?? 'catalog');
 
         return $response;

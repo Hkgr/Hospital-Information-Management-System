@@ -20,7 +20,7 @@ class DirectoryDescriptionTest extends TestCase
 
     public static function descriptions(): array
     {
-        return [['service', 'وصف الخدمة'], ['procedure', 'وصف الإجراء'], ['clinic', 'توصيف العيادة'], ['doctor', 'التوصيف المهني']];
+        return [['service', 'وصف الخدمة'], ['procedure', 'وصف الإجراء'], ['medication', 'وصف الدواء'], ['clinic', 'توصيف العيادة'], ['doctor', 'التوصيف المهني']];
     }
 
     #[DataProvider('descriptions')]
@@ -36,7 +36,7 @@ class DirectoryDescriptionTest extends TestCase
         View::composer('reports.directory', function ($view) use (&$document) {
             $document = $view->getData();
         });
-        if (in_array($kind, ['service', 'procedure'], true)) {
+        if (in_array($kind, ['service', 'procedure', 'medication'], true)) {
             $response = app(CatalogReports::class)->export($request, $facility, [], 'pdf', $kind, $f['items'][$kind][1]);
         } elseif ($kind === 'clinic') {
             $id = DB::table('clinics')->insertGetId(['facility_id' => $f['facility'], 'code' => 'CL-REVIEW', 'name_ar' => 'عيادة اختبار', 'description' => 'وصف محفوظ']);

@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 class CatalogBeneficiaries
 {
-    public const DEFINITION = 'مرضى فريدون لكل نوع ومعرّف ضمن المنشأة: أحداث منفذة حتى تاريخ المنشأة وغير ملغاة في زيارات مكتملة؛ تشمل الإجراءات أيضًا أحداث متلقي الدم غير الملغاة لمريض معروف، مع اشتراط اكتمال الزيارة إن ارتبطت بها. تُستبعد المسودات والملغى والمستقبل، ويُزال التكرار بين المصدرين.';
+    public const DEFINITION = 'مرضى فريدون لكل نوع ومعرّف ضمن المنشأة: أحداث منفذة حتى تاريخ المنشأة وغير ملغاة في زيارات مكتملة؛ تشمل الإجراءات أيضًا أحداث متلقي الدم غير الملغاة لمريض معروف، مع اشتراط اكتمال الزيارة إن ارتبطت بها. للأدوية يُحسب الصرف بتاريخ dispensed_on وجلسات الجرعة عبر dose_sessions حيث الإلغاء على الجلسة لا على البند. تُستبعد المسودات والملغى والمستقبل، ويُزال التكرار بين المصدرين.';
 
     /** One shared relation for the count, patients list and reports; no patient data loaded per directory row. */
     private function events(array $facility, bool $includeEventDetails = false): Builder
@@ -32,11 +32,29 @@ class CatalogBeneficiaries
         if ($includeEventDetails) {
             $blood->selectRaw('? as source', ['blood_procedure'])->addSelect('e.id as event_id', 'e.performed_on', 'v.visit_no');
         }
+        $dispensed = DB::table('visit_medications as e')->join('visits as v', function ($join) {
+            $join->on('v.id', '=', 'e.visit_id')->on('v.facility_id', '=', 'e.facility_id');
+        })->where('e.facility_id', $facility['id'])->where('v.status', 'complete')->whereNull('v.voided_at')
+            ->whereNull('e.voided_at')->whereNotNull('e.medication_id')->where('e.dispensed_on', '<=', $facility['today'])
+            ->selectRaw('? as kind', ['medication'])->addSelect('e.medication_id as item_id', 'v.patient_id');
+        if ($includeEventDetails) {
+            $dispensed->selectRaw('? as source', ['visit_medication'])->addSelect('e.id as event_id', 'e.dispensed_on as performed_on', 'v.visit_no');
+        }
+        $doses = DB::table('dose_session_items as e')->join('dose_sessions as s', 's.id', '=', 'e.dose_session_id')
+            ->join('visits as v', function ($join) {
+                $join->on('v.id', '=', 's.visit_id')->on('v.facility_id', '=', 's.facility_id');
+            })->where('s.facility_id', $facility['id'])->where('v.status', 'complete')->whereNull('v.voided_at')
+            ->whereNull('s.voided_at')->whereNotNull('e.medication_id')->where('s.administered_on', '<=', $facility['today'])
+            ->selectRaw('? as kind', ['medication'])->addSelect('e.medication_id as item_id', 'v.patient_id');
+        if ($includeEventDetails) {
+            $doses->selectRaw('? as source', ['dose_session_item'])->addSelect('e.id as event_id', 's.administered_on as performed_on', 'v.visit_no');
+        }
 
         // Keep the original narrow, deduplicated relation for list counts/reports.
         // Only the presentation endpoint materializes the individual event identities.
-        $union = $includeEventDetails ? $visit('service')->unionAll($visit('procedure'))->unionAll($blood)
-            : $visit('service')->union($visit('procedure'))->union($blood);
+        $union = $includeEventDetails
+            ? $visit('service')->unionAll($visit('procedure'))->unionAll($blood)->unionAll($dispensed)->unionAll($doses)
+            : $visit('service')->union($visit('procedure'))->union($blood)->union($dispensed)->union($doses);
 
         return DB::query()->fromSub($union, 'benefit');
     }

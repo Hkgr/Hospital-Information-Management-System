@@ -18,7 +18,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
-#[Group('Services and procedures')]
+#[Group('Services, procedures and medications')]
 class CatalogController extends Controller
 {
     public function __construct(private CatalogAccess $access, private CatalogQueries $queries, private CatalogWriter $writer) {}
@@ -121,7 +121,8 @@ class CatalogController extends Controller
         $this->access->facility($request->user(), $request->integer('facility_id'));
 
         return response()->json(['data' => ['categories' => DB::table('service_categories')->where('is_active', true)->orderBy('name_ar')->orderBy('id')->get(['id', 'name_ar']),
-            'procedure_types' => DB::table('procedure_types')->where('is_active', true)->orderBy('name_ar')->orderBy('id')->get(['id', 'name_ar'])]]);
+            'procedure_types' => DB::table('procedure_types')->where('is_active', true)->orderBy('name_ar')->orderBy('id')->get(['id', 'name_ar']),
+            'medication_categories' => DB::table('medication_categories')->where('is_active', true)->orderBy('name_ar')->orderBy('id')->get(['id', 'name_ar'])]]);
     }
 
     /** Choices for new registrations: always active and unarchived, even if another status is requested. */

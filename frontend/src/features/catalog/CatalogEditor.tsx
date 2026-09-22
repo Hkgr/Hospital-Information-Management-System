@@ -7,9 +7,9 @@ import CategoryEditor from "./CategoryEditor";
 import { type Item, type Kind, type Choices, useCatalogRequest, kindName, itemPath } from "./api";
 import styles from "../clinics/clinics.module.css";
 
-type Fields = { code: string; name_ar: string; description: string; classification: string; is_active: boolean };
-const labels: Record<keyof Fields, string> = { code: "الكود", name_ar: "الاسم", description: "الوصف", classification: "التصنيف", is_active: "الحالة" };
-const fieldsOf = (item?: Item): Fields => ({ code: item?.code ?? "", name_ar: item?.name_ar ?? "", description: item?.description ?? "", classification: String(item?.category_id ?? item?.procedure_type_id ?? ""), is_active: item?.is_active ?? true });
+type Fields = { code: string; name_ar: string; description: string; classification: string; is_active: boolean; default_unit: string; strength: string; dosage_form: string; reorder_level: string };
+const labels: Record<keyof Fields, string> = { code: "الكود", name_ar: "الاسم", description: "الوصف", classification: "التصنيف", is_active: "الحالة", default_unit: "الوحدة الافتراضية", strength: "التركيز", dosage_form: "الشكل الصيدلاني", reorder_level: "حد إعادة الطلب" };
+const fieldsOf = (item?: Item): Fields => ({ code: item?.code ?? "", name_ar: item?.name_ar ?? "", description: item?.description ?? "", classification: String(item?.category_id ?? item?.procedure_type_id ?? ""), is_active: item?.is_active ?? true, default_unit: item?.default_unit ?? "", strength: item?.strength ?? "", dosage_form: item?.dosage_form ?? "", reorder_level: item?.reorder_level ?? "" });
 
 export default function CatalogEditor({ kind, item, facilityId, canCreateCategory = false, onClose, onSaved, onRefresh }: { kind: Kind; item?: Item; facilityId: number; canCreateCategory?: boolean; onClose: () => void; onSaved: () => void; onRefresh: () => void }) {
   const [base, setBase] = useState(item);
@@ -26,8 +26,9 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
   useEffect(() => () => controller.current?.abort(), []);
   const [categoryOpen, setCategoryOpen] = useState(false), [categoryRevision, setCategoryRevision] = useState(0), [categoryNotice, setCategoryNotice] = useState("");
   const choices = useCatalogRequest<Choices>(`service-catalog/classifications?facility_id=${facilityId}`, false, false, categoryRevision);
-  const options = (kind === "service" ? choices.data?.categories : choices.data?.procedure_types) ?? [];
-  const relation = kind === "service" ? "category_id" : "procedure_type_id";
+  const options = (kind === "service" ? choices.data?.categories : kind === "medication" ? choices.data?.medication_categories : choices.data?.procedure_types) ?? [];
+  const relation = kind === "procedure" ? "procedure_type_id" : "category_id";
+  const visible = (Object.keys(labels) as (keyof Fields)[]).filter(key => kind === "medication" || !["default_unit", "strength", "dosage_form", "reorder_level"].includes(key));
   const fieldError = (name: string) => error?.fields[name] && <span id={`catalog-${name}-error`} className={styles.fieldError}>{error.fields[name]}</span>;
   const display = (key: keyof Fields, value: string | boolean) => key === "is_active" ? (value ? "فعال" : "غير فعال") : key === "classification" ? options.find(option => String(option.id) === value)?.name_ar ?? String(value || "دون تصنيف") : String(value || "—");
 
@@ -46,9 +47,10 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
     pending.current = true; setBusy(true); setError(null);
     const active = new AbortController(); controller.current = active;
     try {
-      const { classification, ...values } = fields;
+      const { classification, default_unit, strength, dosage_form, reorder_level, ...values } = fields;
+      const extras = kind === "medication" ? { default_unit: default_unit || null, strength: strength || null, dosage_form: dosage_form || null, reorder_level: reorder_level === "" ? null : Number(reorder_level) } : {};
       await apiRequest<Item>(base ? itemPath(base) : "service-catalog", { method: base ? "PUT" : "POST", signal: active.signal,
-        body: JSON.stringify({ ...values, [relation]: classification ? Number(classification) : null, facility_id: facilityId, ...(base ? { lock_version: base.lock_version } : { kind }) }) });
+        body: JSON.stringify({ ...values, ...extras, [relation]: classification ? Number(classification) : null, facility_id: facilityId, ...(base ? { lock_version: base.lock_version } : { kind }) }) });
       if (!active.signal.aborted) onSaved();
     } catch (reason) {
       if (!active.signal.aborted) {
@@ -63,9 +65,9 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
       {error && <p role="alert" className={styles.error}>{conflict ? "عدّل مستخدم آخر العنصر. مسودتك محفوظة؛ اجلب أحدث نسخة وراجع التغييرات قبل الحفظ." : error.message}</p>}
       {conflict && <div><button type="button" className={styles.secondary} disabled={fetching} onClick={() => void reload()}>{fetching ? "جارٍ جلب أحدث نسخة…" : "جلب أحدث نسخة"}</button>{reloadError && <p role="alert">{reloadError}</p>}</div>}
       {latest && <section className={styles.conflictReview} aria-label="مراجعة التعارض"><h3>أحدث نسخة ومسودتك</h3><p className={styles.hint}>تُحفظ أحدث قيم المستخدم الآخر افتراضيًا. اختر فقط التغييرات التي تريد تطبيقها؛ لا يتم الحفظ تلقائيًا.</p>
-        {(Object.keys(labels) as (keyof Fields)[]).map(key => <div className={styles.reviewField} key={key}><strong>{labels[key]}</strong><p>أحدث نسخة: {display(key, fieldsOf(latest)[key])}</p><p>مسودتك: {display(key, fields[key])}</p>{fields[key] !== fieldsOf(latest)[key] && <label><input type="checkbox" checked={!!selected[key]} onChange={e => setSelected({ ...selected, [key]: e.target.checked })} />تطبيق مسودتي: {labels[key]}</label>}</div>)}
+        {visible.map(key => <div className={styles.reviewField} key={key}><strong>{labels[key]}</strong><p>أحدث نسخة: {display(key, fieldsOf(latest)[key])}</p><p>مسودتك: {display(key, fields[key])}</p>{fields[key] !== fieldsOf(latest)[key] && <label><input type="checkbox" checked={!!selected[key]} onChange={e => setSelected({ ...selected, [key]: e.target.checked })} />تطبيق مسودتي: {labels[key]}</label>}</div>)}
         {latest.archived_at ? <p role="alert">أصبح العنصر مؤرشفًا. أغلق النافذة واستعده بإجراء مستقل قبل التعديل؛ لم تُفقد مسودتك.</p> : <button type="button" className={styles.secondary} onClick={() => {
-          const merged = fieldsOf(latest); for (const key of Object.keys(labels) as (keyof Fields)[]) if (selected[key]) Object.assign(merged, { [key]: fields[key] });
+          const merged = fieldsOf(latest); for (const key of visible) if (selected[key]) Object.assign(merged, { [key]: fields[key] });
           setFields(merged); setBase(latest); setLatest(null); setConflict(false); setError(null);
         }}>اعتماد الاختيارات للمراجعة</button>}
       </section>}
@@ -73,8 +75,12 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
         <label>الكود *<input autoFocus required maxLength={50} dir="auto" value={fields.code} onChange={e => setFields({ ...fields, code: e.target.value })} aria-invalid={!!error?.fields.code} aria-describedby={error?.fields.code ? "catalog-code-error" : undefined} />{fieldError("code")}</label>
         <label>الاسم *<input required maxLength={200} value={fields.name_ar} onChange={e => setFields({ ...fields, name_ar: e.target.value })} aria-invalid={!!error?.fields.name_ar} />{fieldError("name_ar")}</label>
         <label className={styles.full}>الوصف<textarea maxLength={10000} rows={4} value={fields.description} onChange={e => setFields({ ...fields, description: e.target.value })} />{fieldError("description")}</label>
-        <label>{kind === "service" ? "فئة الخدمة *" : "نوع الإجراء"}<select required={kind === "service"} value={fields.classification} onChange={e => setFields({ ...fields, classification: e.target.value })}><option value="">{kind === "service" ? "اختر فئة الخدمة" : "دون تصنيف"}</option>{fields.classification && !options.some(option => String(option.id) === fields.classification) && <option value={fields.classification}>التصنيف الحالي ({fields.classification})</option>}{options.map(option => <option key={option.id} value={option.id}>{option.name_ar}</option>)}</select>{fieldError(relation)}</label>
-        {kind === "service" && canCreateCategory && <div className={styles.actions}><button type="button" className={styles.secondary} onClick={() => setCategoryOpen(true)}>إضافة فئة</button></div>}
+        {kind === "medication" && <><label>التركيز<input maxLength={60} value={fields.strength} onChange={e => setFields({ ...fields, strength: e.target.value })} />{fieldError("strength")}</label>
+          <label>الشكل الصيدلاني<input maxLength={40} value={fields.dosage_form} onChange={e => setFields({ ...fields, dosage_form: e.target.value })} />{fieldError("dosage_form")}</label>
+          <label>الوحدة الافتراضية<input maxLength={40} value={fields.default_unit} onChange={e => setFields({ ...fields, default_unit: e.target.value })} />{fieldError("default_unit")}</label>
+          <label>حد إعادة الطلب<input inputMode="decimal" value={fields.reorder_level} onChange={e => setFields({ ...fields, reorder_level: e.target.value })} />{fieldError("reorder_level")}</label></>}
+        <label>{kind === "service" ? "فئة الخدمة *" : kind === "medication" ? "فئة الدواء" : "نوع الإجراء"}<select required={kind === "service"} value={fields.classification} onChange={e => setFields({ ...fields, classification: e.target.value })}><option value="">{kind === "service" ? "اختر فئة الخدمة" : "دون تصنيف"}</option>{fields.classification && !options.some(option => String(option.id) === fields.classification) && <option value={fields.classification}>التصنيف الحالي ({fields.classification})</option>}{options.map(option => <option key={option.id} value={option.id}>{option.name_ar}</option>)}</select>{fieldError(relation)}</label>
+        {(kind === "service" || kind === "medication") && canCreateCategory && <div className={styles.actions}><button type="button" className={styles.secondary} onClick={() => setCategoryOpen(true)}>إضافة فئة</button></div>}
         <label>الحالة<select value={String(fields.is_active)} onChange={e => setFields({ ...fields, is_active: e.target.value === "true" })}><option value="true">فعال</option><option value="false">غير فعال</option></select></label>
         {categoryNotice && <p role="status">{categoryNotice}</p>}
         {choices.loading && <p role="status">جارٍ تحميل التصنيفات…</p>}{choices.error && <p role="alert">{choices.error} <button type="button" onClick={choices.retry}>إعادة تحميل التصنيفات</button></p>}
@@ -82,9 +88,9 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
       </fieldset>
       <div className={styles.modalActions}><button type="submit" className={styles.primary} disabled={busy || conflict}>{busy ? "جارٍ الحفظ…" : "حفظ التعريف"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
     </form>
-  </Modal>{categoryOpen && <CategoryEditor facilityId={facilityId} onClose={() => setCategoryOpen(false)} onSaved={category => {
+  </Modal>{categoryOpen && <CategoryEditor kind={kind === "procedure" ? "service" : kind} facilityId={facilityId} onClose={() => setCategoryOpen(false)} onSaved={category => {
     setCategoryOpen(false); setCategoryRevision(n => n + 1);
-    if (category.is_active) { setFields(previous => ({ ...previous, classification: String(category.id) })); setCategoryNotice(`أضيفت الفئة ${category.name_ar} واختيرت للخدمة.`); }
-    else setCategoryNotice("حُفظت الفئة غير الفعالة؛ اختر فئة فعالة للخدمة الجديدة.");
+    if (category.is_active) { setFields(previous => ({ ...previous, classification: String(category.id) })); setCategoryNotice(`أضيفت الفئة ${category.name_ar} واختيرت لل${kind === "medication" ? "دواء" : "خدمة"}.`); }
+    else setCategoryNotice("حُفظت الفئة غير الفعالة؛ اختر فئة فعالة للتعريف الجديد.");
   }} />}</>;
 }

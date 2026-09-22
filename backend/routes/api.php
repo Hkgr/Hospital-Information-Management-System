@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\DossierImportController;
 use App\Http\Controllers\Api\DossierPathologyController;
 use App\Http\Controllers\Api\DossierWizardController;
 use App\Http\Controllers\Api\OncologyController;
+use App\Http\Controllers\Api\StockController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
@@ -130,7 +131,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::get('/options', [CatalogController::class, 'options'])->name('options');
         Route::get('/classifications', [CatalogController::class, 'classifications'])->name('classifications');
         Route::get('/export/{format}', [CatalogController::class, 'export'])->whereIn('format', ['xlsx', 'pdf'])->name('export');
-        Route::prefix('{kind}/{item}')->whereIn('kind', ['service', 'procedure'])->whereNumber('item')->group(function () {
+        Route::prefix('{kind}/{item}')->whereIn('kind', ['service', 'procedure', 'medication'])->whereNumber('item')->group(function () {
             Route::get('/', [CatalogController::class, 'show'])->name('show');
             Route::put('/', [CatalogController::class, 'update'])->name('update');
             Route::delete('/', [CatalogController::class, 'lifecycle'])->name('delete');
@@ -180,6 +181,25 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::post('/{clinic}/deactivate', [ClinicController::class, 'deactivate'])->whereNumber('clinic')->name('deactivate');
         Route::get('/{clinic}/doctors', [ClinicController::class, 'doctors'])->whereNumber('clinic')->name('doctors');
         Route::get('/{clinic}/report', [ClinicController::class, 'report'])->whereNumber('clinic')->name('report');
+    });
+    Route::prefix('stock')->name('stock.')->group(function () {
+        Route::get('/options', [StockController::class, 'options'])->name('options');
+        Route::get('/receipts', [StockController::class, 'receipts'])->name('receipts');
+        Route::post('/receipts', [StockController::class, 'createReceipt'])->name('receipts.store');
+        Route::get('/receipts/{receipt}', [StockController::class, 'receipt'])->whereNumber('receipt')->name('receipts.show');
+        Route::put('/receipts/{receipt}', [StockController::class, 'updateReceipt'])->whereNumber('receipt')->name('receipts.update');
+        Route::post('/receipts/{receipt}/confirm', [StockController::class, 'confirm'])->whereNumber('receipt')->name('receipts.confirm');
+        foreach (['suppliers', 'stores'] as $directory) {
+            Route::get('/'.$directory, [StockController::class, 'index'])->defaults('directory', $directory)->name($directory);
+            Route::post('/'.$directory, [StockController::class, 'store'])->defaults('directory', $directory)->name($directory.'.store');
+            Route::get('/'.$directory.'/{item}', [StockController::class, 'show'])->defaults('directory', $directory)->whereNumber('item')->name($directory.'.show');
+            Route::put('/'.$directory.'/{item}', [StockController::class, 'update'])->defaults('directory', $directory)->whereNumber('item')->name($directory.'.update');
+            Route::delete('/'.$directory.'/{item}', [StockController::class, 'destroy'])->defaults('directory', $directory)->whereNumber('item')->name($directory.'.delete');
+            Route::get('/'.$directory.'/{item}/deletion-preview', [StockController::class, 'deletionPreview'])->defaults('directory', $directory)->whereNumber('item')->name($directory.'.deletionPreview');
+            foreach (['archive', 'restore', 'deactivate', 'reactivate'] as $action) {
+                Route::post('/'.$directory.'/{item}/'.$action, [StockController::class, 'lifecycle'])->defaults('directory', $directory)->whereNumber('item')->name($directory.'.'.$action);
+            }
+        }
     });
     Route::get('/dashboards', [DashboardController::class, 'index'])->name('dashboards');
     Route::get('/dashboards/{key}', [DashboardController::class, 'show'])->name('dashboards.show');
