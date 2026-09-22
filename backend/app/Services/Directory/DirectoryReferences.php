@@ -9,7 +9,7 @@ class DirectoryReferences
     // All restrictive FKs to staff/clinics. staff_specialties are intrinsic attributes,
     // removed only by a successful hard delete; clinic_staff is preserved history.
     public const DOCTOR = ['users' => ['staff_id'], 'staff_aliases' => ['staff_id'], 'staff_work_days' => ['staff_id'],
-        'oncology_plan_revisions' => ['protocol_doctor_id', 'treating_doctor_id'], 'oncology_sessions' => ['doctor_id'],
+        'oncology_plan_revisions' => ['protocol_doctor_id', 'treating_doctor_id'], 'oncology_sessions' => ['doctor_id'], 'oncology_session_doses' => ['nurse_id'],
         'visits' => ['attending_staff_id', 'resident_staff_id'], 'visit_diagnoses' => ['diagnosing_staff_id'],
         'visit_services' => ['performed_by'], 'visit_procedures' => ['specialist_id', 'nurse_id'],
         'dose_sessions' => ['supervising_staff_id', 'administered_by'], 'visit_medications' => ['prescribing_staff_id'],

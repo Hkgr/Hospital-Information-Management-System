@@ -29,6 +29,8 @@ const nextConfig: NextConfig = {
       "dossiers/:dossier(\\d+)/treatment-plans/:plan(\\d+)/status",
       "dossiers/:dossier(\\d+)/treatment-plans/:plan(\\d+)/sessions",
       "dossiers/:dossier(\\d+)/treatment-sessions",
+      "dossiers/:dossier(\\d+)/treatment-sessions/:session(\\d+)/session-doses",
+      "dossiers/:dossier(\\d+)/treatment-sessions/:session(\\d+)/session-doses/:sessionDose(\\d+)",
       "dossiers/:dossier(\\d+)/treatment-sessions/:session(\\d+)",
       "dossiers/:dossier(\\d+)/visits/:visit(\\d+)/doses",
       "dossiers/:dossier(\\d+)/visits/:visit(\\d+)/doses/:dose(\\d+)",

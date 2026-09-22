@@ -691,4 +691,21 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $dispense = $this->item() + ['dose_session_id' => 1, 'dispensed_on' => '2099-01-01', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'dispensing_purpose' => 'supportive'];
         $this->callApi('POST', $this->path('/dispensing'), $dispense)->assertUnprocessable();
     }
+
+    public function test_each_plan_session_keeps_one_or_more_treatment_doses(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $s = $this->schedule($p, '2001-03-02');
+        $path = '/'.$this->s['id'].'/treatment-sessions/'.$s['id'].'/session-doses';
+        $dose = ['given_on' => '2001-03-02', 'dose_name' => 'الجرعة الأولى', 'complaint' => 'غثيان', 'recommendations' => 'إكمال الجلسة', 'nurse_id' => $this->context()['doctor_id']];
+        $this->callApi('POST', $path, $dose)->assertCreated();
+        $this->callApi('POST', $path, array_replace($dose, ['given_on' => '2001-03-05', 'dose_name' => 'جرعة داعمة']))->assertCreated();
+        $listed = $this->callApi('GET', '/'.$this->s['id'].'/treatment-sessions?plan_id='.$p['id'])->assertOk()->json('data');
+        $row = collect($listed)->firstWhere('id', $s['id']);
+        $this->assertCount(2, $row['doses']);
+        $this->assertSame('2001-03-02', $row['doses'][0]['given_on']);
+        $this->assertSame('جرعة داعمة', $row['doses'][1]['dose_name']);
+        $this->callApi('POST', $path, array_replace($dose, ['nurse_id' => 999999999]))->assertUnprocessable()->assertJsonValidationErrors('nurse_id');
+    }
 }

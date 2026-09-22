@@ -32,7 +32,9 @@ class OncologyController extends Controller
             'doctors' => $r->filled('clinic_id') ? app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $date]))->where('c.id', $r->integer('clinic_id'))->distinct()->orderBy('s.full_name')->get(['s.id', 's.full_name as name_ar']) : [],
             'funding_sources' => DB::table('funding_sources')->where('is_active', true)->orderBy('display_order')->orderBy('id')->get(['id', 'code', 'name_ar']),
             'periods' => DB::table('reporting_periods')->where('facility_id', $f['id'])->where('status', 'open')->where('starts_on', '<=', $date)->where('ends_on', '>=', $date)->orderBy('starts_on')->get(['id', 'starts_on', 'ends_on']),
-            'staff' => DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))->distinct()->orderBy('s.full_name')->get(['s.id', 's.full_name as name_ar']), 'today' => $f['today']]]);
+            'staff' => DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))->distinct()->orderBy('s.full_name')->get(['s.id', 's.full_name as name_ar']),
+            'clinic_staff' => $r->filled('clinic_id') ? DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('c.id', $r->integer('clinic_id'))->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))->distinct()->orderBy('s.full_name')->get(['s.id', 's.full_name as name_ar']) : [],
+            'today' => $f['today']]]);
     }
 
     public function index(Request $r, int $dossier)
@@ -101,6 +103,14 @@ class OncologyController extends Controller
         $id = app(OncologyWriter::class)->session($r, $this->scope($r, 'schedule'), $dossier, $session, $r->validated());
 
         return response()->json(['data' => ['id' => $id]]);
+    }
+
+    public function sessionDose(SaveOncology $r, int $dossier, int $session, ?int $sessionDose = null)
+    {
+        $f = $this->scope($r, 'schedule');
+        $id = app(OncologyWriter::class)->sessionDose($r, $f, $dossier, $session, $r->validated(), $sessionDose);
+
+        return response()->json(['data' => ['id' => $id]], $sessionDose ? 200 : 201);
     }
 
     public function appointment(SaveOncology $r, int $dossier)

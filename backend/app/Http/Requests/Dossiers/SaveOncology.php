@@ -31,6 +31,9 @@ class SaveOncology extends FormRequest
     public function operation(): string
     {
         $name = $this->route()?->getName() ?? '';
+        if (str_contains($name, 'session-dose')) {
+            return 'session-dose';
+        }
         if (str_ends_with($name, '.appointment')) {
             return 'appointment';
         }
@@ -64,7 +67,8 @@ class SaveOncology extends FormRequest
         $date = ['required', 'date_format:Y-m-d'];
         $positive = ['required', 'numeric', 'gt:0', 'max:99999999999999', 'decimal:0,4'];
         $text = ['nullable', 'string', 'max:10000'];
-        $rules = ['facility_id' => $id, 'request_id' => ['required', 'uuid'], 'lock_version' => $this->route('plan') || $this->route('session') || $this->route('dose') || $this->route('dispensing') ? $id : ['sometimes', 'integer', 'min:1']];
+        $versioned = $op === 'session-dose' ? (bool) $this->route('sessionDose') : ($this->route('plan') || $this->route('session') || $this->route('dose') || $this->route('dispensing'));
+        $rules = ['facility_id' => $id, 'request_id' => ['required', 'uuid'], 'lock_version' => $versioned ? $id : ['sometimes', 'integer', 'min:1']];
         if ($op === 'void') {
             return $rules + ['reason' => ['required', 'string', 'max:255']] + ($this->route('dose') ? [
                 'session_resolution' => ['required', 'in:rescheduled,missed,cancelled,referred'],
@@ -77,6 +81,9 @@ class SaveOncology extends FormRequest
         }
         if ($op === 'appointment') {
             return $rules + ['planned_on' => $date, 'clinic_id' => $id, 'doctor_id' => $id, 'note' => $text];
+        }
+        if ($op === 'session-dose') {
+            return $rules + ['given_on' => $date, 'dose_name' => ['required', 'string', 'max:200'], 'complaint' => ['required', 'string', 'max:10000'], 'recommendations' => ['required', 'string', 'max:10000'], 'nurse_id' => $id];
         }
         if ($op === 'schedule') {
             return $rules + ['sessions' => ['required', 'array', 'min:1', 'max:24'], 'sessions.*.planned_on' => $date, 'sessions.*.session_number' => ['sometimes', 'nullable', 'integer', 'min:1'], 'sessions.*.note' => $text];
