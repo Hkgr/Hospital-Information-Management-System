@@ -1,7 +1,7 @@
 <?php
 
-use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AuditLogController;
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BloodBankController;
 use App\Http\Controllers\Api\BloodEventController;
 use App\Http\Controllers\Api\CatalogController;
@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\DossierController;
 use App\Http\Controllers\Api\DossierImportController;
 use App\Http\Controllers\Api\DossierPathologyController;
 use App\Http\Controllers\Api\DossierWizardController;
+use App\Http\Controllers\Api\FacilityReportController;
 use App\Http\Controllers\Api\OncologyController;
 use App\Http\Controllers\Api\StockController;
 use Illuminate\Support\Facades\Route;
@@ -208,6 +209,8 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
     Route::get('/dashboards/{key}', [DashboardController::class, 'show'])->name('dashboards.show');
     Route::get('/audit', [AuditLogController::class, 'index'])->name('audit');
     Route::get('/audit/{id}', [AuditLogController::class, 'show'])->whereNumber('id')->name('audit.show');
+    Route::get('/reports', [FacilityReportController::class, 'index'])->name('reports');
+    Route::get('/reports/export/pdf', [FacilityReportController::class, 'export'])->name('reports.export');
 });
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {

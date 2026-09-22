@@ -134,19 +134,17 @@ test("desktop and tablet collapse controls retain usable navigation names withou
   const { context, page } = await openShell({ access: [{ facility: { id: 1, code: "TEST", name_ar: "منشأة اختبار", timezone: "Asia/Damascus" }, roles: [], permissions: ["catalog.view"] }] });
   try {
     const nav = page.getByRole("navigation", { name: "التنقل الرئيسي" });
-    const labels = ["تقارير"];
     assert.equal(await nav.getByRole("link", { name: "الرئيسية", exact: true }).getAttribute("href"), "/dashboard/general");
     assert.equal(await nav.getByRole("link", { name: "الأدوية", exact: true }).getAttribute("href"), "/medications");
     assert.equal(await nav.getByRole("link", { name: "الخدمات والإجراءات", exact: true }).getAttribute("href"), "/services-procedures");
     assert.equal(await nav.getByRole("link", { name: "السجل", exact: true }).getAttribute("href"), "/audit");
-    assert.equal(await nav.locator("button:disabled").count(), labels.length);
-    assert.deepEqual(await nav.getByRole("button").evaluateAll(items => items.map(item => item.getAttribute("aria-label"))), labels.map(label => `${label} — قريبًا، غير متاح بعد`));
-    assert.deepEqual(await nav.locator("small").allTextContents(), labels.map(() => "قريبًا"));
+    assert.equal(await nav.getByRole("link", { name: "تقارير", exact: true }).getAttribute("href"), "/reports");
+    assert.equal(await nav.locator("button:disabled").count(), 0);
     const brand = page.getByRole("complementary").getByRole("link", { name: "مشفى محمد بن زايد الإماراتي — لوحة التحكم" });
     assert.equal(await brand.getAttribute("href"), "/");
     await page.getByRole("button", { name: "طي القائمة الجانبية" }).click();
     assert.equal((await page.getByRole("complementary").boundingBox()).width, 84);
-    for (const label of labels) assert.equal(await nav.getByRole("button", { name: `${label} — قريبًا، غير متاح بعد`, exact: true }).isVisible(), true);
+    assert.equal(await nav.getByRole("link", { name: "تقارير", exact: true }).isVisible(), true);
     await page.getByRole("button", { name: "توسيع القائمة الجانبية" }).focus();
     await page.keyboard.press("Enter");
     assert.equal((await page.getByRole("complementary").boundingBox()).width, 268);

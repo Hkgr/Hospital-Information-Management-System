@@ -20,7 +20,7 @@ export default function AppShell({ user, canViewClinics, canViewDoctors, canView
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
   const collapsed = collapsedOverride ?? tablet;
-  const title = pathname.startsWith("/stock") ? "المخزون" : pathname.startsWith("/blood-bank") ? "بنك الدم" : pathname.startsWith("/doctors") ? "الأطباء" : pathname.startsWith("/clinics") ? "العيادات" : pathname.startsWith("/services-procedures") ? "الخدمات والإجراءات" : pathname.startsWith("/medications") ? "الأدوية" : pathname.startsWith("/dashboard/") ? "الرئيسية" : pathname.startsWith("/audit") ? "السجل" : primaryNavigation.find(item => item.href === pathname)?.label ?? "نظام إدارة المشفى";
+  const title = pathname.startsWith("/stock") ? "المخزون" : pathname.startsWith("/blood-bank") ? "بنك الدم" : pathname.startsWith("/doctors") ? "الأطباء" : pathname.startsWith("/clinics") ? "العيادات" : pathname.startsWith("/services-procedures") ? "الخدمات والإجراءات" : pathname.startsWith("/medications") ? "الأدوية" : pathname.startsWith("/dashboard/") ? "الرئيسية" : pathname.startsWith("/audit") ? "السجل" : pathname.startsWith("/reports") ? "تقارير" : primaryNavigation.find(item => item.href === pathname)?.label ?? "نظام إدارة المشفى";
 
   return <div className={styles.shell} data-collapsed={collapsed}>
     <a className={styles.skipLink} href="#main-content">انتقل إلى المحتوى</a>

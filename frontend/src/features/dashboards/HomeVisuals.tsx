@@ -58,7 +58,7 @@ export function BarChart({ title, items, hrefFor }: { title: string; items: Dash
   </div>;
 }
 
-export function RankTable({ title, items, hrefFor, countLabel }: { title: string; items: DashboardRank[]; hrefFor: (id: number) => string; countLabel: string }) {
+export function RankTable({ title, items, hrefFor, countLabel }: { title: string; items: DashboardRank[]; hrefFor?: (id: number) => string; countLabel: string }) {
   return <section className={styles.tableCard} aria-labelledby={`${title}-heading`}>
     <h2 id={`${title}-heading`}>{title}</h2>
     <div className={styles.tableWrap}>
@@ -66,7 +66,7 @@ export function RankTable({ title, items, hrefFor, countLabel }: { title: string
         <thead><tr><th scope="col">الترتيب</th><th scope="col">الاسم</th><th scope="col">{countLabel}</th></tr></thead>
         <tbody>{items.map((item, index) => <tr key={item.id}>
           <td>{index + 1}</td>
-          <td><Link href={hrefFor(item.id)}>{item.name_ar}</Link></td>
+          <td>{hrefFor ? <Link href={hrefFor(item.id)}>{item.name_ar}</Link> : item.name_ar}</td>
           <td>{item.visit_count.toLocaleString("ar-SY")}</td>
         </tr>)}</tbody>
       </table>

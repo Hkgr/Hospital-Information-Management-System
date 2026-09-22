@@ -1,0 +1,27 @@
+.screen { display: grid; gap: 20px; color: var(--mbz-ink); min-inline-size: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; justify-content: space-between; background: white; border-radius: 18px; padding: 18px 20px; box-shadow: 0 10px 24px color-mix(in srgb, var(--mbz-blue) 8%, transparent); }
+.switch { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: #e7f1f4; }
+.switch button { border: 0; background: transparent; color: var(--mbz-action); font: inherit; font-size: 13px; font-weight: 700; padding: 10px 18px; border-radius: 999px; cursor: pointer; min-block-size: 40px; }
+.switch button[aria-checked="true"] { background: white; color: #0b6178; box-shadow: 0 4px 12px #0b61781a; }
+.custom { display: flex; flex-wrap: wrap; gap: 12px; }
+.custom label { display: grid; gap: 6px; font-size: 12px; color: var(--mbz-muted); }
+.custom input { border: 1px solid #d4e1e5; border-radius: 10px; padding: 8px 11px; min-block-size: 42px; font: inherit; background: white; }
+.export { display: grid; gap: 8px; justify-items: start; }
+.export p { margin: 0; color: #922b3b; font-size: 13px; }
+.range { margin: 0; font-weight: 700; color: var(--mbz-action); font-size: 15px; }
+.hint { margin: 0; color: var(--mbz-muted); font-size: 13px; line-height: 1.9; max-inline-size: 70ch; }
+.spark { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(36px, 1fr); gap: 8px; align-items: end; overflow-x: auto; min-block-size: 180px; padding-block-end: 4px; }
+.sparkCol { display: grid; justify-items: center; gap: 6px; min-inline-size: 36px; }
+.sparkCol strong { font-size: 11px; color: var(--mbz-action); }
+.sparkCol > span:last-child { font-size: 10px; color: var(--mbz-muted); }
+.sparkTrack { display: flex; align-items: end; block-size: 120px; inline-size: 18px; background: #eef4f7; border-radius: 999px; overflow: hidden; }
+.sparkBar { display: block; inline-size: 100%; border-radius: inherit; background: linear-gradient(180deg, #15a999, #0b6178); transform-origin: bottom center; animation: growCol .8s ease-out both; }
+@keyframes growCol { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .sparkBar { animation: none; }
+}
+@media (max-width: 767px) {
+  .controls { padding: 16px; }
+  .switch { inline-size: 100%; }
+  .switch button { flex: 1; padding-inline: 10px; }
+}

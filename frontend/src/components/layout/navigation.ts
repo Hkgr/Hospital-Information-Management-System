@@ -14,6 +14,6 @@ export const primaryNavigation: NavigationItem[] = [
   { label: "الأدوية", icon: LuPill, href: "/medications", permission: "catalog.view" },
   { label: "المخزون", icon: LuPackage, href: "/stock/receipts", permission: "stock.view" },
   { label: "بنك الدم", icon: LuDroplet, href: "/blood-bank", permission: "blood_bank.view" },
-  { label: "تقارير", icon: LuChartNoAxesCombined },
+  { label: "تقارير", icon: LuChartNoAxesCombined, href: "/reports" },
   { label: "السجل", icon: LuHistory, href: "/audit" },
 ];
