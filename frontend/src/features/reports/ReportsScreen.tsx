@@ -35,9 +35,10 @@ export default function ReportsScreen() {
   const path = ready && entry ? reportsPath(entry.facility.id, period, from, to) : null;
   const report = useClinicRequest<FacilityReport>(path, false);
   if (!entry) return <section className={clinic.status}><h2>التقارير غير متاحة</h2><p role="alert">{allowed.length ? "معرّف المنشأة غير صالح ضمن المنشآت المتاحة لك." : "لا منشأة مرتبطة بهذا الدخول لعرض التقارير."}</p></section>;
+  const selected = entry;
   function setQuery(next: Record<string, string>) {
     const q = new URLSearchParams(params.toString());
-    q.set("facility_id", String(entry.facility.id));
+    q.set("facility_id", String(selected.facility.id));
     for (const [key, value] of Object.entries(next)) {
       if (value) q.set(key, value); else q.delete(key);
     }
@@ -59,8 +60,8 @@ export default function ReportsScreen() {
         <div className={dash.heroMark} aria-hidden="true"><LuChartNoAxesCombined /></div>
       </section>
     </Reveal>
-    <div className={clinic.context}><LuHospital aria-hidden="true" /><span>المشفى</span><strong>{entry.facility.name_ar}</strong></div>
-    {allowed.length > 1 && <label className={clinic.filters}>المنشأة<select aria-label="المنشأة" value={String(entry.facility.id)} onChange={e => setQuery({ facility_id: e.target.value })}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select></label>}
+    <div className={clinic.context}><LuHospital aria-hidden="true" /><span>المشفى</span><strong>{selected.facility.name_ar}</strong></div>
+    {allowed.length > 1 && <label className={clinic.filters}>المنشأة<select aria-label="المنشأة" value={String(selected.facility.id)} onChange={e => setQuery({ facility_id: e.target.value })}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select></label>}
     <Reveal delay={0.04}>
       <section className={styles.controls} aria-label="نطاق التقرير">
         <div role="radiogroup" aria-label="الفترة الزمنية" className={styles.switch}>
