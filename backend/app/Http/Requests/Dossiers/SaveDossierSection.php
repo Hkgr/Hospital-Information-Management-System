@@ -46,7 +46,7 @@ class SaveDossierSection extends FormRequest
                 }
             }
         } elseif ($section === 'medical') {
-            $rules += ['disability_text' => ['nullable', 'string', 'max:10000'], 'clinical_history' => ['nullable', 'string', 'max:20000'], 'is_oncology' => ['required', 'boolean'], 'confirm_hide_oncology' => ['sometimes', 'boolean']];
+            $rules += ['disability_text' => ['nullable', 'string', 'max:10000'], 'clinical_history' => ['nullable', 'string', 'max:20000'], 'weight_kg' => ['nullable', 'numeric', 'gt:0', 'lt:500', 'decimal:0,2'], 'height_cm' => ['nullable', 'numeric', 'gt:0', 'lt:300', 'decimal:0,2'], 'is_oncology' => ['required', 'boolean'], 'confirm_hide_oncology' => ['sometimes', 'boolean']];
             foreach (['history' => ['medical', 'surgical', 'medication', 'family'], 'treatment' => ['surgical', 'chemotherapy', 'radiotherapy', 'other']] as $group => $codes) {
                 $rules[$group] = ['sometimes', 'array', 'max:4'];
                 $rules[$group.'.*'] = ['string', 'distinct', Rule::in($codes)];
@@ -72,6 +72,6 @@ class SaveDossierSection extends FormRequest
 
     public function messages(): array
     {
-        return ['required' => 'هذا الحقل مطلوب.', 'present' => 'أرسل بيانات القسم ولو كانت فارغة.', 'prohibited' => 'لا ترسل هذا الحقل في المسار المختار.', 'max' => 'القيمة تتجاوز الحد المسموح.', 'in' => 'اختر قيمة معتمدة.', 'date_format' => 'أدخل تاريخًا كاملًا صحيحًا.', 'before_or_equal' => 'التاريخ يتجاوز التاريخ المسموح.', 'distinct' => 'لا تكرر القيمة نفسها.', 'uuid' => 'معرّف الحفظ غير صالح.'];
+        return ['required' => 'هذا الحقل مطلوب.', 'present' => 'أرسل بيانات القسم ولو كانت فارغة.', 'prohibited' => 'لا ترسل هذا الحقل في المسار المختار.', 'max' => 'القيمة تتجاوز الحد المسموح.', 'in' => 'اختر قيمة معتمدة.', 'date_format' => 'أدخل تاريخًا كاملًا صحيحًا.', 'before_or_equal' => 'التاريخ يتجاوز التاريخ المسموح.', 'distinct' => 'لا تكرر القيمة نفسها.', 'uuid' => 'معرّف الحفظ غير صالح.', 'numeric' => 'أدخل قيمة رقمية صالحة.', 'gt' => 'يجب أن تكون القيمة موجبة.', 'lt' => 'القيمة تتجاوز الحد المسموح.', 'decimal' => 'تقبل القيمة منزلتين عشريتين كحد أقصى.'];
     }
 }

@@ -109,7 +109,7 @@ class DossierQueries
             $latest = (clone $v)->orderByDesc('v.visit_date')->orderByDesc('v.id')->value('v.id');
 
             return ['id' => (int) $d->id, 'card_id' => (int) $d->patient_id, 'facility_id' => (int) $d->facility_id, 'code' => $patient->patient_code, 'legacy_without_visits' => ! DB::table('visits')->where('dossier_id', $id)->exists(), 'status' => $d->status, 'opening_date' => $d->opening_date,
-                'disability_text' => $d->disability_text, 'clinical_history' => $d->clinical_history, 'is_oncology' => (bool) $d->is_oncology,
+                'disability_text' => $d->disability_text, 'clinical_history' => $d->clinical_history, 'weight_kg' => $d->weight_kg, 'height_cm' => $d->height_cm, 'is_oncology' => (bool) $d->is_oncology,
                 'oncology' => $d->is_oncology ? ['previous_examinations' => $d->previous_examinations, 'medication_source' => $d->medication_source, 'other_organization' => $d->other_organization,
                     'selections' => DB::table('dossier_oncology_selections')->where('dossier_id', $id)->where('facility_id', $f['id'])->where('is_active', true)->orderBy('selection_group')->orderBy('code')->get(['selection_group', 'code'])->all()] : null,
                 'patient' => (array) $patient, 'visit_count' => $v->count(), 'latest_visit' => $latest ? $this->visit($f, $id, (int) $latest) : null,

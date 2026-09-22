@@ -8,6 +8,7 @@ use Dedoc\Scramble\Support\Generator\Response;
 use Dedoc\Scramble\Support\Generator\Schema;
 use Dedoc\Scramble\Support\Generator\Types\BooleanType;
 use Dedoc\Scramble\Support\Generator\Types\IntegerType;
+use Dedoc\Scramble\Support\Generator\Types\NumberType;
 use Dedoc\Scramble\Support\Generator\Types\ObjectType;
 use Dedoc\Scramble\Support\Generator\Types\StringType;
 
@@ -33,7 +34,7 @@ class DossierWorkflowDocument extends ClinicDocumentTransformer
             $personal[$key] = $null();
         }
         $personal += ['governorate_id' => $int()->nullable(true), 'city_id' => $int()->nullable(true)];
-        $medical = ['disability_text' => $null(), 'clinical_history' => $null(), 'is_oncology' => new BooleanType, 'history' => $this->list((new StringType)->enum(['medical', 'surgical', 'medication', 'family'])), 'treatment' => $this->list((new StringType)->enum(['surgical', 'chemotherapy', 'radiotherapy', 'other'])), 'previous_examinations' => $null(), 'medication_source' => $null(), 'other_organization' => $null()];
+        $medical = ['disability_text' => $null(), 'clinical_history' => $null(), 'weight_kg' => (new NumberType)->nullable(true), 'height_cm' => (new NumberType)->nullable(true), 'is_oncology' => new BooleanType, 'history' => $this->list((new StringType)->enum(['medical', 'surgical', 'medication', 'family'])), 'treatment' => $this->list((new StringType)->enum(['surgical', 'chemotherapy', 'radiotherapy', 'other'])), 'previous_examinations' => $null(), 'medication_source' => $null(), 'other_organization' => $null()];
         $diagnosis = $this->object(['id' => $int()->nullable(true), 'lock_version' => $int(), 'diagnosis_id' => $int(), 'clinic_id' => $int(), 'diagnosing_staff_id' => $int(), 'diagnosed_on' => $null(), 'remove' => new BooleanType, 'void_reason' => $null()]);
         $diagnosis->required = ['diagnosis_id', 'clinic_id', 'diagnosing_staff_id'];
         $visit = ['visit_date' => $text(), 'is_referred' => new BooleanType, 'referring_hospital' => $null(), 'referral_date' => $null(), 'referral_reason' => $null(), 'diagnoses' => $this->list($diagnosis)];

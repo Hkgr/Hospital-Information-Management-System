@@ -30,5 +30,30 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 :focus-visible { outline: 3px solid var(--mbz-action); outline-offset: 4px; }
+
+select:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  min-block-size: 44px;
+  padding-block: 10px;
+  padding-inline-start: 12px;
+  padding-inline-end: 2.6rem;
+  border: 1px solid #d4e1e5;
+  border-radius: 10px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6.2 8 10.2 12 6.2' stroke='%230b6178' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 1.05rem;
+  background-position: left 0.75rem center;
+  color: #29454e;
+  line-height: 1.45;
+  max-inline-size: 100%;
+}
+html:not([dir="rtl"]) select:not([multiple]) { background-position: right 0.75rem center; }
+select:not([multiple]):hover:not(:disabled) { border-color: #9fbac3; }
+select:not([multiple]):focus-visible { border-color: var(--mbz-action); }
+select:not([multiple]):disabled { cursor: not-allowed; background-color: #f3f7f8; color: #61777d; }
+

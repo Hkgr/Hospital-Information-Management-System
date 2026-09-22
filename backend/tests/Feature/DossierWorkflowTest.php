@@ -172,11 +172,13 @@ class DossierWorkflowTest extends TestCase
     {
         $d = $this->legacyCard();
         $id = $d['id'];
-        $medical = ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_oncology' => true, 'clinical_history' => 'قصة محفوظة', 'history' => ['medical', 'family'], 'treatment' => ['chemotherapy'], 'previous_examinations' => 'فحص سابق', 'medication_source' => 'other_organization', 'other_organization' => 'جهة'];
+        $medical = ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_oncology' => true, 'clinical_history' => 'قصة محفوظة', 'weight_kg' => 70.25, 'height_cm' => 165.5, 'history' => ['medical', 'family'], 'treatment' => ['chemotherapy'], 'previous_examinations' => 'فحص سابق', 'medication_source' => 'other_organization', 'other_organization' => 'جهة'];
         $this->callApi('PUT', "/$id/medical", $medical)->assertOk()->assertJsonPath('data.lock_version', 2);
         $this->callApi('PUT', "/$id/medical", array_replace($medical, ['request_id' => (string) Str::uuid()]))->assertConflict();
         $this->callApi('PUT', "/$id/medical", ['request_id' => (string) Str::uuid(), 'lock_version' => 2, 'is_oncology' => false])->assertUnprocessable()->assertJsonValidationErrors('confirm_hide_oncology');
-        $this->callApi('PUT', "/$id/medical", ['request_id' => (string) Str::uuid(), 'lock_version' => 2, 'is_oncology' => false, 'confirm_hide_oncology' => true, 'clinical_history' => 'قصة محفوظة'])->assertOk()->assertJsonPath('data.medical.previous_examinations', 'فحص سابق');
+        $hidden = $this->callApi('PUT', "/$id/medical", ['request_id' => (string) Str::uuid(), 'lock_version' => 2, 'is_oncology' => false, 'confirm_hide_oncology' => true, 'clinical_history' => 'قصة محفوظة', 'weight_kg' => 70.25, 'height_cm' => 165.5])->assertOk()->assertJsonPath('data.medical.previous_examinations', 'فحص سابق')->json('data');
+        $this->assertEquals(70.25, (float) $hidden['medical']['weight_kg']);
+        $this->assertEquals(165.5, (float) $hidden['medical']['height_cm']);
         $this->assertSame(3, DB::table('dossier_oncology_selections')->where('dossier_id', $id)->count());
         $this->callApi('GET', "/$id")->assertOk()->assertJsonPath('data.oncology', null);
         $this->callApi('POST', "/$id/visits", $this->visit())->assertCreated();

@@ -25,6 +25,7 @@ form.profileForm input[type="radio"] {
 .section { min-inline-size: 0; display: grid; gap: 20px; }
 .profileForm label { align-content: start; text-align: start; }
 .profileForm :is(input:not([type="radio"]), select, textarea) { min-block-size: 44px; }
+.profileForm select { padding-inline-end: 2.6rem; }
 .profileForm :is(input, select, textarea, button) { scroll-margin-block: 24px 100px; }
 .profileForm :is(label, legend) { line-height: 1.8; }
 .profileForm :is(fieldset, section) { min-inline-size: 0; }

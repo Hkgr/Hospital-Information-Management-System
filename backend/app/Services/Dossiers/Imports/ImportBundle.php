@@ -159,12 +159,15 @@ class ImportBundle
                 $this->require(! $personal['city_id'] || ($this->cities[$personal['city_id']] ?? null) == $personal['governorate_id'], 'city_id', 'المدينة لا تتبع المحافظة.');
             }
         }
-        $medicalKeys = ['is_oncology', 'disability_text', 'clinical_history', 'previous_examinations', 'medication_source', 'other_organization'];
+        $medicalKeys = ['is_oncology', 'disability_text', 'clinical_history', 'weight_kg', 'height_cm', 'previous_examinations', 'medication_source', 'other_organization'];
         $medical = array_filter(Arr::only($p, $medicalKeys), fn ($v) => $v !== null);
         if ($medical) {
             if ($dossier) {
                 foreach ($medical as $key => $value) {
-                    $this->require((string) $dossier->$key === (string) $value, $key, 'تختلف المعلومات الطبية المحفوظة؛ يلزم مراجعتها خارج الاستيراد.');
+                    $same = in_array($key, ['weight_kg', 'height_cm'], true)
+                        ? is_numeric($dossier->$key) && is_numeric($value) && round((float) $dossier->$key, 2) === round((float) $value, 2)
+                        : (string) $dossier->$key === (string) $value;
+                    $this->require($same, $key, 'تختلف المعلومات الطبية المحفوظة؛ يلزم مراجعتها خارج الاستيراد.');
                 }
                 $medical = [];
             } else {

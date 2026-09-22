@@ -46,6 +46,7 @@
 .form { display: grid; gap: 28px; min-inline-size: 0; padding: 0; }
 .form label { display: grid; gap: 8px; font-size: 13px; }
 .form :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { min-block-size: 44px; }
+.form select { padding-inline-end: 2.6rem; }
 .form textarea { border: 1px solid #d4e1e5; border-radius: 8px; padding: 9px 11px; background: white; color: #29454e; font: inherit; font-size: 13px; max-inline-size: 100%; inline-size: 100%; resize: vertical; }
 .progress button { block-size: 100%; }
 .section { background: #fff; border: 1px solid #dce6ed; border-radius: 14px; padding: 28px; display: grid; gap: 24px; min-inline-size: 0; }
@@ -93,7 +94,7 @@
 @media (max-width: 600px) {
   .stageRail { display: none; }
   .mobileStages { display: grid; gap: 8px; font-size: 13px; color: #29454e; }
-  .mobileStages select { padding: 12px; border: 1px solid #bcd3dd; border-radius: 9px; background: #edf6fa; color: #176580; font: inherit; }
+  .mobileStages select { padding-block: 12px; padding-inline-start: 12px; padding-inline-end: 2.6rem; border: 1px solid #bcd3dd; border-radius: 9px; background-color: #edf6fa; color: #176580; font: inherit; }
   .stageRail section { flex: 0 0 210px; }
   .stageRail .progress { grid-template-columns: 1fr; }
   .entryModes > * { flex-basis: 100%; }

@@ -20,7 +20,7 @@ class DossierMedicalWriter
             if ($old['is_oncology'] && ! $input['is_oncology'] && empty($input['confirm_hide_oncology'])) {
                 throw ValidationException::withMessages(['confirm_hide_oncology' => 'أكد الاحتفاظ بالبيانات الورمية تاريخيًا وإخفاءها من العرض الحالي.']);
             }
-            $fields = ['is_oncology' => $input['is_oncology'], 'disability_text' => $input['disability_text'] ?? null, 'clinical_history' => $input['clinical_history'] ?? null];
+            $fields = ['is_oncology' => $input['is_oncology'], 'disability_text' => $input['disability_text'] ?? null, 'clinical_history' => $input['clinical_history'] ?? null, 'weight_kg' => $input['weight_kg'] ?? null, 'height_cm' => $input['height_cm'] ?? null];
             if ($input['is_oncology']) {
                 $fields += ['previous_examinations' => $input['previous_examinations'] ?? null, 'medication_source' => $input['medication_source'] ?? null, 'other_organization' => ($input['medication_source'] ?? null) === 'other_organization' ? $input['other_organization'] : null];
                 foreach (['history', 'treatment'] as $group) {

@@ -112,12 +112,12 @@ class DossierReports
             }
             $personal['الميلاد'] = self::birthDate($d['patient']['birth_date'], $d['patient']['birth_date_accuracy']);
             $sections[] = $this->facts('بيانات المريض الحالية', $personal, $identity, $d['patient']['birth_date_accuracy'] === 'exact' ? ['الميلاد' => 'date'] : []);
-            $medical = ['معلومات الإعاقة' => $d['disability_text'], 'القصة المرضية' => $d['clinical_history'], 'مريض ورمي' => $d['is_oncology'] ? 'نعم' : 'لا'];
+            $medical = ['الوزن (كغ)' => $d['weight_kg'], 'الطول (سم)' => $d['height_cm'], 'معلومات الإعاقة' => $d['disability_text'], 'القصة المرضية' => $d['clinical_history'], 'مريض ورمي' => $d['is_oncology'] ? 'نعم' : 'لا'];
             if ($d['oncology']) {
                 $codes = ['medical' => 'مرضية', 'surgical' => 'جراحية', 'medication' => 'دوائية', 'family' => 'عائلية', 'chemotherapy' => 'كيميائي', 'radiotherapy' => 'شعاعي', 'other' => 'أخرى'];
                 $medical += ['السوابق والعلاجات' => implode('، ', array_map(fn ($s) => $codes[$s->code] ?? $s->code, $d['oncology']['selections'])), 'الفحوص السابقة' => $d['oncology']['previous_examinations'], 'مصدر الدواء' => ['ministry_of_health' => 'وزارة الصحة', 'al_rowad' => 'مؤسسة الرواد', 'other_organization' => 'جهة أخرى', 'personal_expense' => 'نفقة شخصية', 'none' => 'لا يوجد'][$d['oncology']['medication_source'] ?? ''] ?? 'غير مسجل', 'الجهة الأخرى' => $d['oncology']['other_organization']];
             }
-            $sections[] = $this->facts('المعلومات الطبية الحالية', $medical, $identity);
+            $sections[] = $this->facts('المعلومات الطبية الحالية', $medical, $identity, ['الوزن (كغ)' => 'decimal', 'الطول (سم)' => 'decimal']);
             $sections[] = $this->section('التسلسل الزمني للزيارات', ['code' => 'كود الزيارة', 'date' => 'التاريخ الفعلي', 'status' => 'حالة الزيارة', 'referral' => 'الإحالة الواردة'], $visits->map(fn ($v) => ['id' => $v->id, 'code' => $v->visit_no, 'name' => $identity['name'], 'date' => $v->visit_date, 'status' => $v->voided_at ? 'ملغاة؛ السبب: '.$v->void_reason : ($v->status === 'draft' ? 'مسودة — غير مكتملة' : 'مكتملة'), 'referral' => $v->is_referred ? implode(' · ', [$v->referring_hospital, $v->referral_date, $v->referral_reason]) : 'غير محال'])->all(), 'الأحدث أولًا حسب التاريخ الفعلي ثم معرّف الزيارة. الإحالة الواردة مستقلة عن النتيجة والإحالة الصادرة.', ['date' => 'date']);
             $ids = $visits->pluck('id');
             $byId = $visits->keyBy('id');
