@@ -53,7 +53,7 @@ class OncologyController extends Controller
     public function sessions(Request $r, int $dossier)
     {
         $f = $this->scope($r);
-        $filters = $r->validate(['page' => ['sometimes', 'integer', 'min:1'], 'per_page' => ['sometimes', 'in:10,20,50'], 'plan_id' => ['nullable', 'integer', 'min:1'], 'status' => ['nullable', 'in:scheduled,rescheduled,completed,missed,cancelled,referred']]);
+        $filters = $r->validate(['page' => ['sometimes', 'integer', 'min:1'], 'per_page' => ['sometimes', 'in:10,20,50'], 'plan_id' => ['nullable', 'integer', 'min:1'], 'status' => ['nullable', 'in:scheduled,completed,cancelled']]);
 
         return response()->json(app(OncologyQueries::class)->sessions($f, $dossier, $filters));
     }
