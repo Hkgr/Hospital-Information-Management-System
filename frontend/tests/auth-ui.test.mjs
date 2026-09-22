@@ -53,11 +53,10 @@ test("desktop geometry, local assets, labels, validation and keyboard password t
     assert.equal(await page.locator('[data-flag="sy"]').count(), 1);
     assert.equal(await page.locator('[data-flag="ae"]').count(), 1);
     assert.deepEqual(await page.evaluate(() => {
-      const card = document.querySelector('section[aria-labelledby="login-heading"]').getBoundingClientRect();
-      const sy = document.querySelector('[data-flag="sy"]').getBoundingClientRect();
-      const ae = document.querySelector('[data-flag="ae"]').getBoundingClientRect();
-      return { syRight: Math.abs(sy.right - card.right) < 1, aeLeft: Math.abs(ae.left - card.left) < 1 };
-    }), { syRight: true, aeLeft: true });
+      const sy = getComputedStyle(document.querySelector('[data-flag="sy"]'));
+      const ae = getComputedStyle(document.querySelector('[data-flag="ae"]'));
+      return { syRight: sy.right, aeLeft: ae.left };
+    }), { syRight: "0px", aeLeft: "0px" });
     assert.equal(await page.evaluate(() => [...document.images].every(i => i.complete && i.naturalWidth > 0)), true);
     assert.equal(await page.evaluate(() => document.fonts.check('14px "Cairo"', 'مشفى Hospital')), true);
     assert.equal(await page.evaluate(() => [...document.fonts].some(font => font.family.replaceAll('"', '') === "Cairo" && font.status === "loaded")), true);

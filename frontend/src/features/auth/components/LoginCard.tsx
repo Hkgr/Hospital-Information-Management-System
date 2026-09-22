@@ -75,7 +75,7 @@ export default function LoginCard() {
       </div>
       <header className={styles.brand}>
         <div className={styles.wordmark}>
-          <Image src="/brand/logos/logo-ar-color.svg" alt="مشفى محمد بن زايد الإماراتي" width={200} height={95} priority />
+          <Image src="/brand/logos/logo-ar-color.svg" alt="مشفى محمد بن زايد الإماراتي" width={200} height={95} priority style={{ height: "auto" }} />
           <p>نظام إدارة المشفى</p>
         </div>
       </header>
