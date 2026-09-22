@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
@@ -12,6 +13,17 @@ use Tests\TestCase;
 class StockReceiptConcurrencyTest extends TestCase
 {
     use DatabaseMigrations;
+
+    public function runDatabaseMigrations()
+    {
+        $this->beforeRefreshingDatabase();
+        $this->refreshTestDatabase();
+        $this->afterRefreshingDatabase();
+        $this->beforeApplicationDestroyed(function () {
+            // Visit classification removal cannot roll back, and the workers need committed rows.
+            RefreshDatabaseState::$migrated = false;
+        });
+    }
 
     public function test_concurrent_confirmation_writes_one_set_of_transactions(): void
     {
