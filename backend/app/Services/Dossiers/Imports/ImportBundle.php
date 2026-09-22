@@ -202,7 +202,7 @@ class ImportBundle
                         break;
                     case 'Prescriptions':
                         $this->require($medications['prescription'] === null, 'prescription', 'تُقبل وصفة واحدة متعددة الأدوية لكل زيارة.');
-                        $medications['prescription'] = $x;
+                        $medications['prescription'] = $x + ['kind' => 'unlinked'];
                         break;
                     case 'Medications': $items[] = $x;
                         break;

@@ -56,8 +56,8 @@ if ($mode === 'prepare') {
             throw new RuntimeException('Expected Phase 3 visits');
         }
         foreach ($visits as $v) {
-            if (DB::table('visit_prescriptions')->where('visit_id', $v->id)->whereNull('voided_at')->count() > 1) {
-                throw new RuntimeException('Multiple active prescriptions');
+            if (DB::table('visit_prescriptions')->where('visit_id', $v->id)->whereNull('voided_at')->select('kind')->groupBy('kind')->havingRaw('COUNT(*) > 1')->exists()) {
+                throw new RuntimeException('Multiple active prescriptions of the same kind');
             }
         }
         echo "Verified actual Phase 3 records, prescription separation and unchanged periods/blood/dispensing.\n";

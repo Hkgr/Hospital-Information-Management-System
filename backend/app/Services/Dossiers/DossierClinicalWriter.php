@@ -109,9 +109,13 @@ class DossierClinicalWriter
 
     private function prescription(Request $r, array $f, object $v, array $row): void
     {
+        $kind = $row['kind'] ?? 'unlinked';
         $old = $this->row('visit_prescriptions', $row, ['visit_id' => $v->id, 'facility_id' => $f['id']]);
-        if (! $old && DB::table('visit_prescriptions')->where('visit_id', $v->id)->whereNull('voided_at')->exists()) {
-            DossierWrites::conflict('توجد وصفة محفوظة لهذه الزيارة؛ اجلب نسختها للمراجعة.');
+        if ($old && $old->kind !== $kind) {
+            throw ValidationException::withMessages(['prescription.kind' => 'لا يمكن تغيير نوع الوصفة المحفوظة.']);
+        }
+        if (! $old && DB::table('visit_prescriptions')->where('visit_id', $v->id)->where('kind', $kind)->whereNull('voided_at')->exists()) {
+            DossierWrites::conflict('توجد وصفة محفوظة لهذا النوع؛ اجلب نسختها للمراجعة.');
         }
         if (! empty($row['remove'])) {
             $this->void($r, $f, 'visit_prescriptions', $old, $row, 'prescription');
@@ -124,7 +128,15 @@ class DossierClinicalWriter
         if (! $old || $old->prescribing_clinic_id != $row['prescribing_clinic_id'] || $old->prescribing_staff_id != $row['prescribing_staff_id']) {
             $this->context->check($f, $row['prescribing_clinic_id'], $row['prescribing_staff_id'], $v->visit_date, 'prescription.prescribing_staff_id', false);
         }
-        $id = $this->persist($r, $f, 'visit_prescriptions', $old, Arr::only($row, ['prescribing_clinic_id', 'prescribing_staff_id', 'prescribed_on']) + ['note' => $row['note'] ?? null], ['visit_id' => $v->id, 'facility_id' => $f['id'], 'client_request_id' => (string) Str::uuid()]);
+        $funding = $kind === 'dose_linked' ? $row['funding_source_id'] : null;
+        if ($kind === 'dose_linked' && (! $old || $old->funding_source_id != $funding) && ! DB::table('funding_sources')->where('id', $funding)->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages(['prescription.funding_source_id' => 'اختر مصدر تمويل فعالًا للوصفة المرتبطة بالجرعة.']);
+        }
+        $reason = $kind === 'outside' ? trim((string) ($row['unavailable_reason'] ?? '')) : null;
+        if ($kind === 'outside' && $reason === '') {
+            throw ValidationException::withMessages(['prescription.unavailable_reason' => 'اذكر سبب عدم تواجد هذه الأدوية في المشفى.']);
+        }
+        $id = $this->persist($r, $f, 'visit_prescriptions', $old, Arr::only($row, ['prescribing_clinic_id', 'prescribing_staff_id', 'prescribed_on']) + ['kind' => $kind, 'note' => $row['note'] ?? null, 'funding_source_id' => $funding, 'unavailable_reason' => $reason ?: null], ['visit_id' => $v->id, 'facility_id' => $f['id'], 'client_request_id' => (string) Str::uuid()]);
         foreach ($row['items'] as $i => $item) {
             $prior = $this->row('visit_prescription_items', $item, ['prescription_id' => $id, 'facility_id' => $f['id']]);
             if (! empty($item['remove'])) {

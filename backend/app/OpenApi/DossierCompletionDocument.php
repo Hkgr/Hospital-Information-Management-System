@@ -25,10 +25,10 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
         $s = fn () => (new StringType)->nullable(true);
         $i = fn () => new IntegerType;
         $row = $this->object(['id' => $i(), 'lock_version' => $i(), 'catalog_id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'clinic_id' => $i()->nullable(true), 'clinic_name' => $s(), 'doctor_id' => $i()->nullable(true), 'doctor_name' => $s(), 'note' => $s()]);
-        $rx = $this->object(['id' => $i(), 'lock_version' => $i(), 'prescribing_clinic_id' => $i(), 'prescribing_staff_id' => $i(), 'clinic_name' => $s(), 'doctor_name' => $s(), 'prescribed_on' => $s(), 'note' => $s(), 'items' => $this->list($this->object(['id' => $i(), 'lock_version' => $i(), 'medication_id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'note' => $s(), 'display_order' => $i()]))])->nullable(true);
+        $rx = $this->object(['id' => $i(), 'lock_version' => $i(), 'kind' => $s(), 'prescribing_clinic_id' => $i(), 'prescribing_staff_id' => $i(), 'clinic_name' => $s(), 'doctor_name' => $s(), 'prescribed_on' => $s(), 'note' => $s(), 'funding_source_id' => $i()->nullable(true), 'funding_name' => $s(), 'unavailable_reason' => $s(), 'items' => $this->list($this->object(['id' => $i(), 'lock_version' => $i(), 'medication_id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'note' => $s(), 'display_order' => $i()]))])->nullable(true);
         $out = $this->object(['id' => $i(), 'lock_version' => $i(), 'code' => $s(), 'name_ar' => $s(), 'clinic_id' => $i(), 'doctor_id' => $i(), 'clinic_name' => $s(), 'doctor_name' => $s(), 'outcome_on' => $s(), 'note' => $s(), 'referral_target' => $s(), 'outgoing_referral_date' => $s(), 'outgoing_referral_reason' => $s()])->nullable(true);
 
-        return $this->object(['services' => $this->list($row), 'procedures' => $this->list($row), 'prescription' => $rx, 'outcome' => $out, 'attachment_count' => $i()->nullable(true)]);
+        return $this->object(['services' => $this->list($row), 'procedures' => $this->list($row), 'prescription' => $rx, 'prescriptions' => $this->list($rx), 'outcome' => $out, 'attachment_count' => $i()->nullable(true)]);
     }
 
     public function operation(Operation $op, string $route): void
@@ -54,13 +54,13 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
         } elseif (str_ends_with($route, '/medications')) {
             $item = $this->object($row + ['medication_id' => $i(), 'display_order' => $i()]);
             $item->required = ['medication_id', 'display_order'];
-            $rx = $this->object($row + ['prescribing_clinic_id' => $i(), 'prescribing_staff_id' => $i(), 'prescribed_on' => $s()->format('date'), 'items' => $this->list($item)])->nullable(true);
-            $rx->required = ['prescribing_clinic_id', 'prescribing_staff_id', 'prescribed_on', 'items'];
+            $rx = $this->object($row + ['kind' => $s()->enum(['unlinked', 'dose_linked', 'outside']), 'prescribing_clinic_id' => $i(), 'prescribing_staff_id' => $i(), 'prescribed_on' => $s()->format('date'), 'funding_source_id' => $i()->nullable(true), 'unavailable_reason' => $null(), 'items' => $this->list($item)])->nullable(true);
+            $rx->required = ['kind', 'prescribing_clinic_id', 'prescribing_staff_id', 'prescribed_on', 'items'];
             $out = $this->object($row + ['code' => $s()->enum(array_keys(DossierOutcomeSeeder::OUTCOMES)), 'clinic_id' => $i(), 'doctor_id' => $i(), 'outcome_on' => $s()->format('date'), 'referral_target' => $null(), 'outgoing_referral_date' => $null(), 'outgoing_referral_reason' => $null()])->nullable(true);
             $out->required = ['code', 'clinic_id', 'doctor_id', 'outcome_on'];
             $fields += ['prescription' => $rx, 'outcome' => $out];
             $required = [...$required, 'prescription', 'outcome'];
-            $op->description .= ' Requires dossiers.clinical.update. One active prescription header with multiple items, zero prescriptions allowed. One current outcome. Dates must not be future. DOS-REFER requires all three outgoing fields; other outcomes prohibit them. Incoming referral stays independent.';
+            $op->description .= ' Requires dossiers.clinical.update. Up to one active prescription per kind (unlinked hospital dispense, dose-linked with funding_source_id, outside-hospital with unavailable_reason). Each prescription has one or more items. Omitted kinds and a null prescription are left unchanged. One current outcome, saved independently of prescriptions. Dates must not be future. DOS-REFER requires all three outgoing fields; other outcomes prohibit them. Incoming referral stays independent.';
         } elseif (str_ends_with($route, '/complete')) {
             $fields += ['dossier_lock_version' => $i(), 'confirmed' => new BooleanType, 'clinic_id' => $i(), 'attending_staff_id' => $i()];
             $required = array_keys($fields);

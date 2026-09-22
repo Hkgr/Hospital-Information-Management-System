@@ -13,6 +13,14 @@ class SaveVisitClinical extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $rx = $this->input('prescription');
+        if (is_array($rx) && empty($rx['kind'])) {
+            $this->merge(['prescription' => $rx + ['kind' => 'unlinked']]);
+        }
+    }
+
     public function rules(): array
     {
         $rules = ['facility_id' => ['required', 'integer', 'min:1'], 'request_id' => ['required', 'uuid'], 'lock_version' => ['required', 'integer', 'min:1']];
@@ -29,7 +37,8 @@ class SaveVisitClinical extends FormRequest
             $rules['prescription'] = ['present', 'nullable', 'array'];
             $rules['outcome'] = ['present', 'nullable', 'array'];
             if ($this->input('prescription') !== null) {
-                foreach ($row + ['prescribing_clinic_id' => ['required', 'integer', 'min:1'], 'prescribing_staff_id' => ['required', 'integer', 'min:1'], 'prescribed_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'], 'items' => ['present', 'array', 'max:100']] as $key => $value) {
+                $kind = $this->input('prescription.kind', 'unlinked');
+                foreach ($row + ['kind' => ['required', 'in:unlinked,dose_linked,outside'], 'prescribing_clinic_id' => ['required', 'integer', 'min:1'], 'prescribing_staff_id' => ['required', 'integer', 'min:1'], 'prescribed_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'], 'funding_source_id' => [$kind === 'dose_linked' ? 'required' : 'prohibited', 'nullable', 'integer', 'min:1'], 'unavailable_reason' => [$kind === 'outside' ? 'required' : 'prohibited', 'nullable', 'string', 'max:10000'], 'items' => ['present', 'array', 'max:100']] as $key => $value) {
                     $rules["prescription.$key"] = str_replace('ROW', 'prescription', $value);
                 }
                 foreach ($row + ['medication_id' => ['required', 'integer', 'min:1'], 'display_order' => ['required', 'integer', 'min:0', 'max:1000']] as $key => $value) {

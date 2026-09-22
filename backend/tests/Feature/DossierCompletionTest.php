@@ -91,4 +91,21 @@ class DossierCompletionTest extends DossierCompletionCase
         $this->assertDatabaseHas('audit_logs', ['entity_type' => 'patient_dossier', 'entity_id' => $this->s['id'], 'event' => 'activated']);
         $this->assertDatabaseHas('audit_logs', ['entity_type' => 'dossier_visit', 'entity_id' => $initial, 'event' => 'completed']);
     }
+
+    public function test_prescription_kinds_are_independent_and_outcome_does_not_replace_them(): void
+    {
+        $funding = DB::table('funding_sources')->insertGetId(['code' => 'RXF-'.$this->f['tag'], 'name_ar' => 'تمويل وصفة اختبار', 'is_active' => true]);
+        $this->s = $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'unlinked'], 'outcome' => null])->assertOk()->json('data');
+        $this->s = $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'dose_linked', 'funding_source_id' => $funding], 'outcome' => null])->assertOk()->json('data');
+        $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'outside'], 'outcome' => null])->assertUnprocessable()->assertJsonValidationErrors('prescription.unavailable_reason');
+        $this->s = $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'outside', 'unavailable_reason' => 'غير متوفر في مخزون المشفى'], 'outcome' => null])->assertOk()->assertJsonCount(3, 'data.clinical.prescriptions')->json('data');
+        $this->assertSame('unlinked', $this->s['clinical']['prescription']['kind']);
+        $this->assertSame($funding, $this->s['clinical']['prescriptions'][1]['funding_source_id']);
+        $this->assertSame('غير متوفر في مخزون المشفى', $this->s['clinical']['prescriptions'][2]['unavailable_reason']);
+        $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'dose_linked', 'funding_source_id' => $funding], 'outcome' => null])->assertConflict();
+        $this->s = $this->saveSection('medications', ['prescription' => null, 'outcome' => $this->outcome()])->assertOk()->json('data');
+        $this->assertCount(3, $this->s['clinical']['prescriptions']);
+        $this->assertSame('DOS-NORX', $this->s['clinical']['outcome']['code']);
+        $this->assertSame(0, DB::table('visit_medications')->where('visit_id', $this->s['visit']['id'])->count());
+    }
 }
