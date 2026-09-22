@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Http\Responses\AuthError;
 use App\Models\User;
+use App\Services\Audit\SystemActivity;
 use App\Services\Auth\UserAccessContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\PersonalAccessToken;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -161,6 +163,39 @@ class AuthApiTest extends TestCase
         $this->bearer('POST', '/api/logout', $first)->assertUnauthorized();
         $this->bearer('GET', '/api/user', $second)->assertOk()->assertJsonPath('data.user.must_change_password', false);
         $this->assertDatabaseCount('personal_access_tokens', 1);
+    }
+
+    public function test_login_and_logout_succeed_when_activity_log_cannot_be_written(): void
+    {
+        $user = User::factory()->create(['username' => 'admin']);
+        $facility = DB::table('facilities')->insertGetId([
+            'code' => 'AUTH-LOG', 'name_ar' => 'مشفى الاختبار', 'timezone' => 'Asia/Damascus', 'is_active' => true,
+        ]);
+        $role = DB::table('roles')->insertGetId(['code' => 'AUTH-LOG', 'name_ar' => 'AUTH-LOG', 'is_active' => true]);
+        DB::table('facility_user_roles')->insert(['facility_id' => $facility, 'role_id' => $role, 'user_id' => $user->id]);
+        Schema::rename('audit_logs', 'audit_logs_paused');
+        try {
+            $token = $this->login()->assertOk()->json('data.token');
+            $this->assertNotEmpty($token);
+            $this->assertTrue($user->fresh()->last_login_at !== null);
+            $this->bearer('POST', '/api/logout', $token)->assertNoContent();
+            $this->bearer('GET', '/api/user', $token)->assertUnauthorized();
+        } finally {
+            Schema::rename('audit_logs_paused', 'audit_logs');
+        }
+    }
+
+    public function test_login_and_logout_succeed_when_activity_recording_throws(): void
+    {
+        User::factory()->create(['username' => 'admin']);
+        $this->mock(SystemActivity::class, function ($mock) {
+            $mock->shouldReceive('auth')->andThrow(new RuntimeException('audit exploded'));
+            $mock->shouldReceive('recordException')->zeroOrMoreTimes();
+        });
+        $token = $this->login()->assertOk()->json('data.token');
+        $this->assertNotEmpty($token);
+        $this->bearer('POST', '/api/logout', $token)->assertNoContent();
+        $this->bearer('GET', '/api/user', $token)->assertUnauthorized();
     }
 
     public static function protectedEndpoints(): array

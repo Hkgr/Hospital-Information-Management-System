@@ -22,40 +22,55 @@ class SystemActivity
             return;
         }
         try {
-            DB::table('audit_logs')->insert([
+            $row = [
                 'facility_id' => $facilityId, 'actor_id' => $actorId,
                 'entity_type' => $entityType, 'entity_id' => $entityId, 'event' => $event,
                 'old_values' => $old === null ? null : json_encode($old, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                 'new_values' => $new === null ? null : json_encode($new, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                 'reason' => $reason, 'request_id' => (string) Str::uuid(),
                 'ip_address' => $request->ip(), 'occurred_at' => now(),
-            ]);
+            ];
         } catch (Throwable) {
-            // Logging must never fail the original action.
+            return;
         }
+        // Never insert inside the caller's transaction: a failed log write must not abort login or other commits.
+        DB::afterCommit(function () use ($row) {
+            try {
+                DB::table('audit_logs')->insert($row);
+            } catch (Throwable) {
+                // Logging must never fail the original action.
+            }
+        });
     }
 
     public function auth(Request $request, int $userId, string $event, string $username): void
     {
-        $facility = $this->facilityFor($request, $userId);
-        $this->record($request, $facility, $userId, 'auth_session', $userId, $event, null, ['username' => $username]);
+        try {
+            $facility = $this->facilityFor($request, $userId);
+            $this->record($request, $facility, $userId, 'auth_session', $userId, $event, null, ['username' => $username]);
+        } catch (Throwable) {
+            // Sign-in and sign-out must complete even when activity lookup fails.
+        }
     }
 
     public function recordException(Throwable $e): void
     {
-        if ($this->ignored($e)) {
-            return;
+        try {
+            if ($this->ignored($e)) {
+                return;
+            }
+            $request = request();
+            if (! $request instanceof Request) {
+                return;
+            }
+            [$facility, $actor] = $this->context($request);
+            $payload = $e instanceof QueryException
+                ? ['message' => 'تعذّر حفظ البيانات بسبب خطأ تقني.', 'type' => 'QueryException']
+                : ['message' => $this->redact($e->getMessage()) ?: 'تعذّر إتمام العملية.', 'type' => class_basename($e)];
+            $payload += ['path' => '/'.ltrim($request->path(), '/'), 'method' => $request->method()];
+            $this->record($request, $facility, $actor, 'system_error', 0, 'failed', null, $payload);
+        } catch (Throwable) {
         }
-        $request = request();
-        if (! $request instanceof Request) {
-            return;
-        }
-        [$facility, $actor] = $this->context($request);
-        $payload = $e instanceof QueryException
-            ? ['message' => 'تعذّر حفظ البيانات بسبب خطأ تقني.', 'type' => 'QueryException']
-            : ['message' => $this->redact($e->getMessage()) ?: 'تعذّر إتمام العملية.', 'type' => class_basename($e)];
-        $payload += ['path' => '/'.ltrim($request->path(), '/'), 'method' => $request->method()];
-        $this->record($request, $facility, $actor, 'system_error', 0, 'failed', null, $payload);
     }
 
     private function ignored(Throwable $e): bool
@@ -111,4 +126,4 @@ class SystemActivity
 
         return mb_substr($message, 0, 300);
     }
-};
+}
