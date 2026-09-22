@@ -18,6 +18,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Throwable;
 
 #[Group('Authentication')]
 class AuthController extends Controller
@@ -46,7 +47,7 @@ class AuthController extends Controller
     {
         $input = $request->validated();
 
-        return DB::transaction(function () use ($input, $request) {
+        $payload = DB::transaction(function () use ($input) {
             $user = User::where('username', $input['username'])->lockForUpdate()->first();
 
             // A dummy hash check also consumes password-hashing work for unknown users.
@@ -64,12 +65,12 @@ class AuthController extends Controller
             $token = $user->createToken($input['device_name'] ?? 'hospital-web', ['api']);
             $user->last_login_at = now();
             $user->save();
-            app(SystemActivity::class)->auth($request, $user->id, 'login', $user->username);
 
-            return new LoginResponse([
-                'token' => $token, 'user' => $user, 'access' => $this->access->forUser($user),
-            ]);
+            return ['token' => $token, 'user' => $user, 'access' => $this->access->forUser($user)];
         });
+        $this->recordAuth($request, $payload['user'], 'login');
+
+        return new LoginResponse($payload);
     }
 
     /** Return the current user and active facility access, without a token or credentials. */
@@ -93,9 +94,18 @@ class AuthController extends Controller
     public function logout(Request $request): Response
     {
         $user = $request->user();
-        app(SystemActivity::class)->auth($request, $user->id, 'logout', $user->username);
+        $this->recordAuth($request, $user, 'logout');
         $user->currentAccessToken()->delete();
 
         return response()->noContent();
+    }
+
+    private function recordAuth(Request $request, User $user, string $event): void
+    {
+        try {
+            app(SystemActivity::class)->auth($request, $user->id, $event, $user->username);
+        } catch (Throwable) {
+            // Activity logging must never block sign-in or sign-out.
+        }
     }
 }

@@ -58,7 +58,9 @@ function AuthenticatedSession({ children }: { children: React.ReactNode }) {
     <Image src="/brand/logos/logo-ar-color.svg" alt="مشفى محمد بن زايد الإماراتي" width={200} height={95} style={{ height: "auto" }} priority />
     <h1>نظام إدارة المشفى</h1>
     {error && <p className={styles.error} role="alert">{error}</p>}
-    {error ? <button type="button" className={styles.submit} onClick={() => { setError(""); setAttempt(value => value + 1); }}>إعادة المحاولة</button>
-      : <p role="status">جارٍ التحقق من الدخول…</p>}
+    {error ? <>
+      <button type="button" className={styles.submit} onClick={() => { setError(""); setAttempt(value => value + 1); }}>إعادة المحاولة</button>
+      <button type="button" className={styles.submit} disabled={busy} onClick={() => void signOut()}>{busy ? "جارٍ تسجيل الخروج…" : "تسجيل الخروج"}</button>
+    </> : <p role="status">جارٍ التحقق من الدخول…</p>}
   </main>;
 }

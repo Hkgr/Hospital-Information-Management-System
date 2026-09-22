@@ -139,6 +139,21 @@ test("Enter submits username contract once; loading, Bearer current-user, identi
   } finally { await context.close(); }
 });
 
+test("server-failed logout still returns to login and clears the tab session", async () => {
+  const { context, page } = await pageFor({ reducedMotion: "reduce" });
+  try {
+    await page.route("**/hospital-api/login", route => route.fulfill({ json: { data: { ...identity, token: "test-only-token", token_type: "Bearer", expires_at: null } } }));
+    await page.route("**/hospital-api/user", route => route.fulfill({ json: { data: identity } }));
+    await page.route("**/hospital-api/logout", route => route.fulfill({ status: 500, json: { error: { code: "REQUEST_FAILED" } } }));
+    await page.goto(`${base}/login`); await fill(page);
+    await page.getByRole("button", { name: "دخول", exact: true }).click();
+    await page.getByRole("button", { name: "حساب مستخدم الواجهة" }).click();
+    await page.getByRole("button", { name: "تسجيل الخروج", exact: true }).click();
+    await page.waitForURL(`${base}/login`);
+    assert.equal(await page.evaluate(() => sessionStorage.getItem("hospital.bearer")), null);
+  } finally { await context.close(); }
+});
+
 test("mobile, narrow and short screens scroll without horizontal clipping; reduced motion and touch disable tilt", async () => {
   const { context, page } = await pageFor({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, reducedMotion: "reduce" });
   try {

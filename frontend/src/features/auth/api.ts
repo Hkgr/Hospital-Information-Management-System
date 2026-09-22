@@ -126,6 +126,13 @@ export async function login(username: string, password: string) {
 
 export const currentUser = (signal?: AbortSignal) => apiRequest<Identity>("user", { signal });
 export async function logout() {
-  await apiRequest<void>("logout", { method: "POST" });
+  try {
+    await apiRequest<void>("logout", { method: "POST" });
+  } catch (error) {
+    // Network failures keep the local session so the operator can retry.
+    // A server error must not trap them inside a shell they cannot leave.
+    if (!(error instanceof AuthError) || error.status !== 0) saveToken(null);
+    throw error;
+  }
   saveToken(null);
 }
