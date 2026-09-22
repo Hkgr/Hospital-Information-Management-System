@@ -45,7 +45,7 @@ test("system log lists actor, time and technical classification for the selected
     await page.getByRole("heading", { name: "سجل الحركة" }).waitFor();
     await page.getByText("بواسطة مستخدم الاختبار", { exact: true }).waitFor();
     await page.getByText("خطأ تقني · خطأ تقني").waitFor();
-    await page.getByText("تعذّر إتمام العملية.").waitFor();
+    await page.locator("article").filter({ hasText: "تعذّر إتمام العملية." }).waitFor();
     assert.ok(calls.some(path => path.startsWith("/hospital-api/audit?facility_id=3")));
     assert.deepEqual(errors, []);
   } finally { await context.close(); }

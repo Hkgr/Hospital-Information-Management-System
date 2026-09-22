@@ -46,7 +46,7 @@ class AuditLogApiTest extends TestCase
         $this->getLog('', $token)->assertUnprocessable();
         $this->getLog('?facility_id='.$other, $token)->assertForbidden()->assertJsonPath('error.code', 'FACILITY_ACCESS_DENIED');
         $this->getLog('?facility_id='.$facility, $this->token(User::factory()->create()))->assertForbidden();
-        $before = $this->getLog('?facility_id='.$facility, $token)->assertOk()->assertHeader('Cache-Control', 'private, no-store')->json('meta.total');
+        $before = $this->getLog('?facility_id='.$facility, $token)->assertOk()->assertHeader('Cache-Control', 'no-store, private')->json('meta.total');
         DB::table('audit_logs')->insert([
             'facility_id' => $facility, 'actor_id' => $user->id, 'entity_type' => 'clinic', 'entity_id' => 1,
             'event' => 'created', 'new_values' => json_encode(['name_ar' => 'عيادة السجل']), 'request_id' => (string) Str::uuid(),
