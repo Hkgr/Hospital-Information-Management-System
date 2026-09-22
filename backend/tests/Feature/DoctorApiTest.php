@@ -384,9 +384,10 @@ class DoctorApiTest extends TestCase
             $this->assertTrue($sheet->getRightToLeft());
             $this->assertSame(0, $sheet->getPageSetup()->getFitToHeight());
             $this->assertSame($doctor['description'], $sheet->getCell('C9')->getValue());
-            $this->assertSame(2, $book->getSheetCount());
+            $this->assertSame(3, $book->getSheetCount());
+            $this->assertNotNull($book->getSheetByName('المرضى'));
             $allText = '';
-            foreach ($book->getSheet(1)->toArray() as $index => $row) {
+            foreach ($book->getSheetByName('النصوص للطباعة')->toArray() as $index => $row) {
                 if ($index > 1) {
                     $allText .= $row[3];
                 }
