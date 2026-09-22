@@ -53,7 +53,7 @@ test("patient card actions include delete when permitted and confirm before the 
     await page.getByRole("button", { name: "تأكيد الحذف" }).click();
     await page.getByRole("dialog", { name: "حذف بطاقة DOS-001" }).waitFor({ state: "hidden" });
     assert.equal(calls.some(call => call.method === "DELETE" && call.path.endsWith("/dossiers/91")), true);
-    assert.equal(await page.getByText("DOS-001", { exact: true }).count(), 0);
+    await page.getByText("لا توجد بطاقات مرضى مطابقة.").waitFor();
   } finally { await context.close(); }
 });
 
