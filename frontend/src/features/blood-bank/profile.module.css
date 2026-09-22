@@ -51,9 +51,15 @@ form.profileForm input[type="radio"] {
 .saveHint { margin-inline-end: auto; font-size: 12px; color: #617a82; }
 .picker { display: grid; gap: 12px; align-content: start; }
 .picker > p { margin: 0; }
-.pickerChoices { display: grid; gap: 6px; max-block-size: 184px; overflow-y: auto; scrollbar-gutter: stable; padding: 4px; overscroll-behavior: contain; scroll-padding-block: 8px; }
-.pickerChoices button { inline-size: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; min-block-size: 44px; text-align: start; white-space: normal; overflow-wrap: anywhere; }
-.pickerChoices button span { display: grid; gap: 3px; }
+.compactPanel { position: relative; gap: 8px; padding: 0; border: 0; background: transparent; }
+.pickerLegend { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.compactPanel input[type="search"] { position: sticky; inset-block-start: 0; z-index: 1; background: #fff; }
+.pickerChoices { display: grid; gap: 4px; max-block-size: 260px; overflow-y: auto; scrollbar-gutter: stable; padding: 4px; overscroll-behavior: contain; scroll-padding-block: 8px; }
+.compactChoices { gap: 2px; max-block-size: min(280px, 46dvh); padding: 2px; }
+.option { inline-size: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; min-block-size: 38px; text-align: start; white-space: normal; overflow-wrap: anywhere; border: 0; border-radius: 6px; background: transparent; color: #29454e; font: inherit; font-size: 13px; cursor: pointer; }
+.option:hover { background: #eef6f8; }
+.option[aria-pressed="true"] { background: #eaf5f6; color: #0b6178; font-weight: 600; }
+.pickerChoices button span { display: grid; gap: 2px; min-inline-size: 0; }
 .pickerChoices button bdi { font-size: 11px; color: #607c87; }
 .pickerChoices button svg { flex-shrink: 0; }
 .choiceColumns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -71,7 +77,8 @@ form.profileForm input[type="radio"] {
   .summaryFacts { display: grid; }
   .saveHint { flex-basis: 100%; }
   .formActions button { flex: 1; }
-  .pickerChoices { max-block-size: 168px; }
+  .pickerChoices { max-block-size: 220px; }
+  .compactChoices { max-block-size: min(240px, 42dvh); }
   .choiceColumns { grid-template-columns: 1fr; }
   .pickerPagination > div { flex-wrap: wrap; }
 }
