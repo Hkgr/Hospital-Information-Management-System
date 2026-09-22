@@ -20,18 +20,17 @@ export function DonutChart({ title, items }: { title: string; items: DashboardCo
   const total = items.reduce((sum, item) => sum + item.value, 0);
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+  const segments = items.map((item, index) => {
+    const dash = total === 0 ? 0 : (item.value / total) * circumference;
+    const offset = items.slice(0, index).reduce((sum, entry) => sum + (total === 0 ? 0 : (entry.value / total) * circumference), 0);
+    return { item, index, dash, offset };
+  });
   return <figure className={styles.donut}>
     <svg viewBox="0 0 120 120" role="img" aria-label={`${title} — الإجمالي ${total}`}>
       <circle className={styles.donutTrack} cx="60" cy="60" r={radius} />
-      {items.map((item, index) => {
-        const dash = total === 0 ? 0 : (item.value / total) * circumference;
-        const circle = <circle key={item.key} className={styles.donutSegment} data-tone={tones[index % tones.length]}
-          cx="60" cy="60" r={radius} strokeDasharray={`${dash} ${circumference - dash}`} strokeDashoffset={-offset}
-          transform="rotate(-90 60 60)" />;
-        offset += dash;
-        return circle;
-      })}
+      {segments.map(({ item, index, dash, offset }) => <circle key={item.key} className={styles.donutSegment} data-tone={tones[index % tones.length]}
+        cx="60" cy="60" r={radius} strokeDasharray={`${dash} ${circumference - dash}`} strokeDashoffset={-offset}
+        transform="rotate(-90 60 60)" />)}
       <text className={styles.donutValue} x="60" y="56">{total.toLocaleString("ar-SY")}</text>
       <text className={styles.donutCaption} x="60" y="74">الإجمالي</text>
     </svg>
@@ -85,20 +84,19 @@ export function Reveal({ children, className, delay = 0 }: { children: React.Rea
 
 function useCount(value: number) {
   const reduced = useReducedMotion();
-  const [shown, setShown] = useState(reduced ? value : 0);
+  const [shown, setShown] = useState(0);
   useEffect(() => {
-    if (reduced) { setShown(value); return; }
+    if (reduced) return;
     let frame = 0;
     const start = performance.now();
-    const from = 0;
     const tick = (now: number) => {
       const progress = Math.min(1, (now - start) / 900);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setShown(Math.round(from + (value - from) * eased));
+      setShown(Math.round(value * eased));
       if (progress < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [value, reduced]);
-  return shown;
+  return reduced ? value : shown;
 }
