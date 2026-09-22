@@ -4,7 +4,8 @@
 .protocol { min-block-size: 8rem; resize: vertical; }
 .fields { align-items: start; }
 .fields > label { align-content: start; }
-.fields input:not([type="checkbox"]), .fields select { min-block-size: 42px; }
+.fields input:not([type="checkbox"]), .fields select { min-block-size: 44px; }
+.fields select { padding-inline-end: 2.6rem; }
 .fields fieldset > div:has(> button[aria-pressed]) { grid-auto-rows: max-content; align-content: start; }
 .review { display: grid; gap: 12px; }
 .review label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }

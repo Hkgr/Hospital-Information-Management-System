@@ -3,7 +3,8 @@
 .section p { line-height: 1.9; }
 .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; max-width: 48rem; }
 .fields label, .upload, .upload label, .filter { display: grid; gap: .6rem; }
-.fields input, .fields select, .filter select { width: 100%; padding: .7rem; border: 1px solid #d7e1df; border-radius: .5rem; background: white; color: inherit; font: inherit; }
+.fields input, .fields select, .filter select { width: 100%; padding-block: .7rem; padding-inline-start: .7rem; padding-inline-end: 2.6rem; border: 1px solid #d7e1df; border-radius: .5rem; background-color: white; color: inherit; font: inherit; }
+.fields input { padding-inline-end: .7rem; }
 .upload { border: 1px dashed #a8c3bd; border-radius: .7rem; padding: 1.25rem; background: #f8fbfa; }
 .upload input { max-width: 100%; }
 .counts { display: flex; gap: .7rem; flex-wrap: wrap; }

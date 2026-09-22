@@ -11,6 +11,8 @@ export default function DossierPicker(props: ComponentProps<typeof Picker>) {
   const id = useId(), trigger = useRef<HTMLButtonElement>(null), root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
+    const search = root.current?.querySelector<HTMLInputElement>("input[type='search']");
+    search?.focus();
     const outside = (event: Event) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
     document.addEventListener("pointerdown", outside);
     document.addEventListener("focusin", outside);
@@ -20,8 +22,8 @@ export default function DossierPicker(props: ComponentProps<typeof Picker>) {
   return <div ref={root} className={layout.compactPicker} onKeyDown={e => { if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); close(); } }}>
     <span id={`${id}-label`}>{props.label}</span>
     <button ref={trigger} name={props.name} type="button" className={layout.pickerTrigger} aria-label={`اختيار: ${props.label}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen(v => !v)}>
-      <span>{props.selected?.name_ar || "اختر من الدليل…"}</span><LuChevronDown aria-hidden="true" />
+      <span>{props.selected ? <>{props.selected.name_ar}{props.selected.code && <bdi>({props.selected.code})</bdi>}</> : "اختر من الدليل…"}</span><LuChevronDown aria-hidden="true" />
     </button>
-    {open && <div id={id} className={layout.pickerPopup}><button type="button" className={layout.closePicker} aria-label={`إغلاق خيارات ${props.label}`} onClick={close}><LuX aria-hidden="true" /></button><Picker {...props} onSelect={row => { props.onSelect(row); close(); }} /></div>}
+    {open && <div id={id} className={layout.pickerPopup}><button type="button" className={layout.closePicker} aria-label={`إغلاق خيارات ${props.label}`} onClick={close}><LuX aria-hidden="true" /></button><Picker {...props} compact autoFocus onSelect={row => { props.onSelect(row); close(); }} /></div>}
   </div>;
 }

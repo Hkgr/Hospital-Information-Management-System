@@ -18,9 +18,10 @@
 .toolbar { display: flex; align-items: end; gap: 20px; justify-content: space-between; padding: 24px; flex-wrap: wrap; }
 .search { display: grid; gap: 7px; font-size: 12px; color: #506b73; flex: 1; min-inline-size: 180px; max-inline-size: 460px; }
 .search span { display: flex; align-items: center; gap: 6px; }
-.screen input, .screen select, .modal input:not([type="checkbox"]), .modal select, .modal textarea { border: 1px solid #d4e1e5; border-radius: 8px; padding: 9px 11px; min-block-size: 42px; background: white; color: #29454e; font: inherit; font-size: 13px; max-inline-size: 100%; inline-size: 100%; }
+.screen input, .modal input:not([type="checkbox"]), .modal textarea { border: 1px solid #d4e1e5; border-radius: 10px; padding: 9px 11px; min-block-size: 42px; background: white; color: #29454e; font: inherit; font-size: 13px; max-inline-size: 100%; inline-size: 100%; }
 .screen input::placeholder, .modal input::placeholder { color: #7c9198; }
-.screen select, .modal select { cursor: pointer; } .modal textarea { resize: vertical; }
+.screen select, .modal select { cursor: pointer; border: 1px solid #d4e1e5; border-radius: 10px; min-block-size: 44px; padding-block: 9px; padding-inline-start: 12px; padding-inline-end: 2.6rem; background-color: white; color: #29454e; font: inherit; font-size: 13px; max-inline-size: 100%; inline-size: 100%; }
+.modal textarea { resize: vertical; }
 .filters { display: flex; align-items: end; flex-wrap: wrap; gap: 13px; padding: 18px 24px; background: #f7fafb; border-block-start: 1px solid #edf1f4; }
 .filters > label { display: grid; gap: 6px; font-size: 11px; color: #61777d; min-inline-size: 125px; flex: 1; }
 .columnMenu, .doctorFilter { position: relative; font-size: 12px; }
@@ -62,7 +63,7 @@
 .dangerText { color: #a5505d; }
 .pagination { display: flex; justify-content: end; align-items: center; gap: 10px; flex-wrap: wrap; padding: 16px 22px; font-size: 12px; color: #627980; border-block-start: 1px solid #e5edef; }
 .pagination label { margin-inline-end: auto; display: flex; gap: 8px; align-items: center; }
-.pagination select { inline-size: 72px; min-block-size: 36px; padding: 5px; }
+.pagination select { inline-size: 72px; min-block-size: 36px; padding-block: 5px; padding-inline-start: 8px; padding-inline-end: 1.7rem; background-size: 0.9rem; }
 .pagination button { min-block-size: 34px; padding: 5px 12px; font-size: 12px; }
 .hint { color: #6b7f86; font-size: 12px; line-height: 1.9; margin: 0; }
 .error { color: #922b3b; background: #fff2f3; padding: 12px; border: 1px solid #f1d4d9; border-radius: 8px; font-size: 13px; line-height: 1.9; }
@@ -95,7 +96,8 @@
 .picker legend { font-size: 13px; font-weight: 600; padding-inline: 6px; }
 .picker .hint { margin-block-end: 12px; }
 .picker .pagination { padding: 12px 0 0; }
-.choices { max-block-size: 220px; overflow: auto; padding-block: 8px; overscroll-behavior: contain; }
+.picker > input[type="search"] { margin-block-end: 8px; }
+.choices { display: grid; gap: 2px; max-block-size: 320px; overflow: auto; padding-block: 4px; overscroll-behavior: contain; }
 .doctorChoice { display: flex; gap: 10px; align-items: center; padding: 9px; cursor: pointer; border-radius: 6px; }
 .doctorChoice:hover { background: #f3f8f9; }
 .doctorChoice span { display: grid; gap: 3px; min-inline-size: 0; overflow-wrap: anywhere; }
