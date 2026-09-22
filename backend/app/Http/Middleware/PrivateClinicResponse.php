@@ -11,7 +11,7 @@ class PrivateClinicResponse
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit')) {
+        if (! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit', 'api/audit/*')) {
             return $next($request);
         }
         try {
@@ -42,8 +42,9 @@ class PrivateClinicResponse
             $status = $response->getStatusCode();
             $response = response()->json(['error' => ['code' => $status === 404 ? 'DOSSIER_NOT_FOUND' : 'DOSSIERS_UNAVAILABLE', 'message' => $status === 404 ? 'بطاقة المريض أو الزيارة غير متاحة في المشفى المحدد.' : 'تعذّر تحميل بطاقات المرضى. حاول مجددًا.']], $status);
         }
-        if ($request->is('api/audit') && $response->getStatusCode() >= 500) {
-            $response = response()->json(['error' => ['code' => 'AUDIT_UNAVAILABLE', 'message' => 'تعذّر تحميل سجل الحركة. حاول مجددًا.']], 500);
+        if ($request->is('api/audit', 'api/audit/*') && in_array($response->getStatusCode(), [404, 500], true)) {
+            $status = $response->getStatusCode();
+            $response = response()->json(['error' => ['code' => $status === 404 ? 'AUDIT_NOT_FOUND' : 'AUDIT_UNAVAILABLE', 'message' => $status === 404 ? 'الحركة غير موجودة في سجل المنشأة المحددة.' : 'تعذّر تحميل سجل الحركة. حاول مجددًا.']], $status);
         }
         $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->set('Vary', 'Authorization');

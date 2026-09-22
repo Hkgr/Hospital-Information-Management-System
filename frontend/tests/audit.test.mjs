@@ -32,21 +32,33 @@ async function setup() {
       assert.equal(url.searchParams.get("facility_id"), "3");
       return route.fulfill({ json: { data: [event], meta: { page: 1, per_page: 10, total: 1, last_page: 1 }, filters: { categories: { technical: "خطأ تقني" }, entities: { system_error: "خطأ تقني" }, actions: { failed: "خطأ تقني" } }, timezone: "Asia/Damascus" } });
     }
+    if (url.pathname === "/hospital-api/audit/9") {
+      assert.equal(url.searchParams.get("facility_id"), "3");
+      return route.fulfill({ json: { data: event } });
+    }
     throw new Error(`Unexpected API call ${url.pathname}`);
   });
   return { context, page, calls, errors };
 }
 
-test("system log lists actor, time and technical classification for the selected facility", async () => {
+test("system log table lists badges and opens a unique activity page", async () => {
   const { context, page, calls, errors } = await setup();
   try {
     await page.goto(`${base}/audit?facility_id=3`);
     await page.getByRole("heading", { name: "السجل", exact: true }).waitFor();
     await page.getByRole("heading", { name: "سجل الحركة" }).waitFor();
-    await page.getByText("بواسطة مستخدم الاختبار", { exact: true }).waitFor();
-    await page.getByText("خطأ تقني · خطأ تقني").waitFor();
-    await page.locator("article").filter({ hasText: "تعذّر إتمام العملية." }).waitFor();
+    const table = page.getByRole("region", { name: "جدول سجل الحركة" });
+    await table.getByRole("columnheader", { name: "التصنيف" }).waitFor();
+    await table.getByText("مستخدم الاختبار", { exact: true }).waitFor();
+    await table.locator("[data-kind='technical']").waitFor();
+    await table.locator("[data-kind='failed']").waitFor();
+    await table.locator("tbody tr").first().click();
+    await page.waitForURL(/\/audit\/9\?facility_id=3/);
+    await page.getByRole("heading", { name: "خطأ تقني", exact: true }).waitFor();
+    await page.locator("dd").filter({ hasText: "مستخدم الاختبار" }).waitFor();
+    await page.getByText("تعذّر إتمام العملية.").first().waitFor();
     assert.ok(calls.some(path => path.startsWith("/hospital-api/audit?facility_id=3")));
+    assert.ok(calls.some(path => path.startsWith("/hospital-api/audit/9?facility_id=3")));
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 });

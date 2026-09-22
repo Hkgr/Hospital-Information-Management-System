@@ -22,4 +22,13 @@ class AuditLogController extends Controller
 
         return response()->json($this->history->listing($f, $request->validated()));
     }
+
+    #[Endpoint(operationId: 'systemLogShow', title: 'Read one facility activity row', description: 'Requires an active account, a Bearer token with the api ability, and membership in the selected facility. No extra permission code is assigned. facility_id is required. The id must belong to that facility. GET never writes an audit entry. Responses are private, no-store. Values are an allowlisted projection.')]
+    #[DocumentedResponse(200, description: 'One activity row including allowlisted changes.')]
+    public function show(AuditLogRequest $request, int $id)
+    {
+        $f = $this->history->facility($request->user(), $request->integer('facility_id'));
+
+        return response()->json($this->history->show($f, $id));
+    }
 }
