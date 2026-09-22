@@ -104,7 +104,7 @@ class PatientCardTest extends TestCase
     {
         $s = $this->callApi('POST', '', $this->input())->assertCreated()->json('data');
         $saved = $this->callApi('PUT', "/{$s['id']}/medical", [
-            'request_id' => (string) Str::uuid(), 'lock_version' => $s['lock_version'],
+            'facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid(), 'lock_version' => $s['lock_version'],
             'is_oncology' => false, 'weight_kg' => 72.5, 'height_cm' => 168,
         ])->assertOk()->json('data');
         $this->assertEquals(72.5, (float) $saved['medical']['weight_kg']);
@@ -113,11 +113,11 @@ class PatientCardTest extends TestCase
         $this->assertEquals(72.5, (float) $detail['weight_kg']);
         $this->assertEquals(168, (float) $detail['height_cm']);
         $this->callApi('PUT', "/{$s['id']}/medical", [
-            'request_id' => (string) Str::uuid(), 'lock_version' => $saved['lock_version'],
+            'facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid(), 'lock_version' => $saved['lock_version'],
             'is_oncology' => false, 'weight_kg' => 0,
         ])->assertUnprocessable()->assertJsonValidationErrors('weight_kg');
         $this->callApi('PUT', "/{$s['id']}/medical", [
-            'request_id' => (string) Str::uuid(), 'lock_version' => $saved['lock_version'],
+            'facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid(), 'lock_version' => $saved['lock_version'],
             'is_oncology' => false, 'height_cm' => 300,
         ])->assertUnprocessable()->assertJsonValidationErrors('height_cm');
     }
