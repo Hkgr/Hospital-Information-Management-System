@@ -13,11 +13,13 @@ import DossierReports, { reportColumns, defaultColumns } from "./DossierReports"
 import { AttachmentHistory } from "./Attachments";
 import { LuHospital, LuPlus, LuSearch } from "react-icons/lu";
 import { useIdentity } from "../auth/AuthenticatedLayout";
+import { apiRequest, AuthError } from "../auth/api";
 import { directoryFacility } from "../directory/facilityContext";
 import { DirectoryBack, DirectoryRowActions, DirectoryTable } from "../directory/DirectoryPrimitives";
 import { Pagination, LongText, ColumnMenu } from "../directory/Controls";
 import { useClinicRequest, type Page } from "../clinics/api";
 import useClinicSearch from "../clinics/useClinicSearch";
+import Modal from "../clinics/Modal";
 import { type Dossier, type DossierRow, type Visit, type ClinicalItem, historyLabels, treatmentLabels, sourceLabels, patientBirthDate } from "./api";
 import styles from "../clinics/clinics.module.css";
 import cardStyles from "./patient-cards.module.css";
@@ -36,6 +38,8 @@ function StatusBadge({ status, visit = false }: { status: "draft" | "active" | "
 }
 function Listing({ facility }: { facility: number }) {
   const [chosenColumns,setColumns]=useState<(keyof typeof reportColumns)[]>(defaultColumns);
+  const [revision,setRevision]=useState(0);
+  const [pending,setPending]=useState<DossierRow|null>(null);
   const options = useClinicRequest<WizardOptions>(`dossiers/options?facility_id=${facility}`);
   const availableColumns = Object.fromEntries(Object.entries(reportColumns).filter(([key])=>options.data?.capabilities.treatment_view || !(key in treatmentColumns)));
   const columns = chosenColumns.filter(key=>key in availableColumns);
@@ -44,7 +48,7 @@ function Listing({ facility }: { facility: number }) {
   const q = new URLSearchParams({ facility_id: String(facility) });
   for (const key of ["treatment_status","treatment_modality","dose_from","dose_to","pathology_status", "status", "oncology", "visits", "from", "to", "sort", "direction", "page", "per_page"]) { const value = params.get(key); if (value) q.set(key, value); }
   if (committed) q.set("search", committed);
-  const list = useClinicRequest<Page<DossierRow> & { totals: { dossiers: number } }>(`dossiers?${q}`, true, true);
+  const list = useClinicRequest<Page<DossierRow> & { totals: { dossiers: number } }>(`dossiers?${q}`, true, true, revision);
   function filter(key: string, value: string) { cancel(); const next = new URLSearchParams(q); if (value) next.set(key, value); else next.delete(key); if (key !== "page") next.delete("page"); window.history.replaceState(null, "", `${pathname}?${next}`); }
   const exportQuery=new URLSearchParams(q);columns.forEach(c=>exportQuery.append("columns[]",c));
   const headings = [...columns.map(k=>reportColumns[k]),"الإجراءات"];
@@ -62,13 +66,15 @@ function Listing({ facility }: { facility: number }) {
     </div>
     {(list.loading || searching) && <p className={styles.status} role="status">{list.data ? "جارٍ تحديث النتائج؛ تظهر النتائج السابقة مؤقتًا." : "جارٍ تحميل بطاقات المرضى…"}</p>}
     {list.error && <><Failure error={list.error} retry={list.retry} />{list.data && <p role="status">المعروض نتائج سابقة؛ أعد التحميل للحصول على النتائج الحالية.</p>}</>}
-    {list.data && <><div className={styles.resultSummary}><strong>{list.data.totals.dossiers} بطاقة مريض مطابقة</strong></div>{list.data.data.length ? <DirectoryTable label="جدول بطاقات المرضى" busy={list.loading || searching} headers={headings}>{list.data.data.map((row, index) => <tr key={row.id}>{columns.map(key=><td key={key} className={["sequence","code","visit_count","procedure_count","latest_visit_date","opening_date","birth_date","phone","paper_file_number","gender"].includes(key)?styles.identifierCell:undefined}>{key==="sequence"?(list.data!.meta.page-1)*list.data!.meta.per_page+index+1:key==="code"?<><bdi>{row.code}</bdi>{row.legacy_without_visits&&<small className={styles.hint}>سجل قديم بلا زيارة مرتبطة؛ يحتاج مراجعة.</small>}</>:key==="name"?row.patient_name:key==="diagnoses"?<>{row.latest_visit_status&&<StatusBadge status={row.latest_visit_status} visit/>}<LongText text={row.diagnoses.map(d=>d.name).join(" · ")}/></>:key==="clinics"?[...new Set(row.diagnoses.map(d=>d.clinic).filter(Boolean))].join(" · ")||"غير مسجلة":key==="doctors"?[...new Set(row.diagnoses.map(d=>d.doctor).filter(Boolean))].join(" · ")||"غير مسجل":key==="pathology_status"?dispositionLabels[row.pathology_status]:key==="treatment_modalities"?row.treatment_modalities?.split(",").map(code=>modalities[code]??code).join(" · ")||"غير مسجل":key==="status"?<StatusBadge status={row.status}/>:key==="gender"?valueLabels[row.gender]??"غير معروف":key==="birth_date"?patientBirthDate(row.birth_date,row.birth_date_accuracy):key==="is_oncology"?<span className={row.is_oncology?styles.active:styles.badge}>{row.is_oncology?"ورمي":"غير ورمي"}</span>:row[key]??"غير مسجل"}</td>)}<td><DirectoryRowActions name={row.code} href={`/patient-cards/${row.id}?${q}`} >{row.workflow.resume_section !== null && <Link className={styles.textButton} href={`/patient-cards/new?card=${row.id}&${q}&section=${row.workflow.resume_section}`}>{row.status === "draft" ? "استكمال بيانات البطاقة" : "تعديل البيانات"}</Link>}{row.workflow.subsequent_create&&<Link className={styles.textButton} href={`/patient-cards/new?card=${row.id}&${q}&visit=new`}>إضافة زيارة للمريض</Link>}</DirectoryRowActions></td></tr>)}</DirectoryTable> : <div className={styles.status}>لا توجد بطاقات مرضى مطابقة.</div>}<Pagination meta={list.data.meta} onPage={p => filter("page", String(p))} onPageSize={s => filter("per_page", s)} /></>}
+    {list.data && <><div className={styles.resultSummary}><strong>{list.data.totals.dossiers} بطاقة مريض مطابقة</strong></div>{list.data.data.length ? <DirectoryTable label="جدول بطاقات المرضى" busy={list.loading || searching} headers={headings}>{list.data.data.map((row, index) => <tr key={row.id}>{columns.map(key=><td key={key} className={["sequence","code","visit_count","procedure_count","latest_visit_date","opening_date","birth_date","phone","paper_file_number","gender"].includes(key)?styles.identifierCell:undefined}>{key==="sequence"?(list.data!.meta.page-1)*list.data!.meta.per_page+index+1:key==="code"?<><bdi>{row.code}</bdi>{row.legacy_without_visits&&<small className={styles.hint}>سجل قديم بلا زيارة مرتبطة؛ يحتاج مراجعة.</small>}</>:key==="name"?row.patient_name:key==="diagnoses"?<>{row.latest_visit_status&&<StatusBadge status={row.latest_visit_status} visit/>}<LongText text={row.diagnoses.map(d=>d.name).join(" · ")}/></>:key==="clinics"?[...new Set(row.diagnoses.map(d=>d.clinic).filter(Boolean))].join(" · ")||"غير مسجلة":key==="doctors"?[...new Set(row.diagnoses.map(d=>d.doctor).filter(Boolean))].join(" · ")||"غير مسجل":key==="pathology_status"?dispositionLabels[row.pathology_status]:key==="treatment_modalities"?row.treatment_modalities?.split(",").map(code=>modalities[code]??code).join(" · ")||"غير مسجل":key==="status"?<StatusBadge status={row.status}/>:key==="gender"?valueLabels[row.gender]??"غير معروف":key==="birth_date"?patientBirthDate(row.birth_date,row.birth_date_accuracy):key==="is_oncology"?<span className={row.is_oncology?styles.active:styles.badge}>{row.is_oncology?"ورمي":"غير ورمي"}</span>:row[key]??"غير مسجل"}</td>)}<td><DirectoryRowActions name={row.code} href={`/patient-cards/${row.id}?${q}`} onDelete={options.data?.capabilities.delete?()=>setPending(row):undefined}>{row.workflow.resume_section !== null && <Link className={styles.textButton} href={`/patient-cards/new?card=${row.id}&${q}&section=${row.workflow.resume_section}`}>{row.status === "draft" ? "استكمال بيانات البطاقة" : "تعديل البيانات"}</Link>}{row.workflow.subsequent_create&&<Link className={styles.textButton} href={`/patient-cards/new?card=${row.id}&${q}&visit=new`}>إضافة زيارة للمريض</Link>}</DirectoryRowActions></td></tr>)}</DirectoryTable> : <div className={styles.status}>لا توجد بطاقات مرضى مطابقة.</div>}<Pagination meta={list.data.meta} onPage={p => filter("page", String(p))} onPageSize={s => filter("per_page", s)} /></>}
+    {pending && <ConfirmDossierDelete code={pending.code} id={pending.id} facility={facility} onClose={()=>setPending(null)} onDeleted={()=>{setPending(null);setRevision(v=>v+1);}} />}
     </section></>;
 }
 const personalLabels: Record<string, string> = { first_name: "الاسم الأول", family_name: "اسم العائلة", father_name: "اسم الأب", mother_name: "اسم الأم", birth_date: "تاريخ الميلاد", birth_date_accuracy: "دقة الميلاد", gender: "الجنس", marital_status: "الوضع العائلي", phone: "الهاتف", paper_file_number: "رقم الملف الورقي", alt_phone: "هاتف بديل", governorate: "المحافظة", city: "المدينة", address_line: "عنوان السكن", displacement_status: "حالة النزوح", permanent_address: "عنوان الإقامة الدائم", occupation: "المهنة", smoking_status: "التدخين", alcohol_status: "الكحول" };
 const valueLabels: Record<string, string> = { unknown: "غير معروف", male: "ذكر", female: "أنثى", exact: "دقيق", year_only: "السنة فقط", estimated: "تقديري", resident: "مقيم", idp: "نازح", single: "أعزب", married: "متزوج", divorced: "مطلق", widowed: "أرمل", yes: "نعم", no: "لا", former: "سابقًا" };
 function Detail({ id, facility }: { id: string; facility: number }) {
-  const revision=0;
+  const [revision,setRevision]=useState(0);
+  const [pending,setPending]=useState(false);
   const params = useSearchParams(); const router = useRouter(); const pathname = usePathname();
   const back = new URLSearchParams(params.toString()); back.set("facility_id", String(facility)); back.delete("visit"); back.delete("visits_page");
   const options=useClinicRequest<WizardOptions>(`dossiers/options?facility_id=${facility}`);
@@ -90,6 +96,7 @@ function Detail({ id, facility }: { id: string; facility: number }) {
       {d.workflow.visit.action && <Link className={styles.secondary} href={`/patient-cards/new?card=${id}&${back}&section=2`}>{d.workflow.visit.label}</Link>}
       {d.workflow.subsequent_create&&<Link className={styles.primary} href={`/patient-cards/new?card=${id}&${back}&visit=new`}>إضافة زيارة للمريض</Link>}
       {options.data?.capabilities.audit ? <a className={styles.secondary} href="#dossier-change-history">سجل التغييرات</a> : <button className={styles.secondary} disabled title="يتطلب عرض سجل التغييرات صلاحية مستقلة">سجل التغييرات</button>}
+      {options.data?.capabilities.delete && <button className={styles.secondary} onClick={() => setPending(true)} aria-label={`حذف بطاقة ${d.code}`}>حذف البطاقة</button>}
     </>}</div>
     <section className={styles.detailPanel}><h2>بيانات المريض الحالية</h2><dl className={styles.facts}>{Object.entries(personalLabels).filter(([key]) => key !== "permanent_address" || d.patient.displacement_status === "idp" || d.patient.permanent_address).map(([key, label]) => <div key={key}><dt>{label}</dt><dd>{key === "birth_date" ? patientBirthDate(d.patient.birth_date, d.patient.birth_date_accuracy) : valueLabels[d.patient[key] ?? ""] ?? d.patient[key] ?? "غير مسجل"}</dd></div>)}</dl></section>
     <section className={styles.detailPanel}><h2>ملخص الحالة الطبية الحالية</h2><dl className={styles.facts}><div><dt>الوزن</dt><dd>{d.weight_kg ? `${d.weight_kg} كغ` : "غير مسجل"}</dd></div><div><dt>الطول</dt><dd>{d.height_cm ? `${d.height_cm} سم` : "غير مسجل"}</dd></div><div><dt>الإعاقات</dt><dd><LongText text={d.disability_text} /></dd></div><div><dt>القصة المرضية المختصرة</dt><dd><LongText text={d.clinical_history} /></dd></div><div><dt>مريض ورمي</dt><dd>{d.is_oncology ? "نعم" : "لا"}</dd></div></dl>{d.oncology && <><h3>الملف الورمي الحالي</h3><dl className={styles.facts}><div><dt>أنواع السوابق</dt><dd>{d.oncology.selections.filter(s => s.selection_group === "history").map(s => historyLabels[s.code]).join(" · ") || "غير مسجلة"}</dd></div><div><dt>العلاجات السابقة</dt><dd>{d.oncology.selections.filter(s => s.selection_group === "treatment").map(s => treatmentLabels[s.code]).join(" · ") || "غير مسجلة"}</dd></div><div><dt>الفحوص السابقة</dt><dd><LongText text={d.oncology.previous_examinations} /></dd></div><div><dt>مصدر الدواء العام</dt><dd>{sourceLabels[d.oncology.medication_source ?? ""] ?? "غير مسجل"}{d.oncology.other_organization && ` · ${d.oncology.other_organization}`}</dd></div></dl></>}</section>
@@ -100,7 +107,28 @@ function Detail({ id, facility }: { id: string; facility: number }) {
     </section>
     {options.data?.capabilities.export && <DossierHistoryReport dossier={id} facility={facility} ready={!!d&&!record.loading&&!record.error} />}
     {options.data?.capabilities.audit && <DossierAuditHistory dossier={id} facility={facility} attachments={!!options.data?.capabilities.attachments_view} />}
+    {pending && <ConfirmDossierDelete code={d.code} id={d.id} facility={facility} onClose={()=>setPending(false)} onDeleted={()=>router.push(`/patient-cards?${back}`)} />}
   </>}</>;
+}
+function ConfirmDossierDelete({ code, id, facility, onClose, onDeleted }: { code: string; id: number; facility: number; onClose: () => void; onDeleted: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function confirm() {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      await apiRequest(`dossiers/${id}?facility_id=${facility}`, { method: "DELETE" });
+      onDeleted();
+    } catch (reason) {
+      setError(reason instanceof AuthError ? reason.message : "تعذّر حذف بطاقة المريض. حاول مجددًا.");
+      setBusy(false);
+    }
+  }
+  return <Modal title={`حذف بطاقة ${code}`} onClose={onClose} busy={busy} size="compact">
+    <p>سيُحذف ملف المريض وكل الارتباطات المتعلقة به نهائيًا، بما في ذلك الزيارات والعلاج والمرفقات. لا يمكن التراجع.</p>
+    {error && <p role="alert" className={styles.error}>{error}</p>}
+    <div className={styles.modalActions}><button className={styles.primary} disabled={busy} onClick={() => void confirm()}>{busy ? "جارٍ الحذف…" : "تأكيد الحذف"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
+  </Modal>;
 }
 function ClinicalTable({ title, items, draft }: { title: string; items: ClinicalItem[]; draft: boolean }) {
   return <><h3>{title}</h3>{draft && !items.length ? <p className={styles.hint}>لم تُسجّل بيانات هذا القسم بعد.</p> : <DirectoryTable label={title} headers={["الاسم", "التاريخ", "التفاصيل"]}>{items.map(item => <tr key={item.id}><td>{item.name}</td><td>{item.date}</td><td>{item.dose_text || ""} {item.quantity != null ? `${item.quantity} ${item.quantity_unit ?? ""}` : "—"}</td></tr>)}{!items.length && <tr><td colSpan={3}>لا توجد بيانات مسجلة.</td></tr>}</DirectoryTable>}</>;

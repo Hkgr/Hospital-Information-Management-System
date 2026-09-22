@@ -7,7 +7,9 @@ use App\Http\Requests\Dossiers\DossierAuditRequest;
 use App\Http\Requests\Dossiers\DossierQueryRequest;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierAuditHistory;
+use App\Services\Dossiers\DossierPurge;
 use App\Services\Dossiers\DossierQueries;
+use Symfony\Component\HttpFoundation\Response;
 use Dedoc\Scramble\Attributes\Group;
 
 #[Group('Patient dossiers')]
@@ -45,6 +47,14 @@ class DossierController extends Controller
         $f = $this->access->facility($r->user(), $r->integer('facility_id'), 'audit');
 
         return response()->json(app(DossierAuditHistory::class)->listing($f, $dossier, $r->validated()));
+    }
+
+    /** Cascade-delete the facility medical context and every association. Requires dossiers.view and dossiers.delete. */
+    public function destroy(DossierQueryRequest $r, int $dossier, DossierPurge $purge): Response
+    {
+        $purge->destroy($r, $this->access->facility($r->user(), $r->integer('facility_id'), 'delete'), $dossier);
+
+        return response()->noContent();
     }
 
     private function facility(DossierQueryRequest $r): array

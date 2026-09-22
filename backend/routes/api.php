@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\DossierWizardController;
 use App\Http\Controllers\Api\FacilityReportController;
 use App\Http\Controllers\Api\OncologyController;
 use App\Http\Controllers\Api\StockController;
+use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
@@ -92,6 +93,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::get('/visits', [DossierController::class, 'visitDirectory'])->name('visit-directory');
         Route::get('/', [DossierController::class, 'index'])->name('index');
         Route::get('/{dossier}', [DossierController::class, 'show'])->whereNumber('dossier')->name('show');
+        Route::delete('/{dossier}', [DossierController::class, 'destroy'])->whereNumber('dossier')->name('destroy');
         Route::get('/{dossier}/audit', [DossierController::class, 'audit'])->whereNumber('dossier')->name('audit');
         Route::get('/{dossier}/visits', [DossierController::class, 'visits'])->whereNumber('dossier')->name('visits');
         Route::get('/{dossier}/visits/{visit}', [DossierController::class, 'visit'])->whereNumber(['dossier', 'visit'])->name('visit');
@@ -207,6 +209,12 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
     });
     Route::get('/dashboards', [DashboardController::class, 'index'])->name('dashboards');
     Route::get('/dashboards/{key}', [DashboardController::class, 'show'])->name('dashboards.show');
+    Route::prefix('users')->name('users.')->group(function () {
+        Route::get('/', [UserController::class, 'index'])->name('index');
+        Route::post('/', [UserController::class, 'store'])->name('store');
+        Route::get('/options', [UserController::class, 'options'])->name('options');
+        Route::delete('/{user}', [UserController::class, 'destroy'])->whereNumber('user')->name('destroy');
+    });
     Route::get('/audit', [AuditLogController::class, 'index'])->name('audit');
     Route::get('/audit/{id}', [AuditLogController::class, 'show'])->whereNumber('id')->name('audit.show');
     Route::get('/reports', [FacilityReportController::class, 'index'])->name('reports');

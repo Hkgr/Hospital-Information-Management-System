@@ -1,4 +1,4 @@
-import { LuHouse, LuDroplet, LuFolderHeart, LuStethoscope, LuHospital, LuClipboardPlus, LuPill, LuPackage, LuChartNoAxesCombined, LuHistory } from "react-icons/lu";
+import { LuHouse, LuDroplet, LuFolderHeart, LuStethoscope, LuHospital, LuClipboardPlus, LuPill, LuPackage, LuChartNoAxesCombined, LuHistory, LuUsers } from "react-icons/lu";
 import type { IconType } from "react-icons";
 
 type NavigationItem = { label: string; icon: IconType; href?: string; permission?: string };
@@ -16,4 +16,5 @@ export const primaryNavigation: NavigationItem[] = [
   { label: "بنك الدم", icon: LuDroplet, href: "/blood-bank", permission: "blood_bank.view" },
   { label: "تقارير", icon: LuChartNoAxesCombined, href: "/reports" },
   { label: "السجل", icon: LuHistory, href: "/audit" },
+  { label: "المستخدمون", icon: LuUsers, href: "/users", permission: "users.view" },
 ];
