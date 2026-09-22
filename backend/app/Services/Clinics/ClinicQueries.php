@@ -3,6 +3,7 @@
 namespace App\Services\Clinics;
 
 use App\Exceptions\ClinicException;
+use App\Services\Directory\DirectoryPatientTable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -125,6 +126,15 @@ class ClinicQueries
             'is_linked' => $clinicId !== null || in_array($doctor->id, $linked),
             'specialties' => ($specialties->get($doctor->id) ?? collect())->map(fn ($s) => ['id' => (int) $s->id, 'name_ar' => $s->name_ar])->all(),
         ])->all(), 'meta' => $this->meta($page)] + ($clinicId === null ? ['unavailable' => $unavailable] : []);
+    }
+
+    public function patients(array $facility, int $clinicId, array $filters): array
+    {
+        $this->requireClinic($facility, $clinicId);
+        $query = DirectoryPatientTable::search($this->counts->patientVisits($facility['id'])->where('v.clinic_id', $clinicId), $filters['search'] ?? '');
+        $page = $this->counts->summarize($query)->paginate($filters['per_page'] ?? 20, ['*'], 'page', $filters['page'] ?? 1);
+
+        return DirectoryPatientTable::present($page, fn ($rows) => $this->meta($rows));
     }
 
     private function requireClinic(array $facility, int $id): void

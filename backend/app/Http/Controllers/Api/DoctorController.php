@@ -134,6 +134,14 @@ class DoctorController extends Controller
         return response()->json($this->queries->clinics($facility, $request->validated(), $doctor));
     }
 
+    /** Distinct patients of complete non-voided visits where this doctor is the attending physician. Requires doctors.view. */
+    public function patients(DoctorQueryRequest $request, int $doctor): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+
+        return response()->json($this->queries->patients($facility, $doctor, $request->validated()));
+    }
+
     /** Active clinic choices, with current linkage when doctor_id is provided. */
     public function clinicOptions(LinkOptionsRequest $request): JsonResponse
     {
@@ -164,7 +172,7 @@ class DoctorController extends Controller
         return $reports->export($request, $facility, $request->validated(), $format);
     }
 
-    /** Private complete PDF doctor report, facility counts/links only; no patient identities. */
+    /** Private complete PDF doctor report, facility counts/links and the matching patients table. */
     public function report(DoctorQueryRequest $request, int $doctor, DoctorReports $reports): Response
     {
         $facility = $this->access->facility($request->user(), $request->integer('facility_id'), 'export');

@@ -26,6 +26,7 @@ async function setup({ width = 1440, access = [{ facility, permissions, roles: [
     if (url.pathname.endsWith("/user")) return route.fulfill({ json: { data: { user, access } } });
     if (url.pathname.endsWith("/options/specialties")) return route.fulfill({ json: { data: [{ id: 1, name_ar: "الطب الداخلي" }] } });
     if (url.pathname.endsWith("/options/doctors")) return route.fulfill({ json: { ...paginated(doctors.map(d => ({ ...d, is_linked: url.searchParams.has("clinic_id") && d.is_linked }))), doctor_types_configured: true } });
+    if (url.pathname.endsWith("/patients")) return route.fulfill({ json: paginated([{ id: 21, patient_code: "P001", patient_name: "مريض اختباري", visit_count: 2, last_visit_on: "2026-09-11" }]) });
     if (url.pathname.endsWith("/doctors")) return route.fulfill({ json: paginated(doctors.slice(0, 2)) });
     const id = Number(url.pathname.match(/\/clinics\/(\d+)/)?.[1]);
     if (id) return route.fulfill({ json: { data: clinics.find(c => c.id === id) ?? clinics[0] } });
@@ -84,6 +85,9 @@ test("navigation, columns, direct detail and back preserve list context", async 
     await page.getByRole("link", { name: "001", exact: true }).click();
     await page.getByRole("heading", { name: "العيادة الداخلية", exact: true }).waitFor();
     assert.ok(calls.some(call => call.url.pathname === "/hospital-api/clinics/1"));
+    const patients = page.getByRole("region", { name: "جدول المرضى", exact: true });
+    await patients.waitFor();
+    assert.equal(await patients.getByText("P001", { exact: true }).count(), 1);
     await page.getByRole("link", { name: "العودة إلى قائمة العيادات" }).click();
     assert.equal(await page.getByLabel("البحث في العيادات").inputValue(), "الداخلية");
     assert.ok(calls.every(call => call.auth === "Bearer clinic-ui-fixture"));

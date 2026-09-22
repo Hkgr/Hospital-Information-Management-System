@@ -13,7 +13,7 @@ class DirectoryReportViewTest extends TestCase
         $html = view('reports.directory', [
             'metadata' => ['title' => 'تفاصيل طبيب', 'facility' => 'منشأة اختبارية', 'number' => 'DR-TEST', 'issuer' => 'اختبار', 'issued_at' => '2026-09-11', 'timezone' => 'Asia/Damascus', 'filters' => 'تفاصيل', 'definition' => 'تعريف المؤشر'],
             'detail' => true, 'linkTitle' => 'العيادات',
-            'rows' => [['name' => '<script>alert(1)</script>', 'code' => '0001', 'description' => '<img src="https://invalid.test/private">', 'details' => ['عدد المرضى' => 0, 'الهاتف' => null], 'links' => []]],
+            'rows' => [['name' => '<script>alert(1)</script>', 'code' => '0001', 'description' => '<img src="https://invalid.test/private">', 'details' => ['عدد المرضى' => 0, 'الهاتف' => null], 'links' => [], 'patients' => [['code' => 'P-1', 'name' => '<b>مريض</b>', 'visits' => 2, 'last_on' => '2026-09-11']]]],
         ])->render();
         $dom = new DOMDocument;
         $dom->loadHTML($html);
@@ -23,5 +23,8 @@ class DirectoryReportViewTest extends TestCase
         $this->assertSame(0, $xpath->query('//script | //img[not(starts-with(@src,"var:"))]')->length);
         $this->assertStringContainsString('<script>alert(1)</script>', $dom->textContent);
         $this->assertStringContainsString('<img src="https://invalid.test/private">', $dom->textContent);
+        $this->assertStringContainsString('جدول المرضى', $dom->textContent);
+        $this->assertStringContainsString('<b>مريض</b>', $dom->textContent);
+        $this->assertSame(0, $xpath->query('//b')->length);
     }
 }

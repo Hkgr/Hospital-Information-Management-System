@@ -50,6 +50,7 @@ class DirectoryDescriptionTest extends TestCase
         $this->assertNotNull($document);
         $html = view('reports.directory', $document)->render();
         $this->assertStringContainsString('<h2>'.$heading.'</h2>', $html);
+        $this->assertStringContainsString('<h2>جدول المرضى</h2>', $html);
         foreach (self::descriptions() as [$other, $label]) {
             if ($other !== $kind) {
                 $this->assertStringNotContainsString('<h2>'.$label.'</h2>', $html);

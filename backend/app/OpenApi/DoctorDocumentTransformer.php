@@ -34,7 +34,7 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
             foreach ($path->operations as $operation) {
                 $operation->responses = [];
                 $operation->security = [new SecurityRequirement(['bearerAuth' => []])];
-                $operation->description .= "\nSanctum Bearer → active account → api ability → doctors.view in the selected active facility. Directory create/update/delete require doctors.directory.* through an explicit global_user_roles assignment; a facility role or super_admin name alone never grants global authority. Links require facility doctors.link; exports require facility doctors.export. Every response is private, no-store. Active clinic counts/current intervals use the facility timezone and [starts_on, ends_on). Cross-writer relationship mutations increment both staff and clinic versions, with staff then clinic locks in ascending id order. Stale writes return DOCTOR_VERSION_CONFLICT. Re-fetch and explicitly review draft choices, never auto-merge. Reports include all filtered rows and selected columns, up to 1000 rows/5000 links; long text continues in an explicit appendix. Cairo is embedded in PDF and named in XLSX; no patient identities.";
+                $operation->description .= "\nSanctum Bearer → active account → api ability → doctors.view in the selected active facility. Directory create/update/delete require doctors.directory.* through an explicit global_user_roles assignment; a facility role or super_admin name alone never grants global authority. Links require facility doctors.link; exports require facility doctors.export. Every response is private, no-store. Active clinic counts/current intervals use the facility timezone and [starts_on, ends_on). Cross-writer relationship mutations increment both staff and clinic versions, with staff then clinic locks in ascending id order. Stale writes return DOCTOR_VERSION_CONFLICT. Re-fetch and explicitly review draft choices, never auto-merge. Reports include all filtered rows, selected columns and the matching patients table, up to 1000 rows/5000 links/5000 patient rows; long text continues in an explicit appendix. Cairo is embedded in PDF and named in XLSX.";
                 $isCreate = $route === 'doctors' && $operation->method === 'post';
                 if ($isCreate || $operation->method === 'put') {
                     $linksOnly = str_ends_with($route, '/clinics');
@@ -72,13 +72,15 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
                     $operation->addResponse($response);
                 } else {
                     $isLinks = str_ends_with($route, '/clinics') && $operation->method === 'get';
+                    $isPatients = str_ends_with($route, '/patients') && $operation->method === 'get';
                     $isList = $route === 'doctors' && $operation->method === 'get';
-                    $data = $isLinks ? $this->list($link) : ($isList ? $this->list($doctor) : $doctor);
+                    $patient = $this->object(['id' => new IntegerType, 'patient_code' => new StringType, 'patient_name' => new StringType, 'visit_count' => new IntegerType, 'last_visit_on' => (new StringType)->nullable(true)]);
+                    $data = $isLinks ? $this->list($link) : ($isPatients ? $this->list($patient) : ($isList ? $this->list($doctor) : $doctor));
                     if ($route === 'doctors/options') {
                         $data = $this->object(['staff_types' => $this->list($type), 'specialties' => $this->list($specialty), 'doctor_types_configured' => new BooleanType, 'capabilities' => $caps]);
                     }
                     $fields = ['data' => $data];
-                    if ($isList || $isLinks) {
+                    if ($isList || $isLinks || $isPatients) {
                         $fields['meta'] = $meta;
                     }
                     if ($route === 'doctors/options/clinics') {

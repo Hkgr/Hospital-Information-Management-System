@@ -27,6 +27,7 @@ async function setup({ width=1440, access=[{facility,permissions,roles:[]}], set
       const search=url.searchParams.get('search')||'';
       return route.fulfill({json:paginated(clinicLinks.filter(c=>(c.code+c.name_ar).includes(search)).map(c=>({...c,is_linked:url.searchParams.has('doctor_id')&&c.is_linked})))});
     }
+    if(/\/doctors\/\d+\/patients$/.test(url.pathname)) return route.fulfill({json:paginated([{id:21,patient_code:'P001',patient_name:'مريض اختباري',visit_count:2,last_visit_on:'2026-09-11'}])});
     if(/\/doctors\/\d+\/clinics$/.test(url.pathname)) return route.fulfill({json:paginated(clinicLinks.filter(c=>c.is_linked))});
     const id=Number(url.pathname.match(/\/doctors\/(\d+)/)?.[1]);
     if(id) return route.fulfill({json:{data:doctors.find(d=>d.id===id)||doctors[0]}});
@@ -257,6 +258,7 @@ test('real history entries restore search filters pagination and cancel obsolete
     assert.ok(!calls.some(c=>c.url.searchParams.get('search')==='قيمة قديمة'));
     await page.goForward();await page.waitForTimeout(400);assert.equal(await input.inputValue(),'ليلى');assert.equal(new URL(page.url()).searchParams.get('page'),'3');
     await page.getByRole('link',{name:'D001',exact:true}).click();await page.getByRole('heading',{name:'أحمد الاختباري',exact:true}).waitFor();
+    const patients=page.getByRole('region',{name:'جدول المرضى',exact:true});await patients.waitFor();assert.equal(await patients.getByText('P001',{exact:true}).count(),1);
     await page.getByRole('link',{name:'العودة إلى قائمة الأطباء',exact:true}).click();assert.equal(await input.inputValue(),'ليلى');
     await input.fill('مرئي');await page.getByRole('combobox',{name:'الحالة',exact:true}).selectOption('active');await page.waitForTimeout(400);assert.equal(new URL(page.url()).searchParams.get('search'),'مرئي');assert.equal(new URL(page.url()).searchParams.has('page'),false);
   }finally{await context.close();}
@@ -305,6 +307,6 @@ for(const width of [390,768,1440])test(`doctor list/editor/links/detail responsi
     await page.screenshot({path:`.superdesign/directory-review/doctors/editor-bottom-${width}.png`,fullPage:false});
     await dialog.getByRole('button',{name:'إلغاء',exact:true}).focus();await page.keyboard.press('Tab');assert.ok(await dialog.evaluate(el=>el.contains(document.activeElement)));await page.keyboard.press('Escape');
     await page.getByRole('button',{name:'عيادات أحمد الاختباري: 2',exact:true}).click();await page.getByRole('dialog').getByText('2 عيادة مطابقة',{exact:true}).waitFor();await page.screenshot({path:`.superdesign/directory-review/doctors/clinics-${width}.png`,fullPage:false});await page.keyboard.press('Escape');
-    await page.getByRole('link',{name:'D001',exact:true}).click();await page.getByRole('heading',{name:'أحمد الاختباري',exact:true}).waitFor();await page.getByText('2 عيادة مطابقة',{exact:true}).waitFor();await page.screenshot({path:`.superdesign/directory-review/doctors/detail-${width}.png`,fullPage:true});assert.deepEqual(errors,[]);
+    await page.getByRole('link',{name:'D001',exact:true}).click();await page.getByRole('heading',{name:'أحمد الاختباري',exact:true}).waitFor();await page.getByText('2 عيادة مطابقة',{exact:true}).waitFor();await page.getByRole('region',{name:'جدول المرضى',exact:true}).getByText('P001',{exact:true}).waitFor();await page.screenshot({path:`.superdesign/directory-review/doctors/detail-${width}.png`,fullPage:true});assert.deepEqual(errors,[]);
   }finally{await context.close();}
 });

@@ -162,6 +162,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::post('/{doctor}/deactivate', [DoctorController::class, 'deactivate'])->whereNumber('doctor')->name('deactivate');
         Route::get('/{doctor}/clinics', [DoctorController::class, 'clinics'])->whereNumber('doctor')->name('clinics');
         Route::put('/{doctor}/clinics', [DoctorController::class, 'updateClinics'])->whereNumber('doctor')->name('updateClinics');
+        Route::get('/{doctor}/patients', [DoctorController::class, 'patients'])->whereNumber('doctor')->name('patients');
         Route::get('/{doctor}/report', [DoctorController::class, 'report'])->whereNumber('doctor')->name('report');
     });
     Route::prefix('clinics')->name('clinics.')->group(function () {
@@ -180,6 +181,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::post('/{clinic}/reactivate', [ClinicController::class, 'reactivate'])->whereNumber('clinic')->name('reactivate');
         Route::post('/{clinic}/deactivate', [ClinicController::class, 'deactivate'])->whereNumber('clinic')->name('deactivate');
         Route::get('/{clinic}/doctors', [ClinicController::class, 'doctors'])->whereNumber('clinic')->name('doctors');
+        Route::get('/{clinic}/patients', [ClinicController::class, 'patients'])->whereNumber('clinic')->name('patients');
         Route::get('/{clinic}/report', [ClinicController::class, 'report'])->whereNumber('clinic')->name('report');
     });
     Route::prefix('stock')->name('stock.')->group(function () {

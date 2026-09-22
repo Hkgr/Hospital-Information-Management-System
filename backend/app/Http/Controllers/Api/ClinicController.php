@@ -125,6 +125,14 @@ class ClinicController extends Controller
         return response()->json($this->queries->doctors($facility, $request->validated(), $clinic));
     }
 
+    /** Distinct patients of complete non-voided visits linked directly to this clinic. Requires clinics.view. */
+    public function patients(ClinicQueryRequest $request, int $clinic): JsonResponse
+    {
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'));
+
+        return response()->json($this->queries->patients($facility, $clinic, $request->validated()));
+    }
+
     /** Search eligible existing doctors from the global staff directory, gated by facility clinics.view. */
     public function doctorOptions(LinkOptionsRequest $request): JsonResponse
     {
@@ -151,7 +159,7 @@ class ClinicController extends Controller
         return $reports->export($request, $facility, $request->validated(), $format);
     }
 
-    /** Private PDF clinic report; no patient identities. Requires clinics.export and clinics.view. */
+    /** Private PDF clinic report with the matching patients table. Requires clinics.export and clinics.view. */
     public function report(ClinicQueryRequest $request, int $clinic, ClinicReports $reports): Response
     {
         $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'export');
