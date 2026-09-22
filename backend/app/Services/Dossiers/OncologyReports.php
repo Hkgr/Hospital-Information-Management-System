@@ -48,7 +48,7 @@ class OncologyReports
             $rows = [];
             foreach ($revisions as $r) {
                 $p = $plans[$r->plan_id];
-                array_push($rows, ...$this->facts($p->plan_number.' / '.$r->revision_number, ['حالة الخطة الحالية' => OncologyQueries::STATUSES[$p->effective_status], 'النية' => OncologyQueries::INTENTS[$r->intent], 'النمط' => OncologyQueries::MODALITIES[$r->modality], 'البروتوكول' => $r->protocol_text, 'طبيب البروتوكول' => $r->protocol_doctor, 'عيادة البروتوكول' => $r->protocol_clinic, 'الطبيب المعالج' => $r->treating_doctor, 'عيادة الطبيب المعالج' => $r->treating_clinic, 'أساس الاعتماد الحالي' => DossierPathology::DISPOSITIONS[$p->basis_disposition] ?? 'غير معتمد', 'استثناء التشريح' => $p->override_reason, 'سبب آخر إجراء' => $p->status_reason, 'تاريخ المراجعة' => $p->reviewed_at], ['تاريخ المراجعة' => 'datetime']));
+                array_push($rows, ...$this->facts($p->plan_number.' / '.$r->revision_number, ['النية' => OncologyQueries::INTENTS[$r->intent], 'النمط' => OncologyQueries::MODALITIES[$r->modality], 'البروتوكول' => $r->protocol_text, 'طبيب البروتوكول' => $r->protocol_doctor, 'عيادة البروتوكول' => $r->protocol_clinic, 'الطبيب المعالج' => $r->treating_doctor, 'عيادة الطبيب المعالج' => $r->treating_clinic]));
             }
             $check(count($rows));
             $result[] = $this->section('الخطط العلاجية ونسخها', $rows);

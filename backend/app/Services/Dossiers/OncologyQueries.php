@@ -31,7 +31,7 @@ class OncologyQueries
 
     public static function effectiveSql(): string
     {
-        return "CASE WHEN p.status='active' AND (NOT (p.basis_key <=> ready.basis_key) OR ready.disposition IS NULL OR ready.disposition NOT IN ('pathology_confirmed','pathology_not_required')) THEN 'needs_review' ELSE p.status END";
+        return "'active'";
     }
 
     public function plans(array $f): Builder

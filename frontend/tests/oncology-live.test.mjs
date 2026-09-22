@@ -78,12 +78,17 @@ test('treatment columns and filters are absent without permission and stale requ
 });
 
 test('competing real database connections serialize UUID replay and reject stale correction',()=>{fixture('concurrency');});
-test('real evidence invalidation blocks new facts and preserves administered history, scope and UUID rules',async()=>{
+test('real evidence invalidation keeps the plan active and preserves administered history, scope and UUID rules',async()=>{
  assert.ok(last);let r=await api('GET',`/${last.id}/treatment-plans/${last.plan.id}`);const p=r.body.data;r=await api('GET',`/${last.id}/treatment-sessions`);const s=r.body.data.find(x=>['scheduled','rescheduled'].includes(x.status));assert.ok(s);
  assert.equal((await api('POST',`/${last.id}/visits/${last.visit.id}/pathology/${last.evidence}/void`,{lock_version:1,void_reason:'سحب الدليل للاختبار'})).status,200);
- r=await api('GET',`/${last.id}/treatment-plans/${p.id}`);assert.equal(r.body.data.effective_status,'needs_review');
- const input={session_id:s.id,session_lock_version:s.lock_version,plan_lock_version:p.lock_version,visit_lock_version:last.visit.lock_version,administered_on:'2001-03-02',supervising_staff_id:f.workflow_doctors[0],administered_by:f.workflow_doctors[0],reporting_period_id:f.period,items:[item()]};
- assert.equal((await api('POST',`/${last.id}/visits/${last.visit.id}/doses`,input)).status,422);r=await api('GET',`/${last.id}/visits/${last.visit.id}/doses`);assert.equal(r.body.data.doses.length,2);
+ r=await api('GET',`/${last.id}/treatment-plans/${p.id}`);assert.equal(r.body.data.effective_status,'active');
+ const open=s;const plan=r.body.data;
+ const moved=await api('PUT',`/${last.id}/treatment-sessions/${open.id}`,{lock_version:open.lock_version,plan_lock_version:plan.lock_version,status:'rescheduled',planned_on:'2001-03-02',reason:'الخطة تبقى فعالة بعد سحب الدليل',...open.revision_id!==open.current_revision_id?{carry_forward:true}:{}});
+ assert.equal(moved.status,200,JSON.stringify(moved.body));
+ const fresh=(await api('GET',`/${last.id}/treatment-sessions/${open.id}`)).body.data;
+ const input={session_id:fresh.id,session_lock_version:fresh.lock_version,plan_lock_version:plan.lock_version,visit_lock_version:last.visit.lock_version,administered_on:'2001-03-02',supervising_staff_id:f.workflow_doctors[0],administered_by:f.workflow_doctors[0],reporting_period_id:f.period,items:[item()]};
+ assert.equal((await api('POST',`/${last.id}/visits/${last.visit.id}/doses`,input)).status,201);
+ r=await api('GET',`/${last.id}/visits/${last.visit.id}/doses`);assert.equal(r.body.data.doses.length,3);
  assert.equal((await api('GET',`/${last.id}/treatment-plans`,{},f.denied_token)).status,403);assert.equal((await api('GET',`/${last.id}/treatment-plans`,{},'')).status,401);assert.equal((await api('GET',`/${last.id}/treatment-plans`,{facility_id:f.other})).status,403);
  for(const path of ['/abc/treatment-plans','/1/treatment-plans/no/status','/1/arbitrary']){const r=await fetch(`${base}/hospital-api/dossiers${path}`);assert.equal(r.status,404);assert.equal(r.headers.get('x-test-laravel'),null);}
 });

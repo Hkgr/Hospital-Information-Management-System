@@ -531,28 +531,28 @@ class OncologyTreatmentTest extends DossierCompletionCase
         }
     }
 
-    public function test_drafts_allow_pending_but_activation_requires_current_qualifying_evidence(): void
+    public function test_plans_are_active_without_waiting_for_diagnostic_evidence(): void
     {
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'pathology_pending'])->assertOk();
         $p = $this->makePlan();
-        $this->activate($p)->assertUnprocessable();
+        $this->assertSame('active', $p['status']);
+        $this->assertSame('active', $p['effective_status']);
         foreach (['not_assessed', 'pathology_required', 'referred_out'] as $state) {
             DB::table('visit_diagnostic_assessments')->where('visit_id', $this->s['visit']['id'])->update(['disposition' => $state, 'required_reason' => $state === 'pathology_required' ? 'مطلوب' : null]);
-            $this->activate($p)->assertUnprocessable();
+            $this->callApi('GET', $this->planPath($p['id']))->assertOk()->assertJsonPath('data.effective_status', 'active');
         }
-        $this->assertDatabaseHas('oncology_plans', ['id' => $p['id'], 'status' => 'draft']);
+        $this->assertDatabaseHas('oncology_plans', ['id' => $p['id'], 'status' => 'active']);
+        $this->schedule($p);
     }
 
-    public function test_override_requires_permission_reason_and_audited_responsible_physician(): void
+    public function test_pathology_exception_does_not_block_an_effective_plan(): void
     {
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'pathology_not_required', 'not_required_reason' => 'قرار مسجل'])->assertOk();
-        $p = $this->makePlan();
         $permission = DB::table('permissions')->where('code', 'dossiers.treatment.override')->value('id');
         DB::table('role_permissions')->where('role_id', $this->f['dossier_role'])->where('permission_id', $permission)->delete();
-        $this->activate($p, ['override_reason' => 'مبرر'])->assertForbidden();
-        DB::table('role_permissions')->insert(['role_id' => $this->f['dossier_role'], 'permission_id' => $permission]);
-        $this->activate($p)->assertUnprocessable();
-        $this->activate($p, ['override_reason' => 'مبرر لهذه الخطة'])->assertOk()->assertJsonPath('data.effective_status', 'active');
+        $p = $this->makePlan();
+        $this->assertSame('active', $p['effective_status']);
+        $this->schedule($p);
         $this->assertDatabaseHas('oncology_plan_revisions', ['plan_id' => $p['id'], 'protocol_doctor_id' => $this->f['workflow_doctors'][0], 'treating_doctor_id' => $this->f['workflow_doctors'][0]]);
         $this->assertDatabaseHas('audit_logs', ['entity_type' => 'oncology_plans', 'entity_id' => $p['id'], 'actor_id' => $this->f['user']->id]);
     }
@@ -599,7 +599,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->callApi('GET', $this->path('/doses'))->assertOk()->assertJsonCount(1, 'data.doses')->assertJsonCount(1, 'data.dispensed');
     }
 
-    public function test_evidence_invalidation_preserves_administered_history_and_blocks_new_administration(): void
+    public function test_evidence_invalidation_preserves_administered_history_while_the_plan_stays_active(): void
     {
         $evidence = $this->ready();
         $p = $this->activate($this->makePlan())->assertOk()->json('data');
@@ -607,14 +607,16 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $id = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
         $before = (array) DB::table('dose_sessions')->where('id', $id)->first();
         $this->callApi('POST', $this->path('/pathology/'.$evidence.'/void'), ['lock_version' => 1, 'void_reason' => 'سحب الدليل'])->assertOk();
-        $this->callApi('GET', $this->planPath($p['id']))->assertOk()->assertJsonPath('data.effective_status', 'needs_review');
-        $next = (array) DB::table('oncology_sessions')->where('plan_id', $p['id'])->where('session_number', 2)->first();
-        $this->callApi('POST', $this->path('/doses'), $this->dose($next))->assertUnprocessable();
+        $this->callApi('GET', $this->planPath($p['id']))->assertOk()->assertJsonPath('data.effective_status', 'active')->assertJsonPath('data.status', 'active');
         $this->assertSame($before, (array) DB::table('dose_sessions')->where('id', $id)->first());
-        $this->callApi('GET', $this->planPath())->assertJsonPath('next_dose', null);
+        $this->callApi('GET', $this->planPath())->assertJsonPath('next_dose.planned_on', '2090-02-01');
+        $version = DB::table('oncology_plans')->where('id', $p['id'])->value('lock_version');
+        $this->callApi('POST', $this->planPath($p['id']).'/sessions', ['lock_version' => $version, 'sessions' => [['planned_on' => '2001-03-02']]])->assertCreated();
+        $next = (array) DB::table('oncology_sessions')->where('plan_id', $p['id'])->where('planned_on', '2001-03-02')->where('status', 'scheduled')->orderByDesc('id')->first();
+        $this->callApi('POST', $this->path('/doses'), $this->dose($next))->assertCreated();
     }
 
-    public function test_revisions_preserve_prior_snapshots_and_require_explicit_review(): void
+    public function test_revisions_preserve_prior_snapshots_and_keep_the_plan_active(): void
     {
         $this->ready();
         $p = $this->activate($this->makePlan())->assertOk()->json('data');
@@ -622,10 +624,10 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $id = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
         $version = DB::table('oncology_plans')->where('id', $p['id'])->value('lock_version');
         $this->callApi('PUT', $this->planPath($p['id']), $this->planData(['lock_version' => $version]))->assertUnprocessable();
-        $next = $this->callApi('PUT', $this->planPath($p['id']), $this->planData(['lock_version' => $version, 'protocol_text' => 'نسخة ثانية']))->assertOk()->assertJsonPath('data.status', 'needs_review')->assertJsonCount(2, 'data.revisions')->json('data');
+        $next = $this->callApi('PUT', $this->planPath($p['id']), $this->planData(['lock_version' => $version, 'protocol_text' => 'نسخة ثانية']))->assertOk()->assertJsonPath('data.status', 'active')->assertJsonPath('data.effective_status', 'active')->assertJsonCount(2, 'data.revisions')->json('data');
         $this->assertDatabaseHas('dose_sessions', ['id' => $id, 'plan_revision_id' => $p['current_revision_id']]);
         $this->assertDatabaseHas('oncology_plan_revisions', ['id' => $p['current_revision_id'], 'protocol_text' => 'خطة اختبار =1+1']);
-        $this->activate($next)->assertOk();
+        $this->callApi('POST', $this->planPath($p['id']).'/sessions', ['lock_version' => $next['lock_version'], 'sessions' => [['planned_on' => '2090-04-01']]])->assertCreated();
     }
 
     public function test_actual_dates_periods_permissions_and_cross_facility_are_enforced(): void

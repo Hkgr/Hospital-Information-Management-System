@@ -1,4 +1,3 @@
-export const planStates: Record<string,string> = { draft:"مسودة",active:"فعالة",paused:"متوقفة مؤقتًا",needs_review:"تحتاج مراجعة",completed:"مكتملة",cancelled:"ملغاة" };
 export const sessionStates: Record<string,string> = { scheduled:"مجدولة",rescheduled:"أعيدت جدولتها",completed:"أُعطيت فعليًا",missed:"لم يحضر",cancelled:"ملغاة",referred:"محالة" };
 export const modalities: Record<string,string> = { chemotherapy:"علاج كيميائي",immunotherapy:"علاج مناعي",targeted:"علاج موجّه",hormone:"علاج هرموني",radiotherapy:"علاج شعاعي",supportive:"علاج داعم",other:"آخر" };
 export const intents: Record<string,string> = { curative:"شفائي",palliative:"تلطيفي",neoadjuvant:"قبل العلاج الأساسي",adjuvant:"مساعد",maintenance:"استمراري",supportive:"داعم",other:"آخر" };
@@ -12,5 +11,5 @@ export type Session = Values & {has_voided_dose:boolean;doses?:SessionDose[];rev
 export type Dose = Values & {session_lock_version:number;plan_lock_version:number;session_revision_id:number;current_revision_id:number;id:number;lock_version:number;items:TreatmentItem[];oncology_session_id:number|null;voided_at:string|null};
 export type Dispensing = Values & {id:number;lock_version:number;dose_session_id:number|null;voided_at:string|null};
 export type TreatmentOptions = {doctors:{id:number;name_ar:string}[];funding_sources:{id:number;name_ar:string}[];periods:{id:number;starts_on:string;ends_on:string}[];staff:{id:number;name_ar:string}[];clinic_staff?:{id:number;name_ar:string}[];today:string};
-export type EditorKind = "appointment"|"plan"|"status"|"schedule"|"session"|"session-dose"|"dose"|"dispense"|"void-dose"|"void-dispense";
-export const treatmentColumns = {treatment_count:"عدد الخطط",active_treatment_count:"الخطط الفعالة",review_treatment_count:"خطط تحتاج مراجعة",treatment_modalities:"أنماط العلاج الفعال",next_dose_on:"الجرعة المجدولة القادمة",last_dose_on:"آخر إعطاء فعلي"};
+export type EditorKind = "appointment"|"plan"|"schedule"|"session"|"session-dose"|"dose"|"dispense"|"void-dose"|"void-dispense";
+export const treatmentColumns = {treatment_count:"عدد الخطط",active_treatment_count:"الخطط الفعالة",treatment_modalities:"أنماط العلاج الفعال",next_dose_on:"الجرعة المجدولة القادمة",last_dose_on:"آخر إعطاء فعلي"};
