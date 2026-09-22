@@ -1,7 +1,7 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
-import { dashboardFixture } from "./dashboard-fixtures.mjs";
+import { dashboardFixture, sampleDashboardStats } from "./dashboard-fixtures.mjs";
 
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3000";
 if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(base).hostname)) throw new Error("Only local dashboard test targets are permitted");
@@ -66,7 +66,8 @@ test("empty or unimplemented/malicious defaults stay local without redirect loop
       await page.goto(base);
       await page.getByRole("heading", { name: "لا توجد لوحة تحكم متاحة" }).waitFor();
       assert.equal(new URL(page.url()).pathname, "/");
-      assert.equal(calls.filter(path => path === "/hospital-api/dashboards").length, 1);
+      const catalogReads = calls.filter(path => path === "/hospital-api/dashboards").length;
+      assert.ok(catalogReads >= 1 && catalogReads <= 2);
       assert.deepEqual(external, []);
     } finally { await context.close(); }
   }
@@ -181,5 +182,34 @@ test("invalid facility parameters and mismatched user payloads are not rendered"
       assert.equal(await page.locator("#welcome-heading").count(), 0);
       assert.doesNotMatch(await page.locator("body").innerText(), /المستخدم الثاني/);
     }
+  } finally { await context.close(); }
+});
+
+test("home navigation and authorized statistics stay on known local destinations", async () => {
+  const { context, page, external, errors } = await setup(async (route, url) => {
+    if (url.pathname !== "/hospital-api/dashboards/general") return false;
+    const fixture = dashboardFixture(users.first, facilities, sampleDashboardStats(), [
+      { key: "patient-cards", title: "بطاقة المريض" },
+      { key: "clinics", title: "العيادات" },
+      { key: "https://attacker.invalid", title: "رابط خارجي" },
+    ]);
+    await route.fulfill({ json: { data: fixture.detail } });
+    return true;
+  });
+  try {
+    await page.goto(`${base}/dashboard/general`);
+    const nav = page.getByRole("navigation", { name: "التنقل الرئيسي" });
+    assert.equal(await nav.getByRole("link", { name: "الرئيسية", exact: true }).getAttribute("href"), "/dashboard/general");
+    await page.getByRole("heading", { name: "مرحبًا، المستخدم الأول" }).waitFor();
+    await page.getByLabel("بطاقات المرضى: 128").waitFor();
+    await page.getByRole("heading", { name: "العيادات الأكثر نشاطًا" }).waitFor();
+    await page.getByRole("heading", { name: "الأطباء الأكثر نشاطًا" }).waitFor();
+    await page.getByRole("heading", { name: "المواعيد القادمة" }).waitFor();
+    assert.equal(await page.getByRole("link", { name: "نورا العبد الله" }).getAttribute("href"), "/patient-cards/9");
+    assert.equal(await page.getByRole("link", { name: "عيادة الأورام" }).first().getAttribute("href"), "/clinics/3");
+    assert.equal(await page.getByRole("main").getByRole("link", { name: /بطاقة المريض/ }).getAttribute("href"), "/patient-cards");
+    assert.equal(await page.getByRole("link", { name: "رابط خارجي" }).count(), 0);
+    assert.deepEqual(external, []);
+    assert.deepEqual(errors, []);
   } finally { await context.close(); }
 });

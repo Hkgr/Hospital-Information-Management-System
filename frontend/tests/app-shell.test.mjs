@@ -38,7 +38,7 @@ async function openShell({ width = 1440, height = 900, logoutFailure = false, cl
   // Test fixture only. Production components use the unchanged auth client.
   await context.addInitScript(() => sessionStorage.setItem("hospital.bearer", "shell-test-token"));
   await page.goto(`${base}/dashboard/general`);
-  await page.getByRole("heading", { name: "لوحة التحكم", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "الرئيسية", exact: true }).waitFor();
   await page.getByRole("heading", { name: "مرحبًا، مستخدم الاختبار", exact: true }).waitFor();
   await page.evaluate(() => document.fonts.ready);
   return { context, page, requests, errors };
@@ -120,7 +120,7 @@ test("Damascus clock ignores device timezone, updates across midnight and fits n
       assert.equal(await clock.locator("time").first().isVisible(), width === 390);
       assert.equal(await clock.locator("time").last().isVisible(), true);
       const clockBox = await clock.boundingBox();
-      const heading = await page.getByRole("heading", { name: "لوحة التحكم", exact: true }).boundingBox();
+      const heading = await page.getByRole("heading", { name: "الرئيسية", exact: true }).boundingBox();
       const notification = await page.getByRole("button", { name: "التنبيهات — غير متاحة بعد" }).boundingBox();
       assert.ok(clockBox.x + clockBox.width <= heading.x);
       assert.ok(notification.x + notification.width <= clockBox.x);
@@ -135,6 +135,7 @@ test("desktop and tablet collapse controls retain usable navigation names withou
   try {
     const nav = page.getByRole("navigation", { name: "التنقل الرئيسي" });
     const labels = ["تقارير", "السجل"];
+    assert.equal(await nav.getByRole("link", { name: "الرئيسية", exact: true }).getAttribute("href"), "/dashboard/general");
     assert.equal(await nav.getByRole("link", { name: "الأدوية", exact: true }).getAttribute("href"), "/medications");
     assert.equal(await nav.getByRole("link", { name: "الخدمات والإجراءات", exact: true }).getAttribute("href"), "/services-procedures");
     assert.equal(await nav.locator("button:disabled").count(), labels.length);
@@ -152,7 +153,7 @@ test("desktop and tablet collapse controls retain usable navigation names withou
     assert.equal((await page.getByRole("complementary").boundingBox()).width, 268); // User choice retained.
     await page.setViewportSize({ width: 768, height: 900 });
     const clock = await page.getByRole("group", { name: "التاريخ والوقت بتوقيت دمشق" }).boundingBox();
-    const heading = await page.getByRole("heading", { name: "لوحة التحكم", exact: true }).boundingBox();
+    const heading = await page.getByRole("heading", { name: "الرئيسية", exact: true }).boundingBox();
     assert.ok(clock.x + clock.width <= heading.x);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
     await page.getByRole("button", { name: "طي القائمة الجانبية" }).click();
@@ -304,6 +305,6 @@ test("failed logout shows its error and retains the existing session for retry",
     await page.getByRole("alert").filter({ hasText: "تعذّر الاتصال بالخادم" }).waitFor();
     assert.equal(await page.getByRole("button", { name: "تسجيل الخروج", exact: true }).isEnabled(), true);
     assert.equal(await page.evaluate(() => sessionStorage.getItem("hospital.bearer") !== null), true);
-    assert.equal(await page.getByRole("heading", { name: "لوحة التحكم", exact: true }).isVisible(), true);
+    assert.equal(await page.getByRole("heading", { name: "الرئيسية", exact: true }).isVisible(), true);
   } finally { await context.close(); }
 });

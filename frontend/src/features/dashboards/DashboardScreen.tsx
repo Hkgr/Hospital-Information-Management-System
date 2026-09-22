@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AuthError } from "@/features/auth/api";
 import { useIdentity } from "@/features/auth/AuthenticatedLayout";
-import { dashboardCatalog, dashboardDetail, invalidResponse, type Catalog, type DashboardData } from "./api";
+import { dashboardCatalog, dashboardDetail, invalidResponse, isDashboardStats, type Catalog, type DashboardData } from "./api";
 import { dashboardPath, dashboardViews, knownDashboard } from "./registry";
 import styles from "./dashboard.module.css";
 
@@ -40,7 +40,8 @@ function DashboardRequest({ dashboardKey, query }: { dashboardKey?: string; quer
       // Always ask Laravel for details; catalog presence is not authorization.
       const data = await dashboardDetail(dashboardKey, facility, controller.signal);
       if (data.dashboard?.key !== dashboardKey || data.user?.id !== identity.user.id || data.selected_facility_id !== facility
-        || !Array.isArray(data.facilities) || (facility !== null && data.facilities.some(item => item.id !== facility))) throw invalidResponse();
+        || !Array.isArray(data.facilities) || (facility !== null && data.facilities.some(item => item.id !== facility))
+        || !Array.isArray(data.links) || !isDashboardStats(data.stats) || data.links.some(item => typeof item?.key !== "string" || typeof item?.title !== "string")) throw invalidResponse();
       if (!controller.signal.aborted) setState({ catalog, data });
     }
     load().catch(reason => {

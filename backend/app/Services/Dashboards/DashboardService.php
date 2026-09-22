@@ -11,7 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 class DashboardService
 {
-    public function __construct(private UserAccessContext $context, private DashboardAccessPolicy $policy) {}
+    public function __construct(private UserAccessContext $context, private DashboardAccessPolicy $policy, private DashboardHome $home) {}
 
     public function catalog(User $user, ?int $facilityId): array
     {
@@ -42,14 +42,15 @@ class DashboardService
         if ($definition['access'] === 'facility_permissions' && $facilityId === null) {
             throw ValidationException::withMessages(['facility_id' => 'اختر منشأة للوصول إلى لوحة التحكم.']);
         }
+        $home = $this->home->assemble($access);
 
         return [
             'dashboard' => $this->descriptor($key, $definition, $access, $facilityId),
             'user' => $user,
             'facilities' => array_values(array_map(fn ($entry) => $entry['facility'], $access)),
             'selected_facility_id' => $facilityId,
-            // No medical/administrative links exist yet. Add only implemented, authorized links.
-            'links' => [],
+            'links' => $home['links'],
+            'stats' => $home['stats'],
         ];
     }
 
