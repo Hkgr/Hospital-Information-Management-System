@@ -1,5 +1,5 @@
 .overview { display: grid; gap: 24px; color: var(--mbz-ink); }
-.hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 28px; border-radius: 22px; color: white; background: linear-gradient(135deg, #0b6178 0%, #2289b9 58%, #15a999 100%); position: relative; overflow: hidden; }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 22px 26px; border-radius: 22px; color: white; background: linear-gradient(135deg, #0b6178 0%, #2289b9 58%, #15a999 100%); position: relative; overflow: hidden; }
 .hero::after { content: ""; position: absolute; inset-inline-end: -40px; inset-block-start: -50px; inline-size: 180px; block-size: 180px; border-radius: 50%; background: color-mix(in srgb, white 16%, transparent); }
 .heroCopy { position: relative; z-index: 1; min-inline-size: 0; }
 .eyebrow { display: inline-flex; align-items: center; gap: 8px; color: #d7f4ff; font-size: 12px; margin: 0 0 8px; }
@@ -7,7 +7,7 @@
 .hero h2, .welcome h2 { font-size: 25px; font-weight: 700; margin: 0 0 12px; line-height: 1.8; overflow-wrap: anywhere; }
 .hero p:not(.eyebrow), .empty, .welcome p:not(.eyebrow) { color: color-mix(in srgb, white 86%, transparent); font-size: 14px; line-height: 2; margin: 0; max-inline-size: 62ch; }
 .empty { color: var(--mbz-muted); max-inline-size: 620px; }
-.heroMark { display: grid; place-items: center; inline-size: 72px; block-size: 72px; border-radius: 20px; background: color-mix(in srgb, white 16%, transparent); color: white; position: relative; z-index: 1; }
+.heroMark { display: grid; place-items: center; inline-size: 56px; block-size: 56px; border-radius: 18px; background: color-mix(in srgb, white 16%, transparent); color: white; position: relative; z-index: 1; }
 .heroMark svg { inline-size: 34px; block-size: 34px; }
 .symbol { display: grid; place-items: center; flex-shrink: 0; inline-size: 44px; block-size: 44px; border-radius: 12px; background: color-mix(in srgb, var(--mbz-blue) 9%, white); color: var(--mbz-action); }
 .symbol svg { inline-size: 22px; block-size: 22px; stroke-width: 1.7; }

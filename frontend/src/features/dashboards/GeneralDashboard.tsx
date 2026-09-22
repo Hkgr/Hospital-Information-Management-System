@@ -58,21 +58,21 @@ export default function GeneralDashboard({ data }: { data: DashboardData }) {
       {stats.clinics.length > 0 && <RankTable title="ترتيب العيادات" items={stats.clinics} hrefFor={id => `/clinics/${id}`} countLabel="الزيارات المكتملة" />}
       {stats.doctors.length > 0 && <RankTable title="الأطباء الأكثر نشاطًا" items={stats.doctors} hrefFor={id => `/doctors/${id}`} countLabel="الزيارات المكتملة" />}
     </div></Reveal>}
-    <Reveal delay={0.14}><section className={styles.panel} aria-labelledby="appointments-heading">
+    {(stats.appointments.length > 0 || actions.some(item => item.key === "patient-cards")) && <Reveal delay={0.14}><section className={styles.panel} aria-labelledby="appointments-heading">
       <h2 id="appointments-heading"><LuCalendarClock aria-hidden="true" /> المواعيد القادمة</h2>
       {stats.appointments.length ? <ul className={styles.appointments}>{stats.appointments.map(item => <AppointmentCard key={item.id} item={item} />)}</ul>
-        : <p className={styles.empty}>{data.links.some(link => link.key === "patient-cards") ? "لا توجد جلسات علاجية مجدولة من اليوم فصاعدًا في المنشآت المتاحة لك." : "تظهر مواعيد العلاج هنا عند توفر صلاحية عرض الخطط العلاجية."}</p>}
-    </section></Reveal>
-    <Reveal delay={0.16}><section className={styles.panel} aria-labelledby="actions-heading">
+        : <p className={styles.empty}>لا توجد جلسات علاجية مجدولة من اليوم فصاعدًا في المنشآت المتاحة لك.</p>}
+    </section></Reveal>}
+    {actions.length > 0 && <Reveal delay={0.16}><section className={styles.panel} aria-labelledby="actions-heading">
       <h2 id="actions-heading">إجراءات سريعة</h2>
-      {actions.length ? <ul className={styles.actions}>{actions.map((item, index) => <li key={item.key}>
+      <ul className={styles.actions}>{actions.map((item, index) => <li key={item.key}>
         <Link href={item.href} className={styles.action} data-tone={["teal", "blue", "action", "amber", "coral", "violet"][index % 6]}>
           <span className={styles.symbol}><item.icon aria-hidden="true" /></span>
           <strong>{item.title}</strong>
           <span>انتقال مباشر</span>
         </Link>
-      </li>)}</ul> : <p className={styles.empty}>لا توجد إجراءات سريعة متاحة لصلاحياتك الحالية. يمكنك مراجعة مسؤول النظام عند الحاجة.</p>}
-    </section></Reveal>
+      </li>)}</ul>
+    </section></Reveal>}
     <Reveal delay={0.18}><section className={styles.facilities} aria-labelledby="facilities-heading">
       <h2 id="facilities-heading">المنشآت المتاحة لك</h2>
       {data.facilities.length ? <ul>{data.facilities.map(facility => <li key={facility.id}>
