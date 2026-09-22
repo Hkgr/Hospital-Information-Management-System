@@ -191,11 +191,23 @@ class OncologyWriter
                 throw ValidationException::withMessages(['nurse_id' => 'اختر ممرضًا مرتبطًا بعيادة هذه الجلسة في تاريخ الجرعة.']);
             }
 
-            return $this->persist($r, $f, 'oncology_session_doses', $old, [
+            $fields = [
                 'session_id' => $session->id, 'dossier_id' => $dossier, 'facility_id' => $f['id'],
                 'given_on' => $data['given_on'], 'dose_name' => trim($data['dose_name']), 'complaint' => trim($data['complaint']),
                 'recommendations' => trim($data['recommendations']), 'nurse_id' => $data['nurse_id'],
-            ] + ($old ? [] : ['client_request_id' => $data['request_id']]));
+            ] + ($old ? [] : ['client_request_id' => $data['request_id']]);
+            $source = $data['medication_source'] ?? null;
+            if ($source === null || $source === '') {
+                if (! $old) {
+                    throw ValidationException::withMessages(['medication_source' => 'اختر مصدر الجرعات.']);
+                }
+            } elseif (! array_key_exists($source, OncologyQueries::MEDICATION_SOURCES)) {
+                throw ValidationException::withMessages(['medication_source' => 'اختر مصدر تمويل من مصادر الدواء المعتمدة.']);
+            } else {
+                $fields['medication_source'] = $source;
+            }
+
+            return $this->persist($r, $f, 'oncology_session_doses', $old, $fields);
         });
     }
 

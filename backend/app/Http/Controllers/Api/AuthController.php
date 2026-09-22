@@ -8,6 +8,7 @@ use App\Http\Resources\Auth\CurrentUserResponse;
 use App\Http\Resources\Auth\LoginResponse;
 use App\Http\Responses\AuthError;
 use App\Models\User;
+use App\Services\Audit\SystemActivity;
 use App\Services\Auth\UserAccessContext;
 use Dedoc\Scramble\Attributes\Endpoint;
 use Dedoc\Scramble\Attributes\Group;
@@ -45,7 +46,7 @@ class AuthController extends Controller
     {
         $input = $request->validated();
 
-        return DB::transaction(function () use ($input) {
+        return DB::transaction(function () use ($input, $request) {
             $user = User::where('username', $input['username'])->lockForUpdate()->first();
 
             // A dummy hash check also consumes password-hashing work for unknown users.
@@ -63,6 +64,7 @@ class AuthController extends Controller
             $token = $user->createToken($input['device_name'] ?? 'hospital-web', ['api']);
             $user->last_login_at = now();
             $user->save();
+            app(SystemActivity::class)->auth($request, $user->id, 'login', $user->username);
 
             return new LoginResponse([
                 'token' => $token, 'user' => $user, 'access' => $this->access->forUser($user),
@@ -90,7 +92,9 @@ class AuthController extends Controller
     #[Endpoint(operationId: 'logout', title: 'Log out the current device', description: 'Requires a Bearer token with the api ability and an active account. An account disabled after token issuance receives 403 and all its tokens are revoked. A token without the api ability receives 403. Successful logout revokes only the current token; other devices remain signed in. Returns 204 without a response body.')]
     public function logout(Request $request): Response
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+        app(SystemActivity::class)->auth($request, $user->id, 'logout', $user->username);
+        $user->currentAccessToken()->delete();
 
         return response()->noContent();
     }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\BloodBankController;
 use App\Http\Controllers\Api\BloodEventController;
 use App\Http\Controllers\Api\CatalogController;
@@ -205,6 +206,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
     });
     Route::get('/dashboards', [DashboardController::class, 'index'])->name('dashboards');
     Route::get('/dashboards/{key}', [DashboardController::class, 'show'])->name('dashboards.show');
+    Route::get('/audit', [AuditLogController::class, 'index'])->name('audit');
 });
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {

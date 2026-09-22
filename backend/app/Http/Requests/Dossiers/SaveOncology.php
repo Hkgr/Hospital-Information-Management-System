@@ -83,7 +83,8 @@ class SaveOncology extends FormRequest
             return $rules + ['planned_on' => $date, 'clinic_id' => $id, 'doctor_id' => $id, 'note' => $text];
         }
         if ($op === 'session-dose') {
-            return $rules + ['given_on' => $date, 'dose_name' => ['required', 'string', 'max:200'], 'complaint' => ['required', 'string', 'max:10000'], 'recommendations' => ['required', 'string', 'max:10000'], 'nurse_id' => $id];
+            $creating = ! $this->route('sessionDose');
+            return $rules + ['given_on' => $date, 'dose_name' => ['required', 'string', 'max:200'], 'complaint' => ['required', 'string', 'max:10000'], 'recommendations' => ['required', 'string', 'max:10000'], 'nurse_id' => $id, 'medication_source' => [$creating ? 'required' : 'nullable', 'string', Rule::in(array_keys(OncologyQueries::MEDICATION_SOURCES))]];
         }
         if ($op === 'schedule') {
             return $rules + ['sessions' => ['required', 'array', 'min:1', 'max:24'], 'sessions.*.planned_on' => $date, 'sessions.*.session_number' => ['sometimes', 'nullable', 'integer', 'min:1'], 'sessions.*.note' => $text];

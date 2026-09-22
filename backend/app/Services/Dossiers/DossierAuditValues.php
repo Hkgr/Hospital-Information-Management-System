@@ -37,7 +37,7 @@ class DossierAuditValues
         'oncology_plans' => ['plan_number', 'current_revision_id', 'status', 'basis_disposition', 'override_reason', 'status_reason', 'reviewed_at', 'reviewed_by'],
         'oncology_plan_revisions' => ['revision_number', 'protocol_text', 'modality', 'intent', 'protocol_clinic_id', 'protocol_doctor_id', 'treating_clinic_id', 'treating_doctor_id'],
         'oncology_sessions' => ['session_number', 'cycle_number', 'planned_on', 'status', 'reason', 'clinic_id', 'doctor_id'],
-        'oncology_session_doses' => ['given_on', 'dose_name', 'complaint', 'recommendations', 'nurse_id'],
+        'oncology_session_doses' => ['given_on', 'dose_name', 'complaint', 'recommendations', 'nurse_id', 'medication_source'],
         'dose_sessions' => ['administered_on', 'supervising_staff_id', 'administered_by', 'session_label', 'correction_reason'],
         'dose_session_items' => ['medication_name_snapshot', 'medication_code_snapshot', 'dose_value', 'dose_unit', 'dose_text', 'quantity', 'quantity_unit', 'route', 'funding_source_id', 'medication_source'],
         'visit_medications' => ['dispensed_on', 'medication_name_snapshot', 'medication_code_snapshot', 'dispensing_purpose', 'quantity', 'quantity_unit', 'dose_text', 'prescribing_staff_id', 'prescribing_clinic_id', 'funding_source_id', 'medication_source', 'correction_reason'],
@@ -93,6 +93,9 @@ class DossierAuditValues
 
     public function changes(string $entity, array $old, array $new): array
     {
+        if (! isset(self::GROUPS[$entity])) {
+            return [];
+        }
         $changes = [];
         foreach ([...self::GROUPS[$entity], 'note', 'voided_at', 'void_reason'] as $field) {
             // New audit snapshots can be partial. Omitted fields are not removals.
