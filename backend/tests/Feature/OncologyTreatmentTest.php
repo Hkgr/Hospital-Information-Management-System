@@ -43,7 +43,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
 
     private function item(): array
     {
-        return ['medication_id' => $this->f['medication'], 'dose_value' => '2.5', 'dose_unit' => 'mg', 'route' => 'IV', 'funding_source_id' => $this->funding, 'quantity' => '1', 'quantity_unit' => 'vial'];
+        return ['medication_id' => $this->f['medication'], 'dose_value' => '2.5', 'dose_unit' => 'mg', 'route' => 'IV', 'medication_source' => 'ministry_of_health', 'quantity' => '1', 'quantity_unit' => 'vial'];
     }
 
     private function planData(array $extra = []): array
@@ -731,5 +731,35 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->assertSame($dose, (int) DB::table('visit_medications')->where('id', $linked)->value('dose_session_id'));
         $this->callApi('POST', $this->path('/dispensing'), $free + ['dispensing_purpose' => 'supportive'])->assertUnprocessable();
         $this->callApi('POST', $this->path('/dispensing'), ['dispensing_purpose' => 'unlinked', 'dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $ctx['doctor_id']] + $this->item())->assertUnprocessable();
+    }
+
+    public function test_medication_recording_omits_the_period_and_stores_the_shared_source(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $s = $this->schedule($p);
+        $input = $this->dose($s);
+        unset($input['reporting_period_id']);
+        $id = $this->callApi('POST', $this->path('/doses'), $input)->assertCreated()->json('data.id');
+        $this->assertNull(DB::table('dose_sessions')->where('id', $id)->value('reporting_period_id'));
+        $this->assertSame('ministry_of_health', DB::table('dose_session_items')->where('dose_session_id', $id)->value('medication_source'));
+        $this->assertNull(DB::table('dose_session_items')->where('dose_session_id', $id)->value('funding_source_id'));
+        $item = DB::table('dose_session_items')->where('dose_session_id', $id)->first();
+        $kept = $this->dose($s, ['lock_version' => 1, 'reason' => 'تصحيح دون فترة', 'reporting_period_id' => $this->period, 'items' => [(array) $item + ['note' => 'ملاحظة']]]);
+        $this->callApi('PUT', $this->path('/doses/'.$id), $kept)->assertOk();
+        $this->assertSame($this->period, (int) DB::table('dose_sessions')->where('id', $id)->value('reporting_period_id'));
+        $omitted = $kept;
+        unset($omitted['reporting_period_id']);
+        $omitted['lock_version'] = 2;
+        $omitted['items'][0]['lock_version'] = DB::table('dose_session_items')->where('id', $item->id)->value('lock_version');
+        $this->callApi('PUT', $this->path('/doses/'.$id), $omitted)->assertOk();
+        $this->assertSame($this->period, (int) DB::table('dose_sessions')->where('id', $id)->value('reporting_period_id'));
+        $ctx = $this->context();
+        $free = ['dispensed_on' => '2001-03-02', 'prescribing_staff_id' => $ctx['doctor_id'], 'prescribing_clinic_id' => $ctx['clinic_id'], 'dispensing_purpose' => 'unlinked', 'funding_source_id' => $this->funding] + $this->item();
+        $dispensed = $this->callApi('POST', $this->path('/dispensing'), $free)->assertCreated()->json('data.id');
+        $this->assertNull(DB::table('visit_medications')->where('id', $dispensed)->value('reporting_period_id'));
+        $this->assertSame('ministry_of_health', DB::table('visit_medications')->where('id', $dispensed)->value('medication_source'));
+        $this->assertSame($this->funding, (int) DB::table('visit_medications')->where('id', $dispensed)->value('funding_source_id'));
+        $this->callApi('POST', $this->path('/dispensing'), array_replace($free, ['medication_source' => 'catalog-row']))->assertUnprocessable()->assertJsonValidationErrors('medication_source');
     }
 }

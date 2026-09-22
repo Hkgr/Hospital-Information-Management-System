@@ -15,6 +15,9 @@ class OncologyQueries
 
     public const INTENTS = ['curative' => 'شفائي', 'palliative' => 'تلطيفي', 'neoadjuvant' => 'قبل العلاج الأساسي', 'adjuvant' => 'مساعد', 'maintenance' => 'استمراري', 'supportive' => 'داعم', 'other' => 'آخر'];
 
+    /** Same codes as the patient-card general medication source. */
+    public const MEDICATION_SOURCES = ['ministry_of_health' => 'وزارة الصحة', 'al_rowad' => 'مؤسسة الرواد', 'other_organization' => 'جهة أخرى', 'personal_expense' => 'نفقة شخصية', 'none' => 'لا يوجد'];
+
     public const SESSION_STATUSES = ['scheduled' => 'مجدولة', 'rescheduled' => 'أعيدت جدولتها', 'due' => 'مستحقة', 'completed' => 'أُعطيت فعليًا', 'missed' => 'لم يحضر', 'cancelled' => 'ملغاة', 'referred' => 'محالة'];
 
     public function readiness(array $f): Builder

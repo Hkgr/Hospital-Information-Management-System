@@ -272,6 +272,11 @@ class OncologyWriter
         }
     }
 
+    private function itemKey(string $field, string $name): string
+    {
+        return $field === 'medication' ? $name : $field.'.'.$name;
+    }
+
     public function medication(array $item, ?object $old, string $field): array
     {
         if ($old && ! array_key_exists('medication_id', $item)) {
@@ -293,7 +298,17 @@ class OncologyWriter
             $item['medication_code_snapshot'] = $old->medication_code_snapshot;
         }
         if (! empty($item['funding_source_id']) && ($old?->funding_source_id ?? null) != $item['funding_source_id'] && ! DB::table('funding_sources')->where('id', $item['funding_source_id'])->where('is_active', true)->exists()) {
-            throw ValidationException::withMessages([$field.'.funding_source_id' => 'اختر مصدر تمويل فعالًا.']);
+            throw ValidationException::withMessages([$this->itemKey($field, 'funding_source_id') => 'اختر مصدر تمويل فعالًا.']);
+        }
+        $sourceKey = $this->itemKey($field, 'medication_source');
+        $source = $item['medication_source'] ?? null;
+        if ($source === null || $source === '') {
+            if (! $old) {
+                throw ValidationException::withMessages([$sourceKey => 'اختر مصدر التمويل.']);
+            }
+            unset($item['medication_source']);
+        } elseif (! array_key_exists($source, OncologyQueries::MEDICATION_SOURCES)) {
+            throw ValidationException::withMessages([$sourceKey => 'اختر مصدر تمويل من مصادر الدواء المعتمدة.']);
         }
 
         return $item;
@@ -336,7 +351,9 @@ class OncologyWriter
                     || (($data['session_resolution'] ?? null) === 'rescheduled' && empty($data['planned_on']))) {
                     OncologyIntegrity::reject('ONCOLOGY_INVALID_VOID_RESOLUTION', 'إبطال الإعطاء يحتاج اختيار معالجة الموعد وتاريخًا صريحًا عند إعادة الجدولة.');
                 }
-                $this->period($f, $old->reporting_period_id, $old->administered_on);
+                if ($old->reporting_period_id) {
+                    $this->period($f, (int) $old->reporting_period_id, $old->administered_on);
+                }
                 $session = DB::table('oncology_sessions')->where('id', $old->oncology_session_id)->lockForUpdate()->first();
                 DossierWrites::version((array) $session, $data['session_lock_version']);
                 $plan = $this->plan($f, $dossier, $session->plan_id, $data['plan_lock_version']);
@@ -348,7 +365,9 @@ class OncologyWriter
             if ($data['administered_on'] !== $v->visit_date || $data['administered_on'] > $f['today']) {
                 OncologyIntegrity::reject('ONCOLOGY_SCHEDULE_DATE_MISMATCH', 'تاريخ الإعطاء والموعد يجب أن يطابقا تاريخ الزيارة الفعلية غير المستقبلي.');
             }
-            $this->period($f, $data['reporting_period_id'], $data['administered_on'], $old?->reporting_period_id);
+            if (! empty($data['reporting_period_id'])) {
+                $this->period($f, (int) $data['reporting_period_id'], $data['administered_on'], $old?->reporting_period_id);
+            }
             $session = DB::table('oncology_sessions')->where('id', $old?->oncology_session_id ?? $data['session_id'])->where('dossier_id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
             abort_unless($session, 404);
             $plan = $this->plan($f, $dossier, $session->plan_id);
@@ -394,7 +413,7 @@ class OncologyWriter
                     $this->persist($r, $f, 'dose_session_items', $prior, ['voided_at' => now(), 'voided_by' => $r->user()->id, 'void_reason' => $item['void_reason']]);
                 } else {
                     $item = $this->medication($item, $prior, "items.$i");
-                    $this->persist($r, $f, 'dose_session_items', $prior, Arr::only($item, ['medication_id', 'medication_name_snapshot', 'medication_code_snapshot', 'funding_source_id', 'dose_text', 'dose_value', 'dose_unit', 'quantity', 'quantity_unit', 'route', 'note']) + ['dose_session_id' => $saved]);
+                    $this->persist($r, $f, 'dose_session_items', $prior, Arr::only($item, ['medication_id', 'medication_name_snapshot', 'medication_code_snapshot', 'funding_source_id', 'medication_source', 'dose_text', 'dose_value', 'dose_unit', 'quantity', 'quantity_unit', 'route', 'note']) + ['dose_session_id' => $saved]);
                 }
             }
             if (! DB::table('dose_session_items')->where('dose_session_id', $saved)->whereNull('voided_at')->exists()) {
@@ -428,20 +447,24 @@ class OncologyWriter
                 }
             }
             if ($void) {
-                $this->period($f, $old->reporting_period_id, $old->dispensed_on);
+                if ($old->reporting_period_id) {
+                    $this->period($f, (int) $old->reporting_period_id, $old->dispensed_on);
+                }
 
                 return $this->persist($r, $f, 'visit_medications', $old, ['voided_at' => now(), 'voided_by' => $r->user()->id, 'void_reason' => $data['reason']]);
             }
             if ($data['dispensed_on'] !== $v->visit_date || $data['dispensed_on'] > $f['today']) {
                 throw ValidationException::withMessages(['dispensed_on' => 'الصرف الفعلي يكون بتاريخ الزيارة غير المستقبلي.']);
             }
-            $this->period($f, $data['reporting_period_id'], $data['dispensed_on'], $old?->reporting_period_id);
+            if (! empty($data['reporting_period_id'])) {
+                $this->period($f, (int) $data['reporting_period_id'], $data['dispensed_on'], $old?->reporting_period_id);
+            }
             $linked = (bool) ($old?->dose_session_id) || $data['dispensing_purpose'] === 'supportive';
             if ($linked && $data['dispensing_purpose'] === 'unlinked') {
                 throw ValidationException::withMessages(['dispensing_purpose' => 'الدواء المرتبط بالجرعة يبقى مرتبطًا بها.']);
             }
             $item = $this->medication($data, $old, 'medication');
-            $fields = Arr::only($item, ['dispensed_on', 'reporting_period_id', 'medication_id', 'medication_name_snapshot', 'medication_code_snapshot', 'funding_source_id', 'prescribing_staff_id', 'dose_text', 'quantity', 'quantity_unit', 'note', 'dispensing_purpose']);
+            $fields = Arr::only($item, ['dispensed_on', 'reporting_period_id', 'medication_id', 'medication_name_snapshot', 'medication_code_snapshot', 'funding_source_id', 'medication_source', 'prescribing_staff_id', 'dose_text', 'quantity', 'quantity_unit', 'note', 'dispensing_purpose']);
             if ($linked) {
                 $dose = DB::table('dose_sessions')->where('id', $old?->dose_session_id ?? $data['dose_session_id'])->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->lockForUpdate()->first();
                 abort_unless($dose, 404);

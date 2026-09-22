@@ -199,7 +199,9 @@ class DossierReports
                 $sections[] = $this->section($title, ['code' => 'كود الزيارة', 'date' => 'التاريخ', 'name' => 'اسم الدواء المحفوظ', 'note' => 'الجرعة والكمية'], $rows->map(function ($e) use ($byId, $historical, $kind) {
                     $kindLabel = $kind === 'dispensed' ? (['unlinked' => 'صرف غير مرتبط بالجرعة', 'take_home' => 'صرف خارج المشفى', 'supportive' => 'دواء مرتبط بالجرعة'][$e->dispensing_purpose ?? ''] ?? '') : 'دواء مرتبط بالجرعة';
 
-                    return ['id' => $e->id, 'code' => $byId[$e->visit_id]->visit_no, 'date' => $e->date, 'name' => $e->medication_name_snapshot, 'note' => trim($kindLabel.' · '.($e->dose_text ?? '').' · '.$e->quantity.' '.$e->quantity_unit).($historical ? "\n".$this->historicalState($e, $byId[$e->visit_id]) : '')];
+                    $source = OncologyQueries::MEDICATION_SOURCES[$e->medication_source ?? ''] ?? null;
+
+                    return ['id' => $e->id, 'code' => $byId[$e->visit_id]->visit_no, 'date' => $e->date, 'name' => $e->medication_name_snapshot, 'note' => trim($kindLabel.' · '.($source ? $source.' · ' : '').($e->dose_text ?? '').' · '.$e->quantity.' '.$e->quantity_unit).($historical ? "\n".$this->historicalState($e, $byId[$e->visit_id]) : '')];
                 })->all(), 'سجل تاريخي مستقل عن الوصفة؛ لا ينشئ المعالج صرفًا أو إعطاءً.', ['date' => 'date']);
             }
             if ($f['capabilities']['attachments_view']) {
