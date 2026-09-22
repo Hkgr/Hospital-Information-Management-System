@@ -151,7 +151,7 @@ class OncologyWriter
                     throw ValidationException::withMessages(['carry_forward' => 'الموعد مستقل ولا يملك نسخة خطة لنقلها.']);
                 }
                 $fields = Arr::only($data, ['status', 'reason']);
-                if ($data['status'] === 'rescheduled') {
+                if ($data['status'] === 'scheduled') {
                     $this->context->check($f, $s->clinic_id, $s->doctor_id, $data['planned_on'], 'planned_on', false);
                     $fields['planned_on'] = $data['planned_on'];
                 }
@@ -178,7 +178,7 @@ class OncologyWriter
             $this->writes->dossier($f, $dossier);
             $session = DB::table('oncology_sessions')->where('id', $sessionId)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
             abort_unless($session, 404);
-            if (! in_array($session->status, ['scheduled', 'rescheduled'], true)) {
+            if ($session->status !== 'scheduled') {
                 throw ValidationException::withMessages(['given_on' => 'الجرعة تُسجل لجلسة مجدولة. غيّر حالة الموعد أولًا إن كان ملغى أو منتهيًا.']);
             }
             $old = null;
@@ -227,12 +227,12 @@ class OncologyWriter
 
     private function resolveSession(Request $r, array $f, object $s, object $plan, array $data): int
     {
-        if (($data['carry_forward'] ?? false) && ($data['status'] !== 'rescheduled'
+        if (($data['carry_forward'] ?? false) && ($data['status'] !== 'scheduled'
             || $s->revision_id == $plan->current_revision_id || empty($data['planned_on']))) {
-            OncologyIntegrity::reject('ONCOLOGY_INVALID_CARRY_FORWARD', 'نقل النسخة متاح فقط لموعد من نسخة سابقة، مع إعادة جدولة وتاريخ صريح.');
+            OncologyIntegrity::reject('ONCOLOGY_INVALID_CARRY_FORWARD', 'نقل النسخة متاح فقط لجلسة مجدولة من نسخة سابقة، مع تاريخ زيارة صريح.');
         }
-        if ($data['status'] === 'rescheduled' && empty($data['planned_on'])) {
-            OncologyIntegrity::reject('ONCOLOGY_RESCHEDULE_DATE_REQUIRED', 'حدد تاريخًا صريحًا لإعادة الجدولة.', ['fields' => ['planned_on' => ['تاريخ إعادة الجدولة مطلوب.']]]);
+        if ($data['status'] === 'scheduled' && empty($data['planned_on'])) {
+            OncologyIntegrity::reject('ONCOLOGY_RESCHEDULE_DATE_REQUIRED', 'حدد تاريخ زيارة الجلسة.', ['fields' => ['planned_on' => ['تاريخ زيارة الجلسة مطلوب.']]]);
         }
         if (DB::table('dose_sessions')->where('oncology_session_id', $s->id)->whereNull('voided_at')->exists()) {
             DossierWrites::conflict('للموعد إعطاء فعال؛ صحح الواقعة أو أبطلها مع معالجة الموعد.');
@@ -243,7 +243,7 @@ class OncologyWriter
             $this->active($f, $s->dossier_id, $plan->id);
             $fields += ['revision_id' => $revision->id, 'clinic_id' => $revision->treating_clinic_id, 'doctor_id' => $revision->treating_doctor_id];
         }
-        if ($data['status'] === 'rescheduled') {
+        if ($data['status'] === 'scheduled') {
             $this->active($f, $s->dossier_id, $plan->id);
             if (($fields['revision_id'] ?? $s->revision_id) != $revision->id) {
                 OncologyIntegrity::reject('ONCOLOGY_OBSOLETE_SESSION_REVISION', 'نسخة علاجية سابقة — تحتاج معالجة قبل الإعطاء. أكد النقل إلى النسخة الحالية صراحة.');
@@ -359,9 +359,9 @@ class OncologyWriter
             }
             if ($void) {
                 abort_unless(in_array('dossiers.treatment.schedule', $f['permissions'], true), 403);
-                if (! in_array($data['session_resolution'] ?? null, ['rescheduled', 'missed', 'cancelled', 'referred'], true)
-                    || (($data['session_resolution'] ?? null) === 'rescheduled' && empty($data['planned_on']))) {
-                    OncologyIntegrity::reject('ONCOLOGY_INVALID_VOID_RESOLUTION', 'إبطال الإعطاء يحتاج اختيار معالجة الموعد وتاريخًا صريحًا عند إعادة الجدولة.');
+                if (! in_array($data['session_resolution'] ?? null, ['scheduled', 'cancelled'], true)
+                    || (($data['session_resolution'] ?? null) === 'scheduled' && empty($data['planned_on']))) {
+                    OncologyIntegrity::reject('ONCOLOGY_INVALID_VOID_RESOLUTION', 'إبطال الإعطاء يحتاج اختيار حالة الجلسة وتاريخ زيارة صريحًا إن بقيت مجدولة.');
                 }
                 if ($old->reporting_period_id) {
                     $this->period($f, (int) $old->reporting_period_id, $old->administered_on);
@@ -395,7 +395,7 @@ class OncologyWriter
                     OncologyIntegrity::reject('ONCOLOGY_SCHEDULE_DATE_MISMATCH', 'أعد جدولة الجلسة صراحة إلى تاريخ الحضور الفعلي قبل تسجيل الإعطاء.');
                 }
                 $this->context->check($f, $session->clinic_id, $session->doctor_id, $session->planned_on, 'session_id', false);
-                if (! in_array($session->status, ['scheduled', 'rescheduled']) || DB::table('dose_sessions')->where('oncology_session_id', $session->id)->whereNull('voided_at')->exists()) {
+                if ($session->status !== 'scheduled' || DB::table('dose_sessions')->where('oncology_session_id', $session->id)->whereNull('voided_at')->exists()) {
                     DossierWrites::conflict('الجلسة غير متاحة للإعطاء أو سُجل حضورها مسبقًا.');
                 }
                 if (DB::table('visit_outcomes as o')->join('visit_results as r', 'r.id', '=', 'o.result_id')->where('o.visit_id', $visit)->whereNull('o.voided_at')->where('r.code', 'DOS-REFER')->exists()) {

@@ -40,7 +40,7 @@ class IndependentTreatmentAppointmentTest extends DossierCompletionCase
         foreach ($counts as $table => $count) {
             $this->assertSame($count, DB::table($table)->count(), $table);
         }
-        $this->callApi('PUT', "$path/$id", ['lock_version' => 1, 'status' => 'rescheduled', 'planned_on' => '2001-03-06', 'reason' => 'تصحيح الموعد'])->assertOk();
+        $this->callApi('PUT', "$path/$id", ['lock_version' => 1, 'status' => 'scheduled', 'planned_on' => '2001-03-06', 'reason' => 'تصحيح الموعد'])->assertOk();
         $this->callApi('PUT', "$path/$id", ['lock_version' => 1, 'status' => 'cancelled', 'reason' => 'نسخة قديمة'])->assertConflict();
         $this->callApi('PUT', "$path/$id", ['lock_version' => 2, 'status' => 'cancelled', 'reason' => 'إلغاء صريح'])->assertOk();
         $this->assertDatabaseHas('oncology_sessions', ['id' => $id, 'status' => 'cancelled', 'lock_version' => 3]);
@@ -56,8 +56,8 @@ class IndependentTreatmentAppointmentTest extends DossierCompletionCase
         $id = $this->callApi('POST', $path, $data)->assertCreated()->json('data.id');
         $this->callApi('GET', $path.'/'.$id)->assertOk()->assertJsonPath('data.plan_id', null);
         $this->callApi('GET', '/'.$this->s['id'].'/treatment-plans')->assertOk()->assertJsonPath('next_dose.id', $id);
-        $this->callApi('PUT', $path.'/'.$id, ['lock_version' => 1, 'status' => 'rescheduled', 'reason' => 'date required'])->assertUnprocessable();
-        $this->callApi('PUT', $path.'/'.$id, ['lock_version' => 1, 'status' => 'rescheduled', 'planned_on' => '2030-01-03', 'reason' => 'no fabricated revision', 'carry_forward' => true])->assertUnprocessable();
+        $this->callApi('PUT', $path.'/'.$id, ['lock_version' => 1, 'status' => 'scheduled', 'reason' => 'date required'])->assertUnprocessable();
+        $this->callApi('PUT', $path.'/'.$id, ['lock_version' => 1, 'status' => 'scheduled', 'planned_on' => '2030-01-03', 'reason' => 'no fabricated revision', 'carry_forward' => true])->assertUnprocessable();
         DB::table('role_permissions')->where('role_id', $this->f['dossier_role'])->where('permission_id', DB::table('permissions')->where('code', 'dossiers.treatment.schedule')->value('id'))->delete();
         $this->callApi('POST', $path, $data)->assertForbidden();
         $this->assertDatabaseHas('oncology_sessions', ['id' => $id, 'planned_on' => '2030-01-02', 'lock_version' => 1]);

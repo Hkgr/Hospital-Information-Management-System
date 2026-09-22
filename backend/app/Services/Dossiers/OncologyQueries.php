@@ -18,7 +18,7 @@ class OncologyQueries
     /** Same codes as the patient-card general medication source. */
     public const MEDICATION_SOURCES = ['ministry_of_health' => 'وزارة الصحة', 'al_rowad' => 'مؤسسة الرواد', 'other_organization' => 'جهة أخرى', 'personal_expense' => 'نفقة شخصية', 'none' => 'لا يوجد'];
 
-    public const SESSION_STATUSES = ['scheduled' => 'مجدولة', 'rescheduled' => 'أعيدت جدولتها', 'due' => 'مستحقة', 'completed' => 'أُعطيت فعليًا', 'missed' => 'لم يحضر', 'cancelled' => 'ملغاة', 'referred' => 'محالة'];
+    public const SESSION_STATUSES = ['scheduled' => 'مجدولة', 'completed' => 'تمت', 'cancelled' => 'أُلغيت'];
 
     public function readiness(array $f): Builder
     {
@@ -55,7 +55,7 @@ class OncologyQueries
     public function scheduled(array $f): Builder
     {
         return DB::table('oncology_sessions as s')->leftJoinSub($this->plans($f)->select('p.id', 'p.current_revision_id')->selectRaw(self::effectiveSql().' AS effective_status'), 'plan', 'plan.id', '=', 's.plan_id')
-            ->where('s.facility_id', $f['id'])->where(fn ($q) => $q->whereNull('s.plan_id')->orWhere(fn ($p) => $p->where('plan.effective_status', 'active')->whereColumn('s.revision_id', 'plan.current_revision_id')))->whereIn('s.status', ['scheduled', 'rescheduled'])
+            ->where('s.facility_id', $f['id'])->where(fn ($q) => $q->whereNull('s.plan_id')->orWhere(fn ($p) => $p->where('plan.effective_status', 'active')->whereColumn('s.revision_id', 'plan.current_revision_id')))->where('s.status', 'scheduled')
             ->whereNotExists(fn ($q) => $q->from('dose_sessions as d')->selectRaw('1')->whereColumn('d.oncology_session_id', 's.id')->whereNull('d.voided_at'));
     }
 
@@ -113,7 +113,7 @@ class OncologyQueries
         abort_unless($row, 404);
         $revisions = DB::table('oncology_plan_revisions as r')->leftJoin('clinics as pc', 'pc.id', '=', 'r.protocol_clinic_id')->leftJoin('staff as pd', 'pd.id', '=', 'r.protocol_doctor_id')->leftJoin('clinics as tc', 'tc.id', '=', 'r.treating_clinic_id')->leftJoin('staff as td', 'td.id', '=', 'r.treating_doctor_id')->where('r.plan_id', $id)->orderByDesc('r.revision_number')->get(['r.*', 'pc.name_ar as protocol_clinic_name', 'pd.full_name as protocol_doctor_name', 'tc.name_ar as treating_clinic_name', 'td.full_name as treating_doctor_name']);
 
-        return (array) $row + ['unresolved_session_count' => DB::table('oncology_sessions')->where('plan_id', $id)->where('revision_id', '<>', $row->current_revision_id)->whereIn('status', ['scheduled', 'rescheduled'])->count(), 'revisions' => $revisions->map(fn ($r) => (array) $r)->all()];
+        return (array) $row + ['unresolved_session_count' => DB::table('oncology_sessions')->where('plan_id', $id)->where('revision_id', '<>', $row->current_revision_id)->where('status', 'scheduled')->count(), 'revisions' => $revisions->map(fn ($r) => (array) $r)->all()];
     }
 
     public static function voidedDoseSql(): string

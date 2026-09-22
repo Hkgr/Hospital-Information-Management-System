@@ -56,7 +56,7 @@ class OncologyReports
             $check($sessions->count());
             $rows = [];
             foreach ($sessions as $s) {
-                array_push($rows, ...$this->facts(($s->plan_id ? $s->plan_number.' / '.$s->session_number : 'موعد مستقل #'.$s->id), ['النسخة' => $s->revision_number, 'موعد مخطط' => $s->planned_on, 'حالة الموعد' => OncologyQueries::SESSION_STATUSES[$s->status], 'سبب الحالة' => $s->reason, 'تاريخ إعطاء فعلي' => $s->administered_on, 'معرّف الزيارة الفعلية' => $s->visit_id, 'سجل الإعطاء المبطل' => $s->has_voided_dose ? 'توجد وقائع إعطاء مبطلة محفوظة تاريخيًا' : null, 'ملاحظة' => $s->note], ['النسخة' => 'integer', 'موعد مخطط' => 'date', 'تاريخ إعطاء فعلي' => 'date']));
+                array_push($rows, ...$this->facts(($s->plan_id ? $s->plan_number.' / '.$s->session_number : 'موعد مستقل #'.$s->id), ['النسخة' => $s->revision_number, 'تاريخ الزيارة' => $s->planned_on, 'حالة الجلسة' => OncologyQueries::SESSION_STATUSES[$s->status], 'سبب الحالة' => $s->reason, 'تاريخ إعطاء فعلي' => $s->administered_on, 'معرّف الزيارة الفعلية' => $s->visit_id, 'سجل الإعطاء المبطل' => $s->has_voided_dose ? 'توجد وقائع إعطاء مبطلة محفوظة تاريخيًا' : null, 'ملاحظة' => $s->note], ['النسخة' => 'integer', 'تاريخ الزيارة' => 'date', 'تاريخ إعطاء فعلي' => 'date']));
             }
             $check(count($rows));
             $result[] = $this->section('سجل الجرعات المجدولة', $rows);

@@ -1,4 +1,4 @@
-export const sessionStates: Record<string,string> = { scheduled:"مجدولة",rescheduled:"أعيدت جدولتها",completed:"أُعطيت فعليًا",missed:"لم يحضر",cancelled:"ملغاة",referred:"محالة" };
+export const sessionStates: Record<string,string> = { scheduled:"مجدولة", completed:"تمت", cancelled:"أُلغيت" };
 export const modalities: Record<string,string> = { chemotherapy:"علاج كيميائي",immunotherapy:"علاج مناعي",targeted:"علاج موجّه",hormone:"علاج هرموني",radiotherapy:"علاج شعاعي",supportive:"علاج داعم",other:"آخر" };
 export const intents: Record<string,string> = { curative:"شفائي",palliative:"تلطيفي",neoadjuvant:"قبل العلاج الأساسي",adjuvant:"مساعد",maintenance:"استمراري",supportive:"داعم",other:"آخر" };
 export type Values = Record<string,string|number|boolean|null>;

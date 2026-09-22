@@ -92,7 +92,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
 
     private function resolve(array $s, array $extra = [])
     {
-        return $this->callApi('PUT', '/'.$this->s['id'].'/treatment-sessions/'.$s['id'], $extra + ['lock_version' => $s['lock_version'], 'plan_lock_version' => DB::table('oncology_plans')->where('id', $s['plan_id'])->value('lock_version'), 'status' => 'rescheduled', 'planned_on' => '2001-03-02', 'reason' => 'تصحيح موعد الحضور']);
+        return $this->callApi('PUT', '/'.$this->s['id'].'/treatment-sessions/'.$s['id'], $extra + ['lock_version' => $s['lock_version'], 'plan_lock_version' => DB::table('oncology_plans')->where('id', $s['plan_id'])->value('lock_version'), 'status' => 'scheduled', 'planned_on' => '2001-03-02', 'reason' => 'تصحيح موعد الحضور']);
     }
 
     private function obsoleteSession(bool $administer = false): array
@@ -128,42 +128,37 @@ class OncologyTreatmentTest extends DossierCompletionCase
     public function test_resolution_terminal_states_preserve_obsolete_clinical_context(): void
     {
         [, $s] = $this->obsoleteSession();
-        foreach (['cancelled', 'missed', 'referred'] as $status) {
-            $this->resolve($s, ['status' => $status, 'planned_on' => '2002-01-01'])->assertOk();
-            $next = (array) DB::table('oncology_sessions')->find($s['id']);
-            foreach (['revision_id', 'clinic_id', 'doctor_id', 'planned_on'] as $key) {
-                $this->assertSame($s[$key], $next[$key], $status.' preserves '.$key);
-            }
-            $this->assertSame($status, $next['status']);
-            $s = $next;
+        $this->resolve($s, ['status' => 'cancelled', 'planned_on' => '2002-01-01'])->assertOk();
+        $next = (array) DB::table('oncology_sessions')->find($s['id']);
+        foreach (['revision_id', 'clinic_id', 'doctor_id', 'planned_on'] as $key) {
+            $this->assertSame($s[$key], $next[$key], 'cancelled preserves '.$key);
         }
+        $this->assertSame('cancelled', $next['status']);
     }
 
     public function test_resolution_terminal_carry_is_rejected_centrally_and_by_api(): void
     {
         [, $s] = $this->obsoleteSession();
-        foreach (['cancelled', 'missed', 'referred'] as $status) {
-            $data = ['status' => $status, 'carry_forward' => true, 'planned_on' => '2001-03-02'];
-            $this->writerResolutionRejected($s, $data);
-            $this->resolve($s, $data)->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_CARRY_FORWARD');
-            $this->assertSame($s, (array) DB::table('oncology_sessions')->find($s['id']));
-        }
+        $data = ['status' => 'cancelled', 'carry_forward' => true, 'planned_on' => '2001-03-02'];
+        $this->writerResolutionRejected($s, $data);
+        $this->resolve($s, $data)->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_CARRY_FORWARD');
+        $this->assertSame($s, (array) DB::table('oncology_sessions')->find($s['id']));
     }
 
     public function test_resolution_current_revision_cannot_be_carried_forward(): void
     {
         $this->ready();
         $s = $this->historicalSession($this->activate($this->makePlan())->assertOk()->json('data'));
-        $this->writerResolutionRejected($s, ['status' => 'rescheduled', 'carry_forward' => true, 'planned_on' => '2001-03-02']);
+        $this->writerResolutionRejected($s, ['status' => 'scheduled', 'carry_forward' => true, 'planned_on' => '2001-03-02']);
         $this->resolve($s, ['carry_forward' => true])->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_CARRY_FORWARD');
     }
 
     public function test_resolution_carry_requires_explicit_date_in_writer_and_request(): void
     {
         [, $s] = $this->obsoleteSession();
-        $this->writerResolutionRejected($s, ['status' => 'rescheduled', 'carry_forward' => true]);
-        $this->writerResolutionRejected($s, ['status' => 'rescheduled'], 'ONCOLOGY_RESCHEDULE_DATE_REQUIRED');
-        $this->resolve($s, ['carry_forward' => true, 'planned_on' => null])->assertUnprocessable()->assertJsonValidationErrors('planned_on')->assertJsonPath('errors.planned_on.0', 'حدد تاريخًا صريحًا لإعادة الجدولة.');
+        $this->writerResolutionRejected($s, ['status' => 'scheduled', 'carry_forward' => true]);
+        $this->writerResolutionRejected($s, ['status' => 'scheduled'], 'ONCOLOGY_RESCHEDULE_DATE_REQUIRED');
+        $this->resolve($s, ['carry_forward' => true, 'planned_on' => null])->assertUnprocessable()->assertJsonValidationErrors('planned_on')->assertJsonPath('errors.planned_on.0', 'حدد تاريخ زيارة الجلسة.');
         $this->resolve($s, ['planned_on' => null])->assertUnprocessable()->assertJsonValidationErrors('planned_on');
         $this->resolve($s)->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_OBSOLETE_SESSION_REVISION');
         $this->resolve($s, ['carry_forward' => true])->assertOk();
@@ -174,12 +169,10 @@ class OncologyTreatmentTest extends DossierCompletionCase
         [$p, $s, $dose] = $this->obsoleteSession(true);
         $before = (array) DB::table('dose_sessions')->find($dose);
         $audit = DB::table('audit_logs')->count();
-        foreach (['cancelled', 'missed', 'referred'] as $status) {
-            $this->callApi('POST', $this->path('/doses/'.$dose.'/void'), ['lock_version' => 1, 'session_lock_version' => $s['lock_version'], 'plan_lock_version' => $p['lock_version'], 'session_resolution' => $status, 'carry_forward' => true, 'reason' => 'قرار إبطال غير صالح'])->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_CARRY_FORWARD');
-            $this->assertSame($before, (array) DB::table('dose_sessions')->find($dose));
-            $this->assertSame($s, (array) DB::table('oncology_sessions')->find($s['id']));
-            $this->assertSame($audit, DB::table('audit_logs')->count());
-        }
+        $this->callApi('POST', $this->path('/doses/'.$dose.'/void'), ['lock_version' => 1, 'session_lock_version' => $s['lock_version'], 'plan_lock_version' => $p['lock_version'], 'session_resolution' => 'cancelled', 'carry_forward' => true, 'reason' => 'قرار إبطال غير صالح'])->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_CARRY_FORWARD');
+        $this->assertSame($before, (array) DB::table('dose_sessions')->find($dose));
+        $this->assertSame($s, (array) DB::table('oncology_sessions')->find($s['id']));
+        $this->assertSame($audit, DB::table('audit_logs')->count());
     }
 
     public function test_resolution_session_history_is_independent_of_active_dose_without_fanout(): void
@@ -189,7 +182,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->callApi('GET', '/'.$this->s['id'].'/treatment-sessions')->assertJsonPath('data.0.has_voided_dose', false)->assertJsonPath('data.0.dose_id', null);
         for ($attempt = 0; $attempt < 2; $attempt++) {
             $dose = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
-            $this->callApi('POST', $this->path('/doses/'.$dose.'/void'), ['lock_version' => 1, 'session_lock_version' => $s['lock_version'] + 1, 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'session_resolution' => 'rescheduled', 'planned_on' => '2001-03-02', 'reason' => 'إبطال واقعة مسجلة خطأ'])->assertOk();
+            $this->callApi('POST', $this->path('/doses/'.$dose.'/void'), ['lock_version' => 1, 'session_lock_version' => $s['lock_version'] + 1, 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'session_resolution' => 'scheduled', 'planned_on' => '2001-03-02', 'reason' => 'إبطال واقعة مسجلة خطأ'])->assertOk();
             $this->callApi('GET', '/'.$this->s['id'].'/treatment-sessions')->assertJsonCount(1, 'data')->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.dose_id', null)->assertJsonPath('data.0.visit_id', null)->assertJsonPath('data.0.has_voided_dose', true);
             $s = (array) DB::table('oncology_sessions')->find($s['id']);
         }
@@ -266,7 +259,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $id = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
         $url = $this->path('/doses/'.$id.'/void');
         $this->callApi('POST', $url, ['lock_version' => 1, 'reason' => 'لم يحدث الإعطاء'])->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_INVALID_VOID_RESOLUTION');
-        $resolution = ['lock_version' => 1, 'session_lock_version' => 2, 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'reason' => 'لم يحدث الإعطاء', 'session_resolution' => 'rescheduled', 'planned_on' => '1980-01-01'];
+        $resolution = ['lock_version' => 1, 'session_lock_version' => 2, 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'reason' => 'لم يحدث الإعطاء', 'session_resolution' => 'scheduled', 'planned_on' => '1980-01-01'];
         $this->callApi('POST', $url, $resolution)->assertUnprocessable();
         $this->assertDatabaseHas('dose_sessions', ['id' => $id, 'voided_at' => null]);
         $this->assertDatabaseHas('oncology_sessions', ['id' => $s['id'], 'status' => 'completed']);
@@ -312,7 +305,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $dispensed = $this->callApi('POST', $this->path('/dispensing'), ['dose_session_id' => $id, 'dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'dispensing_purpose' => 'supportive'] + $this->item())->assertCreated()->json('data.id');
         $current = $this->callApi('PUT', $this->planPath($p['id']), $this->planData(['lock_version' => $this->dose($s)['plan_lock_version'], 'protocol_text' => 'نسخة علاجية معدلة']))->assertOk()->json('data');
         $current = $this->activate($current)->assertOk()->json('data');
-        $payload = ['lock_version' => 1, 'session_lock_version' => 2, 'plan_lock_version' => $current['lock_version'], 'reason' => 'إعطاء سُجل خطأ', 'session_resolution' => 'rescheduled', 'planned_on' => '2001-03-02'];
+        $payload = ['lock_version' => 1, 'session_lock_version' => 2, 'plan_lock_version' => $current['lock_version'], 'reason' => 'إعطاء سُجل خطأ', 'session_resolution' => 'scheduled', 'planned_on' => '2001-03-02'];
         $this->callApi('POST', $this->path('/doses/'.$id.'/void'), $payload)->assertUnprocessable()->assertJsonPath('error.code', 'ONCOLOGY_OBSOLETE_SESSION_REVISION');
         $this->assertDatabaseHas('dose_sessions', ['id' => $id, 'voided_at' => null]);
         $this->callApi('POST', $this->path('/doses/'.$id.'/void'), $payload + ['carry_forward' => true])->assertOk();
@@ -386,16 +379,14 @@ class OncologyTreatmentTest extends DossierCompletionCase
         } catch (QueryException $e) {
             $this->assertSame(1062, (int) $e->errorInfo[1]);
         }
-        foreach (['missed', 'cancelled', 'referred'] as $resolution) {
-            $currentSession = (array) DB::table('oncology_sessions')->where('id', $s['id'])->first();
-            $this->callApi('POST', $this->path('/doses/'.$id.'/void'), ['lock_version' => 1, 'session_lock_version' => $currentSession['lock_version'], 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'reason' => 'اختبار قرار مستقل', 'session_resolution' => $resolution])->assertOk();
-            $this->assertDatabaseHas('oncology_sessions', ['id' => $s['id'], 'status' => $resolution]);
-            $currentSession = (array) DB::table('oncology_sessions')->where('id', $s['id'])->first();
-            $this->resolve($currentSession)->assertOk();
-            $currentSession = (array) DB::table('oncology_sessions')->where('id', $s['id'])->first();
-            $id = $this->callApi('POST', $this->path('/doses'), $this->dose($currentSession))->assertCreated()->json('data.id');
-        }
-        $this->assertSame(4, DB::table('dose_sessions')->where('oncology_session_id', $s['id'])->count());
+        $currentSession = (array) DB::table('oncology_sessions')->where('id', $s['id'])->first();
+        $this->callApi('POST', $this->path('/doses/'.$id.'/void'), ['lock_version' => 1, 'session_lock_version' => $currentSession['lock_version'], 'plan_lock_version' => $this->dose($s)['plan_lock_version'], 'reason' => 'اختبار قرار مستقل', 'session_resolution' => 'cancelled'])->assertOk();
+        $this->assertDatabaseHas('oncology_sessions', ['id' => $s['id'], 'status' => 'cancelled']);
+        $currentSession = (array) DB::table('oncology_sessions')->where('id', $s['id'])->first();
+        $this->resolve($currentSession)->assertOk();
+        $currentSession = (array) DB::table('oncology_sessions')->where('id', $s['id'])->first();
+        $id = $this->callApi('POST', $this->path('/doses'), $this->dose($currentSession))->assertCreated()->json('data.id');
+        $this->assertSame(2, DB::table('dose_sessions')->where('oncology_session_id', $s['id'])->count());
         $this->assertSame(1, DB::table('dose_sessions')->where('oncology_session_id', $s['id'])->whereNull('voided_at')->count());
         $this->callApi('GET', '/'.$this->s['id'].'/treatment-sessions')->assertJsonCount(1, 'data');
         try {
@@ -568,13 +559,11 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->assertSame($doses, DB::table('dose_sessions')->count());
         $this->callApi('GET', $this->planPath())->assertOk()->assertJsonPath('next_dose.planned_on', '2090-01-01');
         $path = '/'.$this->s['id'].'/treatment-sessions/'.$s['id'];
-        $this->callApi('PUT', $path, ['plan_lock_version' => $this->dose($s)['plan_lock_version'], 'lock_version' => 1, 'status' => 'rescheduled', 'planned_on' => '2090-03-01', 'reason' => 'طلب الطبيب'])->assertOk();
+        $this->callApi('PUT', $path, ['plan_lock_version' => $this->dose($s)['plan_lock_version'], 'lock_version' => 1, 'status' => 'scheduled', 'planned_on' => '2090-03-01', 'reason' => 'طلب الطبيب'])->assertOk();
         $this->callApi('GET', $this->planPath())->assertOk()->assertJsonPath('next_dose.planned_on', '2090-02-01');
         $audit = DB::table('audit_logs')->where('entity_type', 'oncology_sessions')->where('entity_id', $s['id'])->orderByDesc('id')->first();
         $this->assertSame('2090-01-01', json_decode($audit->old_values, true)['planned_on']);
-        foreach (['missed', 'cancelled', 'referred'] as $i => $status) {
-            $this->callApi('PUT', $path, ['plan_lock_version' => $this->dose($s)['plan_lock_version'], 'lock_version' => $i + 2, 'status' => $status, 'reason' => 'سبب صريح'])->assertOk();
-        }
+        $this->callApi('PUT', $path, ['plan_lock_version' => $this->dose($s)['plan_lock_version'], 'lock_version' => 2, 'status' => 'cancelled', 'reason' => 'سبب صريح'])->assertOk();
         $this->callApi('PUT', $path, ['plan_lock_version' => $this->dose($s)['plan_lock_version'], 'lock_version' => 1, 'status' => 'cancelled', 'reason' => 'قديم'])->assertConflict();
     }
 
