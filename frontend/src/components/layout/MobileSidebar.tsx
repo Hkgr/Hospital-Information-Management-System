@@ -3,7 +3,7 @@ import { SidebarContent } from "./Sidebar";
 import FrameOrnaments from "./FrameOrnaments";
 import styles from "./shell.module.css";
 
-export default function MobileSidebar({ open, onClose, pathname, canViewClinics, canViewDoctors, canViewCatalog, canViewDossiers = false, canViewBloodBank = false, canViewStock = false }: { open: boolean; onClose: () => void; pathname: string; canViewClinics: boolean; canViewDoctors: boolean; canViewCatalog: boolean; canViewBloodBank?: boolean; canViewDossiers?: boolean; canViewStock?: boolean }) {
+export default function MobileSidebar({ open, onClose, pathname, canViewClinics, canViewDoctors, canViewCatalog, canViewDossiers = false, canViewBloodBank = false, canViewStock = false, canViewUsers = false }: { open: boolean; onClose: () => void; pathname: string; canViewClinics: boolean; canViewDoctors: boolean; canViewCatalog: boolean; canViewBloodBank?: boolean; canViewDossiers?: boolean; canViewStock?: boolean; canViewUsers?: boolean }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -32,6 +32,6 @@ export default function MobileSidebar({ open, onClose, pathname, canViewClinics,
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }}
     onClick={event => { if (event.target === event.currentTarget) dialogRef.current?.close(); }}>
-    <div className={styles.mobileSidebarContent}><SidebarContent pathname={pathname} canViewClinics={canViewClinics} canViewDoctors={canViewDoctors} canViewCatalog={canViewCatalog} canViewDossiers={canViewDossiers} canViewBloodBank={canViewBloodBank} canViewStock={canViewStock} onNavigate={onClose} mobile /><FrameOrnaments /></div>
+    <div className={styles.mobileSidebarContent}><SidebarContent pathname={pathname} canViewClinics={canViewClinics} canViewDoctors={canViewDoctors} canViewCatalog={canViewCatalog} canViewDossiers={canViewDossiers} canViewBloodBank={canViewBloodBank} canViewStock={canViewStock} canViewUsers={canViewUsers} onNavigate={onClose} mobile /><FrameOrnaments /></div>
   </dialog>;
 }

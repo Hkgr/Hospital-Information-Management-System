@@ -139,6 +139,7 @@ test("desktop and tablet collapse controls retain usable navigation names withou
     assert.equal(await nav.getByRole("link", { name: "الخدمات والإجراءات", exact: true }).getAttribute("href"), "/services-procedures");
     assert.equal(await nav.getByRole("link", { name: "السجل", exact: true }).getAttribute("href"), "/audit");
     assert.equal(await nav.getByRole("link", { name: "تقارير", exact: true }).getAttribute("href"), "/reports");
+    assert.equal(await nav.getByRole("link", { name: "المستخدمون", exact: true }).count(), 0);
     assert.equal(await nav.locator("button:disabled").count(), 0);
     const brand = page.getByRole("complementary").getByRole("link", { name: "مشفى محمد بن زايد الإماراتي — لوحة التحكم" });
     assert.equal(await brand.getAttribute("href"), "/");
@@ -161,6 +162,15 @@ test("desktop and tablet collapse controls retain usable navigation names withou
     await brand.click();
     await page.waitForURL(`${base}/dashboard/general`);
     await page.getByRole("heading", { name: "مرحبًا، مستخدم الاختبار" }).waitFor();
+  } finally { await context.close(); }
+});
+
+test("users navigation appears only with users.view", async () => {
+  const { context, page } = await openShell({ access: [{ facility: { id: 1, code: "TEST", name_ar: "منشأة اختبار", timezone: "Asia/Damascus" }, roles: [], permissions: ["users.view"] }] });
+  try {
+    const nav = page.getByRole("navigation", { name: "التنقل الرئيسي" });
+    assert.equal(await nav.getByRole("link", { name: "المستخدمون", exact: true }).getAttribute("href"), "/users");
+    assert.equal(await nav.getByRole("link", { name: "العيادات", exact: true }).count(), 0);
   } finally { await context.close(); }
 });
 

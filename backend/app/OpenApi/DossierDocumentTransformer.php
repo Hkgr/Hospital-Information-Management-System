@@ -91,6 +91,15 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
 
                     continue;
                 }
+                if ($op->method === 'delete') {
+                    $op->description = 'Cascade-delete one facility medical context and every association (visits, treatment, pathology, attachments, import row links). Requires dossiers.view and dossiers.delete. Shared patient identity is removed only when unused elsewhere. GET never writes. All responses private, no-store.';
+                    $op->addResponse(Response::make(204)->setDescription('Dossier and associations removed'));
+                    foreach ([401 => 'Unauthenticated', 403 => 'Missing permission/ability or inactive account/facility', 404 => 'DOSSIER_NOT_FOUND', 422 => 'Invalid query fields', 500 => 'DOSSIERS_UNAVAILABLE; no internal details'] as $status => $description) {
+                        $op->addResponse(Response::make($status)->setDescription($description));
+                    }
+
+                    continue;
+                }
                 if (DossierCompletionDocument::matches($route) && ! str_contains($route, '/options/')) {
                     (new DossierCompletionDocument)->operation($op, $route);
 

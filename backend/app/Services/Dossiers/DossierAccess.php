@@ -36,7 +36,7 @@ class DossierAccess
         foreach (['view', 'create', 'update', 'activate', 'override', 'status', 'schedule', 'administer', 'dispense', 'correct', 'void'] as $action) {
             $caps['treatment_'.$action] = in_array('dossiers.treatment.view', $permissions, true) && in_array('dossiers.treatment.'.$action, $permissions, true);
         }
-        foreach (['import.view', 'import.create', 'import.validate', 'import.commit', 'import.download', 'import.cancel', 'create', 'personal.update', 'medical.update', 'visits.create', 'visits.update', 'clinical.update', 'attachments.view', 'attachments.upload', 'attachments.download', 'attachments.void', 'finalize', 'visits.complete', 'export', 'audit', 'assessment.update', 'pathology.create', 'pathology.update', 'pathology.void'] as $code) {
+        foreach (['import.view', 'import.create', 'import.validate', 'import.commit', 'import.download', 'import.cancel', 'create', 'delete', 'personal.update', 'medical.update', 'visits.create', 'visits.update', 'clinical.update', 'attachments.view', 'attachments.upload', 'attachments.download', 'attachments.void', 'finalize', 'visits.complete', 'export', 'audit', 'assessment.update', 'pathology.create', 'pathology.update', 'pathology.void'] as $code) {
             $caps[str_replace('.', '_', $code)] = in_array('dossiers.'.$code, $permissions, true);
         }
         $global = DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
