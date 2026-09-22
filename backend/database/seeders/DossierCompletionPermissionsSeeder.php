@@ -13,7 +13,7 @@ class DossierCompletionPermissionsSeeder extends Seeder
         'dossiers.attachments.upload' => 'رفع مرفقات زيارة مسودة',
         'dossiers.attachments.download' => 'تنزيل مرفقات بطاقة المريض الخاصة',
         'dossiers.attachments.void' => 'إلغاء مرفق زيارة مسودة مع حفظ التاريخ',
-        'dossiers.finalize' => 'تفعيل بطاقة المريض بعد مراجعتها صراحة',
+        'dossiers.finalize' => 'تفعيل بطاقة المريض بعد حفظ الأقسام الخمسة الأولى',
         'dossiers.visits.complete' => 'إكمال الزيارة المسودة بعد مراجعتها صراحة',
         'dossiers.export' => 'تصدير بطاقات المرضى والزيارات المصرح بها',
         'medications.create' => 'إضافة تعريف دواء إلى الدليل المشترك — تفويض عالمي',
