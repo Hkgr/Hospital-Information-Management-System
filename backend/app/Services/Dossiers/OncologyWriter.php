@@ -199,6 +199,38 @@ class OncologyWriter
         });
     }
 
+    public function sessionDose(Request $r, array $f, int $dossier, int $sessionId, array $data, ?int $doseId = null): int
+    {
+        $target = DB::table('oncology_sessions')->where('id', $sessionId)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->first();
+        abort_unless($target, 404);
+        $targets = $target->plan_id ? $this->planTargets($f, $dossier, (int) $target->plan_id) : [[], []];
+
+        return $this->writes->once($r, $f, $data, 'oncology:session-dose:'.$dossier.':'.$sessionId.':'.($doseId ?? 'new'), function () use ($r, $f, $dossier, $sessionId, $data, $doseId, $targets) {
+            $this->context->lock([array_merge($targets[0], [$data['nurse_id']]), $targets[1]]);
+            $this->writes->dossier($f, $dossier);
+            $session = DB::table('oncology_sessions')->where('id', $sessionId)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
+            abort_unless($session, 404);
+            if (! in_array($session->status, ['scheduled', 'rescheduled'], true)) {
+                throw ValidationException::withMessages(['given_on' => 'الجرعة تُسجل لجلسة مجدولة. غيّر حالة الموعد أولًا إن كان ملغى أو منتهيًا.']);
+            }
+            $old = null;
+            if ($doseId) {
+                $old = DB::table('oncology_session_doses')->where('id', $doseId)->where('session_id', $session->id)->where('facility_id', $f['id'])->lockForUpdate()->first();
+                abort_unless($old, 404);
+                DossierWrites::version((array) $old, $data['lock_version']);
+            }
+            if (! DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('s.id', $data['nurse_id'])->where('c.id', $session->clinic_id)->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $data['given_on'])->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $data['given_on']))->exists()) {
+                throw ValidationException::withMessages(['nurse_id' => 'اختر ممرضًا مرتبطًا بعيادة هذه الجلسة في تاريخ الجرعة.']);
+            }
+
+            return $this->persist($r, $f, 'oncology_session_doses', $old, [
+                'session_id' => $session->id, 'dossier_id' => $dossier, 'facility_id' => $f['id'],
+                'given_on' => $data['given_on'], 'dose_name' => trim($data['dose_name']), 'complaint' => trim($data['complaint']),
+                'recommendations' => trim($data['recommendations']), 'nurse_id' => $data['nurse_id'],
+            ] + ($old ? [] : ['client_request_id' => $data['request_id']]));
+        });
+    }
+
     public function appointment(Request $r, array $f, int $dossier, array $data): int
     {
         return $this->writes->once($r, $f, $data, "oncology:appointment:$dossier", function () use ($r, $f, $dossier, $data) {

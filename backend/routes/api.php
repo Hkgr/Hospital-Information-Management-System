@@ -40,6 +40,8 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::post('/{dossier}/treatment-sessions', [$oncology, 'appointment'])->whereNumber('dossier')->name('treatment.appointment');
         Route::get('/{dossier}/treatment-sessions/{session}', [$oncology, 'session'])->whereNumber(['dossier', 'session'])->name('treatment.session');
         Route::put('/{dossier}/treatment-sessions/{session}', [$oncology, 'updateSession'])->whereNumber(['dossier', 'session'])->name('treatment.reschedule');
+        Route::post('/{dossier}/treatment-sessions/{session}/session-doses', [$oncology, 'sessionDose'])->whereNumber(['dossier', 'session'])->name('treatment.session-dose');
+        Route::put('/{dossier}/treatment-sessions/{session}/session-doses/{sessionDose}', [$oncology, 'sessionDose'])->whereNumber(['dossier', 'session', 'sessionDose'])->name('treatment.session-dose.update');
         Route::get('/{dossier}/visits/{visit}/doses', [$oncology, 'doses'])->whereNumber(['dossier', 'visit'])->name('treatment.doses');
         foreach (['doses' => ['administer', 'dose'], 'dispensing' => ['dispense', 'dispensing']] as $segment => [$handler, $parameter]) {
             Route::post('/{dossier}/visits/{visit}/'.$segment, [$oncology, $handler])->whereNumber(['dossier', 'visit'])->name('treatment.'.$segment.'.create');
