@@ -48,6 +48,16 @@ test("desktop geometry, local assets, labels, validation and keyboard password t
     await page.evaluate(() => document.fonts.ready);
     const geometry = await page.locator('section[aria-labelledby="login-heading"]').evaluate(el => ({ width: el.getBoundingClientRect().width, radius: getComputedStyle(el).borderRadius }));
     assert.deepEqual(geometry, { width: 440, radius: "26px" });
+    assert.equal(await page.locator('img[src="/brand/logos/logo-ar-color.svg"]').count(), 1);
+    assert.equal(await page.locator('img[src="/brand/logos/mark-color.svg"]').count(), 0);
+    assert.equal(await page.locator('[data-flag="sy"]').count(), 1);
+    assert.equal(await page.locator('[data-flag="ae"]').count(), 1);
+    assert.deepEqual(await page.evaluate(() => {
+      const card = document.querySelector('section[aria-labelledby="login-heading"]').getBoundingClientRect();
+      const sy = document.querySelector('[data-flag="sy"]').getBoundingClientRect();
+      const ae = document.querySelector('[data-flag="ae"]').getBoundingClientRect();
+      return { syRight: Math.abs(sy.right - card.right) < 1, aeLeft: Math.abs(ae.left - card.left) < 1 };
+    }), { syRight: true, aeLeft: true });
     assert.equal(await page.evaluate(() => [...document.images].every(i => i.complete && i.naturalWidth > 0)), true);
     assert.equal(await page.evaluate(() => document.fonts.check('14px "Cairo"', 'مشفى Hospital')), true);
     assert.equal(await page.evaluate(() => [...document.fonts].some(font => font.family.replaceAll('"', '') === "Cairo" && font.status === "loaded")), true);
@@ -199,7 +209,7 @@ test("protected API rejection clears expired or disabled-account tokens (mocked)
   }
 });
 
-test("desktop pointer tilts the card while the original mark remains fixed; touch disables tilt without reduced-motion", async () => {
+test("desktop pointer tilts the card while the wordmark remains fixed; touch disables tilt without reduced-motion", async () => {
   const { context, page } = await pageFor({ reducedMotion: "no-preference" });
   try {
     await page.goto(`${base}/login`);
@@ -212,8 +222,8 @@ test("desktop pointer tilts the card while the original mark remains fixed; touc
       const element = document.querySelector('section[aria-labelledby="login-heading"]').parentElement;
       return getComputedStyle(element).transform.startsWith('matrix3d');
     });
-    const mark = page.locator('img[src="/brand/logos/mark-color.svg"]');
-    assert.equal(await mark.evaluate(el => getComputedStyle(el).transform), "none");
+    const wordmark = page.locator('img[src="/brand/logos/logo-ar-color.svg"]');
+    assert.equal(await wordmark.evaluate(el => getComputedStyle(el).transform), "none");
     assert.ok(await page.evaluate(() => document.getAnimations().some(a => a.playState === "running")));
   } finally { await context.close(); }
   const touch = await pageFor({ hasTouch: true, isMobile: true, reducedMotion: "no-preference" });

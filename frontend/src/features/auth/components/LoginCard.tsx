@@ -67,13 +67,13 @@ export default function LoginCard() {
     <motion.div className={styles.glare} style={{ background: glare }} aria-hidden="true" />
     <section className={styles.card} aria-labelledby="login-heading">
       <div className={styles.topBar} aria-hidden="true" />
-      <div className={styles.flagCorner} aria-hidden="true"><div className={styles.flagRibbon}>
+      <div className={styles.flagCorner} data-flag="sy" aria-hidden="true"><div className={styles.flagRibbon}>
         <span>★</span><span>★</span><span>★</span>
       </div></div>
+      <div className={`${styles.flagCorner} ${styles.flagCornerStart}`} data-flag="ae" aria-hidden="true">
+        <div className={`${styles.flagRibbon} ${styles.flagRibbonUae}`}><span className={styles.uaeHoist} /></div>
+      </div>
       <header className={styles.brand}>
-        <div className={styles.markRing}><div className={styles.markInner}>
-          <Image src="/brand/logos/mark-color.svg" alt="" width={66} height={74} priority />
-        </div></div>
         <div className={styles.wordmark}>
           <Image src="/brand/logos/logo-ar-color.svg" alt="مشفى محمد بن زايد الإماراتي" width={200} height={95} priority />
           <p>نظام إدارة المشفى</p>
