@@ -6,7 +6,7 @@ import Modal from "../clinics/Modal";
 import styles from "../clinics/clinics.module.css";
 
 export type Category = { id: number; code: string; name_ar: string; is_active: boolean };
-export default function CategoryEditor({ facilityId, onClose, onSaved }: { facilityId: number; onClose: () => void; onSaved: (category: Category) => void }) {
+export default function CategoryEditor({ facilityId, kind = "service", onClose, onSaved }: { facilityId: number; kind?: "service" | "medication"; onClose: () => void; onSaved: (category: Category) => void }) {
   const [fields, setFields] = useState({ code: "", name_ar: "", is_active: true });
   const [error, setError] = useState<AuthError | null>(null), [busy, setBusy] = useState(false);
   const pending = useRef(false), controller = useRef<AbortController | null>(null);
@@ -14,7 +14,7 @@ export default function CategoryEditor({ facilityId, onClose, onSaved }: { facil
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (pending.current) return;
     pending.current = true; setBusy(true); setError(null); const active = new AbortController(); controller.current = active;
-    try { const category = await apiRequest<Category>("service-catalog/categories", { method: "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, ...fields }) }); if (!active.signal.aborted) onSaved(category); }
+    try { const category = await apiRequest<Category>("service-catalog/categories", { method: "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, kind, ...fields }) }); if (!active.signal.aborted) onSaved(category); }
     catch (reason) { if (!active.signal.aborted) setError(reason instanceof AuthError ? reason : new AuthError(0, "FAILED", "تعذّر إنشاء الفئة. المدخلات محفوظة.")); }
     finally { if (!active.signal.aborted) { pending.current = false; setBusy(false); } }
   }

@@ -11,7 +11,7 @@ let browser;
 before(async () => { browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined }); });
 after(async () => { await browser?.close(); });
 
-async function openShell({ width = 1440, height = 900, logoutFailure = false, clock } = {}) {
+async function openShell({ width = 1440, height = 900, logoutFailure = false, clock, access = [] } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce", timezoneId: "America/Los_Angeles" });
   const page = await context.newPage();
   if (clock) await page.clock.install({ time: new Date(clock) });
@@ -29,7 +29,7 @@ async function openShell({ width = 1440, height = 900, logoutFailure = false, cl
         const fixture = dashboardFixture({ id: 11, name: "مستخدم الاختبار", username: "shell-test", must_change_password: false });
         return route.fulfill({ json: { data: url.pathname.endsWith("/general") ? fixture.detail : fixture.catalog } });
       }
-      if (url.pathname.endsWith("/user")) return route.fulfill({ json: { data: { user: { id: 11, staff_id: null, username: "shell-test", name: "مستخدم الاختبار", email: null, must_change_password: false, last_login_at: null }, access: [] } } });
+      if (url.pathname.endsWith("/user")) return route.fulfill({ json: { data: { user: { id: 11, staff_id: null, username: "shell-test", name: "مستخدم الاختبار", email: null, must_change_password: false, last_login_at: null }, access } } });
       if (url.pathname.endsWith("/logout")) return logoutFailure ? route.abort() : route.fulfill({ status: 204 });
       throw new Error("Unexpected API call in layout test");
     }
@@ -131,11 +131,12 @@ test("Damascus clock ignores device timezone, updates across midnight and fits n
 });
 
 test("desktop and tablet collapse controls retain usable navigation names without inventing routes", async () => {
-  const { context, page } = await openShell();
+  const { context, page } = await openShell({ access: [{ facility: { id: 1, code: "TEST", name_ar: "منشأة اختبار", timezone: "Asia/Damascus" }, roles: [], permissions: ["catalog.view"] }] });
   try {
     const nav = page.getByRole("navigation", { name: "التنقل الرئيسي" });
-    const labels = ["الأدوية", "تقارير", "السجل"];
-    assert.equal(await nav.getByRole("link").count(), 0);
+    const labels = ["تقارير", "السجل"];
+    assert.equal(await nav.getByRole("link", { name: "الأدوية", exact: true }).getAttribute("href"), "/medications");
+    assert.equal(await nav.getByRole("link", { name: "الخدمات والإجراءات", exact: true }).getAttribute("href"), "/services-procedures");
     assert.equal(await nav.locator("button:disabled").count(), labels.length);
     assert.deepEqual(await nav.getByRole("button").evaluateAll(items => items.map(item => item.getAttribute("aria-label"))), labels.map(label => `${label} — قريبًا، غير متاح بعد`));
     assert.deepEqual(await nav.locator("small").allTextContents(), labels.map(() => "قريبًا"));

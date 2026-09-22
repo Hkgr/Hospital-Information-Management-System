@@ -37,7 +37,7 @@ export function CatalogLifecycle({ item, action, facilityId, onClose, onSaved }:
 
 type Patient = { id: number; patient_code: string; first_name: string; family_name: string };
 type Audit = { id: number; event: string; occurred_at: string; old_values: string | null; new_values: string | null };
-const auditLabels: Record<string, string> = { code: "الكود", name_ar: "الاسم", description: "الوصف", is_active: "الحالة", archived_at: "تاريخ الأرشفة", category_id: "معرّف فئة الخدمة", procedure_type_id: "معرّف نوع الإجراء" };
+const auditLabels: Record<string, string> = { code: "الكود", name_ar: "الاسم", description: "الوصف", is_active: "الحالة", archived_at: "تاريخ الأرشفة", category_id: "معرّف الفئة", procedure_type_id: "معرّف نوع الإجراء", default_unit: "الوحدة الافتراضية", strength: "التركيز", dosage_form: "الشكل الصيدلاني", reorder_level: "حد إعادة الطلب" };
 function AuditChanges({ row }: { row: Audit }) {
   const previous: Record<string, unknown> = row.old_values ? JSON.parse(row.old_values) : {};
   const current: Record<string, unknown> = row.new_values ? JSON.parse(row.new_values) : {};
