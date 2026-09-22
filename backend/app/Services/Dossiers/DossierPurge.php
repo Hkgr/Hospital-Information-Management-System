@@ -34,7 +34,7 @@ class DossierPurge
             }
             $this->forgetAudit($f['id'], $id, $visitIds, $patientId);
             DB::table('patient_dossiers')->where('id', $id)->where('facility_id', $f['id'])->delete();
-            app(DossierWrites::class)->audit($request, $f, 'patient_dossier', $id, ['code' => $dossier['code'], 'patient_id' => $patientId], null, 'deleted');
+            app(DossierWrites::class)->audit($request, $f, 'patient_dossier', $id, ['code' => $dossier['code'], 'patient_id' => $patientId], ['deleted' => true], 'deleted');
             $this->forgetOrphanPatient($patientId);
         });
     }
