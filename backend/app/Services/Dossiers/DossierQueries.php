@@ -185,7 +185,7 @@ class DossierQueries
                 ->orderBy('e.'.$date)->orderBy('e.id')->get(['e.id', 'n.code', 'n.name_ar as name', 'e.'.$date.' as date', ...($kind === 'outcomes' ? [] : ['e.quantity'])])->all();
         }
         $result['medications'] = DB::table('visit_medications as e')->where('e.visit_id', $visit)->where('e.facility_id', $f['id'])->whereNull('e.voided_at')->where('e.dispensed_on', '<=', $f['today'])
-            ->when(! ($f['capabilities']['treatment_view'] ?? false), fn ($q) => $q->whereNull('e.dose_session_id'))->orderBy('e.dispensed_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 'e.dispensed_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit'])->all();
+            ->when(! ($f['capabilities']['treatment_view'] ?? false), fn ($q) => $q->whereNull('e.dose_session_id'))->orderBy('e.dispensed_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 'e.dispensed_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit', 'e.dispensing_purpose', 'e.dose_session_id'])->all();
         $result['administered_medications'] = DB::table('dose_sessions as s')->join('dose_session_items as e', 'e.dose_session_id', '=', 's.id')->where('s.visit_id', $visit)->where('s.facility_id', $f['id'])->whereNull('s.voided_at')->whereNull('e.voided_at')->where('s.administered_on', '<=', $f['today'])
             ->when(! ($f['capabilities']['treatment_view'] ?? false), fn ($q) => $q->whereNull('s.oncology_session_id'))->orderBy('s.administered_on')->orderBy('e.id')->get(['e.id', 'e.medication_name_snapshot as name', 's.administered_on as date', 'e.dose_text', 'e.quantity', 'e.quantity_unit'])->all();
 

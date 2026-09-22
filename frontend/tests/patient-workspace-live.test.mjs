@@ -98,8 +98,10 @@ test('new card and real first visit, validation and compact clinic/doctor fields
       await page.getByRole('button', { name: 'إضافة خطة علاجية', exact: true }).waitFor();
       await shot(page, `treatment-${width}`);
       await stage(page, 'أدوية الزيارة والنتيجة', 4);
-      await page.getByRole('tab', {name:'دواء أُعطي فعليًا', exact:true}).click();
-      await page.getByRole('heading', { name: 'سجل الجرعات والأدوية المصروفة للزيارة', exact: true }).waitFor();
+      await page.getByRole('tab', {name:'صرف غير مرتبط بالجرعة', exact:true}).click();
+      await page.getByRole('heading', { name: 'صرف غير مرتبط بالجرعة', exact: true }).waitFor();
+      await page.getByRole('tab', {name:'صرف خارج المشفى', exact:true}).click();
+      await page.getByRole('heading', { name: 'صرف خارج المشفى', exact: true }).waitFor();
       await shot(page, `administration-${width}`);
       const record = (await api('GET', `/${d.id}?facility_id=${f.facility}`)).data;
       assert.equal(record.visit_count, 1);

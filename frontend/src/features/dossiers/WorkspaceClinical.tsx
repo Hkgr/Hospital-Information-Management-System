@@ -9,7 +9,7 @@ import PathologyPanel from "./PathologyPanel";
 import layout from "./wizard.module.css";
 
 export default function WorkspaceClinical({ facility, snapshot, caps, active, visited, revision, onChanged, medicationView }: {
-  facility: number; snapshot: Snapshot; caps: Record<string, boolean>; active: number; visited: number[]; revision: number; onChanged: () => void; medicationView?: "administration"|"dispensing";
+  facility: number; snapshot: Snapshot; caps: Record<string, boolean>; active: number; visited: number[]; revision: number; onChanged: () => void; medicationView?: "unlinked"|"outside";
 }) {
   const visit = useClinicRequest<Visit>(snapshot.visit ? `dossiers/${snapshot.id}/visits/${snapshot.visit.id}?facility_id=${facility}` : null, false, true, revision);
   const patient = useClinicRequest<Dossier>(active === 6 || visited.includes(6) ? `dossiers/${snapshot.id}?facility_id=${facility}` : null, false, true, revision);
