@@ -64,6 +64,16 @@ class AuditLogApiTest extends TestCase
         $doc = $this->getJson('/docs/api.json')->assertOk()->json();
         $this->assertArrayHasKey('/api/audit', $doc['paths']);
         $this->assertMatchesSchema($doc, $doc['paths']['/api/audit']['get']['responses'][200]['content']['application/json']['schema'], $response->json());
+        $id = $row['id'];
+        $count = DB::table('audit_logs')->count();
+        $detail = $this->getLog('/'.$id.'?facility_id='.$facility, $token)->assertOk();
+        $this->assertSame('كاتب السجل', $detail->json('data.actor.name'));
+        $this->assertSame('الدليل', $detail->json('data.category_label'));
+        $this->assertSame($count, DB::table('audit_logs')->count(), 'GET detail must not write an audit row');
+        $this->getLog('/'.$id.'?facility_id='.$other, $token)->assertForbidden()->assertJsonPath('error.code', 'FACILITY_ACCESS_DENIED');
+        $this->getLog('/999999?facility_id='.$facility, $token)->assertNotFound()->assertJsonPath('error.code', 'AUDIT_NOT_FOUND');
+        $this->assertArrayHasKey('/api/audit/{id}', $doc['paths']);
+        $this->assertMatchesSchema($doc, $doc['paths']['/api/audit/{id}']['get']['responses'][200]['content']['application/json']['schema'], $detail->json());
     }
 
     public function test_login_logout_and_technical_errors_are_recorded_without_secrets(): void
