@@ -1,0 +1,12 @@
+.kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.kind { display: inline-flex; align-items: center; border-radius: 20px; padding: 3px 10px; font-size: 10px; font-weight: 700; white-space: nowrap; line-height: 1.6; }
+.kind[data-kind="patient_card"] { color: #0b6178; background: #e7f4f6; }
+.kind[data-kind="treatment"] { color: #186a96; background: #e7f3fb; }
+.kind[data-kind="directory"] { color: #3d6270; background: #eef3f5; }
+.kind[data-kind="stock"] { color: #0f7a5a; background: #e8f6ef; }
+.kind[data-kind="blood_bank"] { color: #a52d40; background: #fdecee; }
+.kind[data-kind="accounts"] { color: #53448c; background: #f1eef8; }
+.kind[data-kind="technical"], .kind[data-kind="failed"], .kind[data-kind="voided"], .kind[data-kind="system_error"] { color: #922b3b; background: #fff2f3; }
+.kind[data-kind="other"], .kind[data-kind="created"], .kind[data-kind="updated"], .kind[data-kind="login"], .kind[data-kind="logout"] { color: #355e68; background: #eef5f6; }
+.clickable { cursor: pointer; }
+.clickable:focus-visible { outline: 2px solid #25839b; outline-offset: -2px; }

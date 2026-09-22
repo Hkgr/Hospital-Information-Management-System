@@ -207,6 +207,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
     Route::get('/dashboards', [DashboardController::class, 'index'])->name('dashboards');
     Route::get('/dashboards/{key}', [DashboardController::class, 'show'])->name('dashboards.show');
     Route::get('/audit', [AuditLogController::class, 'index'])->name('audit');
+    Route::get('/audit/{id}', [AuditLogController::class, 'show'])->whereNumber('id')->name('audit.show');
 });
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {

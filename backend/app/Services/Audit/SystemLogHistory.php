@@ -87,29 +87,7 @@ class SystemLogHistory
                 ->get(['a.id', 'a.actor_id', 'a.entity_type', 'a.entity_id', 'a.event', 'a.occurred_at', 'a.reason', 'a.old_values', 'a.new_values']);
             $actors = DB::table('users')->whereIn('id', $rows->pluck('actor_id')->filter())->pluck('name', 'id');
             $presenter = new DossierAuditValues($f, $rows);
-            $data = $rows->map(function ($row) use ($f, $actors, $presenter) {
-                $old = json_decode($row->old_values ?? '{}', true) ?: [];
-                $new = json_decode($row->new_values ?? '{}', true) ?: [];
-                $void = ! empty($new['voided_at']);
-                $action = $void ? 'voided' : ($row->event === 'saved' ? ($row->old_values === null ? 'created' : 'updated') : $row->event);
-                $category = self::CATEGORY_OF[$row->entity_type] ?? 'other';
-                $changes = $presenter->changes($row->entity_type, $old, $new);
-                if ($changes === [] && in_array($row->entity_type, ['system_error', 'auth_session'], true)) {
-                    $changes = $this->safeFacts($row->entity_type, $new);
-                }
-
-                return [
-                    'id' => $row->id,
-                    'occurred_at' => CarbonImmutable::parse($row->occurred_at, config('app.timezone'))->setTimezone($f['timezone'])->toIso8601String(),
-                    'actor' => ['id' => $row->actor_id, 'name' => $actors[$row->actor_id] ?? 'مستخدم غير متاح'],
-                    'category' => $category, 'category_label' => self::CATEGORIES[$category],
-                    'entity' => $row->entity_type, 'entity_label' => self::ENTITIES[$row->entity_type] ?? $row->entity_type,
-                    'entity_id' => $row->entity_id, 'action' => $action,
-                    'action_label' => self::ACTIONS[$action] ?? (DossierAuditHistory::ACTIONS[$action] ?? 'حركة مسجلة'),
-                    'changes' => $changes,
-                    'reason' => $row->reason ?: (is_string($new['void_reason'] ?? null) ? $new['void_reason'] : null),
-                ];
-            })->all();
+            $data = $rows->map(fn ($row) => $this->present($f, $row, $actors, $presenter))->all();
 
             return [
                 'data' => $data,
@@ -153,6 +131,43 @@ class SystemLogHistory
         }
 
         return $q;
+    }
+
+    public function show(array $f, int $id): array
+    {
+        return DB::transaction(function () use ($f, $id) {
+            $row = DB::table('audit_logs as a')->where('a.facility_id', $f['id'])->where('a.id', $id)
+                ->first(['a.id', 'a.actor_id', 'a.entity_type', 'a.entity_id', 'a.event', 'a.occurred_at', 'a.reason', 'a.old_values', 'a.new_values']);
+            abort_unless($row, 404);
+            $actors = DB::table('users')->where('id', $row->actor_id)->pluck('name', 'id');
+
+            return ['data' => $this->present($f, $row, $actors, new DossierAuditValues($f, collect([$row])))];
+        });
+    }
+
+    private function present(array $f, object $row, $actors, DossierAuditValues $presenter): array
+    {
+        $old = json_decode($row->old_values ?? '{}', true) ?: [];
+        $new = json_decode($row->new_values ?? '{}', true) ?: [];
+        $void = ! empty($new['voided_at']);
+        $action = $void ? 'voided' : ($row->event === 'saved' ? ($row->old_values === null ? 'created' : 'updated') : $row->event);
+        $category = self::CATEGORY_OF[$row->entity_type] ?? 'other';
+        $changes = $presenter->changes($row->entity_type, $old, $new);
+        if ($changes === [] && in_array($row->entity_type, ['system_error', 'auth_session'], true)) {
+            $changes = $this->safeFacts($row->entity_type, $new);
+        }
+
+        return [
+            'id' => $row->id,
+            'occurred_at' => CarbonImmutable::parse($row->occurred_at, config('app.timezone'))->setTimezone($f['timezone'])->toIso8601String(),
+            'actor' => ['id' => $row->actor_id, 'name' => $actors[$row->actor_id] ?? 'مستخدم غير متاح'],
+            'category' => $category, 'category_label' => self::CATEGORIES[$category],
+            'entity' => $row->entity_type, 'entity_label' => self::ENTITIES[$row->entity_type] ?? $row->entity_type,
+            'entity_id' => $row->entity_id, 'action' => $action,
+            'action_label' => self::ACTIONS[$action] ?? (DossierAuditHistory::ACTIONS[$action] ?? 'حركة مسجلة'),
+            'changes' => $changes,
+            'reason' => $row->reason ?: (is_string($new['void_reason'] ?? null) ? $new['void_reason'] : null),
+        ];
     }
 
     private function safeFacts(string $type, array $new): array
