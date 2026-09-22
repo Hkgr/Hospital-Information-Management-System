@@ -95,7 +95,7 @@ class SaveOncology extends FormRequest
             return $rules + ['confirm_duplicate' => ['sometimes', 'boolean'], 'duplicate_reason' => ['required_if:confirm_duplicate,true', 'nullable', 'string', 'max:2000'], 'modality' => ['required', Rule::in(array_keys(OncologyQueries::MODALITIES))], 'intent' => ['required', Rule::in(array_keys(OncologyQueries::INTENTS))], 'protocol_text' => ['required', 'string', 'max:20000'], 'protocol_clinic_id' => $id, 'protocol_doctor_id' => $id, 'treating_clinic_id' => $id, 'treating_doctor_id' => $id];
         }
         if ($op === 'administer') {
-            $rules += ['reporting_period_id' => $id, 'administered_on' => $date, 'supervising_staff_id' => $id, 'administered_by' => $id, 'session_label' => ['nullable', 'string', 'max:200'], 'note' => $text, 'items' => ['present', 'array', 'max:100']];
+            $rules += ['reporting_period_id' => $optionalId, 'administered_on' => $date, 'supervising_staff_id' => $id, 'administered_by' => $id, 'session_label' => ['nullable', 'string', 'max:200'], 'note' => $text, 'items' => ['present', 'array', 'max:100']];
             if ($this->route('dose')) {
                 $rules['reason'] = ['required', 'string', 'max:2000'];
             } else {
@@ -104,7 +104,7 @@ class SaveOncology extends FormRequest
         } elseif ($op === 'dispense') {
             $free = in_array($this->input('dispensing_purpose'), ['unlinked', 'take_home'], true);
             $rules += [
-                'reporting_period_id' => $id, 'dispensed_on' => $date, 'prescribing_staff_id' => $id,
+                'reporting_period_id' => $optionalId, 'dispensed_on' => $date, 'prescribing_staff_id' => $id,
                 'dispensing_purpose' => ['required', 'in:take_home,supportive,unlinked'],
                 'dose_session_id' => ['nullable', 'integer', 'min:1', Rule::requiredIf(fn () => $this->input('dispensing_purpose') === 'supportive'), Rule::prohibitedIf(fn () => ! $this->route('dispensing') && $free)],
                 'prescribing_clinic_id' => ['nullable', 'integer', 'min:1', Rule::requiredIf(fn () => $free && ! $this->filled('dose_session_id')), Rule::prohibitedIf(fn () => $this->input('dispensing_purpose') === 'supportive')],
@@ -114,7 +114,9 @@ class SaveOncology extends FormRequest
             }
         }
         $prefix = $op === 'dispense' ? '' : 'items.*.';
-        $rules += [$prefix.'medication_id' => $optionalId, $prefix.'medication_name_snapshot' => ['nullable', 'string', 'max:200'], $prefix.'medication_code_snapshot' => ['nullable', 'string', 'max:100'], $prefix.'funding_source_id' => $op === 'administer' ? $id : $optionalId, $prefix.'note' => $text];
+        $creating = ($op === 'administer' && ! $this->route('dose')) || ($op === 'dispense' && ! $this->route('dispensing'));
+        $source = [$creating ? 'required' : 'nullable', 'string', Rule::in(array_keys(OncologyQueries::MEDICATION_SOURCES))];
+        $rules += [$prefix.'medication_id' => $optionalId, $prefix.'medication_name_snapshot' => ['nullable', 'string', 'max:200'], $prefix.'medication_code_snapshot' => ['nullable', 'string', 'max:100'], $prefix.'funding_source_id' => $optionalId, $prefix.'medication_source' => $source, $prefix.'note' => $text];
         if ($op !== 'dispense') {
             $rules += [$prefix.'dose_value' => $positive, $prefix.'dose_unit' => ['required', 'string', 'max:40'], $prefix.'route' => ['required', 'string', 'max:100']];
         }

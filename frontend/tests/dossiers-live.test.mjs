@@ -25,7 +25,7 @@ test('list reuses server pagination and add cannot write; complete visual states
   for(const width of [390,768,1440]){const{page,context}=await pageAt(`/patient-cards?facility_id=${f.facility}&per_page=10&sort=code&direction=asc`,width);try{
     await page.getByRole('region',{name:'جدول بطاقات المرضى',exact:true}).waitFor();assert.equal(await page.locator('tbody tr').count(),10);
     if(width===390) await page.getByRole('button',{name:'فتح قائمة التنقل',exact:true}).click();
-    await page.getByRole('link',{name:'بطاقات المرضى',exact:true}).waitFor();
+    await page.getByRole('link',{name:'بطاقة المرضى',exact:true}).waitFor();
     if(width===390) await page.keyboard.press('Escape');
     const writes=[];page.on('request',r=>{if(['POST','PUT','PATCH','DELETE'].includes(r.method())&&r.url().includes('/hospital-api/'))writes.push(r.url());});
     const add=page.getByRole('button',{name:'تسجيل بطاقة مريض',exact:true});assert.equal(await add.isDisabled(),true);await add.evaluate(el=>el.click());assert.equal(writes.length,0);assert.equal(await page.getByRole('dialog').count(),0);
