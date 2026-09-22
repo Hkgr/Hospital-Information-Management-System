@@ -17,8 +17,9 @@ class DashboardDetailResponse extends JsonResource
             'facilities' => FacilityResource::collection($this->resource['facilities']),
             /** @var int|null */
             'selected_facility_id' => $this->resource['selected_facility_id'],
-            /** @var list<array{key: string, title: string}> Implemented local destinations only, currently empty. */
+            /** @var list<array{key: string, title: string}> Known local destinations the caller is authorized to open. */
             'links' => $this->resource['links'],
+            'stats' => new DashboardStatsResource($this->resource['stats']),
         ];
     }
 }

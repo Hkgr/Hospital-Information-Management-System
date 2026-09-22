@@ -73,16 +73,31 @@ facility ID; if otherwise allowed but none is supplied, the response is 422.
     },
     "facilities": [],
     "selected_facility_id": null,
-    "links": []
+    "links": [],
+    "stats": {
+      "counters": [],
+      "visit_status": [],
+      "dossier_status": [],
+      "clinics": [],
+      "doctors": [],
+      "appointments": []
+    }
   }
 }
 ```
 
 `user` uses the existing safe UserResource. Facilities expose `id`, `code`, `name_ar`, and
 `timezone`. When an ID is supplied, detail data contains only that facility. There are no
-other-user records, clinical statistics, revenue totals, credentials or token values.
-`links` is empty because no additional medical/administrative destinations are implemented.
-Future links must use known local keys and be filtered by the same backend authorization.
+other-user records, credentials or token values. `links` lists known local destination keys
+the caller already holds in at least one of the remaining facilities (`patient-cards`,
+`visits`, `doctors`, `clinics`, `services-procedures`, `medications`, `stock`, `blood-bank`).
+The API never returns URLs. `stats` is always present: counters, visit/dossier rings, clinic
+and doctor rankings, and upcoming scheduled oncology sessions. Each block is empty unless the
+matching facility permission is held in the remaining access (`dossiers.view`,
+`dossiers.treatment.view`, `clinics.view`, `doctors.view`, `catalog.view`, `stock.view`,
+`blood_bank.view`). Rankings use complete non-voided visits. Appointments include patient
+names only with both `dossiers.view` and `dossiers.treatment.view`; catalog beneficiary
+identities are never listed. Counts never combine privileges across facilities.
 
 ### Errors
 
@@ -115,8 +130,9 @@ validation errors. These diagnostics do not indicate a failed export, but remain
    Roles may contribute permissions within that facility; role names and first-role order
    never grant access. Unknown access rules or empty restricted permission lists fail closed.
 3. Add its actual data implementation to DashboardService after the common authorization
-   check, scoped to the selected facility. The current service only returns self context;
-   configuring a name alone does not implement a clinical data source.
+   check, scoped to the selected facility. The general dashboard additionally returns
+   permission-gated home statistics and known local links from DashboardHome. Configuring a
+   name alone does not implement a clinical data source.
 4. Add the matching local component to the frontend registry. Preserve the shared route
    group/AppShell. The selector appears only when more than one supported dashboard is allowed.
 5. Test direct API denial, revocation with the same token, facility isolation and default ordering.

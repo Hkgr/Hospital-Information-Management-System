@@ -23,11 +23,12 @@ class DashboardController extends Controller
         return new DashboardCatalogResponse($this->dashboards->catalog($request->user(), $request->facilityId()));
     }
 
-    #[Endpoint(operationId: 'dashboardDetail', title: 'Read an allowed dashboard', description: 'Requires an active account and a Bearer token with the api ability. Authorization is checked again using current active facility/role/permission assignments on every request. Unknown keys return 404 DASHBOARD_NOT_FOUND; known but denied dashboards return 403 DASHBOARD_ACCESS_DENIED. An inaccessible facility_id returns 403 FACILITY_ACCESS_DENIED without revealing whether it exists. Restricted dashboards require facility_id (422 if omitted); privileges are never combined across facilities. General data contains only the current user and their accessible facilities. Responses are private, no-store.')]
-    #[DocumentedResponse(200, description: 'Only the authenticated user and current authorized facility context.', examples: [['data' => [
+    #[Endpoint(operationId: 'dashboardDetail', title: 'Read an allowed dashboard', description: 'Requires an active account and a Bearer token with the api ability. Authorization is checked again using current active facility/role/permission assignments on every request. Unknown keys return 404 DASHBOARD_NOT_FOUND; known but denied dashboards return 403 DASHBOARD_ACCESS_DENIED. An inaccessible facility_id returns 403 FACILITY_ACCESS_DENIED without revealing whether it exists. Restricted dashboards require facility_id (422 if omitted); privileges are never combined across facilities. General data contains the current user, accessible facilities, and permission-gated home statistics and local links. Stats and links are omitted (empty) without the matching facility permission; privileges are never combined across facilities. Responses are private, no-store.')]
+    #[DocumentedResponse(200, description: 'Authenticated user, authorized facility context, and permission-gated home statistics.', examples: [['data' => [
         'dashboard' => ['key' => 'general', 'title' => 'لوحة التحكم', 'requires_facility' => false, 'facilities' => [], 'default_facility_id' => null],
         'user' => ['id' => 1, 'staff_id' => null, 'username' => 'example-user', 'name' => 'مستخدم توضيحي', 'email' => null, 'must_change_password' => false, 'last_login_at' => null],
         'facilities' => [], 'selected_facility_id' => null, 'links' => [],
+        'stats' => ['counters' => [], 'visit_status' => [], 'dossier_status' => [], 'clinics' => [], 'doctors' => [], 'appointments' => []],
     ]]])]
     public function show(DashboardRequest $request, string $key): DashboardDetailResponse
     {
