@@ -77,8 +77,8 @@ class DossierCompletionTest extends DossierCompletionCase
     {
         $this->callApi('POST', $this->path('/complete'), ['lock_version' => $this->s['visit']['lock_version'], 'dossier_lock_version' => $this->s['lock_version'], 'confirmed' => true, 'clinic_id' => $this->f['clinics'][0], 'attending_staff_id' => $this->f['workflow_doctors'][0]])->assertUnprocessable();
         $this->s = $this->saveSection('clinical', ['services' => [], 'procedures' => []])->assertOk()->json('data');
+        $this->callApi('POST', $this->path('/complete'), ['lock_version' => $this->s['visit']['lock_version'], 'dossier_lock_version' => $this->s['lock_version'], 'confirmed' => true, 'clinic_id' => $this->f['clinics'][0], 'attending_staff_id' => $this->f['workflow_doctors'][0]])->assertUnprocessable();
         $this->s = $this->saveSection('medications', ['prescription' => null, 'outcome' => $this->outcome()])->assertOk()->json('data');
-        $this->s = $this->callApi('POST', $this->path('/review'), ['lock_version' => $this->s['visit']['lock_version'], 'confirmed' => true])->assertOk()->json('data');
         $this->s = $this->callApi('POST', $this->path('/complete'), ['lock_version' => $this->s['visit']['lock_version'], 'dossier_lock_version' => $this->s['lock_version'], 'confirmed' => true, 'clinic_id' => $this->f['clinics'][0], 'attending_staff_id' => $this->f['workflow_doctors'][0]])->assertOk()->assertJsonPath('data.status', 'active')->assertJsonPath('data.visit.status', 'complete')->json('data');
         $initial = $this->s['visit']['id'];
         $this->saveSection('clinical', ['services' => [], 'procedures' => []])->assertConflict();

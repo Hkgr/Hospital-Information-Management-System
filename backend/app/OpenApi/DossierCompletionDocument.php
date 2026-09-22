@@ -64,7 +64,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
         } elseif (str_ends_with($route, '/complete')) {
             $fields += ['dossier_lock_version' => $i(), 'confirmed' => new BooleanType, 'clinic_id' => $i(), 'attending_staff_id' => $i()];
             $required = array_keys($fields);
-            $op->description .= ' Requires dossiers.visits.complete; initial activation additionally dossiers.finalize. Six saved sections, diagnosis, outcome, valid retained contexts, no pending uploads, explicit confirmation. Atomically activates initial dossier and completes only this visit.';
+            $op->description .= ' Requires dossiers.visits.complete; initial activation additionally dossiers.finalize. The first five saved sections (personal, medical, visit, clinical, medications) are enough to activate the card; attachments/review stay optional. Diagnosis, outcome, valid retained contexts, no pending uploads, explicit confirmation. Atomically activates initial dossier and completes only this visit.';
         } elseif (str_ends_with($route, '/review')) {
             $fields['confirmed'] = new BooleanType;
             $required[] = 'confirmed';

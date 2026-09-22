@@ -34,9 +34,9 @@ class DossierFinalizer
                     }
                 }
                 $progress = DB::table('dossier_section_progress')->where('dossier_id', $dossier)->where('facility_id', $f['id'])->where(fn ($q) => $q->whereNull('visit_id')->orWhere('visit_id', $visit))->get()->keyBy('section');
-                foreach (['personal', 'medical', 'visit', 'clinical', 'medications', 'attachments'] as $section) {
+                foreach (['personal', 'medical', 'visit', 'clinical', 'medications'] as $section) {
                     if (($progress->get($section)?->state ?? 'not_started') !== 'saved') {
-                        throw ValidationException::withMessages([$section => 'احفظ هذا القسم وراجعه صراحة قبل الإكمال؛ يمكن تأكيد الأقسام الاختيارية فارغة.']);
+                        throw ValidationException::withMessages([$section => 'احفظ هذا القسم قبل تفعيل البطاقة؛ المرفقات والمراجعة اختيارية.']);
                     }
                 }
                 if ($v->visit_date > $f['today']) {
