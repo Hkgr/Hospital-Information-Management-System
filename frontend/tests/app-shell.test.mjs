@@ -134,10 +134,11 @@ test("desktop and tablet collapse controls retain usable navigation names withou
   const { context, page } = await openShell({ access: [{ facility: { id: 1, code: "TEST", name_ar: "منشأة اختبار", timezone: "Asia/Damascus" }, roles: [], permissions: ["catalog.view"] }] });
   try {
     const nav = page.getByRole("navigation", { name: "التنقل الرئيسي" });
-    const labels = ["تقارير", "السجل"];
+    const labels = ["تقارير"];
     assert.equal(await nav.getByRole("link", { name: "الرئيسية", exact: true }).getAttribute("href"), "/dashboard/general");
     assert.equal(await nav.getByRole("link", { name: "الأدوية", exact: true }).getAttribute("href"), "/medications");
     assert.equal(await nav.getByRole("link", { name: "الخدمات والإجراءات", exact: true }).getAttribute("href"), "/services-procedures");
+    assert.equal(await nav.getByRole("link", { name: "السجل", exact: true }).getAttribute("href"), "/audit");
     assert.equal(await nav.locator("button:disabled").count(), labels.length);
     assert.deepEqual(await nav.getByRole("button").evaluateAll(items => items.map(item => item.getAttribute("aria-label"))), labels.map(label => `${label} — قريبًا، غير متاح بعد`));
     assert.deepEqual(await nav.locator("small").allTextContents(), labels.map(() => "قريبًا"));
@@ -240,8 +241,8 @@ test("mobile drawer traps focus, restores it, dismisses with Escape/backdrop/nav
     await page.setViewportSize({ width: 320, height: 500 });
     assert.equal(await menu.getAttribute("aria-expanded"), "false");
     await menu.click();
-    await dialog.getByRole("button", { name: "السجل — قريبًا، غير متاح بعد" }).scrollIntoViewIfNeeded();
-    const lastItem = await dialog.getByRole("button", { name: "السجل — قريبًا، غير متاح بعد" }).boundingBox();
+    await dialog.getByRole("link", { name: "السجل", exact: true }).scrollIntoViewIfNeeded();
+    const lastItem = await dialog.getByRole("link", { name: "السجل", exact: true }).boundingBox();
     assert.ok(lastItem.y >= 80 && lastItem.y + lastItem.height <= 440);
     await dialog.getByRole("button", { name: "إغلاق قائمة التنقل" }).click();
     await dialog.waitFor({ state: "hidden" });

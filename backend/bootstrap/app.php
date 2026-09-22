@@ -32,6 +32,9 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(fn (Request $request, Throwable $e) => $request->is('api/*') || $request->expectsJson());
+        $exceptions->reportable(function (Throwable $e) {
+            app(\App\Services\Audit\SystemActivity::class)->recordException($e);
+        });
         $exceptions->render(function (AuthenticationException $e, Request $request) {
             if ($request->is('api/*')) {
                 return AuthError::Unauthenticated->response();

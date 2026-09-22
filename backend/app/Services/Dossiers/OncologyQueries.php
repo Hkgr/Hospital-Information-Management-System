@@ -131,7 +131,7 @@ class OncologyQueries
             }
         }
         $page = $q->orderBy('s.planned_on')->orderBy('s.id')->paginate($input['per_page'] ?? 10, ['s.*', 'p.plan_number', 'p.effective_status', 'p.current_revision_id', 'p.lock_version as plan_lock_version', 'dose.id as dose_id', 'dose.visit_id', DB::raw(self::voidedDoseSql())], 'page', $input['page'] ?? 1);
-        $courses = DB::table('oncology_session_doses as d')->leftJoin('staff as n', 'n.id', '=', 'd.nurse_id')->whereIn('d.session_id', $page->getCollection()->pluck('id'))->orderBy('d.given_on')->orderBy('d.id')->get(['d.id', 'd.session_id', 'd.given_on', 'd.dose_name', 'd.complaint', 'd.recommendations', 'd.nurse_id', 'd.lock_version', 'n.full_name as nurse_name'])->groupBy('session_id');
+        $courses = DB::table('oncology_session_doses as d')->leftJoin('staff as n', 'n.id', '=', 'd.nurse_id')->whereIn('d.session_id', $page->getCollection()->pluck('id'))->orderBy('d.given_on')->orderBy('d.id')->get(['d.id', 'd.session_id', 'd.given_on', 'd.dose_name', 'd.complaint', 'd.recommendations', 'd.nurse_id', 'd.medication_source', 'd.lock_version', 'n.full_name as nurse_name'])->groupBy('session_id');
         $page->getCollection()->each(function ($row) use ($courses) {
             $row->has_voided_dose = (bool) $row->has_voided_dose;
             $row->doses = ($courses[$row->id] ?? collect())->map(fn ($dose) => (array) $dose)->values()->all();

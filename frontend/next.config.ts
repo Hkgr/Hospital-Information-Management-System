@@ -64,7 +64,7 @@ const nextConfig: NextConfig = {
       "dossiers/options", "dossiers/options/patients", "dossiers/options/cities", "dossiers/options/clinics", "dossiers/options/doctors", "dossiers/options/diagnoses", "dossiers/diagnoses",
       "dossiers/:dossier(\\d+)/progress", "dossiers/:dossier(\\d+)/personal", "dossiers/:dossier(\\d+)/medical",
       "dossiers", "dossiers/:dossier(\\d+)", "dossiers/:dossier(\\d+)/visits", "dossiers/:dossier(\\d+)/visits/:visit(\\d+)",
-      "login", "user", "logout", "dashboards", "dashboards/:key",
+      "login", "user", "logout", "dashboards", "dashboards/:key", "audit",
       "blood-bank", "blood-bank/options", "blood-bank/cities", "blood-bank/clinics", "blood-bank/doctors", "blood-bank/patients",
       "blood-bank/events", "blood-bank/events/export/:format(pdf|xlsx)", "blood-bank/events/:event(\\d+)",
       "blood-bank/events/:event(\\d+)/report/:format(pdf|xlsx)", "blood-bank/people", "blood-bank/people/:person(\\d+)",
