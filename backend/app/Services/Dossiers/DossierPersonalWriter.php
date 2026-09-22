@@ -2,7 +2,7 @@
 
 namespace App\Services\Dossiers;
 
-use App\Http\Requests\BloodBank\SaveBloodProfile;
+use App\Http\Requests\Dossiers\SaveDossierSection;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -56,7 +56,13 @@ class DossierPersonalWriter
                     if ($id) {
                         DossierWrites::version((array) $patient, $input['patient_lock_version']);
                     }
-                    $fields = Arr::only($input, SaveBloodProfile::PERSON) + array_fill_keys(SaveBloodProfile::PERSON, null);
+                    $fields = Arr::only($input, SaveDossierSection::PERSON) + array_fill_keys(SaveDossierSection::PERSON, null);
+                    foreach (['marital_status', 'smoking_status', 'alcohol_status'] as $key) {
+                        $fields[$key] = $fields[$key] ?: 'unknown';
+                    }
+                    if (($fields['displacement_status'] ?? '') !== 'idp') {
+                        $fields['permanent_address'] = null;
+                    }
                     if (($fields['birth_date'] && $fields['birth_date'] > $f['today']) || (! $fields['birth_date'] && $fields['birth_date_accuracy'] !== 'unknown')) {
                         throw ValidationException::withMessages(['birth_date' => 'أدخل ميلادًا غير مستقبلي، أو اختر غير معروف مع تاريخ فارغ.']);
                     }
@@ -72,7 +78,7 @@ class DossierPersonalWriter
                     } else {
                         $patientId = DB::table('patients')->insertGetId($fields + ['patient_code' => $input['code'], 'identity_document_type' => 'unknown', 'identity_check_status' => 'pending', 'created_by' => $r->user()->id, 'created_at' => now()]);
                     }
-                    $this->writes->audit($r, $f, 'patient', $patientId, $patient ? Arr::only((array) $patient, [...SaveBloodProfile::PERSON, 'lock_version']) : null, $fields);
+                    $this->writes->audit($r, $f, 'patient', $patientId, $patient ? Arr::only((array) $patient, [...SaveDossierSection::PERSON, 'lock_version']) : null, $fields);
                 }
                 // patients is the one global card. patient_dossiers rows remain local
                 // clinical contexts; their historical codes are immutable aliases.

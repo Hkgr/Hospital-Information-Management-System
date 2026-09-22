@@ -11,9 +11,9 @@ import { DirectoryBack } from "../directory/DirectoryPrimitives";
 import { useClinicRequest } from "../clinics/api";
 import Picker from "./DossierPicker";
 import ConflictReview from "../blood-bank/ConflictReview";
-import { type Choice, choices } from "../blood-bank/api";
+import { type Choice } from "../blood-bank/api";
 import { historyLabels, treatmentLabels, sourceLabels } from "./api";
-import { type Fields, type Snapshot, type WizardOptions, type DiagnosisDraft, personalFields, medicalFields, visitFields, diagnosisFields, diagnosisPayload, personalLabels, medicalLabels, visitLabels } from "./wizard";
+import { type Fields, type Snapshot, type WizardOptions, type DiagnosisDraft, personalFields, medicalFields, visitFields, diagnosisFields, diagnosisPayload, personalLabels, personalChoices, medicalLabels, visitLabels } from "./wizard";
 import ExistingCardChooser from "./ExistingCardChooser";
 import WorkspaceClinical from "./WorkspaceClinical";
 import DiagnosisEditor from "./DiagnosisEditor";
@@ -104,7 +104,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
   const existingDossier = !base && mode === "existing" ? patient?.dossier_id ?? (error?.code === "DOSSIER_ALREADY_EXISTS" ? error.details.existing_dossier_id : null) : null;
   const chooseAnother = () => { setPatient(null); setError(null); reservation.current = null; touch(); };
   const allowed = step === 0 ? (base ? base.workflow.personal_update : options.creation.allowed && !existingDossier && (mode === "new" ? caps.patients_create : caps.patients_search)) : step === 1 ? base?.workflow.medical_update : step===2 ? !!base?.workflow.visit.action : !!base?.workflow.sections?.[step];
-  const input = (fields: Fields, setter: React.Dispatch<React.SetStateAction<Fields>>, labels: Fields, key: string, type = "text", required = false) => <label key={key}>{labels[key]}{required && " *"}<input name={key} aria-label={labels[key]} aria-invalid={!!error?.fields[key]} type={type} value={fields[key] ?? ""} maxLength={type === "text" ? (key === "code" ? 40 : 200) : undefined} onChange={e => changed(setter, key, e.target.value)} />{fieldError(key)}</label>;
+  const input = (fields: Fields, setter: React.Dispatch<React.SetStateAction<Fields>>, labels: Fields, key: string, type = "text", required = false) => <label key={key}>{labels[key]}{required && " *"}<input name={key} aria-label={labels[key]} aria-invalid={!!error?.fields[key]} type={type} value={fields[key] ?? ""} maxLength={type === "text" ? (key === "code" ? 40 : key === "occupation" ? 120 : 200) : undefined} onChange={e => changed(setter, key, e.target.value)} />{fieldError(key)}</label>;
   async function save(exit: boolean) {
     if (step>5 || pending.current || !allowed || review || error?.status === 409 || uploadsPending || (step===5&&dirty.some(n=>n!==5))) return;
     const controller = new AbortController(); pending.current = controller; setBusy(true); setError(null); setSaved("");
@@ -190,12 +190,16 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
             {(base || mode === "new") && <><div className={styles.fields}>
               {["first_name", "family_name"].map(k => input(personal, setPersonal, personalLabels, k, "text", ["first_name", "family_name"].includes(k)))}
               </div><details className={layout.optionalGroup}><summary>الأسرة والميلاد والجنس</summary><div className={styles.fields}>{["father_name","mother_name"].map(k=>input(personal,setPersonal,personalLabels,k))}{input(personal, setPersonal, personalLabels, "birth_date", "date")}
-              {["birth_date_accuracy", "gender"].map(key => <label key={key}>{personalLabels[key]}<select name={key} value={personal[key]} onChange={e => changed(setPersonal, key, e.target.value)}>{Object.entries(choices[key]).map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select>{fieldError(key)}</label>)}
+              {["birth_date_accuracy", "gender", "marital_status"].map(key => <label key={key}>{personalLabels[key]}<select name={key} value={personal[key]} onChange={e => changed(setPersonal, key, e.target.value)}>{Object.entries(personalChoices[key]).map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select>{fieldError(key)}</label>)}
               </div></details><details className={layout.optionalGroup}><summary>التواصل والسكن</summary><div className={styles.fields}>{["phone", "alt_phone"].map(k => input(personal, setPersonal, personalLabels, k, "tel"))}
               <div><Picker name="governorate_id" label="المحافظة السورية" choices={options.governorates} selected={options.governorates.find(g => String(g.id) === personal.governorate_id)} onSelect={g => { touch(); setPersonal(p => ({ ...p, governorate_id: String(g.id), city_id: p.governorate_id === String(g.id) ? p.city_id : "" })); }} />{personal.governorate_id && <button type="button" className={styles.secondary} onClick={() => { touch(); setPersonal(p => ({ ...p, governorate_id: "", city_id: "" })); }}>إلغاء المحافظة والمدينة</button>}{fieldError("governorate_id")}</div>
               <div>{personal.governorate_id && <Picker key={personal.governorate_id} name="city_id" label="المدينة التابعة للمحافظة" path={`dossiers/options/cities?facility_id=${facility}&governorate_id=${personal.governorate_id}`} selected={personal.city_id ? { id: Number(personal.city_id), name_ar: "المدينة المحددة" } : null} onSelect={c => changed(setPersonal, "city_id", String(c.id))} />}{fieldError("city_id")}</div>
               <label className={styles.full}>عنوان السكن<input name="address_line" value={personal.address_line} onChange={e => changed(setPersonal, "address_line", e.target.value)} maxLength={255} /><small className={styles.hint}>للعنوان خارج سوريا، اكتب المحافظة والمدينة هنا واترك اختيارات الدليل فارغة.</small>{fieldError("address_line")}</label>
-              <label>حالة النزوح<select name="displacement_status" value={personal.displacement_status} onChange={e => changed(setPersonal, "displacement_status", e.target.value)}>{Object.entries(choices.displacement_status).map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select></label>
+              <label>حالة النزوح<select name="displacement_status" value={personal.displacement_status} onChange={e => { const value = e.target.value; touch(); setPersonal(p => ({ ...p, displacement_status: value, permanent_address: value === "idp" ? p.permanent_address : "" })); }}>{Object.entries(personalChoices.displacement_status).map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select></label>
+              {personal.displacement_status === "idp" && <label className={styles.full}>عنوان الإقامة الدائم<textarea name="permanent_address" value={personal.permanent_address} onChange={e => changed(setPersonal, "permanent_address", e.target.value)} rows={3} maxLength={255} />{fieldError("permanent_address")}</label>}
+            </div></details><details className={layout.optionalGroup}><summary>المهنة والتدخين والكحول</summary><div className={styles.fields}>
+              {input(personal, setPersonal, personalLabels, "occupation")}
+              {["smoking_status", "alcohol_status"].map(key => <label key={key}>{personalLabels[key]}<select name={key} value={personal[key]} onChange={e => changed(setPersonal, key, e.target.value)}>{Object.entries(personalChoices[key]).map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select>{fieldError(key)}</label>)}
             </div></details></>}
           </>}
           {step === 1 && <>
@@ -236,7 +240,7 @@ function WizardConflict({ step, latest, personal, medical, visit, diagnoses, onA
   const format = (key: string, value: string) => {
     if (key.startsWith("row:")) { const r = JSON.parse(value) as DiagnosisDraft; return `${r.diagnosis?.name_ar ?? "غير محدد"} · ${r.clinic?.name_ar ?? "غير محددة"} · ${r.doctor?.name_ar ?? "غير محدد"} · ${r.diagnosed_on || "تاريخ غير معروف"}${r.remove ? ` · إزالة: ${r.void_reason ?? ""}` : ""}`; }
     if (["history", "treatment"].includes(key)) return (JSON.parse(value) as string[]).map(v => (key === "history" ? historyLabels : treatmentLabels)[v]).join("، ");
-    return value === "yes" ? "نعم" : value === "no" ? "لا" : sourceLabels[value] ?? value;
+    return personalChoices[key]?.[value] ?? (value === "yes" ? "نعم" : value === "no" ? "لا" : sourceLabels[value] ?? value);
   };
   return <><ConflictReview key={`${latest.lock_version}:${latest.visit?.lock_version}`} latest={latestFields} draft={draft} labels={labels} format={format} onAccept={value => { const rows = Object.entries(value).filter(([key, data]) => key.startsWith("row:") && data).map(([, data]) => { const r = JSON.parse(data) as DiagnosisDraft; return { ...r, lock_version: currentRows.find(c => c.id === r.id)?.lock_version }; }); onAccept(Object.fromEntries(Object.entries(value).filter(([k]) => !k.startsWith("row:"))), rows); }} />{step === 2 && diagnoses.some(r => r.id && !currentRows.some(c => c.id === r.id)) && <p role="status">أزيلت بعض التشخيصات في النسخة الحالية؛ لن تُعاد تلقائيًا. يمكنك مراجعتها وإضافتها صراحة بعد اعتماد المراجعة.</p>}</>;
 }

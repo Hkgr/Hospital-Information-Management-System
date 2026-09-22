@@ -18,6 +18,7 @@ class DossierAuditValues
         'patient_code' => 'كود المريض', 'first_name' => 'الاسم الأول', 'family_name' => 'العائلة', 'father_name' => 'اسم الأب', 'mother_name' => 'اسم الأم',
         'birth_date' => 'الميلاد', 'birth_date_accuracy' => 'دقة الميلاد', 'gender' => 'الجنس', 'phone' => 'الهاتف', 'alt_phone' => 'هاتف بديل',
         'governorate_id' => 'المحافظة', 'city_id' => 'المدينة', 'address_line' => 'عنوان السكن', 'displacement_status' => 'حالة النزوح',
+        'marital_status' => 'الوضع العائلي', 'permanent_address' => 'عنوان الإقامة الدائم', 'occupation' => 'المهنة', 'smoking_status' => 'التدخين', 'alcohol_status' => 'الكحول',
         'is_oncology' => 'ملف ورمي', 'disability_text' => 'معلومات الإعاقة', 'clinical_history' => 'القصة المرضية',
         'previous_examinations' => 'الفحوص السابقة', 'medication_source' => 'مصدر الدواء', 'other_organization' => 'الجهة الأخرى', 'selections' => 'السوابق والعلاجات الورمية',
         'visit_no' => 'كود الزيارة', 'visit_date' => 'تاريخ الزيارة', 'dossier_visit_kind' => 'صلة الزيارة بالبطاقة',
@@ -43,7 +44,7 @@ class DossierAuditValues
         'visit_pathologies' => ['source', 'status', 'report_number', 'external_organization', 'specimen_type', 'anatomical_site', 'requested_on', 'collected_on', 'result_on', 'conclusion', 'unavailable_reason', 'procedure_event_id', 'clinic_id', 'doctor_id', 'supporting_attachment_id'],
         'visit_diagnostic_assessments' => ['disposition', 'assessed_on', 'required_reason', 'not_required_reason', 'follow_up', 'evidence_pathology_id', 'clinic_id', 'doctor_id'],
         'patient_dossier' => ['code', 'opening_date', 'status', 'import_batch_id', 'source_rows', 'purpose', 'cutover_date'],
-        'patient' => ['patient_code', 'paper_file_number', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status'],
+        'patient' => ['patient_code', 'paper_file_number', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status', 'marital_status', 'permanent_address', 'occupation', 'smoking_status', 'alcohol_status'],
         'dossier_medical' => ['is_oncology', 'disability_text', 'clinical_history', 'previous_examinations', 'medication_source', 'other_organization', 'selections'],
         'dossier_visit' => ['visit_no', 'visit_date', 'dossier_visit_kind', 'status', 'clinic_id', 'attending_staff_id', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason'],
         'visit_diagnosis' => ['diagnosis_id', 'diagnosed_on', 'clinic_id', 'diagnosing_staff_id'],
@@ -153,6 +154,9 @@ class DossierAuditValues
         $enums = ['status' => ['draft' => 'مسودة', 'active' => 'فعالة', 'complete' => 'مكتملة', 'void' => 'ملغاة', 'voided' => 'ملغاة'],
             'gender' => ['male' => 'ذكر', 'female' => 'أنثى', 'unknown' => 'غير معروف'], 'birth_date_accuracy' => ['exact' => 'دقيق', 'year_only' => 'السنة فقط', 'estimated' => 'تقديري', 'unknown' => 'غير معروف'],
             'displacement_status' => ['resident' => 'مقيم', 'idp' => 'نازح', 'returnee' => 'عائد', 'unknown' => 'غير معروف'],
+            'marital_status' => ['single' => 'أعزب', 'married' => 'متزوج', 'divorced' => 'مطلق', 'widowed' => 'أرمل', 'unknown' => 'غير معروف'],
+            'smoking_status' => ['yes' => 'نعم', 'no' => 'لا', 'former' => 'سابقًا', 'unknown' => 'غير معروف'],
+            'alcohol_status' => ['yes' => 'نعم', 'no' => 'لا', 'former' => 'سابقًا', 'unknown' => 'غير معروف'],
             'dossier_visit_kind' => ['initial' => 'أول زيارة مسجلة ضمن البطاقة', 'subsequent' => 'لاحقة'], 'state' => ['pending' => 'قيد الرفع', 'complete' => 'مكتمل', 'cancelled' => 'ملغى'],
             'medication_source' => ['ministry_of_health' => 'وزارة الصحة', 'al_rowad' => 'مؤسسة الرواد', 'other_organization' => 'جهة أخرى', 'personal_expense' => 'نفقة شخصية', 'none' => 'لا يوجد']];
 
