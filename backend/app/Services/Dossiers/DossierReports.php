@@ -196,7 +196,11 @@ class DossierReports
                 $rows = $q->where($alias.'.facility_id', $f['id'])->whereIn($alias.'.visit_id', $ids)->when(! $historical, fn ($q) => $q->whereNull('e.voided_at'))->orderBy('e.id')->limit(config('dossiers.report_detail_limit') + 1)->get();
                 $total += $rows->count();
                 $this->limit($total, config('dossiers.report_detail_limit'));
-                $sections[] = $this->section($title, ['code' => 'كود الزيارة', 'date' => 'التاريخ', 'name' => 'اسم الدواء المحفوظ', 'note' => 'الجرعة والكمية'], $rows->map(fn ($e) => ['id' => $e->id, 'code' => $byId[$e->visit_id]->visit_no, 'date' => $e->date, 'name' => $e->medication_name_snapshot, 'note' => trim(($e->dose_text ?? '').' · '.$e->quantity.' '.$e->quantity_unit).($historical ? "\n".$this->historicalState($e, $byId[$e->visit_id]) : '')])->all(), 'سجل تاريخي مستقل عن الوصفة؛ لا ينشئ المعالج صرفًا أو إعطاءً.', ['date' => 'date']);
+                $sections[] = $this->section($title, ['code' => 'كود الزيارة', 'date' => 'التاريخ', 'name' => 'اسم الدواء المحفوظ', 'note' => 'الجرعة والكمية'], $rows->map(function ($e) use ($byId, $historical, $kind) {
+                    $kindLabel = $kind === 'dispensed' ? (['unlinked' => 'صرف غير مرتبط بالجرعة', 'take_home' => 'صرف خارج المشفى', 'supportive' => 'دواء مرتبط بالجرعة'][$e->dispensing_purpose ?? ''] ?? '') : 'دواء مرتبط بالجرعة';
+
+                    return ['id' => $e->id, 'code' => $byId[$e->visit_id]->visit_no, 'date' => $e->date, 'name' => $e->medication_name_snapshot, 'note' => trim($kindLabel.' · '.($e->dose_text ?? '').' · '.$e->quantity.' '.$e->quantity_unit).($historical ? "\n".$this->historicalState($e, $byId[$e->visit_id]) : '')];
+                })->all(), 'سجل تاريخي مستقل عن الوصفة؛ لا ينشئ المعالج صرفًا أو إعطاءً.', ['date' => 'date']);
             }
             if ($f['capabilities']['attachments_view']) {
                 $rows = DB::table('visit_attachments')->where('facility_id', $f['id'])->where('dossier_id', $dossier)->whereIn('visit_id', $ids)->when(! $historical, fn ($q) => $q->whereNull('voided_at'))->orderBy('id')->limit(config('dossiers.report_detail_limit') + 1)->get();

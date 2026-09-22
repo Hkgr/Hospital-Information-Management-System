@@ -39,7 +39,7 @@ class DossierAuditValues
         'oncology_session_doses' => ['given_on', 'dose_name', 'complaint', 'recommendations', 'nurse_id'],
         'dose_sessions' => ['administered_on', 'supervising_staff_id', 'administered_by', 'session_label', 'correction_reason'],
         'dose_session_items' => ['medication_name_snapshot', 'medication_code_snapshot', 'dose_value', 'dose_unit', 'dose_text', 'quantity', 'quantity_unit', 'route', 'funding_source_id'],
-        'visit_medications' => ['dispensed_on', 'medication_name_snapshot', 'medication_code_snapshot', 'dispensing_purpose', 'quantity', 'quantity_unit', 'dose_text', 'prescribing_staff_id', 'funding_source_id', 'correction_reason'],
+        'visit_medications' => ['dispensed_on', 'medication_name_snapshot', 'medication_code_snapshot', 'dispensing_purpose', 'quantity', 'quantity_unit', 'dose_text', 'prescribing_staff_id', 'prescribing_clinic_id', 'funding_source_id', 'correction_reason'],
         'visit_pathologies' => ['source', 'status', 'report_number', 'external_organization', 'specimen_type', 'anatomical_site', 'requested_on', 'collected_on', 'result_on', 'conclusion', 'unavailable_reason', 'procedure_event_id', 'clinic_id', 'doctor_id', 'supporting_attachment_id'],
         'visit_diagnostic_assessments' => ['disposition', 'assessed_on', 'required_reason', 'not_required_reason', 'follow_up', 'evidence_pathology_id', 'clinic_id', 'doctor_id'],
         'patient_dossier' => ['code', 'opening_date', 'status', 'import_batch_id', 'source_rows', 'purpose', 'cutover_date'],

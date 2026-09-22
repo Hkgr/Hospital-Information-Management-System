@@ -309,7 +309,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $p = $this->activate($this->makePlan())->assertOk()->json('data');
         $s = $this->historicalSession($p);
         $id = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
-        $dispensed = $this->callApi('POST', $this->path('/dispensing'), ['dose_session_id' => $id, 'dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'dispensing_purpose' => 'take_home'] + $this->item())->assertCreated()->json('data.id');
+        $dispensed = $this->callApi('POST', $this->path('/dispensing'), ['dose_session_id' => $id, 'dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'dispensing_purpose' => 'supportive'] + $this->item())->assertCreated()->json('data.id');
         $current = $this->callApi('PUT', $this->planPath($p['id']), $this->planData(['lock_version' => $this->dose($s)['plan_lock_version'], 'protocol_text' => 'نسخة علاجية معدلة']))->assertOk()->json('data');
         $current = $this->activate($current)->assertOk()->json('data');
         $payload = ['lock_version' => 1, 'session_lock_version' => 2, 'plan_lock_version' => $current['lock_version'], 'reason' => 'إعطاء سُجل خطأ', 'session_resolution' => 'rescheduled', 'planned_on' => '2001-03-02'];
@@ -593,10 +593,14 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->assertSame($dispensed, DB::table('visit_medications')->count());
         $this->assertSame($rx, DB::table('visit_prescriptions')->count());
         $this->assertDatabaseHas('dose_sessions', ['id' => $id, 'visit_id' => $this->s['visit']['id'], 'plan_revision_id' => $p['current_revision_id']]);
-        $data = ['dose_session_id' => $id, 'dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'dispensing_purpose' => 'take_home'] + $this->item();
-        $this->callApi('POST', $this->path('/dispensing'), $data)->assertCreated();
-        $this->assertSame($dispensed + 1, DB::table('visit_medications')->count());
-        $this->callApi('GET', $this->path('/doses'))->assertOk()->assertJsonCount(1, 'data.doses')->assertJsonCount(1, 'data.dispensed');
+        $ctx = $this->context();
+        $free = ['dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $ctx['doctor_id'], 'prescribing_clinic_id' => $ctx['clinic_id']];
+        $this->callApi('POST', $this->path('/dispensing'), $free + ['dispensing_purpose' => 'take_home'] + $this->item())->assertCreated();
+        $this->callApi('POST', $this->path('/dispensing'), $free + ['dispensing_purpose' => 'unlinked'] + $this->item())->assertCreated();
+        $this->callApi('POST', $this->path('/dispensing'), $free + ['dispensing_purpose' => 'take_home', 'dose_session_id' => $id] + $this->item())->assertUnprocessable();
+        $this->assertSame($dispensed + 2, DB::table('visit_medications')->count());
+        $this->assertSame(0, DB::table('visit_medications')->whereIn('dispensing_purpose', ['take_home', 'unlinked'])->whereNotNull('dose_session_id')->count());
+        $this->callApi('GET', $this->path('/doses'))->assertOk()->assertJsonCount(1, 'data.doses')->assertJsonCount(2, 'data.dispensed');
     }
 
     public function test_evidence_invalidation_preserves_administered_history_while_the_plan_stays_active(): void
@@ -709,5 +713,23 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->assertSame('2001-03-02', $row['doses'][0]['given_on']);
         $this->assertSame('جرعة داعمة', $row['doses'][1]['dose_name']);
         $this->callApi('POST', $path, array_replace($dose, ['nurse_id' => 999999999]))->assertUnprocessable()->assertJsonValidationErrors('nurse_id');
+    }
+
+    public function test_dispensing_splits_unlinked_outside_hospital_and_dose_linked_medication(): void
+    {
+        $this->ready();
+        $p = $this->activate($this->makePlan())->assertOk()->json('data');
+        $s = $this->schedule($p);
+        $dose = $this->callApi('POST', $this->path('/doses'), $this->dose($s))->assertCreated()->json('data.id');
+        $ctx = $this->context();
+        $free = ['dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $ctx['doctor_id'], 'prescribing_clinic_id' => $ctx['clinic_id']] + $this->item();
+        $outside = $this->callApi('POST', $this->path('/dispensing'), $free + ['dispensing_purpose' => 'take_home'])->assertCreated()->json('data.id');
+        $unlinked = $this->callApi('POST', $this->path('/dispensing'), $free + ['dispensing_purpose' => 'unlinked'])->assertCreated()->json('data.id');
+        $linked = $this->callApi('POST', $this->path('/dispensing'), ['dose_session_id' => $dose, 'dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $ctx['doctor_id'], 'dispensing_purpose' => 'supportive'] + $this->item())->assertCreated()->json('data.id');
+        $this->assertNull(DB::table('visit_medications')->where('id', $outside)->value('dose_session_id'));
+        $this->assertNull(DB::table('visit_medications')->where('id', $unlinked)->value('dose_session_id'));
+        $this->assertSame($dose, (int) DB::table('visit_medications')->where('id', $linked)->value('dose_session_id'));
+        $this->callApi('POST', $this->path('/dispensing'), $free + ['dispensing_purpose' => 'supportive'])->assertUnprocessable();
+        $this->callApi('POST', $this->path('/dispensing'), ['dispensing_purpose' => 'unlinked', 'dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $ctx['doctor_id']] + $this->item())->assertUnprocessable();
     }
 }

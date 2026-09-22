@@ -102,7 +102,13 @@ class SaveOncology extends FormRequest
                 $rules += ['session_id' => $id, 'session_lock_version' => $id, 'plan_lock_version' => $id, 'visit_lock_version' => $id];
             }
         } elseif ($op === 'dispense') {
-            $rules += ['reporting_period_id' => $id, 'dispensed_on' => $date, 'prescribing_staff_id' => $id, 'dose_session_id' => $id, 'dispensing_purpose' => ['required', 'in:take_home,supportive']];
+            $free = in_array($this->input('dispensing_purpose'), ['unlinked', 'take_home'], true);
+            $rules += [
+                'reporting_period_id' => $id, 'dispensed_on' => $date, 'prescribing_staff_id' => $id,
+                'dispensing_purpose' => ['required', 'in:take_home,supportive,unlinked'],
+                'dose_session_id' => ['nullable', 'integer', 'min:1', Rule::requiredIf(fn () => $this->input('dispensing_purpose') === 'supportive'), Rule::prohibitedIf(fn () => ! $this->route('dispensing') && $free)],
+                'prescribing_clinic_id' => ['nullable', 'integer', 'min:1', Rule::requiredIf(fn () => $free && ! $this->filled('dose_session_id')), Rule::prohibitedIf(fn () => $this->input('dispensing_purpose') === 'supportive')],
+            ];
             if ($this->route('dispensing')) {
                 $rules['reason'] = ['required', 'string', 'max:2000'];
             }

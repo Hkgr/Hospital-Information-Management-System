@@ -417,9 +417,9 @@ class OncologyWriter
     public function dispense(Request $r, array $f, int $dossier, int $visit, array $data, ?int $id = null, bool $void = false): int
     {
         return $this->writes->once($r, $f, $data, "oncology:dispense:$dossier:$visit:".($id ?? 'new').':'.($void ? 'void' : 'save'), function () use ($r, $f, $dossier, $visit, $data, $id, $void) {
-            $this->context->lock([array_filter([$data['prescribing_staff_id'] ?? null]), []]);
+            $this->context->lock([array_filter([$data['prescribing_staff_id'] ?? null]), array_filter([$data['prescribing_clinic_id'] ?? null])]);
             $v = app(DossierPathology::class)->visit($f, $dossier, $visit, true);
-            $old = $id ? DB::table('visit_medications')->where('id', $id)->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNotNull('dose_session_id')->lockForUpdate()->first() : null;
+            $old = $id ? DB::table('visit_medications')->where('id', $id)->where('visit_id', $visit)->where('facility_id', $f['id'])->lockForUpdate()->first() : null;
             if ($id) {
                 abort_unless($old, 404);
                 DossierWrites::version((array) $old, $data['lock_version']);
@@ -436,15 +436,28 @@ class OncologyWriter
                 throw ValidationException::withMessages(['dispensed_on' => 'الصرف الفعلي يكون بتاريخ الزيارة غير المستقبلي.']);
             }
             $this->period($f, $data['reporting_period_id'], $data['dispensed_on'], $old?->reporting_period_id);
-            $dose = DB::table('dose_sessions')->where('id', $old?->dose_session_id ?? $data['dose_session_id'])->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->lockForUpdate()->first();
-            abort_unless($dose, 404);
-            $session = DB::table('oncology_sessions')->where('id', $dose->oncology_session_id)->first();
-            abort_unless($session, 404);
-            $this->context->check($f, $session->clinic_id, $data['prescribing_staff_id'], $v->visit_date, 'prescribing_staff_id', false);
+            $linked = (bool) ($old?->dose_session_id) || $data['dispensing_purpose'] === 'supportive';
+            if ($linked && $data['dispensing_purpose'] === 'unlinked') {
+                throw ValidationException::withMessages(['dispensing_purpose' => 'الدواء المرتبط بالجرعة يبقى مرتبطًا بها.']);
+            }
             $item = $this->medication($data, $old, 'medication');
             $fields = Arr::only($item, ['dispensed_on', 'reporting_period_id', 'medication_id', 'medication_name_snapshot', 'medication_code_snapshot', 'funding_source_id', 'prescribing_staff_id', 'dose_text', 'quantity', 'quantity_unit', 'note', 'dispensing_purpose']);
-            if (! $old) {
-                $fields += ['visit_id' => $visit, 'facility_id' => $f['id'], 'dose_session_id' => $dose->id, 'client_request_id' => $data['request_id']];
+            if ($linked) {
+                $dose = DB::table('dose_sessions')->where('id', $old?->dose_session_id ?? $data['dose_session_id'])->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->lockForUpdate()->first();
+                abort_unless($dose, 404);
+                $session = DB::table('oncology_sessions')->where('id', $dose->oncology_session_id)->first();
+                abort_unless($session, 404);
+                $this->context->check($f, $session->clinic_id, $data['prescribing_staff_id'], $v->visit_date, 'prescribing_staff_id', false);
+                if (! $old) {
+                    $fields += ['visit_id' => $visit, 'facility_id' => $f['id'], 'dose_session_id' => $dose->id, 'client_request_id' => $data['request_id']];
+                }
+            } else {
+                $this->context->check($f, (int) $data['prescribing_clinic_id'], (int) $data['prescribing_staff_id'], $v->visit_date, 'prescribing_staff_id', false);
+                $fields['prescribing_clinic_id'] = $data['prescribing_clinic_id'];
+                $fields['dose_session_id'] = null;
+                if (! $old) {
+                    $fields += ['visit_id' => $visit, 'facility_id' => $f['id'], 'client_request_id' => $data['request_id']];
+                }
             }
             $saved = $this->persist($r, $f, 'visit_medications', $old, $fields);
             if ($old) {

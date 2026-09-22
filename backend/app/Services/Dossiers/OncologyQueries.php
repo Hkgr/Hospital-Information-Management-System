@@ -142,7 +142,7 @@ class OncologyQueries
         app(DossierPathology::class)->visit($f, $dossier, $visit);
         $doses = DB::table('dose_sessions as d')->leftJoin('oncology_sessions as s', 's.id', '=', 'd.oncology_session_id')->leftJoin('oncology_plan_revisions as r', 'r.id', '=', 'd.plan_revision_id')->leftJoin('oncology_plans as p', 'p.id', '=', 's.plan_id')->where('d.visit_id', $visit)->where('d.facility_id', $f['id'])->orderBy('d.id')->get(['d.*', 'r.treating_clinic_id as clinic_id', 's.lock_version as session_lock_version', 's.planned_on', 's.revision_id as session_revision_id', 'p.current_revision_id', 'p.lock_version as plan_lock_version']);
         $items = DB::table('dose_session_items')->whereIn('dose_session_id', $doses->pluck('id'))->orderBy('id')->get()->groupBy('dose_session_id');
-        $dispensed = DB::table('visit_medications as m')->leftJoin('dose_sessions as d', 'd.id', '=', 'm.dose_session_id')->leftJoin('oncology_plan_revisions as r', 'r.id', '=', 'd.plan_revision_id')->where('m.visit_id', $visit)->where('m.facility_id', $f['id'])->orderBy('m.id')->get(['m.*', 'r.treating_clinic_id as clinic_id', 'd.voided_at as parent_voided_at']);
+        $dispensed = DB::table('visit_medications as m')->leftJoin('dose_sessions as d', 'd.id', '=', 'm.dose_session_id')->leftJoin('oncology_plan_revisions as r', 'r.id', '=', 'd.plan_revision_id')->where('m.visit_id', $visit)->where('m.facility_id', $f['id'])->orderBy('m.id')->get(['m.*', DB::raw('COALESCE(r.treating_clinic_id, m.prescribing_clinic_id) as clinic_id'), 'd.voided_at as parent_voided_at']);
 
         return ['doses' => $doses->map(fn ($d) => (array) $d + ['items' => ($items[$d->id] ?? collect())->all()])->all(), 'dispensed' => $dispensed->all()];
     }
