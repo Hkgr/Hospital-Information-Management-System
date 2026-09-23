@@ -53,8 +53,8 @@ class DossierPathology
 
     public function summaries(array $f): Builder
     {
-        $cases = $this->cases($f)->whereNull('p.voided_at')->selectRaw("p.dossier_id, p.visit_id, p.id, COALESCE(p.result_on,p.collected_on,p.requested_on,v.visit_date) AS fact_date, CASE p.status WHEN 'completed' THEN 'pathology_confirmed' WHEN 'requested' THEN 'pathology_required' WHEN 'specimen_collected' THEN 'pathology_pending' WHEN 'pending_result' THEN 'pathology_pending' ELSE p.status END AS disposition");
-        $ranked = DB::query()->fromSub($cases, 'facts')->select('facts.*')->selectRaw('ROW_NUMBER() OVER (PARTITION BY dossier_id ORDER BY fact_date DESC, visit_id DESC, id DESC) AS fact_rank');
+        $cases = $this->cases($f)->whereNull('p.voided_at')->selectRaw("p.dossier_id, p.visit_id, p.id, 0 AS kind, COALESCE(p.result_on,p.collected_on,p.requested_on,v.visit_date) AS fact_date, CASE p.status WHEN 'completed' THEN 'pathology_confirmed' WHEN 'requested' THEN 'pathology_required' WHEN 'specimen_collected' THEN 'pathology_pending' WHEN 'pending_result' THEN 'pathology_pending' ELSE p.status END AS disposition");
+        $ranked = DB::query()->fromSub($cases, 'facts')->select('facts.*')->selectRaw('ROW_NUMBER() OVER (PARTITION BY dossier_id ORDER BY fact_date DESC, visit_id DESC, kind DESC, id DESC) AS fact_rank');
 
         return DB::query()->fromSub($ranked, 'ranked')->where('fact_rank', 1);
     }
