@@ -107,7 +107,8 @@ class DossierVisitWriter
             if ($saved->groupBy(fn ($row) => implode('|', [$row->diagnosis_id, $row->clinic_id, $row->diagnosing_staff_id, $row->diagnosed_on ?? '']))->contains(fn ($group) => $group->count() > 1)) {
                 throw ValidationException::withMessages(['diagnoses' => 'لا تكرر التشخيص نفسه بالعيادة والطبيب والتاريخ أنفسها.']);
             }
-            $this->writes->progress($r, $f, $dossier, 'visit', $saved->isEmpty() ? 'in_progress' : 'saved', $id);
+            $unchanged = ! empty($input['unchanged']);
+            $this->writes->progress($r, $f, $dossier, 'visit', ($unchanged || $saved->isNotEmpty()) ? 'saved' : 'in_progress', $id, $unchanged);
             $this->writes->audit($r, $f, 'dossier_visit', $id, $old ? (array) $old : null, $fields);
 
             return $id;

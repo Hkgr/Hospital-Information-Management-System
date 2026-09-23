@@ -53,9 +53,8 @@ class DossierPathology
 
     public function summaries(array $f): Builder
     {
-        $cases = $this->cases($f)->whereNull('p.voided_at')->selectRaw("p.dossier_id, p.visit_id, p.id, 0 AS kind, COALESCE(p.result_on,p.collected_on,p.requested_on,v.visit_date) AS fact_date, CASE p.status WHEN 'completed' THEN 'pathology_confirmed' WHEN 'requested' THEN 'pathology_required' WHEN 'specimen_collected' THEN 'pathology_pending' WHEN 'pending_result' THEN 'pathology_pending' ELSE p.status END AS disposition");
-        $assessments = $this->assessments($f)->selectRaw('a.dossier_id, a.visit_id, a.id, 1 AS kind, COALESCE(a.assessed_on,v.visit_date) AS fact_date, '.$this->effectiveSql().' AS disposition', [$f['today'], $f['today']]);
-        $ranked = DB::query()->fromSub($cases->unionAll($assessments), 'facts')->select('facts.*')->selectRaw('ROW_NUMBER() OVER (PARTITION BY dossier_id ORDER BY fact_date DESC, visit_id DESC, kind DESC, id DESC) AS fact_rank');
+        $cases = $this->cases($f)->whereNull('p.voided_at')->selectRaw("p.dossier_id, p.visit_id, p.id, COALESCE(p.result_on,p.collected_on,p.requested_on,v.visit_date) AS fact_date, CASE p.status WHEN 'completed' THEN 'pathology_confirmed' WHEN 'requested' THEN 'pathology_required' WHEN 'specimen_collected' THEN 'pathology_pending' WHEN 'pending_result' THEN 'pathology_pending' ELSE p.status END AS disposition");
+        $ranked = DB::query()->fromSub($cases, 'facts')->select('facts.*')->selectRaw('ROW_NUMBER() OVER (PARTITION BY dossier_id ORDER BY fact_date DESC, visit_id DESC, id DESC) AS fact_rank');
 
         return DB::query()->fromSub($ranked, 'ranked')->where('fact_rank', 1);
     }
@@ -74,7 +73,7 @@ class DossierPathology
         if ($visit) {
             $this->visit($f, $dossier, $visit);
         }
-        $q = $this->cases($f)->where('p.dossier_id', $dossier)->when($visit, fn ($q) => $q->where('p.visit_id', $visit));
+        $q = $this->cases($f)->leftJoin('clinics as clinic', 'clinic.id', '=', 'p.clinic_id')->leftJoin('staff as doctor', 'doctor.id', '=', 'p.doctor_id')->where('p.dossier_id', $dossier)->when($visit, fn ($q) => $q->where('p.visit_id', $visit));
         $q->when(! empty($input['status']), fn ($q) => $q->where('p.status', $input['status']))
             ->when(! empty($input['source']), fn ($q) => $q->where('p.source', $input['source']));
         if (! empty($input['search'])) {
@@ -84,7 +83,7 @@ class DossierPathology
         if (! empty($input['evidence_only'])) {
             $q->whereNull('p.voided_at')->where('p.status', 'completed');
         }
-        $page = $q->orderByRaw('COALESCE(p.result_on,p.collected_on,p.requested_on,v.visit_date) DESC')->orderByDesc('p.id')->paginate($input['per_page'] ?? 10, ['p.*', 'v.visit_no', 'v.visit_date', 'v.status as visit_status'], 'page', $input['page'] ?? 1);
+        $page = $q->orderByRaw('COALESCE(p.result_on,p.collected_on,p.requested_on,v.visit_date) DESC')->orderByDesc('p.id')->paginate($input['per_page'] ?? 10, ['p.*', 'v.visit_no', 'v.visit_date', 'v.status as visit_status', 'clinic.name_ar as clinic_name', 'doctor.full_name as doctor_name'], 'page', $input['page'] ?? 1);
         $files = $this->attachmentMetadata($f, array_column($page->items(), 'id'));
         $rows = array_map(fn ($row) => (array) $row + ['name_ar' => ($row->report_number ?? '#'.$row->id).' · '.$row->visit_no.' · '.self::STATUSES[$row->status], 'attachments' => $files[$row->id] ?? [], 'capabilities' => ['update' => ! $row->voided_at && ($f['capabilities']['pathology_update'] ?? false), 'void' => ! $row->voided_at && ($f['capabilities']['pathology_void'] ?? false)]], $page->items());
 
@@ -94,7 +93,7 @@ class DossierPathology
     public function show(array $f, int $dossier, int $visit, int $id): array
     {
         $this->visit($f, $dossier, $visit);
-        $row = $this->cases($f)->where('p.id', $id)->where('p.visit_id', $visit)->where('p.dossier_id', $dossier)->first(['p.*', 'v.visit_no', 'v.visit_date']);
+        $row = $this->cases($f)->leftJoin('clinics as clinic', 'clinic.id', '=', 'p.clinic_id')->leftJoin('staff as doctor', 'doctor.id', '=', 'p.doctor_id')->where('p.id', $id)->where('p.visit_id', $visit)->where('p.dossier_id', $dossier)->first(['p.*', 'v.visit_no', 'v.visit_date', 'clinic.name_ar as clinic_name', 'doctor.full_name as doctor_name']);
         abort_unless($row, 404);
 
         return (array) $row + ['attachments' => $this->attachmentMetadata($f, [$id])[$id] ?? [], 'capabilities' => ['update' => ! $row->voided_at && ($f['capabilities']['pathology_update'] ?? false), 'void' => ! $row->voided_at && ($f['capabilities']['pathology_void'] ?? false)]];
@@ -184,10 +183,11 @@ class DossierPathology
 
     private function responsible(array $f, object $v, array $data, ?object $old): void
     {
-        if (empty($data['clinic_id']) !== empty($data['doctor_id'])) {
-            throw ValidationException::withMessages(['doctor_id' => 'اختر العيادة والطبيب معًا أو اتركهما فارغين.']);
+        $message = ($data['source'] ?? null) === 'external' ? 'اختر الطبيب المراجع ضمن المشفى والعيادة.' : 'اختر الطبيب المنظم والعيادة.';
+        if (empty($data['clinic_id']) || empty($data['doctor_id'])) {
+            throw ValidationException::withMessages(['doctor_id' => $message]);
         }
-        if (! empty($data['clinic_id']) && (! $old || $old->clinic_id != $data['clinic_id'] || $old->doctor_id != $data['doctor_id'])) {
+        if (! $old || $old->clinic_id != $data['clinic_id'] || $old->doctor_id != $data['doctor_id']) {
             $this->context->check($f, $data['clinic_id'], $data['doctor_id'], $v->visit_date, 'doctor_id', false);
         }
     }

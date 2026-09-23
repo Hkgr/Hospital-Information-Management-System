@@ -23,7 +23,7 @@ class SaveVisitClinical extends FormRequest
 
     public function rules(): array
     {
-        $rules = ['facility_id' => ['required', 'integer', 'min:1'], 'request_id' => ['required', 'uuid'], 'lock_version' => ['required', 'integer', 'min:1']];
+        $rules = ['facility_id' => ['required', 'integer', 'min:1'], 'request_id' => ['required', 'uuid'], 'lock_version' => ['required', 'integer', 'min:1'], 'unchanged' => ['sometimes', 'boolean']];
         $row = ['id' => ['nullable', 'integer', 'min:1'], 'lock_version' => ['required_with:ROW.id', 'integer', 'min:1'], 'remove' => ['sometimes', 'boolean'], 'void_reason' => ['nullable', 'string', 'max:255'], 'note' => ['nullable', 'string', 'max:10000']];
         if ($this->route('section') === 'clinical') {
             foreach (['services', 'procedures'] as $section) {

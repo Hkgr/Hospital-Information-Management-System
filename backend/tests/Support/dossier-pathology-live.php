@@ -56,7 +56,7 @@ if ($mode === 'prepare') {
         if (! $v) {
             throw new RuntimeException('Save a synthetic visit before concurrency checks.');
         }
-        $data = ['source' => 'internal', 'status' => 'requested', 'requested_on' => $v->visit_date, 'request_id' => (string) Str::uuid()];
+        $data = ['source' => 'internal', 'status' => 'requested', 'requested_on' => $v->visit_date, 'request_id' => (string) Str::uuid(), 'clinic_id' => $f['clinics'][0], 'doctor_id' => $f['workflow_doctors'][0]];
         $payload = ['user' => $f['user_id'], 'facility' => $f['facility'], 'dossier' => $v->dossier_id, 'visit' => $v->id, 'id' => null, 'data' => $data];
         $id = null;
         foreach (['replay', 'correction'] as $operation) {

@@ -35,12 +35,30 @@ class DossierWizardQueries
             if ($visit) {
                 $visit->is_referred = (bool) $visit->is_referred;
             }
+            $prior = $this->priorVisit($f, $id, $visitId);
 
             return ['id' => $id, 'card_id' => (int) $p->id, 'code' => $p->patient_code, 'status' => $d['status'], 'lock_version' => $d['lock_version'], 'opening_date' => $d['opening_date'], 'patient' => $p, 'workflow' => $context['workflow'],
                 'medical' => Arr::only($d, ['disability_text', 'clinical_history', 'weight_kg', 'height_cm', 'is_oncology', 'previous_examinations', 'medication_source', 'other_organization']) + ['history' => $selections->where('selection_group', 'history')->pluck('code')->values()->all(), 'treatment' => $selections->where('selection_group', 'treatment')->pluck('code')->values()->all()],
                 'clinical' => $visit ? app(DossierVisitSections::class)->read($f, $visit->id) : ['services' => [], 'procedures' => [], 'prescription' => null, 'prescriptions' => [], 'outcome' => null, 'attachment_count' => 0],
-                'progress' => collect(['personal', 'medical', 'visit', 'clinical', 'medications', 'attachments'])->map(fn ($s) => $progress->has($s) ? (array) $progress->get($s) : ['section' => $s, 'state' => 'not_started', 'last_saved_by' => null, 'last_saved_at' => null, 'lock_version' => 0, 'visit_id' => null])->all(),
+                'progress' => collect(['personal', 'medical', 'visit', 'clinical', 'medications', 'attachments'])->map(fn ($s) => $progress->has($s) ? (array) $progress->get($s) + ['unchanged' => (bool) ($progress->get($s)->unchanged ?? false)] : ['section' => $s, 'state' => 'not_started', 'unchanged' => false, 'last_saved_by' => null, 'last_saved_at' => null, 'lock_version' => 0, 'visit_id' => null])->all(),
+                'prior_visit' => $prior,
                 'visit' => $visit ? (array) $visit + ['diagnoses' => DB::table('visit_diagnoses as e')->join('diagnoses as n', 'n.id', '=', 'e.diagnosis_id')->leftJoin('clinics as c', 'c.id', '=', 'e.clinic_id')->join('staff as s', 's.id', '=', 'e.diagnosing_staff_id')->where('e.visit_id', $visitId)->where('e.facility_id', $f['id'])->whereNull('e.voided_at')->orderBy('e.id')->get(['e.id', 'e.lock_version', 'e.diagnosis_id', 'e.diagnosed_on', 'e.clinic_id', 'e.diagnosing_staff_id', 'n.name_ar as diagnosis_name', 'c.name_ar as clinic_name', 's.full_name as doctor_name'])->all()] : null];
         });
+    }
+
+    private function priorVisit(array $f, int $dossier, ?int $except): ?array
+    {
+        $row = DB::table('visits')->where('dossier_id', $dossier)->where('facility_id', $f['id'])->whereNull('voided_at')->whereIn('status', ['draft', 'complete'])
+            ->when($except, fn ($q) => $q->where('id', '!=', $except))
+            ->orderByDesc('visit_date')->orderByDesc('id')->first(['id', 'visit_no', 'visit_date', 'status']);
+        if (! $row) {
+            return null;
+        }
+        $clinical = app(DossierVisitSections::class)->read($f, $row->id);
+        $diagnoses = DB::table('visit_diagnoses as e')->join('diagnoses as n', 'n.id', '=', 'e.diagnosis_id')->leftJoin('clinics as c', 'c.id', '=', 'e.clinic_id')->join('staff as s', 's.id', '=', 'e.diagnosing_staff_id')
+            ->where('e.visit_id', $row->id)->where('e.facility_id', $f['id'])->whereNull('e.voided_at')->orderBy('e.id')
+            ->get(['n.name_ar as diagnosis_name', 'c.name_ar as clinic_name', 's.full_name as doctor_name', 'e.diagnosed_on'])->all();
+
+        return (array) $row + ['diagnoses' => $diagnoses] + $clinical;
     }
 }

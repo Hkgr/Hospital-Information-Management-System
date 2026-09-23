@@ -10,7 +10,16 @@ export type Snapshot = {
   clinical?: import("./clinical").ClinicalData;
   patient: { id: number; patient_code: string; lock_version: number } & Record<string, string | number | null>;
   medical: { is_oncology: boolean | number; history: string[]; treatment: string[] } & Record<string, unknown>;
-  progress: { section: string; state: "not_started" | "in_progress" | "saved" | "needs_review"; last_saved_at: string | null; lock_version: number }[];
+  progress: { section: string; state: "not_started" | "in_progress" | "saved" | "needs_review"; unchanged?: boolean | number; last_saved_at: string | null; lock_version: number }[];
+  prior_visit?: {
+    id: number; visit_no: string; visit_date: string; status: string;
+    diagnoses: { diagnosis_name: string; clinic_name: string | null; doctor_name: string; diagnosed_on: string | null }[];
+    services: { name_ar: string; clinic_name: string | null; doctor_name: string | null }[];
+    procedures: { name_ar: string; clinic_name: string | null; doctor_name: string | null }[];
+    prescriptions?: { kind?: string; doctor_name: string; clinic_name?: string; items: { name_ar: string }[] }[];
+    outcome: { name_ar: string; outcome_on: string; doctor_name?: string } | null;
+    attachment_count?: number | null;
+  } | null;
   visit: ({ id: number; status: string; lock_version: number; diagnoses: { id: number; lock_version: number; diagnosis_id: number; clinic_id: number | null; diagnosing_staff_id: number; diagnosis_name: string; clinic_name: string | null; doctor_name: string; diagnosed_on: string | null }[] } & Record<string, unknown>) | null;
 };
 export const personalLabels: Fields = { code: "كود المريض", opening_date: "بداية الملف الطبي في المشفى", first_name: "الاسم الأول", family_name: "اسم العائلة", father_name: "اسم الأب", mother_name: "اسم الأم", birth_date: "تاريخ الميلاد", birth_date_accuracy: "دقة الميلاد", gender: "الجنس", marital_status: "الوضع العائلي", phone: "الهاتف", alt_phone: "هاتف بديل", governorate_id: "المحافظة", city_id: "المدينة", address_line: "عنوان السكن", displacement_status: "حالة النزوح", permanent_address: "عنوان الإقامة الدائم", occupation: "المهنة", smoking_status: "التدخين", alcohol_status: "الكحول" };

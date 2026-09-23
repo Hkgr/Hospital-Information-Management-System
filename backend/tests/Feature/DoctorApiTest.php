@@ -210,8 +210,8 @@ class DoctorApiTest extends TestCase
 
     public function test_types_specialties_validation_and_configuration_fail_closed(): void
     {
-        $nurse = DB::table('staff_types')->insertGetId(['code' => 'NURSE', 'name_ar' => 'طبيب']);
-        $this->callApi('POST', '', $this->input(['staff_type_id' => $nurse]))->assertUnprocessable()->assertJsonValidationErrors('staff_type_id');
+        $unlisted = DB::table('staff_types')->insertGetId(['code' => 'UNLISTED', 'name_ar' => 'طبيب']);
+        $this->callApi('POST', '', $this->input(['staff_type_id' => $unlisted]))->assertUnprocessable()->assertJsonValidationErrors('staff_type_id');
         $this->callApi('POST', '', $this->input(['specialty_ids' => []]))->assertUnprocessable()->assertJsonValidationErrors('specialty_ids');
         $this->callApi('POST', '', $this->input(['code' => str_repeat('x', 41), 'name' => str_repeat('x', 201), 'phone' => str_repeat('0', 31), 'license_no' => str_repeat('x', 61)]))->assertUnprocessable()->assertJsonValidationErrors(['code', 'name', 'phone', 'license_no']);
         $doctor = $this->create();

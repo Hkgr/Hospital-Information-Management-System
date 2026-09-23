@@ -67,8 +67,8 @@ class DossierPathologyTest extends DossierCompletionCase
     public function test_pathology_normalization_and_completed_correction_cannot_downgrade(): void
     {
         foreach (['unavailable', 'cancelled'] as $status) {
-            $id = $this->callApi('POST', $this->path('/pathology'), ['source' => 'external', 'status' => $status, 'external_organization' => 'old organization', 'unavailable_reason' => 'old reason', 'result_on' => '1999-01-01', 'conclusion' => 'HIDDEN-FINAL', 'note' => 'keep note'] + $this->context())->assertCreated()->json('data.id');
-            $this->callApi('PUT', $this->path('/pathology/'.$id), ['source' => 'internal', 'status' => 'requested', 'lock_version' => 1])->assertOk();
+            $id = $this->callApi('POST', $this->path('/pathology'), $this->case(['source' => 'external', 'status' => $status, 'external_organization' => 'old organization', 'unavailable_reason' => 'old reason', 'result_on' => '1999-01-01', 'conclusion' => 'HIDDEN-FINAL', 'note' => 'keep note']))->assertCreated()->json('data.id');
+            $this->callApi('PUT', $this->path('/pathology/'.$id), $this->case(['source' => 'internal', 'status' => 'requested', 'lock_version' => 1]))->assertOk();
             $expected = ['external_organization' => null, 'unavailable_reason' => null, 'result_on' => null, 'conclusion' => null, 'note' => 'keep note'] + $this->context();
             $read = $this->callApi('GET', $this->path('/pathology/'.$id))->assertOk();
             foreach ($expected as $field => $value) {
@@ -76,14 +76,14 @@ class DossierPathologyTest extends DossierCompletionCase
             }
             $this->assertDatabaseHas('visit_pathologies', ['id' => $id] + $expected);
         }
-        $this->callApi('PUT', $this->path('/pathology/'.$id), ['source' => 'internal', 'status' => 'completed', 'lock_version' => 2, 'result_on' => '2001-03-03', 'conclusion' => 'final'])->assertOk();
+        $this->callApi('PUT', $this->path('/pathology/'.$id), $this->case(['source' => 'internal', 'status' => 'completed', 'lock_version' => 2, 'result_on' => '2001-03-03', 'conclusion' => 'final']))->assertOk();
         $before = DB::table('audit_logs')->where('entity_type', 'visit_pathologies')->where('entity_id', $id)->count();
         foreach (['requested', 'pending_result', 'unavailable', 'cancelled'] as $status) {
-            $this->callApi('PUT', $this->path('/pathology/'.$id), ['source' => 'internal', 'status' => $status, 'lock_version' => 3, 'unavailable_reason' => 'not a void'])->assertUnprocessable()->assertJsonValidationErrors('status');
+            $this->callApi('PUT', $this->path('/pathology/'.$id), $this->case(['source' => 'internal', 'status' => $status, 'lock_version' => 3, 'unavailable_reason' => 'not a void']))->assertUnprocessable()->assertJsonValidationErrors('status');
         }
         $this->assertSame($before, DB::table('audit_logs')->where('entity_type', 'visit_pathologies')->where('entity_id', $id)->count());
         $this->assertDatabaseHas('visit_pathologies', ['id' => $id, 'lock_version' => 3, 'status' => 'completed', 'conclusion' => 'final']);
-        $this->callApi('PUT', $this->path('/pathology/'.$id), ['source' => 'internal', 'status' => 'completed', 'lock_version' => 3, 'result_on' => '2001-03-04', 'conclusion' => 'audited correction'])->assertOk();
+        $this->callApi('PUT', $this->path('/pathology/'.$id), $this->case(['source' => 'internal', 'status' => 'completed', 'lock_version' => 3, 'result_on' => '2001-03-04', 'conclusion' => 'audited correction']))->assertOk();
         $audit = DB::table('audit_logs')->where('entity_type', 'visit_pathologies')->where('entity_id', $id)->orderByDesc('id')->first();
         $this->assertSame('final', json_decode($audit->old_values, true)['conclusion']);
         $this->assertSame('audited correction', json_decode($audit->new_values, true)['conclusion']);
@@ -93,7 +93,7 @@ class DossierPathologyTest extends DossierCompletionCase
     {
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'not_assessed', 'assessed_on' => '2001-03-01'])->assertUnprocessable()->assertJsonValidationErrors('assessed_on');
         foreach (['requested_on', 'collected_on', 'result_on'] as $field) {
-            $data = ['source' => 'internal', 'status' => $field === 'result_on' ? 'completed' : 'requested', $field => '2001-03-01', 'conclusion' => 'result'];
+            $data = $this->case(['source' => 'internal', 'status' => $field === 'result_on' ? 'completed' : 'requested', $field => '2001-03-01', 'conclusion' => 'result']);
             $this->callApi('POST', $this->path('/pathology'), $data)->assertUnprocessable()->assertJsonValidationErrors($field);
             $this->callApi('POST', $this->path('/pathology'), array_replace($data, [$field => '2099-01-01']))->assertUnprocessable()->assertJsonValidationErrors($field);
         }
@@ -101,19 +101,19 @@ class DossierPathologyTest extends DossierCompletionCase
         $this->callApi('POST', $this->path('/pathology'), $this->report(['requested_on' => '1998-01-01', 'collected_on' => '1998-02-01']))->assertCreated();
         $this->callApi('POST', $this->path('/pathology'), $this->report(['requested_on' => '2000-01-01']))->assertUnprocessable()->assertJsonValidationErrors('result_on');
         DB::table('visits')->where('id', $this->s['visit']['id'])->update(['status' => 'complete', 'attending_staff_id' => $this->f['workflow_doctors'][0]]);
-        $this->callApi('POST', $this->path('/pathology'), ['source' => 'internal', 'status' => 'completed', 'result_on' => '2001-03-04', 'conclusion' => 'نتيجة وصلت بعد اكتمال الزيارة'])->assertCreated();
+        $this->callApi('POST', $this->path('/pathology'), $this->case(['source' => 'internal', 'status' => 'completed', 'result_on' => '2001-03-04', 'conclusion' => 'نتيجة وصلت بعد اكتمال الزيارة']))->assertCreated();
     }
 
     public function test_visit_date_correction_cannot_invalidate_saved_internal_dates(): void
     {
-        $this->callApi('POST', $this->path('/pathology'), ['source' => 'internal', 'status' => 'requested', 'requested_on' => '2001-03-02'])->assertCreated();
+        $this->callApi('POST', $this->path('/pathology'), $this->case(['source' => 'internal', 'status' => 'requested', 'requested_on' => '2001-03-02']))->assertCreated();
         $this->callApi('PUT', $this->path(), $this->visit(['visit_date' => '2001-03-03', 'lock_version' => $this->s['visit']['lock_version']]))->assertUnprocessable()->assertJsonValidationErrors('requested_on');
         $this->assertDatabaseHas('visits', ['id' => $this->s['visit']['id'], 'visit_date' => '2001-03-02']);
     }
 
     public function test_direct_writes_cannot_store_mutually_exclusive_fields(): void
     {
-        $id = $this->callApi('POST', $this->path('/pathology'), ['source' => 'internal', 'status' => 'requested'])->assertCreated()->json('data.id');
+        $id = $this->callApi('POST', $this->path('/pathology'), $this->case(['source' => 'internal', 'status' => 'requested']))->assertCreated()->json('data.id');
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'not_assessed'])->assertOk();
         foreach ([['visit_pathologies', ['id' => $id], ['external_organization' => 'invalid']], ['visit_pathologies', ['id' => $id], ['unavailable_reason' => 'invalid']], ['visit_pathologies', ['id' => $id], ['result_on' => '2001-03-02']], ['visit_pathologies', ['id' => $id], ['conclusion' => 'invalid']], ['visit_diagnostic_assessments', ['visit_id' => $this->s['visit']['id']], ['not_required_reason' => 'invalid']], ['visit_diagnostic_assessments', ['visit_id' => $this->s['visit']['id']], ['required_reason' => 'invalid']], ['visit_diagnostic_assessments', ['visit_id' => $this->s['visit']['id']], ['evidence_pathology_id' => $id]]] as [$table, $where, $values]) {
             try {
@@ -125,13 +125,14 @@ class DossierPathologyTest extends DossierCompletionCase
         }
     }
 
-    public function test_omitted_responsibility_is_preserved_but_half_clearing_the_pair_is_rejected(): void
+    public function test_omitted_responsibility_is_preserved_but_clearing_the_pair_is_rejected(): void
     {
-        $id = $this->callApi('POST', $this->path('/pathology'), $this->report($this->context()))->assertCreated()->json('data.id');
-        $this->callApi('PUT', $this->path('/pathology/'.$id), $this->report(['lock_version' => 1, 'clinic_id' => null]))->assertUnprocessable()->assertJsonValidationErrors('doctor_id');
+        $id = $this->callApi('POST', $this->path('/pathology'), $this->report())->assertCreated()->json('data.id');
+        $this->callApi('PUT', $this->path('/pathology/'.$id), $this->report(['lock_version' => 1, 'clinic_id' => null]))->assertUnprocessable()->assertJsonValidationErrors('clinic_id');
         $this->assertDatabaseHas('visit_pathologies', ['id' => $id, 'lock_version' => 1] + $this->context());
         $this->callApi('PUT', $this->path('/pathology/'.$id), $this->report(['lock_version' => 1, 'note' => 'تصحيح دون حذف المسؤول']))->assertOk();
         $this->assertDatabaseHas('visit_pathologies', ['id' => $id, 'lock_version' => 2] + $this->context());
+        $this->callApi('POST', $this->path('/pathology'), ['source' => 'internal', 'status' => 'requested'])->assertUnprocessable()->assertJsonValidationErrors(['clinic_id', 'doctor_id']);
     }
 
     public function test_attachment_and_procedure_scope_database_constraints_and_completed_visit_corrections(): void
@@ -232,7 +233,12 @@ class DossierPathologyTest extends DossierCompletionCase
 
     private function report(array $extra = []): array
     {
-        return $extra + ['source' => 'external', 'status' => 'completed', 'external_organization' => 'مختبر خارجي', 'result_on' => '1999-01-02', 'report_number' => '0000123', 'conclusion' => 'خلاصة محفوظة'];
+        return array_replace($this->context(), ['source' => 'external', 'status' => 'completed', 'external_organization' => 'مختبر خارجي', 'result_on' => '1999-01-02', 'report_number' => '0000123', 'conclusion' => 'خلاصة محفوظة'], $extra);
+    }
+
+    private function case(array $extra = []): array
+    {
+        return array_replace($this->context(), $extra);
     }
 
     public function test_historical_external_report_replay_confirmation_void_history_and_atomic_conflict(): void
@@ -259,11 +265,11 @@ class DossierPathologyTest extends DossierCompletionCase
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'pathology_not_required'])->assertUnprocessable();
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'pathology_not_required', 'not_required_reason' => 'قرار الطبيب'])->assertOk();
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 1, 'disposition' => 'pathology_required', 'required_reason' => 'لتحديد الخطة'])->assertOk();
-        $id = $this->callApi('POST', $this->path('/pathology'), ['source' => 'internal', 'status' => 'requested', 'requested_on' => '2001-03-02'])->assertCreated()->json('data.id');
+        $id = $this->callApi('POST', $this->path('/pathology'), $this->case(['source' => 'internal', 'status' => 'requested', 'requested_on' => '2001-03-02']))->assertCreated()->json('data.id');
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 2, 'disposition' => 'pathology_confirmed', 'evidence_pathology_id' => $id])->assertUnprocessable();
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 2, 'disposition' => 'pathology_pending'])->assertOk();
         foreach (['specimen_collected', 'pending_result', 'completed'] as $i => $status) {
-            $this->callApi('PUT', $this->path('/pathology/'.$id), ['lock_version' => $i + 1, 'source' => 'internal', 'status' => $status, 'collected_on' => '2001-03-03', 'result_on' => $status === 'completed' ? '2001-03-04' : null, 'conclusion' => $status === 'completed' ? 'نتيجة' : null])->assertOk();
+            $this->callApi('PUT', $this->path('/pathology/'.$id), $this->case(['lock_version' => $i + 1, 'source' => 'internal', 'status' => $status, 'collected_on' => '2001-03-03', 'result_on' => $status === 'completed' ? '2001-03-04' : null, 'conclusion' => $status === 'completed' ? 'نتيجة' : null]))->assertOk();
         }
         $this->callApi('GET', '/'.$this->s['id'])->assertOk()->assertJsonPath('data.pathology_summary.disposition', 'pathology_confirmed');
         $this->callApi('POST', $this->path('/pathology'), $this->report(['result_on' => '2099-01-01']))->assertUnprocessable();
@@ -275,7 +281,7 @@ class DossierPathologyTest extends DossierCompletionCase
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'referred_out'])->assertUnprocessable();
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'pathology_not_required', 'not_required_reason' => 'previous decision'])->assertOk();
         $this->s = $this->saveSection('medications', ['prescription' => null, 'outcome' => $this->outcome(['code' => 'DOS-REFER', 'referral_target' => 'مشفى آخر', 'outgoing_referral_date' => '2001-03-02', 'outgoing_referral_reason' => 'التشريح غير متاح'])])->assertOk()->json('data');
-        $this->callApi('POST', $this->path('/pathology'), ['source' => 'internal', 'status' => 'unavailable', 'unavailable_reason' => 'الفحص غير متاح'])->assertCreated();
+        $this->callApi('POST', $this->path('/pathology'), $this->case(['source' => 'internal', 'status' => 'unavailable', 'unavailable_reason' => 'الفحص غير متاح']))->assertCreated();
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 1, 'disposition' => 'referred_out'])->assertOk()->assertJsonPath('data.not_required_reason', null)->assertJsonPath('data.evidence_pathology_id', null);
         $this->assertDatabaseHas('visit_diagnostic_assessments', ['visit_id' => $this->s['visit']['id'], 'disposition' => 'referred_out', 'not_required_reason' => null, 'evidence_pathology_id' => null]);
         $this->assertSame(1, DB::table('visit_outcomes')->where('visit_id', $this->s['visit']['id'])->count());

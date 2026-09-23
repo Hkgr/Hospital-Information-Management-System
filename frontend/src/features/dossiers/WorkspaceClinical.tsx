@@ -19,7 +19,7 @@ export default function WorkspaceClinical({ facility, snapshot, caps, active, re
   if (active > 6 && !caps.treatment_view) return <p role="alert">لا تتوفر صلاحية استعراض العلاج في هذا المشفى.</p>;
   return <>{[6, 7, 8].map(i => <section key={i} hidden={active !== i} className={layout.toolPanel}>
     <p className={layout.toolNotice}>كل إجراء يُحفظ بتأكيد مستقل. الموعد والوصفة لا يسجلان إعطاءً أو صرفًا تلقائيًا.</p>
-    {i === 6 && <div><h3>حالة التشريح المرضي الحالية للمريض</h3>{patient.error ? <p role="alert">{patient.error}<button onClick={patient.retry}>إعادة المحاولة</button></p> : patient.loading ? <p role="status">جارٍ تحديث الحالة…</p> : <p>{dispositionLabels[patient.data?.pathology_summary?.disposition ?? "not_assessed"]}</p>}<small>ملخص أحدث واقعة محفوظة في هذا المشفى؛ التقييم أدناه يخص الزيارة المحددة.</small></div>}
+    {i === 6 && <div><h3>التشريح المرضي</h3>{patient.error ? <p role="alert">{patient.error}<button onClick={patient.retry}>إعادة المحاولة</button></p> : patient.loading ? <p role="status">جارٍ تحديث الحالة…</p> : <p>{dispositionLabels[patient.data?.pathology_summary?.disposition ?? "not_assessed"]}</p>}<small>أحدث تقرير محفوظ في هذه البطاقة، دون تقييم أو موافقة منفصلة.</small></div>}
     {i === 6 ? <PathologyPanel facility={facility} dossier={snapshot.id} visit={visit.data} caps={caps} revision={revision} onChanged={onChanged} /> : <OncologyPanel medicationView={i===8?medicationView:undefined} facility={facility} dossier={snapshot.id} caps={caps} revision={revision} onChanged={onChanged} medicationSource={typeof snapshot.medical.medication_source === "string" ? snapshot.medical.medication_source : null} visit={visit.data} />}
   </section>)}</>;
 }
