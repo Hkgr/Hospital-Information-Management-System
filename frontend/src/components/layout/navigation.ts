@@ -5,7 +5,7 @@ type NavigationItem = { label: string; icon: IconType; href?: string; permission
 
 // Missing routes are presentation-only, not permissions or fabricated modules.
 export const primaryNavigation: NavigationItem[] = [
-  { label: "الرئيسية", icon: LuHouse, href: "/dashboard/general" },
+  { label: "الرئيسية", icon: LuHouse, href: "/dashboard/general", permission: "dashboards.view" },
   { label: "بطاقة المريض", icon: LuFolderHeart, href: "/patient-cards", permission: "dossiers.view" },
   { label: "الزيارات", icon: LuClipboardPlus, href: "/visits", permission: "dossiers.view" },
   { label: "الأطباء", icon: LuStethoscope, href: "/doctors", permission: "doctors.view" },
@@ -14,7 +14,7 @@ export const primaryNavigation: NavigationItem[] = [
   { label: "الأدوية", icon: LuPill, href: "/medications", permission: "catalog.view" },
   { label: "المخزون", icon: LuPackage, href: "/stock/receipts", permission: "stock.view" },
   { label: "بنك الدم", icon: LuDroplet, href: "/blood-bank", permission: "blood_bank.view" },
-  { label: "تقارير", icon: LuChartNoAxesCombined, href: "/reports" },
-  { label: "السجل", icon: LuHistory, href: "/audit" },
+  { label: "تقارير", icon: LuChartNoAxesCombined, href: "/reports", permission: "reports.view" },
+  { label: "السجل", icon: LuHistory, href: "/audit", permission: "audit.view" },
   { label: "المستخدمون", icon: LuUsers, href: "/users", permission: "users.view" },
 ];

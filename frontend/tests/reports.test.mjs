@@ -8,7 +8,7 @@ let browser;
 before(async () => { browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined }); });
 after(async () => { await browser?.close(); });
 
-const access = [{ facility: { id: 3, code: "FAC-3", name_ar: "منشأة التقارير", timezone: "Asia/Damascus" }, roles: [], permissions: ["dossiers.view", "clinics.view"] }];
+const access = [{ facility: { id: 3, code: "FAC-3", name_ar: "منشأة التقارير", timezone: "Asia/Damascus" }, roles: [], permissions: ["reports.view", "reports.export", "dossiers.view", "clinics.view"] }];
 const snapshot = {
   facility: { id: 3, code: "FAC-3", name_ar: "منشأة التقارير", timezone: "Asia/Damascus" },
   period: { key: "day", label: "اليوم · 2026-09-22", starts_on: "2026-09-22", ends_on: "2026-09-22" },

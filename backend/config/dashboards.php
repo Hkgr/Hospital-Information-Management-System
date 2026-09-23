@@ -5,7 +5,7 @@ return [
     'general' => [
         'title' => 'لوحة التحكم',
         'priority' => 100,
-        'access' => 'authenticated',
-        'permissions' => [],
+        'access' => 'facility_permissions',
+        'permissions' => ['dashboards.view'],
     ],
 ];

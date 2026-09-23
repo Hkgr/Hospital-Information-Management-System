@@ -16,10 +16,10 @@ class FacilityReport
 {
     public const PATIENTS_DEFINITION = 'مرضى ظهرت لهم زيارة غير ملغاة بتاريخ داخل الفترة المحددة في المنشأة.';
 
-    public function facility(User $user, int $id): array
+    public function facility(User $user, int $id, string $permission = 'reports.view'): array
     {
         foreach (app(UserAccessContext::class)->forUser($user) as $entry) {
-            if ($entry['facility']['id'] === $id) {
+            if ($entry['facility']['id'] === $id && in_array($permission, $entry['permissions'], true)) {
                 return $entry['facility'] + ['permissions' => $entry['permissions']];
             }
         }

@@ -41,7 +41,7 @@ class FacilityReportApiTest extends TestCase
         return $this->getJson('/api/reports'.$query, $token ? ['Authorization' => 'Bearer '.$token] : []);
     }
 
-    public function test_membership_without_extra_permission_opens_empty_stats_and_user_one_does_not_bypass(): void
+    public function test_reports_view_opens_empty_stats_and_user_one_does_not_bypass(): void
     {
         $user = User::factory()->create(['name' => 'مدير النظام']);
         $outsider = User::factory()->create(['name' => 'مستخدم سري']);
@@ -50,6 +50,8 @@ class FacilityReportApiTest extends TestCase
         $this->getReport('?facility_id=2147483647&period=day', $token)->assertForbidden()->assertJsonPath('error.code', 'FACILITY_ACCESS_DENIED');
         $facility = $this->assignment($user, 'REP0', []);
         $this->assignment($outsider, 'REPX', ['dossiers.view']);
+        $this->getReport('?facility_id='.$facility.'&period=day', $token)->assertForbidden()->assertJsonPath('error.code', 'FACILITY_ACCESS_DENIED');
+        $facility = $this->assignment($user, 'REP1', ['reports.view']);
         $empty = $this->getReport('?facility_id='.$facility.'&period=day', $token)->assertOk()
             ->assertHeader('Cache-Control', 'no-store, private')->assertHeader('Vary', 'Authorization');
         $this->assertSame([], $empty->json('data.counters'));
@@ -66,8 +68,8 @@ class FacilityReportApiTest extends TestCase
     {
         $user = User::factory()->create(['name' => 'قارئ التقارير']);
         $outsider = User::factory()->create(['name' => 'مستخدم سري']);
-        $allowed = $this->assignment($user, 'REPA', ['dossiers.view', 'dossiers.treatment.view', 'clinics.view', 'doctors.view']);
-        $denied = $this->assignment($user, 'REPB', []);
+        $allowed = $this->assignment($user, 'REPA', ['reports.view', 'dossiers.view', 'dossiers.treatment.view', 'clinics.view', 'doctors.view']);
+        $denied = $this->assignment($user, 'REPB', ['reports.view']);
         $foreign = $this->assignment($outsider, 'REPC', ['dossiers.view', 'clinics.view', 'doctors.view']);
         $today = now('Asia/Damascus')->toDateString();
         $yesterday = now('Asia/Damascus')->subDay()->toDateString();
@@ -128,7 +130,7 @@ class FacilityReportApiTest extends TestCase
     public function test_json_get_does_not_write_audit_and_pdf_export_does(): void
     {
         $user = User::factory()->create(['name' => 'مُصدر التقرير']);
-        $facility = $this->assignment($user, 'REPP', ['dossiers.view']);
+        $facility = $this->assignment($user, 'REPP', ['reports.view', 'reports.export', 'dossiers.view']);
         $token = $this->token($user);
         $before = DB::table('audit_logs')->count();
         $this->getReport('?facility_id='.$facility.'&period=day', $token)->assertOk();
@@ -146,14 +148,14 @@ class FacilityReportApiTest extends TestCase
     {
         config(['scramble.enabled' => true]);
         $viewer = User::factory()->create();
-        $id = $this->assignment($viewer, 'REPE', []);
+        $id = $this->assignment($viewer, 'REPE', ['reports.view']);
         $doc = $this->getJson('/docs/api.json')->assertOk()->json();
         $this->assertArrayHasKey('/api/reports', $doc['paths']);
         $this->assertArrayHasKey('/api/reports/export/pdf', $doc['paths']);
         $operation = $doc['paths']['/api/reports']['get'];
         $this->assertSame('facilityReport', $operation['operationId']);
         $this->assertStringContainsString('api ability', $operation['description']);
-        $this->assertStringContainsString('No extra permission', $operation['description']);
+        $this->assertStringContainsString('reports.view', $operation['description']);
         $response = $this->getReport('?facility_id='.$id.'&period=week', $this->token($viewer))->assertOk();
         $this->assertMatchesSchema($doc, $operation['responses'][200]['content']['application/json']['schema'], $response->json());
     }

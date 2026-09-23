@@ -23,7 +23,7 @@ export default function AuditLogScreen() {
   const params = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
-  const { entry, allowed } = directoryFacility(access, null, params.get("facility_id"));
+  const { entry, allowed } = directoryFacility(access, "audit.view", params.get("facility_id"));
   if (!entry) return <section className={styles.status}><h2>السجل غير متاح</h2><p role="alert">{allowed.length ? "معرّف المنشأة غير صالح ضمن المنشآت المتاحة لك." : "لا منشأة مرتبطة بهذا الدخول لعرض سجل الحركة."}</p></section>;
   const facility = entry.facility.id;
   const q = new URLSearchParams({ facility_id: String(facility) });

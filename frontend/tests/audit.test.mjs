@@ -8,7 +8,7 @@ let browser;
 before(async () => { browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined }); });
 after(async () => { await browser?.close(); });
 
-const access = [{ facility: { id: 3, code: "FAC-3", name_ar: "منشأة السجل", timezone: "Asia/Damascus" }, roles: [], permissions: [] }];
+const access = [{ facility: { id: 3, code: "FAC-3", name_ar: "منشأة السجل", timezone: "Asia/Damascus" }, roles: [], permissions: ["audit.view"] }];
 const event = {
   id: 9, occurred_at: "2026-09-22T11:00:00+03:00", actor: { id: 11, name: "مستخدم الاختبار" },
   category: "technical", category_label: "خطأ تقني", entity: "system_error", entity_label: "خطأ تقني",
