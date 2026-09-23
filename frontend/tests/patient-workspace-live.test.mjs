@@ -91,8 +91,8 @@ test('new card and real first visit, validation and compact clinic/doctor fields
       d = await save(page, `/${d.id}/visits/${d.visit.id}`);
       assert.equal(d.visit.diagnoses[0].clinic_id, f.clinics[1]);
       assert.equal(d.visit.diagnoses[0].diagnosing_staff_id, f.workflow_doctors[1]);
-      await stage(page, 'التقييم والتشريح المرضي', 6);
-      await page.getByRole('button', { name: 'تسجيل أو تعديل التقييم التشخيصي', exact: true }).waitFor();
+      await stage(page, 'التشريح المرضي', 6);
+      await page.getByRole('button', { name: 'إضافة تقرير تشريح مرضي', exact: true }).waitFor();
       await shot(page, `pathology-${width}`);
       await stage(page, 'الخطة ومواعيد العلاج', 7);
       await page.getByRole('button', { name: 'إضافة خطة علاجية', exact: true }).waitFor();

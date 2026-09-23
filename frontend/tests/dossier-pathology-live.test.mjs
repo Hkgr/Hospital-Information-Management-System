@@ -26,6 +26,13 @@ async function create() {
   const response = await api('POST', '', { person_mode: 'new', code: `PATH-${randomUUID().slice(0,18)}`, first_name: 'مريض', family_name: 'تشريح اصطناعي', opening_date: '1999-01-01', visit_date: '2000-02-03', birth_date_accuracy: 'unknown', gender: 'unknown', displacement_status: 'unknown' });
   assert.equal(response.status, 201, JSON.stringify(response.body)); return response.body.data;
 }
+async function pickPathologyDoctor(dialog, source) {
+  const doctor = source === 'external' ? 'الطبيب المراجع ضمن المشفى' : 'الطبيب المنظم';
+  await dialog.getByRole('button', { name: 'اختيار: العيادة · التقرير', exact: true }).click();
+  await dialog.getByRole('group', { name: 'العيادة · التقرير', exact: true }).locator('button[aria-pressed]').first().click();
+  await dialog.getByRole('button', { name: `اختيار: ${doctor}`, exact: true }).click();
+  await dialog.getByRole('group', { name: doctor, exact: true }).locator('button[aria-pressed]').first().click();
+}
 test('external completed pathology and validation preserve draft at 390, 768 and 1440; real reports', async () => {
   for (const width of [390, 768, 1440]) {
     last = await create(); const ctx = await browser.newContext({ viewport: { width, height: 1000 } });
@@ -36,6 +43,7 @@ test('external completed pathology and validation preserve draft at 390, 768 and
       await page.getByRole('button', { name: 'إضافة تقرير تشريح مرضي', exact: true }).click();
       const dialog = page.getByRole('dialog');
       await dialog.locator('[name="source"]').selectOption('external');
+      await pickPathologyDoctor(dialog, 'external');
       assert.equal(await dialog.locator('[name="status"]').count(), 0);
       assert.equal(await dialog.getByText("المرفقات الداعمة", {exact:true}).count(), 0);
       await dialog.locator('[name="report_number"]').fill('0000123');
@@ -88,7 +96,7 @@ test('explicit latest-version review preserves other author changes and the loca
   } finally { await ctx.close(); }
 });
 test('real authorization, cross-facility refusal, UUID replay and authoritative list filter', async () => {
-  const data = { source: 'internal', status: 'requested', requested_on: '2000-02-03', request_id: randomUUID() }, path = `/${last.id}/visits/${last.visit.id}/pathology`;
+  const data = { source: 'internal', status: 'requested', requested_on: '2000-02-03', request_id: randomUUID(), clinic_id: f.clinics[0], doctor_id: f.workflow_doctors[0] }, path = `/${last.id}/visits/${last.visit.id}/pathology`;
   const first = await api('POST', path, data); assert.equal(first.status, 201); assert.equal((await api('POST', path, data)).body.data.id, first.body.data.id);
   assert.equal((await api('POST', path, { ...data, note: 'different' })).status, 409);
   assert.equal((await api('POST', path, { ...data, request_id: randomUUID() }, f.denied_token)).status, 403);
@@ -99,21 +107,16 @@ test('real authorization, cross-facility refusal, UUID replay and authoritative 
   fixture('concurrency');
 });
 
-test('diagnostic decision UI, optional column and filter use the saved pathology; read-only UI has no write actions', async () => {
+test('pathology report UI has no diagnostic assessment; list filter uses the saved report; read-only UI has no write actions', async () => {
   const ctx = await browser.newContext(); await ctx.addInitScript(t => sessionStorage.setItem('hospital.bearer', t), f.token); const page = await ctx.newPage();
   try {
     await page.goto(`${base}/patient-cards/new?card=${last.id}&visit=${last.visit.id}&section=6&facility_id=${f.facility}`);
-    await page.getByRole('button', {name:'تسجيل أو تعديل التقييم التشخيصي',exact:true}).click();
-    const dialog=page.getByRole('dialog'); await dialog.locator('[name="disposition"]').selectOption('pathology_not_required');
-    await dialog.locator('[name="not_required_reason"]').fill('قرار سريري صريح');
-    await dialog.locator('[name="assessed_on"]').fill('2001-01-01');
-    const saved=page.waitForResponse(r=>r.request().method()==='PUT'&&r.url().includes('diagnostic-assessment')&&r.status()===200);
-    await dialog.getByRole('button',{name:'حفظ',exact:true}).click(); await saved; await dialog.waitFor({state:'hidden'});
-    assert.equal((await api('GET',`/${last.id}/visits/${last.visit.id}/diagnostic-assessment`)).body.data.disposition,'pathology_not_required');
-    await page.goto(`${base}/patient-cards?facility_id=${f.facility}&search=${encodeURIComponent(last.code)}&pathology_status=pathology_not_required`);
+    assert.equal(await page.getByRole('button', {name:'تسجيل أو تعديل التقييم التشخيصي',exact:true}).count(), 0);
+    await page.getByRole('button', {name:'إضافة تقرير تشريح مرضي',exact:true}).waitFor();
+    await page.goto(`${base}/patient-cards?facility_id=${f.facility}&search=${encodeURIComponent(last.code)}&pathology_status=pathology_confirmed`);
     await page.getByRole('region',{name:'جدول بطاقات المرضى'}).getByText(last.code,{exact:true}).waitFor();
     await page.getByText('الأعمدة',{exact:true}).click(); await page.getByRole('checkbox',{name:'حالة التشريح المرضي',exact:true}).check();
-    await page.getByRole('region',{name:'جدول بطاقات المرضى'}).getByText('لا يتطلب تشريحًا مرضيًا',{exact:true}).waitFor();
+    await page.getByRole('region',{name:'جدول بطاقات المرضى'}).getByText('نتيجة التشريح المرضي متوفرة',{exact:true}).waitFor();
     await page.getByText('الأعمدة',{exact:true}).click();
     for (const width of [390, 768, 1440]) {
       await page.setViewportSize({width,height:1000});
@@ -146,15 +149,13 @@ test('conditional drafts, conflict review and effective panels remain consistent
       await page.getByRole('dialog').waitFor({state:'hidden'});
       return response;
     };
-    const decision = async () => {
-      await page.getByRole('button',{name:'تسجيل أو تعديل التقييم التشخيصي',exact:true}).click();
-      return page.getByRole('dialog');
-    };
     try {
       await page.goto(`${base}/patient-cards/new?card=${card.id}&visit=${card.visit.id}&section=6&facility_id=${f.facility}`);
+      assert.equal(await page.getByRole('button',{name:'تسجيل أو تعديل التقييم التشخيصي',exact:true}).count(),0);
       await page.getByRole('button',{name:'إضافة تقرير تشريح مرضي',exact:true}).click();
       let dialog = page.getByRole('dialog');
       await dialog.locator('[name="source"]').selectOption('external');
+      await pickPathologyDoctor(dialog, 'external');
       await dialog.locator('[name="external_organization"]').fill('STALE-ORGANIZATION');
       assert.equal(await dialog.locator('[name="status"]').count(),0);
       await dialog.locator('[name="result_on"]').fill('1998-06-02');
@@ -175,48 +176,8 @@ test('conditional drafts, conflict review and effective panels remain consistent
       assert.equal(report.unavailable_reason,null);
       assert.equal(report.result_on,'1998-06-02');
       assert.equal(report.conclusion,'STALE-FINAL');
-
-      dialog = await decision();
-      await dialog.locator('[name="disposition"]').selectOption('pathology_not_required');
-      await dialog.locator('[name="not_required_reason"]').fill('STALE-NOT-REQUIRED');
-      await dialog.locator('[name="assessed_on"]').fill(card.visit.visit_date);
-      await dialog.locator('[name="note"]').fill('assessment generic note');
-      await save('PUT','diagnostic-assessment');
-      await page.getByText('لا يتطلب تشريحًا مرضيًا',{exact:true}).nth(1).waitFor();
-      dialog = await decision();
-      await dialog.locator('[name="disposition"]').selectOption('pathology_required');
-      assert.equal(await dialog.locator('[name="not_required_reason"]').count(),0);
-      await dialog.locator('[name="required_reason"]').fill('continuing reason');
-      const changed = await save('PUT','diagnostic-assessment');
-      assert.ok(!('not_required_reason' in changed.request().postDataJSON()));
-      await page.getByText('التشريح المرضي مطلوب',{exact:true}).nth(1).waitFor();
-      assert.equal(await page.getByText('STALE-NOT-REQUIRED',{exact:true}).count(),0);
-
-      dialog = await decision();
-      await dialog.locator('[name="disposition"]').selectOption('pathology_pending');
-      await dialog.locator('[name="follow_up"]').fill('my preserved follow up');
-      const current = (await api('GET',`${root}/diagnostic-assessment`)).body.data;
-      assert.equal((await api('PUT',`${root}/diagnostic-assessment`,{...current,note:'other author note',request_id:randomUUID()})).status,200);
-      const conflict = page.waitForResponse(r=>r.status()===409);
-      await dialog.getByRole('button',{name:'حفظ',exact:true}).click(); await conflict;
-      assert.equal(await dialog.locator('[name="follow_up"]').inputValue(),'my preserved follow up');
-      assert.equal(await dialog.locator('[name="disposition"]').inputValue(),'pathology_pending');
-      await page.screenshot({path:fileURLToPath(new URL(`correction-conflict-${width}.png`,artifacts))});
-      await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();
-      await dialog.getByText('الأحدث: other author note',{exact:false}).waitFor();
-      await dialog.getByRole('checkbox',{name:/التقييم التشخيصي/}).check();
-      await dialog.getByRole('checkbox',{name:/المتابعة المطلوبة/}).check();
-      // Selecting a stale incompatible field still cannot reintroduce it.
-      await dialog.getByRole('checkbox',{name:/سبب عدم الحاجة للتشريح المرضي/}).check();
-      await dialog.getByRole('button',{name:'اعتماد الاختيارات للمراجعة قبل الحفظ'}).click();
-      const reviewed = await save('PUT','diagnostic-assessment');
-      assert.ok(!('not_required_reason' in reviewed.request().postDataJSON()));
-      // Status-filter <option> nodes share this label but are not the displayed panels.
-      await page.locator('p').filter({hasText:/^بانتظار النتيجة/}).nth(1).waitFor();
-      const actual = (await api('GET',`${root}/diagnostic-assessment`)).body.data;
-      assert.equal(actual.required_reason,'continuing reason'); assert.equal(actual.not_required_reason,null);
-      assert.equal(actual.note,'other author note'); assert.equal(actual.follow_up,'my preserved follow up');
-      assert.equal((await api('GET',`/${card.id}`)).body.data.pathology_summary.disposition,actual.effective_disposition);
+      await page.getByText('نتيجة التشريح المرضي متوفرة',{exact:true}).first().waitFor();
+      assert.equal((await api('GET',`/${card.id}`)).body.data.pathology_summary.disposition,'pathology_confirmed');
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
       await page.evaluate(()=>window.scrollTo(0,0));
       await page.screenshot({path:fileURLToPath(new URL(`correction-state-${width}.png`,artifacts)),fullPage:true});

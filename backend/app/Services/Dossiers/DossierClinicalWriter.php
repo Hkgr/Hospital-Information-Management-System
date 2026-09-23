@@ -66,7 +66,7 @@ class DossierClinicalWriter
             }
             $fields = ['phase_three' => true, 'lock_version' => $v->lock_version + 1, 'updated_by' => $r->user()->id, 'updated_at' => now()];
             DB::table('visits')->where('id', $visit)->update($fields);
-            $this->writes->progress($r, $f, $dossier, $section, 'saved', $visit);
+            $this->writes->progress($r, $f, $dossier, $section, 'saved', $visit, ! empty($data['unchanged']));
             $this->writes->audit($r, $f, 'dossier_visit', $visit, (array) $v, $fields);
 
             return $visit;

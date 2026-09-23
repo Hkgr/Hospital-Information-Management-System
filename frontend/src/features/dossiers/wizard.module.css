@@ -71,6 +71,15 @@
 .checkGroup { display: flex; gap: 12px 20px; flex-wrap: wrap; }
 .form .checkGroup label { display: flex; align-items: center; gap: 8px; }
 .form input:is([type="radio"], [type="checkbox"]) { inline-size: 18px; block-size: 18px; flex: 0 0 18px; margin: 0; padding: 0; accent-color: var(--mbz-action); }
+.priorVisit { display: grid; gap: 8px; padding: 16px 18px; border: 1px solid #d5e4ea; border-radius: 12px; background: #f4fafc; }
+.priorVisit h4 { margin: 0; color: #176580; font-size: 14px; }
+.priorVisit p, .priorVisit strong { margin: 0; font-size: 13px; }
+.priorVisit ul { margin: 0; padding-inline-start: 18px; display: grid; gap: 4px; font-size: 13px; }
+.unchangedOption { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; border: 1px solid #cfe4d8; border-radius: 10px; background: #f3faf6; }
+.form label.unchangedOption { display: flex; }
+.unchangedOption span { display: grid; gap: 2px; }
+.unchangedOption small { color: #4d626e; }
+.pathologyIntro { margin: 0 0 12px; color: #365765; font-size: 14px; line-height: 1.6; }
 .diagnosis { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; min-inline-size: 0; border-block-start: 1px solid #dce6ed; padding-block-start: 24px; }
 .diagnosisHeader { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; align-items: center; }
 .error { color: #a0271c; font-size: 13px; }

@@ -20,12 +20,14 @@ import DiagnosisEditor from "./DiagnosisEditor";
 import ClinicalEditor from "./ClinicalEditor";
 import ClinicalConflict from "./ClinicalConflict";
 import FinalReview from "./FinalReview";
-import { clinicalDraft, clinicalPayload, medicationPanes, type MedicationPane } from "./clinical";
+import { clinicalDraft, clinicalPayload, medicationPanes, prescriptionKindLabels, type MedicationPane } from "./clinical";
 import styles from "../clinics/clinics.module.css";
 import layout from "./wizard.module.css";
 
-const steps = ["البيانات الشخصية", "المعلومات الطبية والورمية", "الزيارة والتشخيصات", "الخدمات والإجراءات", "أدوية الزيارة والنتيجة", "المرفقات ثم المراجعة", "التقييم والتشريح المرضي", "الخطة ومواعيد العلاج", "تسجيل الجرعات"];
+const steps = ["البيانات الشخصية", "المعلومات الطبية والورمية", "الزيارة والتشخيصات", "الخدمات والإجراءات", "أدوية الزيارة والنتيجة", "المرفقات ثم المراجعة", "التشريح المرضي", "الخطة ومواعيد العلاج", "تسجيل الجرعات"];
 const codes = ["personal", "medical", "visit", "clinical", "medications", "attachments"];
+const skipLabels: Record<number, string> = { 2: "لا تغير — لا يوجد تشخيص جديد في هذه الزيارة", 3: "لا تغير — لا يوجد إجراء أو خدمة جديدة في هذه الزيارة", 4: "لا تغير — لا يوجد دواء أو نتيجة جديدة في هذه الزيارة" };
+function skipFrom(s?: Snapshot) { return { 2: !!s?.progress.find(p => p.section === "visit")?.unchanged, 3: !!s?.progress.find(p => p.section === "clinical")?.unchanged, 4: !!s?.progress.find(p => p.section === "medications")?.unchanged }; }
 export default function DossierWizard({ id: legacyId }: { id?: string }) {
   const { access, user } = useIdentity(); const params = useSearchParams();
   const id = legacyId ?? params.get("card") ?? undefined;
@@ -61,6 +63,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
   const [clinicalRevision,setClinicalRevision]=useState(0);
   const [uploadsPending,setUploadsPending]=useState(false);
   const [reviewed,setReviewed]=useState(false);
+  const [skip, setSkip] = useState(() => skipFrom(initial));
   const subsequent=initial?.visit?.dossier_visit_kind === "subsequent" || (params.get("visit")==="new" && initial?.status==="active");
   const [patientVersion, setPatientVersion] = useState(initial?.patient.lock_version ?? 0);
   const [personal, setPersonal] = useState(() => personalFields(initial)); const [medical, setMedical] = useState(() => medicalFields(initial)); const [visit, setVisit] = useState(() => visitFields(initial)); const [diagnoses, setDiagnoses] = useState(() => diagnosisFields(initial));
@@ -124,9 +127,10 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
       body = { visit_date: visit.visit_date, is_referred: visit.is_referred === "yes", diagnoses: diagnoses.map(diagnosisPayload) };
       if (visit.is_referred === "yes") Object.assign(body, { referring_hospital: visit.referring_hospital, referral_date: visit.referral_date, referral_reason: visit.referral_reason });
       if (base!.visit) body.lock_version = sectionVersions[2];
+      body.unchanged = skip[2];
       path = `dossiers/${base!.id}/visits${base!.visit ? `/${base!.visit.id}` : subsequent ? "/subsequent" : ""}`;
     }
-    if(step>=3){body={...(step===5?{confirmed:reviewed}:clinicalPayload(clinical,step,medicationPane)),lock_version:sectionVersions[step]};path=`dossiers/${base!.id}/visits/${base!.visit!.id}/${step===5?"review":codes[step]}`;}
+    if(step>=3){body={...(step===5?{confirmed:reviewed}:clinicalPayload(clinical,step,medicationPane)),lock_version:sectionVersions[step],...(step===3||step===4?{unchanged:skip[step as 3|4]}:{})};path=`dossiers/${base!.id}/visits/${base!.visit!.id}/${step===5?"review":codes[step]}`;}
     body.facility_id = facility;
     const signature = JSON.stringify({ path, body });
     if (reservation.current?.body !== signature) reservation.current = { body: signature, id: crypto.randomUUID() };
@@ -160,6 +164,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
     if(savedStep===0||!dirty.includes(0))setPersonal(personalFields(result));
     if(savedStep===1||!dirty.includes(1))setMedical(medicalFields(result));
     if(savedStep===2||!dirty.includes(2)){setVisit(visitFields(result));setDiagnoses(diagnosisFields(result));}
+    setSkip(old => ({ 2: savedStep===2||!dirty.includes(2)?skipFrom(result)[2]:old[2], 3: savedStep===3||!dirty.includes(3)?skipFrom(result)[3]:old[3], 4: savedStep===4||!dirty.includes(4)?skipFrom(result)[4]:old[4] }));
     const latest=clinicalDraft(result);setClinical(old=>{
       const next={...old,...(savedStep===3||!dirty.includes(3)?{services:latest.services,procedures:latest.procedures}:{})};
       if(savedStep===4){
@@ -186,7 +191,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
     {!base && <nav className={layout.entryModes} aria-label="عملية التسجيل"><span aria-current="page">بطاقة جديدة وزيارتها الأولى</span><Link href={`/patient-cards/new?facility_id=${facility}&intent=visit&return_to=visits`}>زيارة لبطاقة موجودة</Link></nav>}
     <label className={layout.mobileStages}>القسم الحالي<select value={step} onChange={e=>go(Number(e.target.value))}>{steps.map((label,i)=>(!(subsequent&&i<2)&&(i<6||!!base?.visit)&&<option key={i} value={i} disabled={(!base&&i>0)||(i>2&&!base?.visit)}>{label}</option>))}</select></label>
     <div className={layout.workbench}><nav className={layout.stageRail} aria-label="مراحل مساحة العمل">
-    {[{title:"بطاقة المريض",indices:[0,1],tone:"card"},{title:"الزيارة الحالية",indices:[2,3,4],tone:"visit"},{title:"التقييم والعلاج",indices:[6,7,8],tone:"treatment"},{title:"المراجعة والحفظ",indices:[5],tone:"review"}].map(group=><section key={group.tone} data-tone={group.tone}><h3>{group.title}</h3><ol className={layout.progress} aria-label={group.title}>{group.indices.filter(i=>!(subsequent&&i<2)&&(!(i>5)||!!base?.visit)).map(i=><li key={i}><button type="button" aria-current={i===step?"step":undefined} data-state={state(i)} disabled={(i>2&&!base?.visit)||(!base&&i>0)||busy||!!review||error?.status===409} onClick={()=>go(i)}><span aria-hidden="true">{state(i)==="saved"?<LuCheck/>:i+1}</span><strong>{steps[i]}</strong><small>{i===step?"القسم الحالي":dirty.includes(i)?"تعديلات غير محفوظة":state(i)==="saved"?"محفوظ":"متاح للاستكمال"}</small></button></li>)}</ol></section>)}
+    {[{title:"بطاقة المريض",indices:[0,1],tone:"card"},{title:"الزيارة الحالية",indices:[2,3,4],tone:"visit"},{title:"التشريح والعلاج",indices:[6,7,8],tone:"treatment"},{title:"المراجعة والحفظ",indices:[5],tone:"review"}].map(group=><section key={group.tone} data-tone={group.tone}><h3>{group.title}</h3><ol className={layout.progress} aria-label={group.title}>{group.indices.filter(i=>!(subsequent&&i<2)&&(!(i>5)||!!base?.visit)).map(i=><li key={i}><button type="button" aria-current={i===step?"step":undefined} data-state={state(i)} disabled={(i>2&&!base?.visit)||(!base&&i>0)||busy||!!review||error?.status===409} onClick={()=>go(i)}><span aria-hidden="true">{state(i)==="saved"?<LuCheck/>:i+1}</span><strong>{steps[i]}</strong><small>{i===step?"القسم الحالي":dirty.includes(i)?"تعديلات غير محفوظة":state(i)==="saved"?"محفوظ":"متاح للاستكمال"}</small></button></li>)}</ol></section>)}
     </nav><div className={layout.workContent}>
     <div className={layout.summary}>{base ? <><div><strong>{base.patient.first_name} {base.patient.family_name}</strong><p>كود المريض <bdi>{base.patient.patient_code}</bdi> </p></div><div><strong>{base.visit?`الزيارة: ${String(base.visit.visit_date)}`:"زيارة جديدة لم تُحفظ"}</strong><p>{base.visit?.status==="complete"?"زيارة مكتملة":"مسودة زيارة"} · {base.medical.is_oncology?"مريض ورمي":"رعاية عامة"}</p></div></> : <p>{mode === "existing" ? "اختر بطاقة المريض الموجودة؛ تسجيل زيارته في هذا المشفى لا ينشئ هوية أو كودًا آخر." : "لم تُحفظ بطاقة بعد. الحفظ الأول يسجّل المريض وزيارته الفعلية المسودة معًا؛ أدخل تاريخ الزيارة الفعلي قبل الحفظ."}</p>}</div>
     {step===4&&<div className={layout.sectionTabs} role="tablist" aria-label="أدوية هذه الزيارة">{medicationPanes.map(tab=><button key={tab.key} type="button" role="tab" aria-selected={medicationPane===tab.key} onClick={()=>setMedicationPane(tab.key)}>{tab.label}</button>)}</div>}
@@ -197,6 +202,8 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
       {review && step===5 && <div className={styles.conflict}><p>راجع البيانات الحالية في ملخص المراجعة قبل تأكيدها مجددًا.</p><button type="button" className={styles.secondary} onClick={()=>{acceptServer(review,5);setReview(null);setError(null);setReviewed(false);reservation.current=null;}}>جلب البيانات الحالية لإعادة المراجعة</button></div>}
       <fieldset disabled={busy || !!review || (!!base && !allowed)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <section className={layout.section}><div><h3 ref={heading} tabIndex={-1}>{steps[step]}</h3><p className={styles.hint}>الحقول المعلّمة بنجمة مطلوبة. تبقى الأقسام اللاحقة محفوظة عند العودة.</p></div>
+          {step>=2 && step<=5 && <PriorVisitHistory visit={base?.prior_visit} step={step}/>}
+          {step>=2 && step<=4 && <label className={layout.unchangedOption}><input type="checkbox" name="unchanged" checked={skip[step as 2|3|4]} onChange={e => { touch(); setSkip(s => ({ ...s, [step]: e.target.checked })); }} /><span><strong>لا تغير</strong><small>{skipLabels[step]}</small></span></label>}
           {step === 0 && <>
             <div className={styles.fields}>{base ? <label>كود المريض<input name="code" value={personal.code} readOnly /><small>الكود الموحد ثابت.</small></label> : mode === "new" && input(personal, setPersonal, personalLabels, "code", "text", true)}{input(personal, setPersonal, personalLabels, "opening_date", "date", true)}</div>
             {!base && !existingDossier && <div className={styles.fields}><h4 className={layout.subheading}>أول زيارة مسجلة ضمن البطاقة</h4>{input(visit, setVisit, visitLabels, "visit_date", "date", true)}<p className={styles.hint}>تاريخ الواقعة الفعلي مطلوب؛ لا يُستنتج من تاريخ فتح الملف. لا يُحفظ أي تشخيص أو نتيجة تلقائيًا.</p></div>}
@@ -228,7 +235,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
             <div className={styles.fields}>{input(visit, setVisit, visitLabels, "visit_date", "date", true)}</div>
             <label>هل المريض محال من مشفى آخر؟<select name="is_referred" value={visit.is_referred} onChange={e => changed(setVisit, "is_referred", e.target.value)}><option value="no">لا</option><option value="yes">نعم</option></select></label>
             {visit.is_referred === "yes" && <div className={styles.fields}>{input(visit, setVisit, visitLabels, "referring_hospital", "text", true)}{input(visit, setVisit, visitLabels, "referral_date", "date", true)}<label className={styles.full}>سبب الإحالة *<textarea name="referral_reason" rows={3} value={visit.referral_reason} onChange={e => changed(setVisit, "referral_reason", e.target.value)} />{fieldError("referral_reason")}</label></div>}
-            <div><h4>التشخيصات</h4><p className={styles.hint}>لكل تشخيص عيادته وطبيبه؛ لا يوجد تشخيص رئيسي. الارتباط الجديد يجب أن يغطي تاريخ الزيارة.</p>{!diagnoses.length && <p>لم تُسجّل تشخيصات بعد؛ هذا القسم غير مكتمل.</p>}{fieldError("diagnoses")}</div>
+            <div><h4>التشخيصات</h4><p className={styles.hint}>لكل تشخيص عيادته وطبيبه؛ لا يوجد تشخيص رئيسي. الارتباط الجديد يجب أن يغطي تاريخ الزيارة.</p>{!diagnoses.length && !skip[2] && <p>لم تُسجّل تشخيصات بعد؛ علّم «لا تغير» إن لم يوجد تشخيص جديد، أو أضف تشخيصًا.</p>}{!diagnoses.length && skip[2] && <p>سيُحفظ القسم بلا تشخيص جديد.</p>}{fieldError("diagnoses")}</div>
             {diagnoses.map((row, index) => <DiagnosisEditor key={row.key} row={row} index={index} facility={facility} date={visit.visit_date} canCreate={!!caps.diagnoses_create} change={value => { touch(); setDiagnoses(items => items.map(d => d.key === row.key ? value : d)); }} remove={() => { touch(); setDiagnoses(items => items.filter(d => d.key !== row.key)); }} error={fieldError} />)}
             <div><button type="button" className={styles.secondary} onClick={() => { touch(); setDiagnoses(items => [...items, { key: `new-${crypto.randomUUID()}`, diagnosis: null, clinic: null, doctor: null, diagnosed_on: "" }]); }}><LuPlus aria-hidden="true" />إضافة تشخيص للزيارة</button></div>
           </>}
@@ -258,4 +265,13 @@ function WizardConflict({ step, latest, personal, medical, visit, diagnoses, onA
     return personalChoices[key]?.[value] ?? (value === "yes" ? "نعم" : value === "no" ? "لا" : sourceLabels[value] ?? value);
   };
   return <><ConflictReview key={`${latest.lock_version}:${latest.visit?.lock_version}`} latest={latestFields} draft={draft} labels={labels} format={format} onAccept={value => { const rows = Object.entries(value).filter(([key, data]) => key.startsWith("row:") && data).map(([, data]) => { const r = JSON.parse(data) as DiagnosisDraft; return { ...r, lock_version: currentRows.find(c => c.id === r.id)?.lock_version }; }); onAccept(Object.fromEntries(Object.entries(value).filter(([k]) => !k.startsWith("row:"))), rows); }} />{step === 2 && diagnoses.some(r => r.id && !currentRows.some(c => c.id === r.id)) && <p role="status">أزيلت بعض التشخيصات في النسخة الحالية؛ لن تُعاد تلقائيًا. يمكنك مراجعتها وإضافتها صراحة بعد اعتماد المراجعة.</p>}</>;
+}
+function PriorVisitHistory({ visit, step }: { visit?: Snapshot["prior_visit"]; step: number }) {
+  if (!visit) return null;
+  const items = step === 2 ? visit.diagnoses.map(d => `${d.diagnosis_name} · ${d.doctor_name}${d.clinic_name ? ` · ${d.clinic_name}` : ""}${d.diagnosed_on ? ` · ${d.diagnosed_on}` : ""}`)
+    : step === 3 ? [...visit.procedures.map(p => `إجراء: ${p.name_ar}${p.doctor_name ? ` · ${p.doctor_name}` : ""}`), ...visit.services.map(s => `خدمة: ${s.name_ar}${s.doctor_name ? ` · ${s.doctor_name}` : ""}`)]
+    : step === 4 ? [...(visit.prescriptions ?? []).flatMap(rx => [`وصفة${rx.kind ? ` · ${prescriptionKindLabels[rx.kind as keyof typeof prescriptionKindLabels] ?? rx.kind}` : ""} · ${rx.doctor_name}`, ...rx.items.map(i => `دواء: ${i.name_ar}`)]), visit.outcome ? `النتيجة: ${visit.outcome.name_ar} · ${visit.outcome.outcome_on}` : ""].filter(Boolean)
+    : visit.attachment_count ? [`${visit.attachment_count} مرفق محفوظ`] : [];
+  const title = step === 2 ? "تشخيصات الزيارة السابقة" : step === 3 ? "إجراءات وخدمات الزيارة السابقة" : step === 4 ? "أدوية ونتيجة الزيارة السابقة" : "مرفقات الزيارة السابقة";
+  return <aside className={layout.priorVisit}><h4>الزيارة السابقة · {visit.visit_date}</h4><p>{visit.visit_no}{visit.status === "complete" ? " · مكتملة" : " · مسودة"}</p><strong>{title}</strong>{items.length ? <ul>{items.map((item, i) => <li key={i}>{item}</li>)}</ul> : <p>لا توجد بيانات مرتبطة في هذا القسم من الزيارة السابقة.</p>}</aside>;
 }

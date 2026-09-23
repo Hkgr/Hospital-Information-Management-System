@@ -42,12 +42,12 @@ class DossierFinalizer
                 if ($v->visit_date > $f['today']) {
                     throw ValidationException::withMessages(['visit_date' => 'لا يمكن إكمال زيارة بتاريخ مستقبلي.']);
                 }
-                if (! DB::table('visit_diagnoses')->where('visit_id', $visit)->whereNull('voided_at')->exists()) {
-                    throw ValidationException::withMessages(['diagnoses' => 'يجب حفظ تشخيص واحد على الأقل.']);
+                if (! ($progress->get('visit')?->unchanged) && ! DB::table('visit_diagnoses')->where('visit_id', $visit)->whereNull('voided_at')->exists()) {
+                    throw ValidationException::withMessages(['diagnoses' => 'يجب حفظ تشخيص واحد على الأقل، أو تعليم القسم بلا تغيّر.']);
                 }
                 $outcome = DB::table('visit_outcomes as o')->join('visit_results as r', 'r.id', '=', 'o.result_id')->where('o.visit_id', $visit)->whereNull('o.voided_at')->first(['r.code', 'o.outcome_on']);
-                if (! $outcome || ! array_key_exists($outcome->code, DossierOutcomeSeeder::OUTCOMES) || $outcome->outcome_on > $f['today']) {
-                    throw ValidationException::withMessages(['outcome' => 'احفظ نتيجة معتمدة واحدة بتاريخ غير مستقبلي قبل الإكمال.']);
+                if (! ($progress->get('medications')?->unchanged) && (! $outcome || ! array_key_exists($outcome->code, DossierOutcomeSeeder::OUTCOMES) || $outcome->outcome_on > $f['today'])) {
+                    throw ValidationException::withMessages(['outcome' => 'احفظ نتيجة معتمدة واحدة بتاريخ غير مستقبلي قبل الإكمال، أو علّم قسم الأدوية والنتيجة بلا تغيّر.']);
                 }
                 $contexts->retained($f, $visit, $v->visit_date);
                 $contexts->check($f, $data['clinic_id'], $data['attending_staff_id'], $v->visit_date, 'attending_staff_id', false);

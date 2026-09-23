@@ -114,10 +114,10 @@ class ClinicApiTest extends TestCase
 
     public function test_doctor_eligibility_fail_closed_and_validation(): void
     {
-        $nurseType = DB::table('staff_types')->insertGetId(['code' => 'NURSE', 'name_ar' => 'طبيب']);
-        $nurse = $this->staff('N1', ['staff_type_id' => $nurseType]);
+        $unlistedType = DB::table('staff_types')->insertGetId(['code' => 'UNLISTED', 'name_ar' => 'طبيب']);
+        $unlisted = $this->staff('N1', ['staff_type_id' => $unlistedType]);
         $inactive = $this->staff('D2', ['is_active' => false]);
-        foreach ([$nurse, $inactive, 999999] as $id) {
+        foreach ([$unlisted, $inactive, 999999] as $id) {
             $this->callApi('POST', '', ['code' => 'bad', 'name_ar' => 'رفض', 'is_active' => true, 'doctor_add_ids' => [$id]])->assertUnprocessable()->assertJsonValidationErrors('doctor_add_ids');
         }
         $this->assertDatabaseCount('clinics', 0);

@@ -299,4 +299,12 @@ class DossierWorkflowTest extends TestCase
         $this->assertDatabaseHas('visits', ['id' => $v->id, 'reporting_period_id' => $v->reporting_period_id, 'visit_date' => '1991-01-01']);
         $this->assertDatabaseHas('reporting_periods', ['id' => $v->reporting_period_id, 'status' => 'locked']);
     }
+
+    public function test_unchanged_visit_section_saves_without_diagnoses(): void
+    {
+        $d = $this->legacyCard();
+        $v = $this->callApi('POST', "/{$d['id']}/visits", $this->visit(['unchanged' => true]))->assertCreated()->assertJsonPath('data.progress.2.state', 'saved')->json('data.visit');
+        $this->assertDatabaseHas('dossier_section_progress', ['visit_id' => $v['id'], 'section' => 'visit', 'state' => 'saved']);
+        $this->assertTrue((bool) DB::table('dossier_section_progress')->where('visit_id', $v['id'])->where('section', 'visit')->value('unchanged'));
+    }
 }

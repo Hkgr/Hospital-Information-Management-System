@@ -13,7 +13,7 @@ class SavePathology extends FormRequest
 
     public function messages(): array
     {
-        return ['required_if' => 'هذا الحقل مطلوب للحالة أو المصدر المختار.', 'required_with' => 'اختر العيادة والطبيب معًا أو اتركهما فارغين.', 'date_format' => 'أدخل تاريخًا صحيحًا بصيغة سنة-شهر-يوم.'];
+        return ['required' => 'هذا الحقل مطلوب.', 'required_if' => 'هذا الحقل مطلوب للحالة أو المصدر المختار.', 'required_with' => 'اختر العيادة والطبيب معًا.', 'date_format' => 'أدخل تاريخًا صحيحًا بصيغة سنة-شهر-يوم.'];
     }
 
     public function rules(): array
@@ -30,7 +30,7 @@ class SavePathology extends FormRequest
             'external_organization' => ['nullable', 'string', 'max:200'],
             'specimen_type' => ['nullable', 'string', 'max:200'], 'anatomical_site' => ['nullable', 'string', 'max:200'],
             'procedure_event_id' => ['nullable', 'integer', 'min:1'],
-            'clinic_id' => ['nullable', 'required_with:doctor_id', 'integer', 'min:1'], 'doctor_id' => ['nullable', 'required_with:clinic_id', 'integer', 'min:1'],
+            'clinic_id' => ['required', 'integer', 'min:1'], 'doctor_id' => ['required', 'integer', 'min:1'],
             'requested_on' => ['nullable', 'date_format:Y-m-d'], 'collected_on' => ['nullable', 'date_format:Y-m-d'], 'result_on' => ['nullable', 'date_format:Y-m-d'],
             'conclusion' => ['nullable', 'string', 'max:20000'], 'note' => ['nullable', 'string', 'max:20000'],
             'unavailable_reason' => ['nullable', 'string', 'max:2000'],
