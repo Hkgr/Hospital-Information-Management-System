@@ -11,6 +11,9 @@ class UserPermissionsSeeder extends Seeder
         'users.view' => 'استعراض مستخدمي المنشأة',
         'users.create' => 'إضافة مستخدم وربطه بالمنشأة',
         'users.delete' => 'حذف مستخدم من المنشأة',
+        'roles.view' => 'استعراض الأدوار وصلاحياتها',
+        'roles.create' => 'إضافة دور وتحديد صلاحياته',
+        'roles.update' => 'تعديل اسم الدور وصلاحياته',
     ];
 
     public function run(): void

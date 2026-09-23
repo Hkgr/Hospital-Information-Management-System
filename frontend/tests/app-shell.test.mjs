@@ -11,7 +11,9 @@ let browser;
 before(async () => { browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined }); });
 after(async () => { await browser?.close(); });
 
-async function openShell({ width = 1440, height = 900, logoutFailure = false, clock, access = [] } = {}) {
+const shellAccess = [{ facility: { id: 1, code: "TEST", name_ar: "منشأة اختبار", timezone: "Asia/Damascus" }, roles: [], permissions: ["dashboards.view", "reports.view", "audit.view"] }];
+
+async function openShell({ width = 1440, height = 900, logoutFailure = false, clock, access = shellAccess } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce", timezoneId: "America/Los_Angeles" });
   const page = await context.newPage();
   if (clock) await page.clock.install({ time: new Date(clock) });
@@ -131,7 +133,7 @@ test("Damascus clock ignores device timezone, updates across midnight and fits n
 });
 
 test("desktop and tablet collapse controls retain usable navigation names without inventing routes", async () => {
-  const { context, page } = await openShell({ access: [{ facility: { id: 1, code: "TEST", name_ar: "منشأة اختبار", timezone: "Asia/Damascus" }, roles: [], permissions: ["catalog.view"] }] });
+  const { context, page } = await openShell({ access: [{ facility: { id: 1, code: "TEST", name_ar: "منشأة اختبار", timezone: "Asia/Damascus" }, roles: [], permissions: ["dashboards.view", "catalog.view", "reports.view", "audit.view"] }] });
   try {
     const nav = page.getByRole("navigation", { name: "التنقل الرئيسي" });
     assert.equal(await nav.getByRole("link", { name: "الرئيسية", exact: true }).getAttribute("href"), "/dashboard/general");

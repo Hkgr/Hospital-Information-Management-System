@@ -43,22 +43,22 @@ class UserDirectory
 
     public function options(array $f): array
     {
-        $roles = DB::table('roles')->where('is_active', true)->orderBy('code')->orderBy('id')->get(['id', 'code', 'name_ar']);
+        $roles = app(RoleDirectory::class)->assignable($f);
 
-        return ['data' => ['roles' => $roles, 'capabilities' => [
+        return ['data' => ['roles' => $roles, 'permission_groups' => app(PermissionCatalog::class)->grouped($f['permissions']), 'capabilities' => [
             'view' => in_array('users.view', $f['permissions'], true),
             'create' => in_array('users.create', $f['permissions'], true),
             'delete' => in_array('users.delete', $f['permissions'], true),
+            'roles_view' => in_array('roles.view', $f['permissions'], true),
+            'roles_create' => in_array('roles.create', $f['permissions'], true),
+            'roles_update' => in_array('roles.update', $f['permissions'], true),
         ]]];
     }
 
     public function create(Request $request, array $f, array $input): array
     {
         return DB::transaction(function () use ($request, $f, $input) {
-            $role = DB::table('roles')->where('id', $input['role_id'])->where('is_active', true)->lockForUpdate()->first();
-            if (! $role) {
-                throw new HttpResponseException(response()->json(['error' => ['code' => 'USER_ROLE_INVALID', 'message' => 'الدور المحدد غير متاح.']], 422));
-            }
+            $role = app(RoleDirectory::class)->assertAssignable($f, (int) $input['role_id']);
             if (User::where('username', $input['username'])->lockForUpdate()->exists()) {
                 throw new HttpResponseException(response()->json(['error' => ['code' => 'USER_USERNAME_TAKEN', 'message' => 'اسم المستخدم مستخدم مسبقاً.']], 422));
             }

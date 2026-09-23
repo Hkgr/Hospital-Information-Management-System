@@ -24,6 +24,9 @@ class AuditLogApiTest extends TestCase
     {
         $facility = DB::table('facilities')->insertGetId(['code' => $code, 'name_ar' => 'مشفى '.$code, 'timezone' => 'Asia/Damascus', 'is_active' => true]);
         $role = DB::table('roles')->insertGetId(['code' => $code, 'name_ar' => $code, 'is_active' => true]);
+        $permission = DB::table('permissions')->where('code', 'audit.view')->value('id')
+            ?? DB::table('permissions')->insertGetId(['code' => 'audit.view', 'name_ar' => 'عرض سجل حركة النظام', 'is_active' => true]);
+        DB::table('role_permissions')->insert(['role_id' => $role, 'permission_id' => $permission]);
         DB::table('facility_user_roles')->insert(['facility_id' => $facility, 'role_id' => $role, 'user_id' => $user->id]);
 
         return $facility;

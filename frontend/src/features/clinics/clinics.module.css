@@ -128,7 +128,14 @@
 .facts { display: flex; flex-wrap: wrap; gap: 20px 32px; border-block: 1px solid #e3ecef; padding-block: 20px; margin-block: 20px; }
 .facts > div { min-inline-size: 130px; } .facts dt { color: #70818b; font-size: 12px; } .facts dd { margin: 7px 0 0; font-weight: 700; font-size: 16px; color: #285b67; }
 .clinicName small { color: #71838c; font-size: 10px; }
-.screen :focus-visible, .modal :focus-visible { outline: 2px solid #25839b; outline-offset: 3px; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tabs button { border: 1px solid #d5e2e6; border-radius: 9px; padding: 8px 14px; background: white; color: var(--mbz-action); font: inherit; font-size: 13px; cursor: pointer; min-block-size: 40px; }
+.tabs button[aria-selected="true"] { background: var(--mbz-action); border-color: var(--mbz-action); color: white; font-weight: 700; }
+.permissionGroups { display: grid; gap: 14px; grid-column: 1 / -1; }
+.permissionGroup { border: 1px solid #dce7eb; border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; margin: 0; }
+.permissionGroup legend { font-size: 13px; font-weight: 700; color: #0b6178; display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; padding-inline: 0; }
+.permissionGroup label { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; font-weight: 500; line-height: 1.6; }
+.permissionMeta { color: #6b7f86; font-size: 12px; }
 @media (max-width: 767px) {
   .screen { gap: 18px; } .heading { gap: 16px; } .heading h2 { font-size: 23px; }
   .heading > .primary { inline-size: 100%; } .toolbar { padding: 16px; gap: 14px; } .search { max-inline-size: none; inline-size: 100%; flex-basis: 100%; }

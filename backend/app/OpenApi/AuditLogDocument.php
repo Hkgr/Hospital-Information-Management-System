@@ -38,9 +38,9 @@ class AuditLogDocument extends ClinicDocumentTransformer
             'category' => $s()->enum(array_keys(SystemLogHistory::CATEGORIES)), 'category_label' => $s(),
             'entity' => $s(), 'entity_label' => $s(), 'entity_id' => $i(), 'action' => $s(), 'action_label' => $s(),
             'reason' => $s()->nullable(true), 'changes' => $this->list($change)]);
-        $op->description = $detail
-            ? 'Facility-scoped read of one audit_logs row. Requires Sanctum Bearer api ability, an active account, and membership in facility_id. The id must belong to that facility. No new permission is created or assigned. GET never writes. Allowlisted field projection only.'
-            : 'Facility-scoped read of audit_logs for the system activity table. Requires Sanctum Bearer api ability, an active account, and membership in facility_id. No new permission is created or assigned. GET never writes. Technical errors are stored as entity_type=system_error with a redacted message. Login and logout are stored as auth_session when the user has a facility. Allowlisted field projection only.';
+                $op->description = $detail
+                    ? 'Facility-scoped read of one audit_logs row. Requires Sanctum Bearer api ability, an active account, membership in facility_id, and audit.view. The id must belong to that facility. User 1 is not exempt. Definitions are seeded and never auto-granted. GET never writes. Allowlisted field projection only.'
+                    : 'Facility-scoped read of audit_logs for the system activity table. Requires Sanctum Bearer api ability, an active account, membership in facility_id, and audit.view. User 1 is not exempt. Definitions are seeded and never auto-granted. GET never writes. Technical errors are stored as entity_type=system_error with a redacted message. Login and logout are stored as auth_session when the user has a facility. Allowlisted field projection only.';
         $op->responses = [];
         if ($detail) {
             $op->addResponse(Response::make(200)->setDescription('Authorized activity row')->setContent('application/json', Schema::fromType($this->object(['data' => $event]))));

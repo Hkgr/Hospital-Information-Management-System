@@ -25,7 +25,7 @@ export default function ReportsScreen() {
   const params = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
-  const { entry, allowed } = directoryFacility(access, null, params.get("facility_id"));
+  const { entry, allowed } = directoryFacility(access, "reports.view", params.get("facility_id"));
   const period = periods.some(item => item.key === params.get("period")) ? params.get("period")! : "day";
   const [customFrom, setCustomFrom] = useState(params.get("from") ?? "");
   const [customTo, setCustomTo] = useState(params.get("to") ?? "");
@@ -72,7 +72,7 @@ export default function ReportsScreen() {
           <label>من تاريخ<input type="date" value={customFrom} onChange={e => setCustom(e.target.value, customTo)} /></label>
           <label>إلى تاريخ<input type="date" value={customTo} onChange={e => setCustom(customFrom, e.target.value)} /></label>
         </div>}
-        <ExportButton path={path} ready={!!path && !!report.data && !report.loading && !report.error} />
+        <ExportButton path={path} ready={!!path && !!report.data && !report.loading && !report.error} canExport={selected.permissions.includes("reports.export")} />
       </section>
     </Reveal>
     {path && report.loading && <p className={dash.loading} role="status">جارٍ تحميل التقرير…</p>}
@@ -141,13 +141,13 @@ function ActivityChart({ title, items }: { title: string; items: NamedCount[] })
   </div>;
 }
 
-function ExportButton({ path, ready }: { path: string | null; ready: boolean }) {
+function ExportButton({ path, ready, canExport }: { path: string | null; ready: boolean; canExport: boolean }) {
   const pending = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => () => pending.current?.abort(), [path]);
   async function download() {
-    if (!path || !ready || pending.current) return;
+    if (!path || !ready || !canExport || pending.current) return;
     const controller = new AbortController();
     pending.current = controller;
     setBusy(true); setError("");
@@ -155,6 +155,7 @@ function ExportButton({ path, ready }: { path: string | null; ready: boolean }) 
     catch (reason) { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "تعذّر تصدير PDF."); }
     finally { if (pending.current === controller) pending.current = null; setBusy(false); }
   }
+  if (!canExport) return null;
   return <div className={styles.export}>
     <button type="button" className={clinic.primary} disabled={!ready || busy} onClick={() => void download()}>{busy ? "جارٍ إنشاء PDF…" : "تصدير PDF"}</button>
     {error && <p role="alert">{error}</p>}

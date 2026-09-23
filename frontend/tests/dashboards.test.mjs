@@ -27,7 +27,7 @@ async function setup(override = () => false) {
     calls.push(url.pathname + url.search);
     const user = route.request().headers().authorization === "Bearer second" ? users.second : users.first;
     if (await override(route, url, user)) return;
-    if (url.pathname === "/hospital-api/user") return route.fulfill({ json: { data: { user, access: [] } } });
+    if (url.pathname === "/hospital-api/user") return route.fulfill({ json: { data: { user, access: [{ facility: facilities[0], roles: [], permissions: ["dashboards.view"] }] } } });
     if (url.pathname === "/hospital-api/logout") return route.fulfill({ status: 204 });
     const fixture = dashboardFixture(user, facilities);
     if (url.pathname === "/hospital-api/dashboards") return route.fulfill({ json: { data: fixture.catalog } });

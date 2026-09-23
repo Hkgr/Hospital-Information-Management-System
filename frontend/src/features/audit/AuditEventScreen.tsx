@@ -18,7 +18,7 @@ function Kind({ kind, label }: { kind: string; label: string }) {
 export default function AuditEventScreen({ id }: { id: string }) {
   const { access } = useIdentity();
   const params = useSearchParams();
-  const { entry, allowed } = directoryFacility(access, null, params.get("facility_id"));
+  const { entry, allowed } = directoryFacility(access, "audit.view", params.get("facility_id"));
   if (!entry || !/^[1-9]\d*$/.test(id)) return <section className={styles.status}><h2>السجل غير متاح</h2><p role="alert">{allowed.length ? "معرّف الحركة أو المنشأة غير صالح." : "لا منشأة مرتبطة بهذا الدخول لعرض سجل الحركة."}</p></section>;
   const facility = entry.facility.id;
   const event = useClinicRequest<AuditEvent>(`audit/${id}?facility_id=${facility}`);

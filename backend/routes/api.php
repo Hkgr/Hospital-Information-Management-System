@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\DossierWizardController;
 use App\Http\Controllers\Api\FacilityReportController;
 use App\Http\Controllers\Api\OncologyController;
 use App\Http\Controllers\Api\StockController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -213,6 +214,9 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
         Route::get('/', [UserController::class, 'index'])->name('index');
         Route::post('/', [UserController::class, 'store'])->name('store');
         Route::get('/options', [UserController::class, 'options'])->name('options');
+        Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
+        Route::post('/roles', [RoleController::class, 'store'])->name('roles.store');
+        Route::put('/roles/{role}', [RoleController::class, 'update'])->whereNumber('role')->name('roles.update');
         Route::delete('/{user}', [UserController::class, 'destroy'])->whereNumber('user')->name('destroy');
     });
     Route::get('/audit', [AuditLogController::class, 'index'])->name('audit');

@@ -71,30 +71,32 @@ class DashboardApiTest extends TestCase
         $this->getDashboard('/api/dashboards', $token)->assertUnauthorized();
     }
 
-    public function test_general_is_self_only_private_and_available_without_roles(): void
+    public function test_general_requires_dashboard_view_and_stays_private(): void
     {
         $user = User::factory()->create(['name' => 'Current user']);
         $other = User::factory()->create(['name' => 'Other secret user']);
         $token = $this->token($user);
-        $this->getDashboard('/api/dashboards', $token)->assertOk()->assertJsonPath('data.default_dashboard_key', 'general')->assertJsonCount(1, 'data.dashboards');
-        $response = $this->getDashboard('/api/dashboards/general', $token)->assertOk()
+        $this->getDashboard('/api/dashboards', $token)->assertOk()->assertJsonPath('data.dashboards', [])->assertJsonPath('data.default_dashboard_key', null);
+        $this->getDashboard('/api/dashboards/general', $token)->assertForbidden()->assertJsonPath('error.code', 'DASHBOARD_ACCESS_DENIED');
+        [$facility] = $this->assignment($user, 'HOME', ['dashboards.view']);
+        $response = $this->getDashboard('/api/dashboards/general?facility_id='.$facility, $token)->assertOk()
             ->assertHeader('Cache-Control', 'no-store, private')->assertHeader('Vary', 'Authorization')
-            ->assertJsonPath('data.user.id', $user->id)->assertJsonPath('data.facilities', [])->assertJsonPath('data.links', [])
+            ->assertJsonPath('data.user.id', $user->id)->assertJsonPath('data.facilities.0.id', $facility)->assertJsonPath('data.links', [])
             ->assertJsonPath('data.stats.counters', [])->assertJsonPath('data.stats.visit_status', [])
             ->assertJsonPath('data.stats.dossier_status', [])->assertJsonPath('data.stats.clinics', [])
             ->assertJsonPath('data.stats.doctors', [])->assertJsonPath('data.stats.appointments', []);
         foreach ([$other->name, '"password"', '"remember_token"', '"token"', '"trace"', $token, $user->password] as $secret) {
             $this->assertStringNotContainsString($secret, $response->getContent());
         }
-        $this->getDashboard('/api/dashboards/general', $this->token($other))->assertOk()->assertJsonPath('data.user.id', $other->id);
+        $this->getDashboard('/api/dashboards/general?facility_id='.$facility, $this->token($other))->assertForbidden();
     }
 
     public function test_home_stats_and_links_are_permission_gated_and_facility_scoped(): void
     {
         $user = User::factory()->create(['name' => 'Home viewer']);
         $outsider = User::factory()->create(['name' => 'Other secret user']);
-        [$allowed] = $this->assignment($user, 'HOMEA', ['dossiers.view', 'dossiers.treatment.view', 'clinics.view', 'doctors.view', 'catalog.view']);
-        [$denied] = $this->assignment($user, 'HOMEB', []);
+        [$allowed] = $this->assignment($user, 'HOMEA', ['dashboards.view', 'dossiers.view', 'dossiers.treatment.view', 'clinics.view', 'doctors.view', 'catalog.view']);
+        [$denied] = $this->assignment($user, 'HOMEB', ['dashboards.view']);
         [$foreign] = $this->assignment($outsider, 'HOMEC', ['dossiers.view', 'clinics.view', 'doctors.view', 'dossiers.treatment.view']);
         $today = now('Asia/Damascus')->toDateString();
         $type = DB::table('staff_types')->insertGetId(['code' => 'HOME-DR', 'name_ar' => 'طبيب رئيسية']);
@@ -142,7 +144,7 @@ class DashboardApiTest extends TestCase
         ]);
 
         $token = $this->token($user);
-        $response = $this->getDashboard('/api/dashboards/general', $token)->assertOk();
+        $response = $this->getDashboard('/api/dashboards/general?facility_id='.$allowed, $token)->assertOk();
         $stats = $response->json('data.stats');
         $this->assertEqualsCanonicalizing(['patient-cards', 'visits', 'doctors', 'clinics', 'services-procedures', 'medications'], array_column($response->json('data.links'), 'key'));
         $values = array_column($stats['counters'], 'value', 'key');
@@ -188,7 +190,7 @@ class DashboardApiTest extends TestCase
         [$a, $roleA, $ids] = $this->assignment($user, 'A', ['patients.view']);
         [$b, $roleB, $createIds] = $this->assignment($user, 'B', ['patients.create']);
         $token = $this->token($user);
-        $this->getDashboard('/api/dashboards', $token)->assertJsonCount(1, 'data.dashboards');
+        $this->getDashboard('/api/dashboards', $token)->assertJsonCount(0, 'data.dashboards');
         foreach (['', '?facility_id='.$a, '?facility_id='.$b] as $suffix) {
             $this->getDashboard('/api/dashboards/clinical'.$suffix, $token)->assertForbidden()->assertJsonPath('error.code', 'DASHBOARD_ACCESS_DENIED');
         }
@@ -244,7 +246,9 @@ class DashboardApiTest extends TestCase
     public function test_documentation_matches_actual_dashboard_responses(): void
     {
         config(['scramble.enabled' => true]);
-        $token = $this->token(User::factory()->create());
+        $user = User::factory()->create();
+        [$facility] = $this->assignment($user, 'DOC', ['dashboards.view']);
+        $token = $this->token($user);
         $doc = $this->getJson('/docs/api.json')->assertOk()->json();
         foreach (['/api/dashboards' => '/api/dashboards', '/api/dashboards/{key}' => '/api/dashboards/general'] as $path => $url) {
             $operation = $doc['paths'][$path]['get'];
@@ -254,7 +258,8 @@ class DashboardApiTest extends TestCase
             foreach ([200, 401, 403, 422, 500] as $status) {
                 $this->assertArrayHasKey($status, $operation['responses']);
             }
-            $this->assertMatchesSchema($doc, $operation['responses'][200]['content']['application/json']['schema'], $this->getDashboard($url, $token)->json());
+            $ok = $path === '/api/dashboards' ? $url : $url.'?facility_id='.$facility;
+            $this->assertMatchesSchema($doc, $operation['responses'][200]['content']['application/json']['schema'], $this->getDashboard($ok, $token)->json());
             foreach ([
                 [401, $this->getDashboard($url)->assertUnauthorized()],
                 [403, $this->getDashboard($url.'?facility_id=2147483647', $token)->assertForbidden()],
