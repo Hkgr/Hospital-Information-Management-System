@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierReports;
 use Database\Seeders\DossierPathologyPermissionsSeeder;
+use Database\Seeders\OncologyPermissionsSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -285,6 +286,16 @@ class DossierPathologyTest extends DossierCompletionCase
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 1, 'disposition' => 'referred_out'])->assertOk()->assertJsonPath('data.not_required_reason', null)->assertJsonPath('data.evidence_pathology_id', null);
         $this->assertDatabaseHas('visit_diagnostic_assessments', ['visit_id' => $this->s['visit']['id'], 'disposition' => 'referred_out', 'not_required_reason' => null, 'evidence_pathology_id' => null]);
         $this->assertSame(1, DB::table('visit_outcomes')->where('visit_id', $this->s['visit']['id'])->count());
+    }
+
+    public function test_patient_card_listing_succeeds_with_treatment_view(): void
+    {
+        $this->seed(OncologyPermissionsSeeder::class);
+        foreach (DB::table('permissions')->whereIn('code', array_keys(OncologyPermissionsSeeder::CODES))->pluck('id') as $permission) {
+            DB::table('role_permissions')->insertOrIgnore(['role_id' => $this->f['dossier_role'], 'permission_id' => $permission]);
+        }
+        $this->callApi('POST', $this->path('/pathology'), $this->report())->assertCreated();
+        $this->callApi('GET', '', ['search' => $this->s['code']])->assertOk()->assertJsonPath('totals.dossiers', 1)->assertJsonPath('data.0.treatment_count', 0);
     }
 
     public function test_permissions_scope_filters_and_bounded_queries(): void
