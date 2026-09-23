@@ -181,13 +181,15 @@ class DossierPathology
         return $fields;
     }
 
-    private function responsible(array $f, object $v, array $data, ?object $old): void
+    private function responsible(array $f, object $v, array $data, ?object $old, bool $required = false): void
     {
-        $message = ($data['source'] ?? null) === 'external' ? 'اختر الطبيب المراجع ضمن المشفى والعيادة.' : 'اختر الطبيب المنظم والعيادة.';
-        if (empty($data['clinic_id']) || empty($data['doctor_id'])) {
-            throw ValidationException::withMessages(['doctor_id' => $message]);
+        if ($required && (empty($data['clinic_id']) || empty($data['doctor_id']))) {
+            throw ValidationException::withMessages(['doctor_id' => ($data['source'] ?? null) === 'external' ? 'اختر الطبيب المراجع ضمن المشفى والعيادة.' : 'اختر الطبيب المنظم والعيادة.']);
         }
-        if (! $old || $old->clinic_id != $data['clinic_id'] || $old->doctor_id != $data['doctor_id']) {
+        if (empty($data['clinic_id']) !== empty($data['doctor_id'])) {
+            throw ValidationException::withMessages(['doctor_id' => 'اختر العيادة والطبيب معًا أو اتركهما فارغين.']);
+        }
+        if (! empty($data['clinic_id']) && (! $old || $old->clinic_id != $data['clinic_id'] || $old->doctor_id != $data['doctor_id'])) {
             $this->context->check($f, $data['clinic_id'], $data['doctor_id'], $v->visit_date, 'doctor_id', false);
         }
     }
@@ -225,7 +227,7 @@ class DossierPathology
             $fields = array_replace(array_fill_keys(self::FIELDS, null), $old ? Arr::only((array) $old, self::FIELDS) : [], Arr::only($data, self::FIELDS));
             $fields = $this->normalizePathology($fields, $old);
             $this->dates($f, $fields, $v->visit_date);
-            $this->responsible($f, $v, $fields, $old);
+            $this->responsible($f, $v, $fields, $old, true);
             if ($fields['procedure_event_id'] && ! DB::table('visit_procedures')->where('id', $fields['procedure_event_id'])->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->exists()) {
                 throw ValidationException::withMessages(['procedure_event_id' => 'اختر إجراءً محفوظًا غير ملغى من هذه الزيارة.']);
             }
