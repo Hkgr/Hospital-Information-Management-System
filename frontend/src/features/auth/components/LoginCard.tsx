@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, useMotionValue, useMotionTemplate, useTransform, useSpring, useReducedMotion } from "framer-motion";
 import { FaUser, FaLock, FaEye, FaEyeSlash, FaSignInAlt } from "react-icons/fa";
 import { AuthError, login } from "../api";
@@ -18,6 +18,7 @@ export default function LoginCard() {
   const passwordInput = useRef<HTMLInputElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const params = useSearchParams();
   const reduced = useReducedMotion();
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
@@ -45,7 +46,9 @@ export default function LoginCard() {
       const identity = await login(username, password);
       setPassword("");
       const reception = identity.access.find(entry => entry.permissions.includes("reception.view"));
-      router.replace(reception && !identity.access.some(entry => entry.permissions.includes("dashboards.view") || entry.permissions.includes("dossiers.view")) ? `/reception?facility_id=${reception.facility.id}` : "/");
+      const statistics = identity.access.find(entry => entry.permissions.includes("statistics.view"));
+      const operational = identity.access.some(entry => entry.permissions.includes("dashboards.view") || entry.permissions.includes("dossiers.view"));
+      router.replace(!operational && statistics ? `/statistics?facility_id=${statistics.facility.id}` : reception && !operational ? `/reception?facility_id=${reception.facility.id}` : "/");
     } catch (reason) {
       const failure = reason instanceof AuthError ? reason : new AuthError(0, "UNKNOWN", "تعذّر تسجيل الدخول. حاول مجددًا.");
       setError(failure.message);
@@ -82,6 +85,7 @@ export default function LoginCard() {
       </header>
       <div className={styles.divider}><span /><h1 id="login-heading">تسجيل الدخول</h1><span /></div>
       <form className={styles.form} onSubmit={submit} noValidate aria-busy={loading}>
+        {params.get("reason") === "idle" && <p className={styles.error} role="status">انتهت الجلسة بسبب الخمول</p>}
         {error && <p className={styles.error} role="alert">{error}</p>}
         <div>
           <label className={styles.srOnly} htmlFor="username">اسم المستخدم</label>

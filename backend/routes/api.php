@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AnonymousStatisticsController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BloodBankController;
@@ -20,12 +21,17 @@ use App\Http\Controllers\Api\ReceptionReviewController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\WebSessionController;
 use App\Http\Middleware\AuditDossierRead;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
 
-Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
+Route::middleware(['auth:sanctum', 'account.active', 'abilities:api', 'web.idle'])->group(function () {
+    Route::get('/statistics', [AnonymousStatisticsController::class, 'show'])->name('statistics.show');
+    Route::post('/statistics/export/{format}', [AnonymousStatisticsController::class, 'export'])->whereIn('format', ['pdf', 'xlsx'])->name('statistics.export');
+    Route::get('/session', [WebSessionController::class, 'show'])->name('session.show');
+    Route::post('/session/activity', [WebSessionController::class, 'activity'])->name('session.activity');
     Route::prefix('reception')->name('reception.')->middleware(AuditDossierRead::class)->group(function () {
         $review = ReceptionReviewController::class;
         Route::get('/cards/{dossier}/identity', [$review, 'identity'])->whereNumber('dossier')->name('identity');
@@ -249,7 +255,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(fu
     Route::get('/reports/export/pdf', [FacilityReportController::class, 'export'])->name('reports.export');
 });
 
-Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
+Route::middleware(['auth:sanctum', 'account.active', 'abilities:api', 'web.idle'])->group(function () {
     Route::get('/user', [AuthController::class, 'currentUser'])->name('currentUser');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });

@@ -1,0 +1,16 @@
+.warning {
+  position: fixed;
+  z-index: 10000;
+  inset-block-end: 1rem;
+  inset-inline-end: 1rem;
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid #ae7a16;
+  border-radius: 1rem;
+  background: #fff9e9;
+  color: #503b13;
+  box-shadow: 0 8px 32px #182e3330;
+}
+.warning p { margin: 0 0 .75rem; line-height: 1.8; }

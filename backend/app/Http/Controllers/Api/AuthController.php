@@ -10,6 +10,7 @@ use App\Http\Responses\AuthError;
 use App\Models\User;
 use App\Services\Audit\SystemActivity;
 use App\Services\Auth\UserAccessContext;
+use App\Services\Auth\WebSession;
 use Dedoc\Scramble\Attributes\Endpoint;
 use Dedoc\Scramble\Attributes\Group;
 use Dedoc\Scramble\Attributes\Response as DocumentedResponse;
@@ -63,6 +64,7 @@ class AuthController extends Controller
                 $user->password = Hash::make($input['password']);
             }
             $token = $user->createToken($input['device_name'] ?? 'hospital-web', ['api']);
+            $token->accessToken->forceFill(['web_idle_deadline' => now()->addSeconds(WebSession::TIMEOUT)->format('Y-m-d H:i:s.u')])->save();
             $user->last_login_at = now();
             $user->save();
 

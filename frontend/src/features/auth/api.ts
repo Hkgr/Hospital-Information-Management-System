@@ -19,6 +19,16 @@ export type Identity = {
 
 const TOKEN_KEY = "hospital.bearer";
 let memoryToken: string | null = null;
+let sessionRequests = new AbortController();
+let idleExpired = false;
+
+export function expireLocalSession() {
+  idleExpired = true;
+  saveToken(null);
+}
+
+export const sessionExpiredByIdle = () => idleExpired;
+export const clearLocalSession = () => saveToken(null);
 
 // No existing frontend session mechanism: retain a Bearer token in this tab
 // only, never localStorage, a URL, logs, or a role-derived cookie.
@@ -28,6 +38,9 @@ export function getToken(): string | null {
 }
 
 function saveToken(token: string | null) {
+  sessionRequests.abort();
+  sessionRequests = new AbortController();
+  if (token) idleExpired = false;
   memoryToken = token;
   try {
     if (token) sessionStorage.setItem(TOKEN_KEY, token);
@@ -53,7 +66,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {},
   let response: Response;
   try {
     response = await fetch(`/hospital-api/${endpoint}`, {
-      ...options, cache: "no-store", credentials: "omit", signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(mode === "blob" ? 60000 : 15000)]) : AbortSignal.timeout(mode === "blob" ? 60000 : 15000),
+      ...options, cache: "no-store", credentials: "omit", signal: AbortSignal.any([sessionRequests.signal, ...(options.signal ? [options.signal] : []), AbortSignal.timeout(mode === "blob" ? 60000 : 15000)]),
       headers: {
         Accept: "application/json", "Content-Type": "application/json",
         ...(token && endpoint !== "login" ? { Authorization: `Bearer ${token}` } : {}),
@@ -74,7 +87,10 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {},
   if (getToken() !== token) throw new AuthError(0, "STALE_SESSION", "تغيرت جلسة المستخدم.");
   if (!response.ok) {
     const code = body?.error?.code || "REQUEST_FAILED";
-    if (endpoint !== "login" && (response.status === 401 || code === "ACCOUNT_INACTIVE")) saveToken(null);
+    if (response.status === 403 && endpoint !== "user") window.dispatchEvent(new Event("hospital-access-refresh"));
+    if (endpoint !== "login" && (response.status === 401 || code === "ACCOUNT_INACTIVE")) {
+      if (code === "SESSION_IDLE_EXPIRED") expireLocalSession(); else saveToken(null);
+    }
     const fields: AuthError["fields"] = {};
     if (response.status === 422) {
       for (const [key, errors] of Object.entries(body?.errors ?? {})) {
@@ -84,6 +100,8 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {},
       if (body?.errors?.password) fields.password = "أدخل كلمة المرور.";
     }
     const clinicMessages: Record<string, string> = {
+      STATISTICS_PERIOD_INVALID: "اختر من شهر إلى اثني عشر شهرًا مكتملًا، بدءًا من سنة 1900.",
+      STATISTICS_LIMIT: "حجم التقرير يتجاوز الحد الآمن. قلّل عدد الأشهر؛ لم تُقطع النتائج.",
       DOCTOR_VERSION_CONFLICT: "تغيّرت بيانات الطبيب أو ارتباطاته. اجلب أحدث نسخة وراجع مسودتك قبل الحفظ.",
       DOCTOR_DIRECTORY_ACCESS_DENIED: "تعديل دليل الأطباء المشترك يحتاج تفويضًا عالميًا صريحًا.",
       DOCTOR_REFERENCED: "للطبيب ارتباطات أو تاريخ محفوظ. أعد معاينة الأثر واختر أرشفة وإزالة من الدليل. التعطيل العالمي إجراء منفصل.",
@@ -106,7 +124,7 @@ export async function apiRequest<T>(endpoint: string, options: RequestInit = {},
       EXPORT_LIMIT_EXCEEDED: "نتائج التقرير أكبر من الحد الآمن. ضيّق نطاق الفلاتر ثم أعد المحاولة.",
       PDF_LAYOUT_LIMIT_EXCEEDED: "النص في إحدى الخلايا طويل جدًا لتقرير القائمة. أخفِ عمود التوصيف أو الأطباء، أو استخدم Excel أو تقرير العيادة المفردة.",
     };
-    const message = clinicMessages[code] ?? (response.status === 429 ? "تجاوزت عدد محاولات الدخول. انتظر دقيقة ثم حاول مجددًا."
+    const message = code === "SESSION_IDLE_EXPIRED" ? "انتهت الجلسة بسبب الخمول" : clinicMessages[code] ?? (response.status === 429 ? "تجاوزت عدد محاولات الدخول. انتظر دقيقة ثم حاول مجددًا."
       : code === "ACCOUNT_INACTIVE" ? "هذا الحساب غير فعال. راجع مسؤول النظام."
       : response.status === 401 ? (endpoint === "login" ? "اسم المستخدم أو كلمة المرور غير صحيحة." : "انتهت صلاحية الدخول. سجّل الدخول مجددًا.")
       : response.status === 403 ? "لا يملك هذا الدخول صلاحية الوصول المطلوبة. راجع مسؤول النظام."

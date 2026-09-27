@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditValues
 {
     private const FIELDS = [
+        'from_month' => 'من شهر', 'to_month' => 'إلى شهر', 'format' => 'صيغة التصدير',
         'merged_into_id' => 'الهوية المعتمدة', 'is_active' => 'الحساب فعال', 'permissions' => 'الصلاحيات', 'can_merge' => 'الدمج متاح', 'fields' => 'الحقول المطلوب تصحيحها',
         'paper_file_number' => 'رقم الملف الورقي',
         'import_batch_id' => 'دفعة الاستيراد', 'source_rows' => 'مراجع صفوف المصدر لهذه البطاقة', 'purpose' => 'غرض الاستيراد', 'cutover_date' => 'تاريخ الانتقال للنظام',
@@ -35,6 +36,7 @@ class DossierAuditValues
     ];
 
     private const GROUPS = [
+        'anonymous_statistics' => ['from_month', 'to_month', 'format'],
         'patient_identity_correction' => ['status', 'fields', 'reason'],
         'patient_duplicate_review' => ['status', 'can_merge', 'reason'],
         'reception_account' => ['is_active', 'permissions', 'reason'],

@@ -1,9 +1,11 @@
 <?php
 
+use App\Http\Middleware\EnforceWebIdleSession;
 use App\Http\Middleware\EnsureActiveAccount;
 use App\Http\Middleware\PrivateClinicResponse;
 use App\Http\Middleware\PrivateDashboardResponse;
 use App\Http\Responses\AuthError;
+use App\Services\Audit\SystemActivity;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -25,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(PrivateClinicResponse::class);
         $middleware->alias([
             'account.active' => EnsureActiveAccount::class,
+            'web.idle' => EnforceWebIdleSession::class,
             'abilities' => CheckAbilities::class,
         ]);
         // LoginRequest trims only the username; passwords remain byte-for-byte intact.
@@ -33,7 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(fn (Request $request, Throwable $e) => $request->is('api/*') || $request->expectsJson());
         $exceptions->reportable(function (Throwable $e) {
-            app(\App\Services\Audit\SystemActivity::class)->recordException($e);
+            app(SystemActivity::class)->recordException($e);
         });
         $exceptions->render(function (AuthenticationException $e, Request $request) {
             if ($request->is('api/*')) {

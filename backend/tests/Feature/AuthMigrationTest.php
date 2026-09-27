@@ -58,6 +58,9 @@ class AuthMigrationTest extends TestCase
                 Cache::store('array')->flush();
                 config(['cache.default' => 'array']);
             }
+            // Removing idle deadlines must never revive an issued web session.
+            // This test owns the freshly-created database and its single token.
+            DB::table('personal_access_tokens')->delete();
             $this->artisan('migrate:rollback', ['--env' => 'testing'])->assertSuccessful();
             $this->assertFalse(Schema::hasTable('personal_access_tokens'));
             $this->assertFalse(Schema::hasTable('users'));

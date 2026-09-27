@@ -8,6 +8,7 @@ use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Tests\Support\AssertsOpenApi;
 use Tests\TestCase;
 
@@ -85,7 +86,7 @@ class AuditLogApiTest extends TestCase
         $facility = $this->assignment($user, 'LOG-C');
         $this->postJson('/api/login', ['username' => 'auditor', 'password' => 'secret-pass'])->assertOk();
         $this->assertDatabaseHas('audit_logs', ['facility_id' => $facility, 'actor_id' => $user->id, 'entity_type' => 'auth_session', 'event' => 'login']);
-        $loginValues = json_decode(DB::table('audit_logs')->where('event', 'login')->value('new_values'), true);
+        $loginValues = json_decode(DB::table('audit_logs')->where('actor_id', $user->id)->where('facility_id', $facility)->where('event', 'login')->value('new_values'), true);
         $this->assertSame('auditor', $loginValues['username']);
         $this->assertArrayNotHasKey('password', $loginValues);
         $token = $this->token($user);
@@ -112,7 +113,7 @@ class AuditLogApiTest extends TestCase
         $this->postJson('/api/login', ['username' => 'nofac', 'password' => 'password'])->assertOk();
         $this->assertSame(0, DB::table('audit_logs')->where('actor_id', $user->id)->where('entity_type', 'auth_session')->count());
         $count = DB::table('audit_logs')->count();
-        app(SystemActivity::class)->recordException(new \Illuminate\Validation\ValidationException(validator([], ['x' => 'required'])));
+        app(SystemActivity::class)->recordException(new ValidationException(validator([], ['x' => 'required'])));
         $this->assertSame($count, DB::table('audit_logs')->count());
     }
 }

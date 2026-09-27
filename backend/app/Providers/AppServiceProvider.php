@@ -13,6 +13,7 @@ use App\OpenApi\ClinicDocumentTransformer;
 use App\OpenApi\DoctorDocumentTransformer;
 use App\OpenApi\DossierDocumentTransformer;
 use App\OpenApi\ReceptionDocumentTransformer;
+use App\OpenApi\StatisticsSessionDocument;
 use App\OpenApi\StockDocumentTransformer;
 use App\OpenApi\UserDocumentTransformer;
 use App\Support\TestDatabaseSafety;
@@ -64,7 +65,7 @@ class AppServiceProvider extends ServiceProvider
         // Register auth and directory contracts in the existing Scramble document.
         if (class_exists(Scramble::class)) {
             Scramble::configure()
-                ->withDocumentTransformers([AuthDocumentTransformer::class, ClinicDocumentTransformer::class, DoctorDocumentTransformer::class, CatalogDocumentTransformer::class, BloodBankDocumentTransformer::class, BloodEventDocumentTransformer::class, DossierDocumentTransformer::class, StockDocumentTransformer::class, AuditLogDocument::class, UserDocumentTransformer::class, ReceptionDocumentTransformer::class]);
+                ->withDocumentTransformers([AuthDocumentTransformer::class, ClinicDocumentTransformer::class, DoctorDocumentTransformer::class, CatalogDocumentTransformer::class, BloodBankDocumentTransformer::class, BloodEventDocumentTransformer::class, DossierDocumentTransformer::class, StockDocumentTransformer::class, AuditLogDocument::class, UserDocumentTransformer::class, ReceptionDocumentTransformer::class, StatisticsSessionDocument::class]);
         }
 
         Event::listen(CommandStarting::class, function (CommandStarting $event) {
