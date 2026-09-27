@@ -108,7 +108,7 @@ class PermissionMatrixTest extends TestCase
     public function test_system_assignment_is_explicit_dynamic_protected_and_idempotent(): void
     {
         $user = User::find(1) ?? User::factory()->create(['id' => 1]);
-        $before = $user->getAttributes();
+        $before = $user->fresh()->getAttributes();
         // Isolated transaction: remove only fixture assignments of the reserved role
         // so the test does not promote any preexisting test role holder.
         $role = DB::table('roles')->where('code', 'super_admin')->value('id');

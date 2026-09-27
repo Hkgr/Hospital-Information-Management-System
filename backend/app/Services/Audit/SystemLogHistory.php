@@ -25,6 +25,7 @@ class SystemLogHistory
     ];
 
     public const ENTITIES = [
+        'patient_identity_correction' => 'طلب تصحيح الهوية', 'patient_duplicate_review' => 'مراجعة تكرار الهوية', 'reception_account' => 'حساب الاستقبال',
         'patient_dossier' => 'بطاقة المريض', 'patient' => 'بيانات الشخص', 'dossier_medical' => 'المعلومات الطبية والورمية',
         'dossier_visit' => 'الزيارة', 'visit_diagnosis' => 'التشخيص', 'visit_services' => 'الخدمة',
         'visit_procedures' => 'الإجراء', 'visit_prescriptions' => 'الوصفة', 'visit_prescription_items' => 'بند الوصفة',
@@ -40,6 +41,7 @@ class SystemLogHistory
     ];
 
     public const ACTIONS = ['opened' => 'فتح السجل', 'assigned' => 'إسناد دور محمي',
+        'approved' => 'موافقة وتنفيذ', 'rejected' => 'رفض', 'merged' => 'ربط هوية مكررة',
         'created' => 'إنشاء', 'updated' => 'تعديل', 'saved' => 'حفظ', 'activated' => 'تفعيل', 'completed' => 'إكمال',
         'reviewed' => 'مراجعة', 'voided' => 'إلغاء', 'started' => 'بدء رفع', 'uploaded' => 'رفع', 'cancelled' => 'إلغاء رفع',
         'imported' => 'اعتماد استيراد', 'login' => 'تسجيل دخول', 'logout' => 'تسجيل خروج', 'failed' => 'خطأ تقني',
@@ -51,6 +53,7 @@ class SystemLogHistory
     ];
 
     private const CATEGORY_OF = [
+        'patient_identity_correction' => 'patient_card', 'patient_duplicate_review' => 'patient_card', 'reception_account' => 'accounts',
         'patient_dossier' => 'patient_card', 'patient' => 'patient_card', 'dossier_medical' => 'patient_card',
         'dossier_visit' => 'patient_card', 'visit_diagnosis' => 'patient_card', 'visit_services' => 'patient_card',
         'visit_procedures' => 'patient_card', 'visit_prescriptions' => 'patient_card', 'visit_prescription_items' => 'patient_card',

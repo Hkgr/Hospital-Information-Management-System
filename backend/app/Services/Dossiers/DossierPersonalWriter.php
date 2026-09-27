@@ -3,6 +3,7 @@
 namespace App\Services\Dossiers;
 
 use App\Http\Requests\Dossiers\SaveDossierSection;
+use App\Services\Reception\IdentityCorrections;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -117,6 +118,11 @@ class DossierPersonalWriter
                     }
                 }
                 $this->writes->progress($r, $f, $id, 'personal');
+                if ($automaticCode && ! $patient) {
+                    DB::table('reception_identity_windows')->insert(['dossier_id' => $id, 'facility_id' => $f['id'], 'patient_id' => $patientId,
+                        'entered_by' => $r->user()->id, 'fields' => json_encode(array_values(array_intersect(array_keys($input), IdentityCorrections::FIELDS))),
+                        'patient_version' => 1, 'expires_at' => now()->addMinutes(15), 'created_at' => now(), 'updated_at' => now()]);
+                }
                 $this->writes->audit($r, $f, 'patient_dossier', $id, $old, $this->writes->dossier($f, $id));
 
                 return $id;

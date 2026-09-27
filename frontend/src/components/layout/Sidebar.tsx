@@ -17,7 +17,7 @@ export function SidebarContent({ pathname, granted, collapsed = false, onToggle,
       {mobile && <button className={styles.iconButton} type="button" onClick={onNavigate} aria-label="إغلاق قائمة التنقل"><LuX aria-hidden="true" /></button>}
     </div>
     <nav className={styles.navigation} id={mobile ? "mobile-navigation" : "desktop-navigation"} aria-label="التنقل الرئيسي">
-      <NavigationItems items={primaryNavigation.filter(item => !item.permission || granted.includes(item.permission))} pathname={pathname} onNavigate={onNavigate} />
+      <NavigationItems items={primaryNavigation.filter(item => item.anyPermission ? item.anyPermission.some(code => granted.includes(code)) : !item.permission || granted.includes(item.permission))} pathname={pathname} onNavigate={onNavigate} />
     </nav>
     <div className={styles.sidebarBottom}>
       {onToggle ? <button className={styles.collapseButton} type="button" onClick={onToggle} aria-expanded={!collapsed} aria-controls="desktop-navigation" aria-label={collapsed ? "توسيع القائمة الجانبية" : "طي القائمة الجانبية"}>

@@ -37,7 +37,7 @@ class ReceptionController extends Controller
             return response()->json(['data' => []]);
         }
         $like = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $term).'%';
-        $rows = DB::table('patients as p')->where('p.status', 'active')->where(fn ($q) => $q->where('p.patient_code', $term)->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', p.first_name, p.family_name), '[[:space:]]+', ' ') LIKE ? ESCAPE '!'", [$like]))
+        $rows = DB::table('patients as p')->where('p.status', 'active')->where(fn ($q) => $q->where('p.patient_code', $term)->orWhereExists(fn ($a) => $a->selectRaw('1')->from('patients as alias')->whereColumn('alias.merged_into_id', 'p.id')->where('alias.patient_code', $term))->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', p.first_name, p.family_name), '[[:space:]]+', ' ') LIKE ? ESCAPE '!'", [$like]))
             ->select('p.id', 'p.patient_code as code', 'p.first_name', 'p.family_name', 'p.birth_date', 'p.gender')
             ->selectSub(DB::table('patient_dossiers as d')->whereColumn('d.patient_id', 'p.id')->where('d.facility_id', $f['id'])->select('d.id')->limit(1), 'dossier_id')->orderBy('p.first_name')->orderBy('p.id')->limit(10)->get();
 
