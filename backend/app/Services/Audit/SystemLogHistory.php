@@ -39,7 +39,7 @@ class SystemLogHistory
         'blood_bank_person' => 'شخص بنك الدم', 'auth_session' => 'جلسة الدخول', 'system_error' => 'خطأ تقني',
     ];
 
-    public const ACTIONS = [
+    public const ACTIONS = ['opened' => 'فتح السجل', 'assigned' => 'إسناد دور محمي',
         'created' => 'إنشاء', 'updated' => 'تعديل', 'saved' => 'حفظ', 'activated' => 'تفعيل', 'completed' => 'إكمال',
         'reviewed' => 'مراجعة', 'voided' => 'إلغاء', 'started' => 'بدء رفع', 'uploaded' => 'رفع', 'cancelled' => 'إلغاء رفع',
         'imported' => 'اعتماد استيراد', 'login' => 'تسجيل دخول', 'logout' => 'تسجيل خروج', 'failed' => 'خطأ تقني',

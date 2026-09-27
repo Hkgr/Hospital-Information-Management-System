@@ -12,6 +12,7 @@ use App\OpenApi\CatalogDocumentTransformer;
 use App\OpenApi\ClinicDocumentTransformer;
 use App\OpenApi\DoctorDocumentTransformer;
 use App\OpenApi\DossierDocumentTransformer;
+use App\OpenApi\ReceptionDocumentTransformer;
 use App\OpenApi\StockDocumentTransformer;
 use App\OpenApi\UserDocumentTransformer;
 use App\Support\TestDatabaseSafety;
@@ -40,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('reception', fn (Request $r) => Limit::perMinute(30)->by((string) $r->user()?->id));
         RateLimiter::for('login', function (Request $request) {
             $username = $request->input('username');
             $normalized = is_string($username)
@@ -62,7 +64,7 @@ class AppServiceProvider extends ServiceProvider
         // Register auth and directory contracts in the existing Scramble document.
         if (class_exists(Scramble::class)) {
             Scramble::configure()
-                ->withDocumentTransformers([AuthDocumentTransformer::class, ClinicDocumentTransformer::class, DoctorDocumentTransformer::class, CatalogDocumentTransformer::class, BloodBankDocumentTransformer::class, BloodEventDocumentTransformer::class, DossierDocumentTransformer::class, StockDocumentTransformer::class, AuditLogDocument::class, UserDocumentTransformer::class]);
+                ->withDocumentTransformers([AuthDocumentTransformer::class, ClinicDocumentTransformer::class, DoctorDocumentTransformer::class, CatalogDocumentTransformer::class, BloodBankDocumentTransformer::class, BloodEventDocumentTransformer::class, DossierDocumentTransformer::class, StockDocumentTransformer::class, AuditLogDocument::class, UserDocumentTransformer::class, ReceptionDocumentTransformer::class]);
         }
 
         Event::listen(CommandStarting::class, function (CommandStarting $event) {

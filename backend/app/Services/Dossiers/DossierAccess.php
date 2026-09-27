@@ -3,9 +3,9 @@
 namespace App\Services\Dossiers;
 
 use App\Models\User;
+use App\Services\Auth\GlobalAccess;
 use App\Services\Auth\UserAccessContext;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Support\Facades\DB;
 
 class DossierAccess
 {
@@ -21,8 +21,7 @@ class DossierAccess
 
     public function global(User $user, string $permission, bool $require = true): bool
     {
-        $allowed = DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
-            ->where('g.user_id', $user->id)->where('r.is_active', true)->where('p.is_active', true)->where('p.code', $permission)->exists();
+        $allowed = app(GlobalAccess::class)->allows($user, $permission);
         if ($require && ! $allowed) {
             throw new HttpResponseException(response()->json(['error' => ['code' => 'DOSSIER_ACCESS_DENIED', 'message' => 'هذه العملية على الدليل المشترك تحتاج تفويضًا صريحًا.']], 403));
         }
@@ -39,8 +38,7 @@ class DossierAccess
         foreach (['import.view', 'import.create', 'import.validate', 'import.commit', 'import.download', 'import.cancel', 'create', 'delete', 'personal.update', 'medical.update', 'visits.create', 'visits.update', 'clinical.update', 'attachments.view', 'attachments.upload', 'attachments.download', 'attachments.void', 'finalize', 'visits.complete', 'export', 'audit', 'assessment.update', 'pathology.create', 'pathology.update', 'pathology.void'] as $code) {
             $caps[str_replace('.', '_', $code)] = in_array('dossiers.'.$code, $permissions, true);
         }
-        $global = DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
-            ->where('g.user_id', $user->id)->where('r.is_active', true)->where('p.is_active', true)->whereIn('p.code', ['patients.search', 'patients.create', 'patients.update', 'diagnoses.create', 'medications.create'])->pluck('p.code')->all();
+        $global = app(GlobalAccess::class)->codes($user);
         foreach (['patients.search', 'patients.create', 'patients.update', 'diagnoses.create', 'medications.create'] as $code) {
             $caps[str_replace('.', '_', $code)] = in_array($code, $global, true);
         }

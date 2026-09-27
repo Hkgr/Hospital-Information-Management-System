@@ -4,8 +4,8 @@ namespace App\Services\Catalog;
 
 use App\Exceptions\CatalogException;
 use App\Models\User;
+use App\Services\Auth\GlobalAccess;
 use App\Services\Auth\UserAccessContext;
-use Illuminate\Support\Facades\DB;
 
 class CatalogAccess
 {
@@ -29,9 +29,7 @@ class CatalogAccess
 
     public function capabilities(User $user, array $facility): array
     {
-        $global = DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')
-            ->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
-            ->where('g.user_id', $user->id)->where('r.is_active', true)->where('p.is_active', true)->pluck('p.code')->all();
+        $global = app(GlobalAccess::class)->codes($user);
 
         return ['create' => in_array('catalog.directory.create', $global, true), 'update' => in_array('catalog.directory.update', $global, true),
             'delete' => in_array('catalog.directory.delete', $global, true), 'export' => in_array('catalog.export', $facility['permissions'], true),

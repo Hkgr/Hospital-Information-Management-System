@@ -4,8 +4,8 @@ namespace App\Services\Doctors;
 
 use App\Exceptions\DoctorException;
 use App\Models\User;
+use App\Services\Auth\GlobalAccess;
 use App\Services\Auth\UserAccessContext;
-use Illuminate\Support\Facades\DB;
 
 class DoctorAccess
 {
@@ -22,11 +22,7 @@ class DoctorAccess
 
     public function globalPermissions(User $user): array
     {
-        return DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')
-            ->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
-            ->where('g.user_id', $user->id)->where('r.is_active', true)->where('p.is_active', true)
-            ->whereIn('p.code', ['doctors.directory.create', 'doctors.directory.update', 'doctors.directory.delete'])
-            ->distinct()->orderBy('p.code')->pluck('p.code')->all();
+        return array_values(array_intersect(app(GlobalAccess::class)->codes($user), ['doctors.directory.create', 'doctors.directory.update', 'doctors.directory.delete']));
     }
 
     public function directory(User $user, string $action): void
