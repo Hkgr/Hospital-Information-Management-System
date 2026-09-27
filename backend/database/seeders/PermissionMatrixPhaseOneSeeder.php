@@ -14,8 +14,12 @@ class PermissionMatrixPhaseOneSeeder extends Seeder
     public function run(): void
     {
         DB::transaction(function () {
-            foreach ([SurfacePermissionsSeeder::class, UserPermissionsSeeder::class, DossierPermissionsSeeder::class, DossierAuditPermissionsSeeder::class, ClinicPermissionsSeeder::class, DoctorPermissionsSeeder::class, CatalogPermissionsSeeder::class] as $definition) {
+            foreach ([SurfacePermissionsSeeder::class, UserPermissionsSeeder::class, DossierPermissionsSeeder::class, DossierCompletionPermissionsSeeder::class, DossierAuditPermissionsSeeder::class, ClinicPermissionsSeeder::class, DoctorPermissionsSeeder::class, CatalogPermissionsSeeder::class] as $definition) {
                 app($definition)->run();
+            }
+            $missing = array_diff(self::ADMIN, DB::table('permissions')->whereIn('code', self::ADMIN)->pluck('code')->all());
+            if ($missing) {
+                throw new \RuntimeException('Missing administrator permission definitions: '.implode(', ', $missing));
             }
             foreach (array_combine(self::RECEPTION, ['عرض الاستقبال المحدود', 'تسجيل بطاقة وزيارة أولى من الاستقبال', 'بحث تعريفي محدود عن المرضى — تفويض عالمي', 'إنشاء هوية مريض من الاستقبال — تفويض عالمي']) as $code => $name) {
                 DB::table('permissions')->insertOrIgnore(['code' => $code, 'name_ar' => $name, 'is_active' => true]);

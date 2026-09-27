@@ -115,11 +115,24 @@ class PermissionMatrixTest extends TestCase
         DB::table('facility_user_roles')->where('role_id', $role)->delete();
         DB::table('global_user_roles')->where('role_id', $role)->delete();
         $this->assertNull(app(GlobalAccess::class)->systemRole($user));
-        $this->artisan('access:super-admin', ['--apply' => true, '--reason' => 'synthetic matrix test'])->assertSuccessful();
-        $this->artisan('access:super-admin', ['--apply' => true, '--reason' => 'idempotent retry'])->assertSuccessful();
+        $this->artisan('access:super-admin', ['--apply' => true, '--execution-reference' => 'CHANGE-58/operator-test', '--reason' => 'synthetic matrix test'])->assertSuccessful();
+        $audit = DB::table('audit_logs')->where('facility_id', $this->facility)->where('entity_type', 'role')->where('event', 'assigned')->first();
+        $this->assertNull($audit->actor_id, 'A CLI assignment must not impersonate its beneficiary.');
+        $facts = json_decode($audit->new_values, true);
+        $this->assertSame(1, $facts['user_id']);
+        $this->assertSame('CHANGE-58/operator-test', $facts['execution_reference']);
+        $auditCount = DB::table('audit_logs')->where('event', 'assigned')->count();
+        $this->artisan('access:super-admin', ['--apply' => true, '--execution-reference' => 'CHANGE-58/operator-test', '--reason' => 'idempotent retry'])->assertSuccessful();
         $this->assertEquals($before, $user->fresh()->getAttributes());
+        $this->assertSame($auditCount, DB::table('audit_logs')->where('event', 'assigned')->count());
         $this->assertSame(1, DB::table('global_user_roles')->where('user_id', 1)->where('role_id', $role)->count());
         $token = $user->createToken('system-test', ['api'])->plainTextToken;
+        foreach (['audit?category=accounts', 'audit/'.$audit->id] as $path) {
+            $this->api('GET', $path, [], $token)->assertOk()
+                ->assertJsonFragment(['id' => null, 'name' => 'أمر طرفية — ليس جلسة مستخدم'])
+                ->assertJsonFragment(['field' => 'user_id', 'label' => 'المستخدم المستفيد من التعيين', 'before' => null, 'after' => '1', 'before_recorded' => false])
+                ->assertJsonFragment(['after' => 'CHANGE-58/operator-test']);
+        }
         $this->api('GET', 'users', ['facility_id' => $this->other], $token)->assertOk();
         $this->api('GET', 'doctors/options', ['facility_id' => $this->other], $token)->assertOk()->assertJsonPath('data.capabilities.create', true);
         $this->api('GET', 'service-catalog', ['facility_id' => $this->other], $token)->assertOk()->assertJsonPath('capabilities.create', true);
@@ -181,13 +194,37 @@ class PermissionMatrixTest extends TestCase
         $migration->down();
     }
 
+    public function test_operator_command_requires_reference_without_assigning_or_claiming_an_actor(): void
+    {
+        User::find(1) ?? User::factory()->create(['id' => 1]);
+        $before = DB::table('global_user_roles')->get()->toJson();
+        foreach (['', str_repeat('x', 256)] as $reference) {
+            $this->artisan('access:super-admin', ['--apply' => true, '--reason' => 'reviewed change', '--execution-reference' => $reference])
+                ->expectsOutput('--execution-reference must contain 1 to 255 characters.')->assertFailed();
+        }
+        $this->assertSame($before, DB::table('global_user_roles')->get()->toJson());
+    }
+
+    public function test_operator_audit_rollback_preserves_events_without_inventing_actors(): void
+    {
+        $id = DB::table('audit_logs')->insertGetId(['facility_id' => $this->facility, 'actor_id' => null, 'entity_type' => 'role', 'entity_id' => 1, 'event' => 'assigned', 'request_id' => (string) Str::uuid(), 'occurred_at' => now()]);
+        $migration = require database_path('migrations/2026_09_27_000002_allow_operator_audit_without_user.php');
+        try {
+            $migration->down();
+            $this->fail('Rollback must preserve operator audit history.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('cannot invent an actor', $exception->getMessage());
+        }
+        $this->assertDatabaseHas('audit_logs', ['id' => $id, 'actor_id' => null]);
+    }
+
     public function test_missing_user_query_fails_assignment_without_creating_a_user_or_grant(): void
     {
         $before = DB::table('global_user_roles')->count();
         // Simulate the lookup returning no user, without deleting referenced test users.
         User::addGlobalScope('missing-target', fn ($q) => $q->where('id', '!=', 1));
         try {
-            $this->artisan('access:super-admin', ['--apply' => true, '--reason' => 'missing target test'])
+            $this->artisan('access:super-admin', ['--apply' => true, '--execution-reference' => 'CHANGE-58/operator-test', '--reason' => 'missing target test'])
                 ->expectsOutput('User 1 does not exist. No user or assignment was created.')->assertFailed();
             $this->assertSame($before, DB::table('global_user_roles')->count());
         } finally {

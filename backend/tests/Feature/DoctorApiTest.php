@@ -40,19 +40,23 @@ class DoctorApiTest extends TestCase
         $this->token = $this->user->createToken('doctor-test', ['api'])->plainTextToken;
         $this->facility = DB::table('facilities')->insertGetId(['code' => 'TEST-A', 'name_ar' => 'منشأة اختبار أ', 'timezone' => 'Asia/Damascus']);
         $this->other = DB::table('facilities')->insertGetId(['code' => 'TEST-B', 'name_ar' => 'منشأة اختبار ب', 'timezone' => 'Asia/Damascus']);
-        $this->role = DB::table('roles')->insertGetId(['code' => 'super_admin', 'name_ar' => 'دور اختباري']);
+        // Never mutate or acquire the protected system role from a populated database.
+        $this->role = DB::table('roles')->insertGetId(['code' => 'doctor-api-'.Str::random(16), 'name_ar' => 'دور اختباري']);
         $this->seed(DoctorPermissionsSeeder::class);
         foreach (DB::table('permissions')->pluck('id') as $permission) {
             DB::table('role_permissions')->insert(['role_id' => $this->role, 'permission_id' => $permission]);
         }
         foreach (['clinics.view', 'clinics.update'] as $code) {
-            $permission = DB::table('permissions')->insertGetId(['code' => $code, 'name_ar' => $code]);
-            DB::table('role_permissions')->insert(['role_id' => $this->role, 'permission_id' => $permission]);
+            DB::table('permissions')->insertOrIgnore(['code' => $code, 'name_ar' => $code]);
+            $permission = DB::table('permissions')->where('code', $code)->value('id');
+            DB::table('role_permissions')->insertOrIgnore(['role_id' => $this->role, 'permission_id' => $permission]);
         }
         DB::table('facility_user_roles')->insert(['user_id' => $this->user->id, 'role_id' => $this->role, 'facility_id' => $this->facility]);
         DB::table('global_user_roles')->insert(['user_id' => $this->user->id, 'role_id' => $this->role]);
-        $this->type = DB::table('staff_types')->insertGetId(['code' => 'DOCTOR', 'name_ar' => 'طبيب اختباري']);
-        $this->specialty = DB::table('specialties')->insertGetId(['code' => 'INTERNAL', 'name_ar' => 'الطب الداخلي']);
+        DB::table('staff_types')->insertOrIgnore(['code' => 'DOCTOR', 'name_ar' => 'طبيب اختباري']);
+        $this->type = DB::table('staff_types')->where('code', 'DOCTOR')->value('id');
+        DB::table('specialties')->insertOrIgnore(['code' => 'INTERNAL', 'name_ar' => 'الطب الداخلي']);
+        $this->specialty = DB::table('specialties')->where('code', 'INTERNAL')->value('id');
     }
 
     protected function tearDown(): void
@@ -85,9 +89,10 @@ class DoctorApiTest extends TestCase
 
     public function test_crud_global_unique_code_specialties_and_unrelated_fields_survive(): void
     {
+        $usersBefore = DB::table('users')->count();
         $doctor = $this->create();
         $this->assertSame(0, $doctor['clinic_count']);
-        $this->assertDatabaseCount('users', 1);
+        $this->assertSame($usersBefore, DB::table('users')->count());
         $this->assertDatabaseHas('staff_specialties', ['staff_id' => $doctor['id'], 'specialty_id' => $this->specialty]);
         $this->callApi('POST', '', $this->input())->assertUnprocessable()->assertJsonValidationErrors('code');
         $funding = DB::table('funding_sources')->insertGetId(['code' => 'FUND', 'name_ar' => 'تمويل اختباري']);
@@ -164,7 +169,7 @@ class DoctorApiTest extends TestCase
         foreach ([$first, $other] as $clinic) {
             DB::table('clinic_staff')->insert(['staff_id' => $doctor['id'], 'clinic_id' => $clinic, 'starts_on' => '2020-01-01']);
         }
-        DB::table('global_user_roles')->delete();
+        DB::table('global_user_roles')->where('user_id', $this->user->id)->delete();
         $this->callApi('GET', '/options')->assertJsonPath('data.capabilities.update', false)->assertJsonPath('data.capabilities.link', true);
         $this->callApi('POST', '', $this->input(['code' => 'NEW']))->assertForbidden()->assertJsonPath('error.code', 'DOCTOR_DIRECTORY_ACCESS_DENIED');
         $this->callApi('PUT', '/'.$doctor['id'], $this->input(['lock_version' => 1]))->assertForbidden();
@@ -195,7 +200,7 @@ class DoctorApiTest extends TestCase
         $this->json('PUT', '/api/clinics/'.$clinic, $clinicInput, ['Authorization' => 'Bearer '.$this->token])->assertOk()->assertJsonPath('data.doctor_count', 0);
         $this->callApi('PUT', '/'.$doctor['id'].'/clinics', ['lock_version' => 1, 'clinic_add_ids' => [$clinic]])->assertConflict();
         $this->callApi('PUT', '/'.$doctor['id'].'/clinics', ['lock_version' => 2, 'clinic_add_ids' => [$clinic]])->assertOk()->assertJsonPath('data.clinic_count', 2);
-        $this->assertDatabaseCount('clinic_staff', 2); // Same-day reopening, not a duplicate period.
+        $this->assertSame(2, DB::table('clinic_staff')->where('staff_id', $doctor['id'])->count()); // Same-day reopening, not a duplicate period.
         DB::table('clinics')->where('id', $second)->update(['is_active' => false]);
         $this->callApi('PUT', '/'.$doctor['id'], $this->input(['lock_version' => 3, 'name' => 'اسم فقط']))->assertOk()->assertJsonPath('data.clinic_count', 1);
         $this->assertDatabaseHas('clinic_staff', ['clinic_id' => $second, 'ends_on' => null]);
@@ -205,7 +210,7 @@ class DoctorApiTest extends TestCase
         $this->assertDatabaseHas('staff', ['id' => $doctor['id'], 'lock_version' => 4]);
         $this->callApi('DELETE', '/'.$doctor['id'], ['lock_version' => 4])->assertConflict()->assertJsonPath('error.code', 'DOCTOR_REFERENCED');
         $this->callApi('POST', '/'.$doctor['id'].'/deactivate', ['lock_version' => 4])->assertOk()->assertJsonPath('data.is_active', false);
-        $this->assertDatabaseCount('clinic_staff', 3);
+        $this->assertSame(3, DB::table('clinic_staff')->where('staff_id', $doctor['id'])->count());
     }
 
     public function test_types_specialties_validation_and_configuration_fail_closed(): void
@@ -272,8 +277,8 @@ class DoctorApiTest extends TestCase
         $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'asc', 'per_page' => 1])->assertJsonPath('meta.total', 4)->assertJsonPath('data.0.patient_count', 0);
         $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'desc', 'per_page' => 1, 'page' => 3])->assertJsonPath('data.0.patient_count', 0);
         $this->callApi('DELETE', '/'.$procedureDoctor['id'], ['lock_version' => 1])->assertConflict()->assertJsonPath('error.code', 'DOCTOR_REFERENCED');
-        $this->assertDatabaseCount('visit_procedures', 1);
-        $this->assertDatabaseCount('visits', 6);
+        $this->assertSame(1, DB::table('visit_procedures')->where('facility_id', $this->facility)->count());
+        $this->assertSame(6, DB::table('visits')->whereIn('facility_id', [$this->facility, $this->other])->count());
     }
 
     public function test_search_matches_only_current_scoped_clinics_without_duplicate_doctors(): void
@@ -362,7 +367,7 @@ class DoctorApiTest extends TestCase
         $this->callApi('GET')->assertForbidden();
         $this->user->forceFill(['is_active' => false])->save();
         $this->callApi('GET')->assertForbidden()->assertJsonPath('error.code', 'ACCOUNT_INACTIVE');
-        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertSame(0, $this->user->tokens()->count());
     }
 
     public function test_reports_cairo_all_filtered_rows_safe_text_long_appendices_and_scope(): void
@@ -413,14 +418,14 @@ class DoctorApiTest extends TestCase
 
     public function test_explicit_grant_is_previewed_idempotent_and_never_guessed_from_role_name(): void
     {
-        DB::table('global_user_roles')->delete();
-        $this->artisan('doctors:grant-access', ['--user' => 'testadmin', '--facility' => ['TEST-A'], '--global' => true])->assertSuccessful();
-        $this->assertDatabaseCount('global_user_roles', 0);
+        DB::table('global_user_roles')->where('user_id', $this->user->id)->delete();
+        $this->artisan('doctors:grant-access', ['--user' => 'testadmin', '--role' => DB::table('roles')->where('id', $this->role)->value('code'), '--facility' => ['TEST-A'], '--global' => true])->assertSuccessful();
+        $this->assertSame(0, DB::table('global_user_roles')->where('user_id', $this->user->id)->count());
         foreach ([1, 2] as $attempt) {
-            $this->artisan('doctors:grant-access', ['--user' => 'testadmin', '--facility' => ['TEST-A'], '--global' => true, '--apply' => true])->assertSuccessful();
+            $this->artisan('doctors:grant-access', ['--user' => 'testadmin', '--role' => DB::table('roles')->where('id', $this->role)->value('code'), '--facility' => ['TEST-A'], '--global' => true, '--apply' => true])->assertSuccessful();
         }
-        $this->assertDatabaseCount('global_user_roles', 1);
-        $this->assertDatabaseCount('facility_user_roles', 1);
+        $this->assertSame(1, DB::table('global_user_roles')->where('user_id', $this->user->id)->count());
+        $this->assertSame(1, DB::table('facility_user_roles')->where('user_id', $this->user->id)->count());
         DB::table('permissions')->where('code', 'doctors.directory.delete')->update(['is_active' => false]);
         $this->seed(DoctorPermissionsSeeder::class);
         $this->seed(DoctorPermissionsSeeder::class);

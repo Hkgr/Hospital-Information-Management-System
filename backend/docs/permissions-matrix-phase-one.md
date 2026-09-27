@@ -25,11 +25,12 @@ After normal backup and release review, the operator runs:
 ```sh
 php artisan migrate --force
 php artisan db:seed --class=PermissionMatrixPhaseOneSeeder --force
-php artisan access:super-admin --apply --reason="approved change reference and operator"
+php artisan access:super-admin --apply --reason="approved assignment" --execution-reference="CHANGE-58/operator-or-job-reference"
 php artisan access:super-admin
 ```
 
-Migration: `2026_09_27_000001_protect_system_super_admin_role.php`.
+Migrations: `2026_09_27_000001_protect_system_super_admin_role.php` and
+`2026_09_27_000002_allow_operator_audit_without_user.php`.
 No production commands were executed by this change. The assignment requires the
 existing user 1, an active reserved role and an active facility for auditing. It
 never creates or changes the user's identity, credentials or active state. Inactive
@@ -37,9 +38,17 @@ accounts remain unable to authenticate. Existing reserved-role assignments to ot
 users stop the transaction for explicit review. Repeated execution preserves prior
 assignments without duplicating them or unchanged audit events.
 
-Audit records identify the target user, `source=operator_command`, protected role
-and mandatory operator reference. They describe an operator assignment, not an
-HTTP action initiated by the target user. The command without `--apply` is read-only:
+New command audit records use `actor_id=null`: a terminal process is not an
+authenticated application user. `new_values.user_id=1` remains the beneficiary,
+with `source=operator_command`, protected role and mandatory `execution_reference`
+(1–255 characters, an operator/job/change reference, not a password or token).
+This is an operator-supplied reference, not verified application-user identity.
+The audit list/detail UI explicitly shows «أمر طرفية — ليس جلسة مستخدم» and separate
+beneficiary/reference/role facts. The reason remains a separate explanation.
+The actor FK remains enforced for non-null users. Existing events are not rewritten;
+the new migration's rollback refuses while null-actor events exist rather than
+inventing actors or deleting history. Re-running assignment does not rewrite old
+events or manufacture a new assignment. The command without `--apply` is read-only:
 it reports assignment, active account and effective access. Verify `/api/user`
 through normal login afterward. Future active facilities/permissions are resolved
 on every request. No ID, username or role-name bypass exists: the protected marker
@@ -109,7 +118,7 @@ test account afterward. Never run against a non-testing database.
 Phase 2 correction windows/approvals/deletion changes, Phase 3 anonymous statistics
 and inactivity logout, and 2FA are outside this change.
 
-### Results on 2026-09-27
+### Initial verification on 2026-09-27 (31eed93)
 
 - Base: latest fetched `develop`, `3ef3476113d836e9a4f49cb52fa084b55d65ef7d`.
 - Safety check and migration upgrade passed on local MariaDB 10.11.18,
@@ -135,3 +144,41 @@ and inactivity logout, and 2FA are outside this change.
   capabilities through the actual API. The full Laravel suite was not run.
 - Migration up ran on the populated test database; the protected rollback refusal
   was tested. A full destructive down/up cycle was not performed.
+
+### PR #58 corrective verification
+
+The matrix seeder now invokes `DossierCompletionPermissionsSeeder` before grants,
+and verifies that every `ADMIN` code has a definition. Existing inactive permissions
+are not reactivated. `PermissionMatrixFreshTest` starts without permission seeders,
+checks the complete administrator allowlist and downloads an actual XLSX via the API.
+Before the fix it failed specifically because `dossiers.export` was missing; afterward
+it passed (1 test, 7 assertions) on newly created `matrix_review_20260927_testing`,
+MariaDB 10.11.18/mysql, 127.0.0.1:13417, after the safety gate. The original local
+test account could not provision a database; a separate existing local test-server
+provisioning connection was used. No existing database was deleted.
+
+The audit regression failed before the fix (`actor_id` was 1 instead of null).
+It now checks terminal attribution, beneficiary, mandatory execution reference,
+list/detail response facts, unchanged assignment replay, and rollback refusal.
+The existing audit UI consumes these same actor/changes fields: both browser tests
+passed, including distinct display of the terminal actor, beneficiary and reference.
+These two UI tests use API fixtures, not real integration.
+
+All 15 DoctorApiTest cases now pass. Its fixture uses a unique ordinary role instead
+of assuming `super_admin` is absent, reuses existing directory definitions and scopes
+counts/deletes/grant commands to its own fixtures. No doctor application behavior
+changed. The first repaired-fixture run exposed four whole-database count assumptions;
+these were corrected rather than deleting preexisting test data.
+
+Final populated-database selection: DoctorApiTest, PermissionMatrixTest, RoleApiTest,
+UserApiTest and AuditLogApiTest: **32 passed, 1365 assertions**, no skips, on
+`blood_bank_cities_testing` at 127.0.0.1:13416 using the preserving bootstrap.
+The nullable-actor migration also succeeded on this populated MariaDB database.
+The earlier 15-test DoctorApi blocker is resolved by this corrective pass.
+TypeScript, ESLint for the changed browser test, Pint dirty check and
+`git diff --check` passed in this pass.
+
+No frontend implementation changed; browser checks used the existing standalone
+build. No new real Next→Laravel integration or full Laravel suite was run in this
+focused pass. The initial verification and its full-lint limitations remain recorded
+above rather than being presented as newly executed checks.

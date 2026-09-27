@@ -154,6 +154,16 @@ class SystemLogHistory
         $action = $void ? 'voided' : ($row->event === 'saved' ? ($row->old_values === null ? 'created' : 'updated') : $row->event);
         $category = self::CATEGORY_OF[$row->entity_type] ?? 'other';
         $changes = $presenter->changes($row->entity_type, $old, $new);
+        $operatorAssignment = $row->entity_type === 'role' && $row->event === 'assigned'
+            && $row->actor_id === null && ($new['source'] ?? null) === 'operator_command';
+        if ($operatorAssignment) {
+            $changes = [];
+            foreach (['user_id' => 'المستخدم المستفيد من التعيين', 'execution_reference' => 'مرجع تنفيذ أمر الطرفية', 'role' => 'الدور المسند'] as $key => $label) {
+                if (isset($new[$key]) && is_scalar($new[$key])) {
+                    $changes[] = ['field' => $key, 'label' => $label, 'before' => null, 'after' => (string) $new[$key], 'before_recorded' => false];
+                }
+            }
+        }
         if ($changes === [] && in_array($row->entity_type, ['system_error', 'auth_session'], true)) {
             $changes = $this->safeFacts($row->entity_type, $new);
         }
@@ -161,7 +171,7 @@ class SystemLogHistory
         return [
             'id' => $row->id,
             'occurred_at' => CarbonImmutable::parse($row->occurred_at, config('app.timezone'))->setTimezone($f['timezone'])->toIso8601String(),
-            'actor' => ['id' => $row->actor_id, 'name' => $actors[$row->actor_id] ?? 'مستخدم غير متاح'],
+            'actor' => ['id' => $row->actor_id, 'name' => $operatorAssignment ? 'أمر طرفية — ليس جلسة مستخدم' : ($actors[$row->actor_id] ?? 'مستخدم غير متاح')],
             'category' => $category, 'category_label' => self::CATEGORIES[$category],
             'entity' => $row->entity_type, 'entity_label' => self::ENTITIES[$row->entity_type] ?? $row->entity_type,
             'entity_id' => $row->entity_id, 'action' => $action,
