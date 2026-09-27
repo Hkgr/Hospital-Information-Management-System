@@ -11,7 +11,7 @@ class PrivateClinicResponse
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit', 'api/audit/*', 'api/reports', 'api/reports/*', 'api/users', 'api/users/*')) {
+        if (! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit', 'api/audit/*', 'api/reports', 'api/reports/*', 'api/users', 'api/users/*', 'api/reception', 'api/reception/*')) {
             return $next($request);
         }
         try {
@@ -38,7 +38,7 @@ class PrivateClinicResponse
             $status = $response->getStatusCode();
             $response = response()->json(['error' => ['code' => $status === 404 ? 'BLOOD_BANK_NOT_FOUND' : 'BLOOD_BANK_UNAVAILABLE', 'message' => $status === 404 ? 'السجل أو المسار غير موجود في بنك الدم المتاح.' : 'تعذّر إتمام عملية بنك الدم. حاول مجددًا.']], $status);
         }
-        if ($request->is('api/dossiers', 'api/dossiers/*') && in_array($response->getStatusCode(), [404, 500], true)) {
+        if ($request->is('api/dossiers', 'api/dossiers/*', 'api/reception', 'api/reception/*') && in_array($response->getStatusCode(), [404, 500], true)) {
             $status = $response->getStatusCode();
             $response = response()->json(['error' => ['code' => $status === 404 ? 'DOSSIER_NOT_FOUND' : 'DOSSIERS_UNAVAILABLE', 'message' => $status === 404 ? 'بطاقة المريض أو الزيارة غير متاحة في المشفى المحدد.' : 'تعذّر تحميل بطاقات المرضى. حاول مجددًا.']], $status);
         }

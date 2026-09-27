@@ -6,6 +6,7 @@ type NavigationItem = { label: string; icon: IconType; href?: string; permission
 // Missing routes are presentation-only, not permissions or fabricated modules.
 export const primaryNavigation: NavigationItem[] = [
   { label: "الرئيسية", icon: LuHouse, href: "/dashboard/general", permission: "dashboards.view" },
+  { label: "الاستقبال", icon: LuClipboardPlus, href: "/reception", permission: "reception.view" },
   { label: "بطاقة المريض", icon: LuFolderHeart, href: "/patient-cards", permission: "dossiers.view" },
   { label: "الزيارات", icon: LuClipboardPlus, href: "/visits", permission: "dossiers.view" },
   { label: "الأطباء", icon: LuStethoscope, href: "/doctors", permission: "doctors.view" },

@@ -15,15 +15,24 @@ use App\Http\Controllers\Api\DossierPathologyController;
 use App\Http\Controllers\Api\DossierWizardController;
 use App\Http\Controllers\Api\FacilityReportController;
 use App\Http\Controllers\Api\OncologyController;
-use App\Http\Controllers\Api\StockController;
+use App\Http\Controllers\Api\ReceptionController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Middleware\AuditDossierRead;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
-    Route::prefix('dossiers')->name('dossiers.')->group(function () {
+    Route::prefix('reception')->name('reception.')->middleware(AuditDossierRead::class)->group(function () {
+        $controller = ReceptionController::class;
+        Route::get('/options', [$controller, 'options'])->name('options');
+        Route::get('/patients', [$controller, 'search'])->middleware('throttle:reception')->name('patients');
+        Route::post('/registrations', [$controller, 'store'])->defaults('section', 'personal')->name('store');
+        Route::get('/cards/{dossier}', [$controller, 'show'])->whereNumber('dossier')->name('show');
+    });
+    Route::prefix('dossiers')->name('dossiers.')->middleware(AuditDossierRead::class)->group(function () {
         $imports = DossierImportController::class;
         Route::get('/import-template.xlsx', [$imports, 'template'])->name('imports.template');
         Route::get('/imports', [$imports, 'index'])->name('imports.index');

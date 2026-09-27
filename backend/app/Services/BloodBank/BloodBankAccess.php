@@ -4,8 +4,8 @@ namespace App\Services\BloodBank;
 
 use App\Exceptions\BloodBankException;
 use App\Models\User;
+use App\Services\Auth\GlobalAccess;
 use App\Services\Auth\UserAccessContext;
-use Illuminate\Support\Facades\DB;
 
 class BloodBankAccess
 {
@@ -21,8 +21,7 @@ class BloodBankAccess
 
     public function canSearchPatients(User $user): bool
     {
-        return DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
-            ->where('g.user_id', $user->id)->where('r.is_active', true)->where('p.is_active', true)->where('p.code', 'blood_bank.patients.search')->exists();
+        return app(GlobalAccess::class)->allows($user, 'blood_bank.patients.search');
     }
 
     public function patients(User $user, array $facility): void

@@ -14,15 +14,23 @@ class RoleDirectory
 
     public function listing(array $f): array
     {
-        $roles = DB::table('roles')->where('is_active', true)->orderBy('name_ar')->orderBy('id')->get(['id', 'code', 'name_ar']);
+        $roles = DB::table('roles')->where('is_active', true)->orderBy('name_ar')->orderBy('id')->get(['id', 'code', 'name_ar', 'is_system_super_admin']);
         $permissions = $this->catalog->codesFor($roles->pluck('id')->all());
+        if ($roles->contains(fn ($role) => (bool) $role->is_system_super_admin)) {
+            $all = DB::table('permissions')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name_ar'])->map(fn ($p) => (array) $p)->all();
+            foreach ($roles as $role) {
+                if ($role->is_system_super_admin) {
+                    $permissions[$role->id] = $all;
+                }
+            }
+        }
         $data = [];
         foreach ($roles as $role) {
             $codes = array_column($permissions[$role->id] ?? [], 'code');
             $data[] = [
                 'id' => (int) $role->id, 'code' => $role->code, 'name_ar' => $role->name_ar,
                 'permissions' => $permissions[$role->id] ?? [],
-                'manageable' => $this->catalog->within($f['permissions'], $codes),
+                'manageable' => ! $role->is_system_super_admin && $role->code !== 'super_admin' && $this->catalog->within($f['permissions'], $codes),
             ];
         }
 
@@ -51,6 +59,7 @@ class RoleDirectory
             if (! $role) {
                 throw new HttpResponseException(response()->json(['error' => ['code' => 'ROLE_NOT_FOUND', 'message' => 'الدور غير موجود.']], 404));
             }
+            $this->assertOrdinary($role);
             $current = array_column($this->catalog->codesFor([$id])[$id] ?? [], 'code');
             if (! $this->catalog->within($f['permissions'], $current)) {
                 throw new HttpResponseException(response()->json(['error' => ['code' => 'ROLE_NOT_MANAGEABLE', 'message' => 'لا يمكن تعديل دور يملك صلاحيات خارج صلاحياتك.']], 403));
@@ -67,12 +76,12 @@ class RoleDirectory
 
     public function assignable(array $f): array
     {
-        $roles = DB::table('roles')->where('is_active', true)->orderBy('code')->orderBy('id')->get(['id', 'code', 'name_ar']);
+        $roles = DB::table('roles')->where('is_active', true)->orderBy('code')->orderBy('id')->get(['id', 'code', 'name_ar', 'is_system_super_admin']);
         $permissions = $this->catalog->codesFor($roles->pluck('id')->all());
         $assignable = [];
         foreach ($roles as $role) {
             $codes = array_column($permissions[$role->id] ?? [], 'code');
-            if ($this->catalog->within($f['permissions'], $codes)) {
+            if (! $role->is_system_super_admin && $role->code !== 'super_admin' && $this->catalog->within($f['permissions'], $codes)) {
                 $assignable[] = ['id' => (int) $role->id, 'code' => $role->code, 'name_ar' => $role->name_ar];
             }
         }
@@ -86,12 +95,20 @@ class RoleDirectory
         if (! $role) {
             throw new HttpResponseException(response()->json(['error' => ['code' => 'USER_ROLE_INVALID', 'message' => 'الدور المحدد غير متاح.']], 422));
         }
+        $this->assertOrdinary($role);
         $codes = array_column($this->catalog->codesFor([$roleId])[$roleId] ?? [], 'code');
         if (! $this->catalog->within($f['permissions'], $codes)) {
             throw new HttpResponseException(response()->json(['error' => ['code' => 'USER_ROLE_INVALID', 'message' => 'الدور المحدد غير متاح.']], 422));
         }
 
         return $role;
+    }
+
+    private function assertOrdinary(object $role): void
+    {
+        if ($role->is_system_super_admin || $role->code === 'super_admin') {
+            throw new HttpResponseException(response()->json(['error' => ['code' => 'PROTECTED_SYSTEM_ROLE', 'message' => 'دور مدير النظام محمي؛ لا يمكن تعديله أو إسناده من إدارة الأدوار.']], 403));
+        }
     }
 
     private function grantable(array $f, array $ids): array
@@ -136,7 +153,7 @@ class RoleDirectory
         return [
             'id' => (int) $role->id, 'code' => $role->code, 'name_ar' => $role->name_ar,
             'permissions' => $permissions,
-            'manageable' => $this->catalog->within($f['permissions'], array_column($permissions, 'code')),
+            'manageable' => ! $role->is_system_super_admin && $role->code !== 'super_admin' && $this->catalog->within($f['permissions'], array_column($permissions, 'code')),
         ];
     }
 }

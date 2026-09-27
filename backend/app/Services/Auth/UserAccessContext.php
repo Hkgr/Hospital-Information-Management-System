@@ -9,12 +9,22 @@ use Illuminate\Support\Facades\DB;
 class UserAccessContext
 {
     /**
-     * Build current access in one query, including roles without permissions.
+     * Build current access in bounded queries, including roles without permissions.
      *
      * @return list<array{facility: array{id: int, code: string, name_ar: string, timezone: string}, roles: list<array{code: string, name_ar: string, name_en: ?string}>, permissions: list<string>}>
      */
     public function forUser(User $user): array
     {
+        if (! $user->is_active) {
+            return [];
+        }
+        if ($role = app(GlobalAccess::class)->systemRole($user)) {
+            $permissions = app(GlobalAccess::class)->codes($user);
+
+            return DB::table('facilities')->where('is_active', true)->orderBy('code')->orderBy('id')->get(['id', 'code', 'name_ar', 'timezone'])->map(fn ($f) => [
+                'facility' => (array) $f, 'roles' => [['code' => $role->code, 'name_ar' => $role->name_ar, 'name_en' => $role->name_en]], 'permissions' => $permissions,
+            ])->all();
+        }
         $rows = DB::table('facility_user_roles as assignments')
             ->join('facilities as f', 'f.id', '=', 'assignments.facility_id')
             ->join('roles as r', 'r.id', '=', 'assignments.role_id')

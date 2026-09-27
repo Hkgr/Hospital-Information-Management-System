@@ -88,6 +88,10 @@ class UserDirectory
             if (! $user || ! DB::table('facility_user_roles')->where('facility_id', $f['id'])->where('user_id', $id)->exists()) {
                 throw new HttpResponseException(response()->json(['error' => ['code' => 'USER_NOT_FOUND', 'message' => 'المستخدم غير موجود في المنشأة المحددة.']], 404));
             }
+            if (DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->where('g.user_id', $id)->where(fn ($q) => $q->where('r.is_system_super_admin', true)->orWhere('r.code', 'super_admin'))->exists()
+                || DB::table('facility_user_roles as a')->join('roles as r', 'r.id', '=', 'a.role_id')->where('a.user_id', $id)->where(fn ($q) => $q->where('r.is_system_super_admin', true)->orWhere('r.code', 'super_admin'))->exists()) {
+                throw new HttpResponseException(response()->json(['error' => ['code' => 'PROTECTED_SYSTEM_USER', 'message' => 'لا يمكن حذف أو سحب تعيين مدير النظام من هذه الواجهة.']], 403));
+            }
             if ($id === (int) $request->user()->id) {
                 throw new HttpResponseException(response()->json(['error' => ['code' => 'USER_SELF_DELETE', 'message' => 'لا يمكن حذف حساب الدخول الحالي.']], 409));
             }

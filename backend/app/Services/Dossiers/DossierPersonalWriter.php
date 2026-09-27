@@ -21,8 +21,22 @@ class DossierPersonalWriter
         if (! $id && ! $withoutVisit) {
             $this->access->facility($r->user(), $f['id'], 'visits.create');
         }
+
+        return $this->persist($r, $f, $input, $id, $withoutVisit);
+    }
+
+    public function registerReception(Request $r, array $f, array $input): int
+    {
+        $f = app(ReceptionAccess::class)->facility($r->user(), $f['id'], 'register');
+        app(ReceptionAccess::class)->patients($r->user(), $input['person_mode'] === 'new' ? 'create' : 'search');
+
+        return $this->persist($r, $f, $input, null, false, true);
+    }
+
+    private function persist(Request $r, array $f, array $input, ?int $id, bool $withoutVisit, bool $automaticCode = false): int
+    {
         try {
-            return $this->writes->once($r, $f, $input, 'personal:'.($id ?? 'new'), function () use ($r, $f, $input, $id, $withoutVisit) {
+            return $this->writes->once($r, $f, $input, ($automaticCode ? 'reception:' : '').'personal:'.($id ?? 'new'), function () use ($r, $f, $input, $id, $withoutVisit, $automaticCode) {
                 $old = $id ? $this->writes->dossier($f, $id) : null;
                 if ($old) {
                     DossierWrites::version($old, $input['lock_version']);
@@ -33,6 +47,9 @@ class DossierPersonalWriter
                     }
                     // Serialize canonical-code/legacy-code reservations across facilities.
                     app(PatientCardCodes::class)->reserve();
+                    if ($automaticCode && $input['person_mode'] === 'new') {
+                        $input['code'] = app(PatientCardCodes::class)->next();
+                    }
                 }
                 $patientId = $old['patient_id'] ?? ($input['patient_id'] ?? null);
                 $patient = $patientId ? DB::table('patients')->where('id', $patientId)->where('status', 'active')->lockForUpdate()->first() : null;

@@ -42,9 +42,10 @@ export default function LoginCard() {
     submitting.current = true;
     setLoading(true);
     try {
-      await login(username, password);
+      const identity = await login(username, password);
       setPassword("");
-      router.replace("/");
+      const reception = identity.access.find(entry => entry.permissions.includes("reception.view"));
+      router.replace(reception && !identity.access.some(entry => entry.permissions.includes("dashboards.view") || entry.permissions.includes("dossiers.view")) ? `/reception?facility_id=${reception.facility.id}` : "/");
     } catch (reason) {
       const failure = reason instanceof AuthError ? reason : new AuthError(0, "UNKNOWN", "تعذّر تسجيل الدخول. حاول مجددًا.");
       setError(failure.message);

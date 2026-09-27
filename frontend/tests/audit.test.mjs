@@ -16,7 +16,7 @@ const event = {
   changes: [{ field: "message", label: "الرسالة", before: null, after: "تعذّر إتمام العملية.", before_recorded: false }],
 };
 
-async function setup() {
+async function setup(fixture = event) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce", timezoneId: "Asia/Damascus" });
   const page = await context.newPage();
   const calls = [], errors = [];
@@ -30,11 +30,11 @@ async function setup() {
     if (url.pathname === "/hospital-api/user") return route.fulfill({ json: { data: { user: { id: 11, staff_id: null, username: "audit-user", name: "مستخدم الاختبار", email: null, must_change_password: false, last_login_at: null }, access } } });
     if (url.pathname === "/hospital-api/audit") {
       assert.equal(url.searchParams.get("facility_id"), "3");
-      return route.fulfill({ json: { data: [event], meta: { page: 1, per_page: 10, total: 1, last_page: 1 }, filters: { categories: { technical: "خطأ تقني" }, entities: { system_error: "خطأ تقني" }, actions: { failed: "خطأ تقني" } }, timezone: "Asia/Damascus" } });
+      return route.fulfill({ json: { data: [fixture], meta: { page: 1, per_page: 10, total: 1, last_page: 1 }, filters: { categories: { technical: "خطأ تقني" }, entities: { system_error: "خطأ تقني" }, actions: { failed: "خطأ تقني" } }, timezone: "Asia/Damascus" } });
     }
     if (url.pathname === "/hospital-api/audit/9") {
       assert.equal(url.searchParams.get("facility_id"), "3");
-      return route.fulfill({ json: { data: event } });
+      return route.fulfill({ json: { data: fixture } });
     }
     throw new Error(`Unexpected API call ${url.pathname}`);
   });
@@ -59,6 +59,24 @@ test("system log table lists badges and opens a unique activity page", async () 
     await page.getByText("تعذّر إتمام العملية.").first().waitFor();
     assert.ok(calls.some(path => path.startsWith("/hospital-api/audit?facility_id=3")));
     assert.ok(calls.some(path => path.startsWith("/hospital-api/audit/9?facility_id=3")));
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
+
+test("operator assignment shows terminal actor, beneficiary and execution reference separately", async () => {
+  const assignment = { ...event, actor: { id: null, name: "أمر طرفية — ليس جلسة مستخدم" }, entity: "role", entity_label: "الدور", category: "accounts", category_label: "الحسابات", action: "assigned", action_label: "إسناد دور محمي", reason: "approved assignment", changes: [
+    { field: "user_id", label: "المستخدم المستفيد من التعيين", before: null, after: "1", before_recorded: false },
+    { field: "execution_reference", label: "مرجع تنفيذ أمر الطرفية", before: null, after: "CHANGE-58/operator-test", before_recorded: false },
+  ] };
+  const { context, page, errors } = await setup(assignment);
+  try {
+    await page.goto(`${base}/audit?facility_id=3`);
+    await page.getByText(assignment.actor.name, { exact: true }).waitFor();
+    await page.locator("tbody tr").first().click();
+    await page.waitForURL(/\/audit\/9\?facility_id=3/);
+    await page.locator("dd").filter({ hasText: assignment.actor.name }).waitFor();
+    await page.getByText("المستخدم المستفيد من التعيين", { exact: true }).waitFor();
+    await page.getByText("CHANGE-58/operator-test", { exact: true }).first().waitFor();
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 });
