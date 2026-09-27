@@ -57,6 +57,9 @@ class DossierWrites
         $q = DB::table('patient_dossiers')->where('id', $id)->where('facility_id', $f['id'])->whereIn('status', ['draft', 'active']);
         $row = ($lock ? $q->lockForUpdate() : $q)->first();
         abort_unless($row, 404);
+        if ($lock && DB::table('patients')->where('id', $row->patient_id)->where('status', 'merged')->exists()) {
+            self::conflict('هذه هوية مكررة محفوظة تاريخيًا. افتح الهوية المعتمدة لإضافة أو تعديل البيانات.');
+        }
 
         return (array) $row;
     }

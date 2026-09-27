@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 class DossierAuditValues
 {
     private const FIELDS = [
+        'merged_into_id' => 'الهوية المعتمدة', 'is_active' => 'الحساب فعال', 'permissions' => 'الصلاحيات', 'can_merge' => 'الدمج متاح', 'fields' => 'الحقول المطلوب تصحيحها',
         'paper_file_number' => 'رقم الملف الورقي',
         'import_batch_id' => 'دفعة الاستيراد', 'source_rows' => 'مراجع صفوف المصدر لهذه البطاقة', 'purpose' => 'غرض الاستيراد', 'cutover_date' => 'تاريخ الانتقال للنظام',
         'plan_number' => 'رقم الخطة', 'current_revision_id' => 'النسخة الحالية', 'revision_number' => 'رقم النسخة', 'basis_disposition' => 'أساس الاعتماد', 'override_reason' => 'مبرر الاستثناء', 'status_reason' => 'سبب تغيير الحالة', 'reviewed_at' => 'وقت المراجعة', 'reviewed_by' => 'المراجع', 'protocol_text' => 'البروتوكول العلاجي', 'modality' => 'نمط العلاج', 'intent' => 'النية العلاجية', 'protocol_doctor_id' => 'طبيب البروتوكول', 'treating_doctor_id' => 'الطبيب المعالج', 'protocol_clinic_id' => 'عيادة بروتوكول العلاج', 'treating_clinic_id' => 'عيادة الطبيب المعالج', 'planned_on' => 'الموعد المخطط', 'session_number' => 'رقم الجلسة', 'cycle_number' => 'رقم الدورة', 'reason' => 'السبب', 'given_on' => 'تاريخ الجرعة', 'dose_name' => 'اسم الجرعة', 'complaint' => 'شكاية المريض', 'recommendations' => 'توصيات الطبيب', 'nurse_id' => 'الممرض', 'administered_on' => 'تاريخ الإعطاء', 'supervising_staff_id' => 'الطبيب المشرف', 'administered_by' => 'القائم بالإعطاء', 'session_label' => 'عنوان الجلسة', 'dose_value' => 'قيمة الجرعة', 'dose_unit' => 'وحدة الجرعة', 'dose_text' => 'تعليمات الجرعة', 'route' => 'طريق الإعطاء', 'funding_source_id' => 'مصدر التمويل', 'dispensed_on' => 'تاريخ الصرف', 'dispensing_purpose' => 'غرض الصرف', 'correction_reason' => 'سبب التصحيح', 'kind' => 'نوع الوصفة',
@@ -34,6 +35,9 @@ class DossierAuditValues
     ];
 
     private const GROUPS = [
+        'patient_identity_correction' => ['status', 'fields', 'reason'],
+        'patient_duplicate_review' => ['status', 'can_merge', 'reason'],
+        'reception_account' => ['is_active', 'permissions', 'reason'],
         'oncology_plans' => ['plan_number', 'current_revision_id', 'status', 'basis_disposition', 'override_reason', 'status_reason', 'reviewed_at', 'reviewed_by'],
         'oncology_plan_revisions' => ['revision_number', 'protocol_text', 'modality', 'intent', 'protocol_clinic_id', 'protocol_doctor_id', 'treating_clinic_id', 'treating_doctor_id'],
         'oncology_sessions' => ['session_number', 'cycle_number', 'planned_on', 'status', 'reason', 'clinic_id', 'doctor_id'],
@@ -44,7 +48,7 @@ class DossierAuditValues
         'visit_pathologies' => ['source', 'status', 'report_number', 'external_organization', 'specimen_type', 'anatomical_site', 'requested_on', 'collected_on', 'result_on', 'conclusion', 'unavailable_reason', 'procedure_event_id', 'clinic_id', 'doctor_id', 'supporting_attachment_id'],
         'visit_diagnostic_assessments' => ['disposition', 'assessed_on', 'required_reason', 'not_required_reason', 'follow_up', 'evidence_pathology_id', 'clinic_id', 'doctor_id'],
         'patient_dossier' => ['code', 'opening_date', 'status', 'import_batch_id', 'source_rows', 'purpose', 'cutover_date'],
-        'patient' => ['patient_code', 'paper_file_number', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status', 'marital_status', 'permanent_address', 'occupation', 'smoking_status', 'alcohol_status'],
+        'patient' => ['patient_code', 'paper_file_number', 'first_name', 'family_name', 'father_name', 'mother_name', 'birth_date', 'birth_date_accuracy', 'gender', 'phone', 'alt_phone', 'governorate_id', 'city_id', 'address_line', 'displacement_status', 'marital_status', 'permanent_address', 'occupation', 'smoking_status', 'alcohol_status', 'status', 'merged_into_id', 'reason'],
         'dossier_medical' => ['is_oncology', 'disability_text', 'clinical_history', 'weight_kg', 'height_cm', 'previous_examinations', 'medication_source', 'other_organization', 'selections'],
         'dossier_visit' => ['visit_no', 'visit_date', 'dossier_visit_kind', 'status', 'clinic_id', 'attending_staff_id', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason'],
         'visit_diagnosis' => ['diagnosis_id', 'diagnosed_on', 'clinic_id', 'diagnosing_staff_id'],
@@ -118,7 +122,7 @@ class DossierAuditValues
         if ($value === null || $value === '') {
             return 'غير مسجل';
         }
-        if (in_array($field, ['is_oncology', 'is_referred'], true)) {
+        if (in_array($field, ['is_oncology', 'is_referred', 'is_active', 'can_merge'], true)) {
             return $value ? 'نعم' : 'لا';
         }
         if (isset(self::REFERENCES[$field])) {
@@ -141,6 +145,9 @@ class DossierAuditValues
         }
         if ($field === 'source_rows' && is_array($value)) {
             return implode('، ', array_map('intval', $value));
+        }
+        if (in_array($field, ['permissions', 'fields'], true) && is_array($value)) {
+            return implode('، ', array_filter($value, 'is_string')) ?: 'لا توجد';
         }
         if (! is_scalar($value)) {
             return 'قيمة غير قابلة للعرض';

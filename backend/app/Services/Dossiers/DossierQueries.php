@@ -17,7 +17,7 @@ class DossierQueries
     private function dossiers(array $f): Builder
     {
         return DB::table('patient_dossiers as d')->join('patients as p', 'p.id', '=', 'd.patient_id')
-            ->where('d.facility_id', $f['id'])->whereIn('d.status', ['draft', 'active']);
+            ->where('d.facility_id', $f['id'])->whereIn('d.status', ['draft', 'active'])->where('p.status', 'active');
     }
 
     public function listing(array $f, array $input): array

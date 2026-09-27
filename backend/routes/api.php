@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\DossierWizardController;
 use App\Http\Controllers\Api\FacilityReportController;
 use App\Http\Controllers\Api\OncologyController;
 use App\Http\Controllers\Api\ReceptionController;
+use App\Http\Controllers\Api\ReceptionReviewController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\UserController;
@@ -26,6 +27,20 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api'])->group(function () {
     Route::prefix('reception')->name('reception.')->middleware(AuditDossierRead::class)->group(function () {
+        $review = ReceptionReviewController::class;
+        Route::get('/cards/{dossier}/identity', [$review, 'identity'])->whereNumber('dossier')->name('identity');
+        Route::post('/cards/{dossier}/{action}', [$review, 'correct'])->whereNumber('dossier')->whereIn('action', ['correct', 'corrections'])->name('identity.write');
+        Route::get('/reviews/corrections', [$review, 'corrections'])->name('corrections.index');
+        Route::get('/reviews/corrections/{review}', [$review, 'correction'])->whereNumber('review')->name('corrections.show');
+        Route::post('/reviews/corrections/{review}/decision', [$review, 'correctionDecision'])->whereNumber('review')->name('corrections.decide');
+        Route::get('/reviews/patients', [$review, 'patients'])->name('reviews.patients');
+        Route::get('/reviews/duplicates/preview', [$review, 'preview'])->name('duplicates.preview');
+        Route::get('/reviews/duplicates', [$review, 'duplicates'])->name('duplicates.index');
+        Route::post('/reviews/duplicates', [$review, 'duplicateRequest'])->name('duplicates.store');
+        Route::get('/reviews/duplicates/{review}', [$review, 'duplicate'])->whereNumber('review')->name('duplicates.show');
+        Route::post('/reviews/duplicates/{review}/decision', [$review, 'duplicateDecision'])->whereNumber('review')->name('duplicates.decide');
+        Route::get('/reviews/accounts', [$review, 'accounts'])->name('accounts.index');
+        Route::put('/reviews/accounts/{user}', [$review, 'account'])->whereNumber('user')->name('accounts.update');
         $controller = ReceptionController::class;
         Route::get('/options', [$controller, 'options'])->name('options');
         Route::get('/patients', [$controller, 'search'])->middleware('throttle:reception')->name('patients');

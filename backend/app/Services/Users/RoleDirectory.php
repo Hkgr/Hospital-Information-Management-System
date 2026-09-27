@@ -30,7 +30,7 @@ class RoleDirectory
             $data[] = [
                 'id' => (int) $role->id, 'code' => $role->code, 'name_ar' => $role->name_ar,
                 'permissions' => $permissions[$role->id] ?? [],
-                'manageable' => ! $role->is_system_super_admin && $role->code !== 'super_admin' && $this->catalog->within($f['permissions'], $codes),
+                'manageable' => ! $role->is_system_super_admin && $role->code !== 'super_admin' && ! str_starts_with($role->code, 'reception-') && $this->catalog->within($f['permissions'], $codes),
             ];
         }
 
@@ -81,7 +81,7 @@ class RoleDirectory
         $assignable = [];
         foreach ($roles as $role) {
             $codes = array_column($permissions[$role->id] ?? [], 'code');
-            if (! $role->is_system_super_admin && $role->code !== 'super_admin' && $this->catalog->within($f['permissions'], $codes)) {
+            if (! $role->is_system_super_admin && $role->code !== 'super_admin' && ! str_starts_with($role->code, 'reception-') && $this->catalog->within($f['permissions'], $codes)) {
                 $assignable[] = ['id' => (int) $role->id, 'code' => $role->code, 'name_ar' => $role->name_ar];
             }
         }
@@ -106,8 +106,8 @@ class RoleDirectory
 
     private function assertOrdinary(object $role): void
     {
-        if ($role->is_system_super_admin || $role->code === 'super_admin') {
-            throw new HttpResponseException(response()->json(['error' => ['code' => 'PROTECTED_SYSTEM_ROLE', 'message' => 'دور مدير النظام محمي؛ لا يمكن تعديله أو إسناده من إدارة الأدوار.']], 403));
+        if ($role->is_system_super_admin || $role->code === 'super_admin' || str_starts_with($role->code, 'reception-')) {
+            throw new HttpResponseException(response()->json(['error' => ['code' => 'PROTECTED_SYSTEM_ROLE', 'message' => 'هذا الدور محمي؛ لا يمكن تعديله أو إسناده من إدارة الأدوار العامة.']], 403));
         }
     }
 
@@ -153,7 +153,7 @@ class RoleDirectory
         return [
             'id' => (int) $role->id, 'code' => $role->code, 'name_ar' => $role->name_ar,
             'permissions' => $permissions,
-            'manageable' => ! $role->is_system_super_admin && $role->code !== 'super_admin' && $this->catalog->within($f['permissions'], array_column($permissions, 'code')),
+            'manageable' => ! $role->is_system_super_admin && $role->code !== 'super_admin' && ! str_starts_with($role->code, 'reception-') && $this->catalog->within($f['permissions'], array_column($permissions, 'code')),
         ];
     }
 }
