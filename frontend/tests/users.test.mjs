@@ -26,6 +26,7 @@ async function setup({ permissions = ["users.view", "users.create", "users.delet
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
   await context.addInitScript(() => sessionStorage.setItem("hospital.bearer", "users-ui-fixture"));
   const page = await context.newPage();
+  page.setDefaultTimeout(6000);
   const calls = [];
   let rows = [...members];
   let extraRoles = [...roles];
@@ -35,6 +36,7 @@ async function setup({ permissions = ["users.view", "users.create", "users.delet
     if (!url.pathname.startsWith("/hospital-api/")) return route.continue();
     calls.push({ url, method: request.method(), body: request.postDataJSON() });
     if (await override(route, url)) return;
+    if (url.pathname === '/hospital-api/session') return route.fulfill({ json: { data: { idle_timeout: null } } });
     if (url.pathname.endsWith("/user")) return route.fulfill({ json: { data: { user, access: [{ facility, roles: [], permissions }] } } });
     if (url.pathname.endsWith("/users/options")) return route.fulfill({ json: { data: { roles: extraRoles, permission_groups: groups, capabilities: {
       view: permissions.includes("users.view"), create: permissions.includes("users.create"), delete: permissions.includes("users.delete"),
@@ -83,8 +85,25 @@ test("navbar users item and add/delete members when permitted", async () => {
     await page.getByRole("dialog", { name: "حذف nurse-one" }).waitFor();
     await page.getByRole("button", { name: "تأكيد الحذف" }).click();
     await page.getByRole("dialog", { name: "حذف nurse-one" }).waitFor({ state: "hidden" });
+    await page.getByText("nurse-one", { exact: true }).waitFor({ state: "hidden" });
     assert.equal(await page.getByText("nurse-one").count(), 0);
     assert.equal(calls.some(call => call.method === "DELETE" && call.url.pathname.endsWith("/users/22")), true);
+  } finally { await context.close(); }
+});
+
+test('options connection failure is visible with retry; success restores capabilities', async () => {
+  let failing = true;
+  const { page, context } = await setup({ override: async (route, url) => {
+    if (!failing || !url.pathname.endsWith('/users/options')) return false;
+    await route.abort(); return true;
+  } });
+  try {
+    await page.getByText('تعذّر تحميل خيارات إدارة المستخدمين.', { exact: true }).waitFor();
+    await page.getByRole('alert').filter({ hasText: 'تعذّر الاتصال بالخادم' }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'إضافة مستخدم', exact: true }).count(), 0);
+    failing = false;
+    await page.getByRole('button', { name: 'إعادة تحميل الخيارات', exact: true }).click();
+    await page.getByRole('button', { name: 'إضافة مستخدم', exact: true }).waitFor();
   } finally { await context.close(); }
 });
 
@@ -92,6 +111,7 @@ test("create and delete controls stay hidden without write permissions", async (
   const { page, context } = await setup({ permissions: ["users.view"] });
   try {
     await page.getByRole("heading", { name: "إدارة المستخدمين", exact: true }).waitFor();
+    await page.getByText("ممرض اختباري", { exact: true }).waitFor();
     assert.equal(await page.getByRole("button", { name: "إضافة مستخدم" }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "حذف nurse-one" }).count(), 0);
     assert.equal(await page.getByText("ممرض اختباري").count(), 1);
