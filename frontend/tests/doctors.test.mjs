@@ -39,6 +39,38 @@ async function setup({ width=1440, access=[{facility,permissions,roles:[]}], set
   return {page,context,calls,errors};
 }
 
+test('uncertain doctor creation replays its UUID and original links, never a changed draft or a name lookup', async () => {
+  const writes = [];
+  const { page, context, calls } = await setup({ override: async (route, url) => {
+    if (url.pathname === '/hospital-api/doctors' && route.request().method() === 'POST') {
+      writes.push(route.request().postDataJSON());
+      if (writes.length === 1) await route.abort('failed');
+      else await route.fulfill({ status: 201, json: { data: { ...doctors[0], id: 99, code: 'AUTO-DR-001', name: writes[0].name } } });
+      return true;
+    }
+    return false;
+  } });
+  try {
+    await page.getByRole('button', { name: 'إضافة طبيب جديد', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('الاسم الكامل *').fill('طبيب محفوظ رغم انقطاع الاستجابة');
+    await dialog.getByLabel('نوع الطبيب *').selectOption('1');
+    await dialog.getByRole('checkbox', { name: 'الطب الداخلي', exact: true }).check();
+    await dialog.getByRole('button', { name: 'حفظ الطبيب', exact: true }).click();
+    await dialog.getByRole('button', { name: 'استعادة نتيجة الحفظ', exact: true }).waitFor();
+    assert.match(writes[0].request_id, /^[0-9a-f-]{36}$/);
+    await dialog.getByLabel('الاسم الكامل *').fill('مسودة معدلة بعد انقطاع الاستجابة');
+    await dialog.getByRole('button', { name: 'حفظ الطبيب', exact: true }).click();
+    await dialog.getByText(/تغيّرت المسودة بعد محاولة حفظ غير مؤكدة/).waitFor();
+    assert.equal(writes.length, 1);
+    assert.equal(await dialog.getByLabel('الاسم الكامل *').inputValue(), 'مسودة معدلة بعد انقطاع الاستجابة');
+    await dialog.getByRole('button', { name: 'استعادة نتيجة الحفظ', exact: true }).click();
+    await dialog.waitFor({ state: 'detached' });
+    assert.deepEqual(writes[1], writes[0]);
+    assert.equal(calls.some(call => call.method === 'GET' && call.url.searchParams.get('search')?.includes('طبيب محفوظ')), false);
+  } finally { await context.close(); }
+});
+
 test('list loads independently of delayed capabilities and relation choices stay lazy until opened',async()=>{
   let release;const gate=new Promise(resolve=>{release=resolve;});
   const {page,context,calls}=await setup({override:async(route,url)=>{
@@ -104,15 +136,15 @@ test('creation without clinics validates in place and blocks duplicate save, esc
   let release,writes=0;const gate=new Promise(resolve=>{release=resolve;});
   const {page,context,calls}=await setup({override:async(route,url)=>{
     if(route.request().method()!=='POST'||url.pathname!=='/hospital-api/doctors') return false;
-    writes++;await gate;await route.fulfill({status:422,json:{errors:{code:['كود الطبيب مستخدم.']}}});return true;
+    writes++;await gate;await route.fulfill({status:422,json:{errors:{name:['الاسم الكامل مطلوب.']}}});return true;
   }});
   try{
     const opener=page.getByRole('button',{name:'إضافة طبيب جديد',exact:true});await opener.click();
-    const dialog=page.getByRole('dialog');await dialog.getByLabel('كود الطبيب *').fill('NEW');await dialog.getByLabel('الاسم الكامل *').fill('طبيب جديد');
+    const dialog=page.getByRole('dialog');await dialog.getByText('يُمنح كود الطبيب تلقائيًا عند الحفظ.').waitFor();await dialog.getByLabel('الاسم الكامل *').fill('طبيب جديد');
     await dialog.getByLabel('نوع الطبيب *').selectOption('1');await dialog.getByRole('checkbox',{name:'الطب الداخلي',exact:true}).check();
     await dialog.getByRole('button',{name:'حفظ الطبيب',exact:true}).click();await page.keyboard.press('Escape');assert.equal(await dialog.count(),1);
-    release();await dialog.getByText('كود الطبيب مستخدم.',{exact:true}).waitFor();assert.equal(writes,1);
-    assert.equal(await dialog.getByLabel('كود الطبيب *').inputValue(),'NEW');assert.deepEqual(calls.find(c=>c.method==='POST').body.clinic_add_ids,[]);
+    release();await dialog.getByText('الاسم الكامل مطلوب.',{exact:true}).waitFor();assert.equal(writes,1);
+    assert.equal(await dialog.getByLabel('الاسم الكامل *').inputValue(),'طبيب جديد');assert.equal(calls.find(c=>c.method==='POST').body.code,undefined);assert.deepEqual(calls.find(c=>c.method==='POST').body.clinic_add_ids,[]);
     await page.keyboard.press('Escape');assert.equal(await opener.evaluate(el=>el===document.activeElement),true);
   }finally{release();await context.close();}
 });

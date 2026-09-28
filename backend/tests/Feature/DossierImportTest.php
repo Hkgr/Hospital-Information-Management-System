@@ -282,6 +282,25 @@ class DossierImportTest extends TestCase
         $this->api('GET', '/imports/'.$b['id'])->assertDontSee('encrypted_payload')->assertDontSee('private_path')->assertDontSee('001234567');
     }
 
+    public function test_new_patient_validation_issues_no_code_and_commit_preserves_source_identifiers(): void
+    {
+        $before = DB::table('number_sequences')->orderBy('id')->get()->toJson();
+        $rows = ['Patients' => [$this->patient(['legacy_code' => 'AUTO-LEG-'.$this->f['tag'], 'paper_file_number' => '00017-'.$this->f['tag']])]];
+        $batch = $this->step($this->upload($rows), 'validate');
+        $this->assertSame('validated', $batch['status'], json_encode($batch));
+        $this->assertSame($before, DB::table('number_sequences')->orderBy('id')->get()->toJson());
+        $batch = $this->step($batch, 'commit');
+        $this->assertSame('completed', $batch['status'], json_encode($batch));
+        $dossier = DB::table('patient_dossiers')->find($batch['rows']['data'][0]['dossier_id']);
+        $patient = DB::table('patients')->find($dossier->patient_id);
+        $this->assertStringStartsWith('PC-', $patient->patient_code);
+        $this->assertSame($rows['Patients'][0]['paper_file_number'], $patient->paper_file_number);
+        $this->assertSame($rows['Patients'][0]['legacy_code'], $dossier->code);
+        $issued = DB::table('number_sequences')->orderBy('id')->get()->toJson();
+        $this->api('POST', '/imports/'.$batch['id'].'/commit', ['lock_version' => $batch['lock_version'], 'confirm' => true])->assertConflict();
+        $this->assertSame($issued, DB::table('number_sequences')->orderBy('id')->get()->toJson());
+    }
+
     public function test_explicit_same_day_visits_are_distinct_drafts_and_source_replay_skips_them(): void
     {
         $p = $this->patient();

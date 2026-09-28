@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Services\Directory\IssuedCodes;
+use Database\Seeders\DossierDiagnosisReferenceSeeder;
 use Database\Seeders\MissingReferenceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +19,8 @@ class MissingReferenceSeederTest extends TestCase
     {
         parent::setUp();
         $facility = DB::table('facilities')->insertGetId(['code' => 'MBZ-ALEPPO', 'name_ar' => 'المشفى الإماراتي - حلب', 'timezone' => 'Asia/Damascus']);
-        $type = DB::table('staff_types')->insertGetId(['code' => 'DOCTOR', 'name_ar' => 'طبيب']);
+        DB::table('staff_types')->insertOrIgnore(['code' => 'DOCTOR', 'name_ar' => 'طبيب']);
+        $type = DB::table('staff_types')->where('code', 'DOCTOR')->value('id');
         $staff = [];
         foreach (['DR-003', 'DR-005', 'DR-006', 'DR-007', 'DR-008', 'DR-009', 'DR-010', 'DR-011'] as $code) {
             $staff[$code] = DB::table('staff')->insertGetId(['staff_code' => $code, 'full_name' => $code, 'search_name' => $code, 'staff_type_id' => $type]);
@@ -31,6 +34,12 @@ class MissingReferenceSeederTest extends TestCase
         DB::table('services')->insert(['code' => 'SER-2-001', 'name_ar' => 'ايكو قلبي', 'category_id' => $category]);
         DB::table('procedures')->insert(['code' => 'PRO-006', 'name_ar' => 'إجراء مرجعي']);
         $this->link = DB::table('clinic_staff')->insertGetId(['clinic_id' => $clinics['CLI-001'], 'staff_id' => $staff['DR-005'], 'starts_on' => '2026-09-12']);
+        config(['reference_seeding.identities' => [
+            'staff' => DB::table('staff')->pluck('full_name', 'staff_code')->all(),
+            'clinics' => DB::table('clinics')->where('facility_id', $facility)->pluck('name_ar', 'code')->all(),
+            'services' => ['SER-2-001' => 'ايكو قلبي'],
+            'procedures' => ['PRO-006' => 'إجراء مرجعي'],
+        ]]);
     }
 
     public function test_seeder_fills_gaps_is_idempotent_and_preserves_existing_rows(): void
@@ -64,6 +73,52 @@ class MissingReferenceSeederTest extends TestCase
         $after = $this->counts();
         app(MissingReferenceSeeder::class)->run();
         $this->assertSame($after, $this->counts());
+    }
+
+    public function test_reference_collision_aborts_every_write_and_link(): void
+    {
+        DB::table('clinics')->insert(['facility_id' => DB::table('facilities')->where('code', 'MBZ-ALEPPO')->value('id'), 'code' => 'CLI-012', 'name_ar' => 'هوية مختلفة']);
+        $before = $this->counts();
+        $period = DB::table('clinic_staff')->find($this->link);
+        try {
+            app(MissingReferenceSeeder::class)->run();
+            $this->fail('Reference collision must abort instead of linking another identity.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('CLI-012', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->counts());
+        $this->assertEquals($period, DB::table('clinic_staff')->find($this->link));
+    }
+
+    public function test_missing_legacy_identity_review_fails_without_writes(): void
+    {
+        config(['reference_seeding.identities' => []]);
+        $before = $this->counts();
+        try {
+            app(MissingReferenceSeeder::class)->run();
+            $this->fail('Unknown legacy identity must not be inferred from its code.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('reference-identities.json', $exception->getMessage());
+        }
+        $this->assertSame($before, $this->counts());
+    }
+
+    public function test_generated_codes_and_reference_seeders_are_order_independent(): void
+    {
+        $codes = app(IssuedCodes::class);
+        $first = $codes->diagnosis();
+        DB::table('diagnoses')->insert(['code' => $first, 'name_ar' => 'تشخيص تلقائي مستقل']);
+        app(DossierDiagnosisReferenceSeeder::class)->run();
+        app(MissingReferenceSeeder::class)->run();
+        $second = $codes->diagnosis();
+        $this->assertStringStartsWith('AUTO-DOS-DX-', $first);
+        $this->assertNotSame($first, $second);
+        DB::table('diagnoses')->insert(['code' => $second, 'name_ar' => 'تشخيص تلقائي ثان']);
+        $before = $this->counts();
+        app(DossierDiagnosisReferenceSeeder::class)->run();
+        app(MissingReferenceSeeder::class)->run();
+        $this->assertSame($before, $this->counts());
+        $this->assertDatabaseHas('diagnoses', ['code' => $first, 'name_ar' => 'تشخيص تلقائي مستقل']);
     }
 
     private function counts(): array

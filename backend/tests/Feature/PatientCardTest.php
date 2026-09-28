@@ -37,8 +37,10 @@ class PatientCardTest extends TestCase
 
     private function input(array $extra = []): array
     {
+        unset($extra['code']);
+
         return $extra + ['facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid(), 'person_mode' => 'new',
-            'code' => 'CARD-'.Str::random(12), 'opening_date' => '2000-01-01', 'visit_date' => '2001-03-02',
+            'opening_date' => '2000-01-01', 'visit_date' => '2001-03-02',
             'first_name' => 'أحمد', 'family_name' => 'محمد', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
     }
 
@@ -54,7 +56,7 @@ class PatientCardTest extends TestCase
         $before = array_map(fn ($t) => DB::table($t)->count(), ['patients', 'patient_dossiers', 'visits']);
         $input = $this->input();
         $s = $this->callApi('POST', '', $input)->assertCreated()->json('data');
-        $this->assertSame($input['code'], $s['patient']['patient_code']);
+        $this->assertMatchesRegularExpression('/^PC-\d{8}$/', $s['patient']['patient_code']);
         $this->assertSame($s['code'], $s['patient']['patient_code']);
         $this->assertSame($s['patient']['id'], $s['card_id']);
         $this->assertNull(DB::table('patient_dossiers')->where('id', $s['id'])->value('code'));
@@ -67,7 +69,7 @@ class PatientCardTest extends TestCase
             $this->assertSame($before[$i] + 1, DB::table($table)->count());
         }
         $this->callApi('POST', '', array_replace($input, ['first_name' => 'آخر']))->assertConflict();
-        $this->callApi('POST', '', array_replace($input, ['request_id' => (string) Str::uuid()]))->assertUnprocessable();
+        $this->callApi('POST', '', array_replace($input, ['request_id' => (string) Str::uuid(), 'code' => 'FORCED']))->assertUnprocessable()->assertJsonValidationErrors('code');
         $this->callApi('GET', "/{$s['id']}/progress?facility_id={$this->f['facility']}")->assertOk()->assertJsonPath('data.visit.id', $s['visit']['id']);
     }
 
@@ -165,7 +167,7 @@ class PatientCardTest extends TestCase
         $canonical = DB::table('patients')->where('id', $old->patient_id)->value('patient_code');
         $this->callApi('GET', '?'.http_build_query(['facility_id' => $this->f['facility'], 'search' => $old->code]))->assertOk()->assertJsonPath('data.0.code', $canonical);
         $this->callApi('GET', "/$id?facility_id={$this->f['facility']}")->assertOk()->assertJsonPath('data.code', $canonical);
-        $this->callApi('POST', '', $this->input(['code' => $old->code]))->assertUnprocessable();
+        $this->callApi('POST', '', $this->input() + ['code' => $old->code])->assertUnprocessable()->assertJsonValidationErrors('code');
         $r = Request::create('/');
         $r->setUserResolver(fn () => $this->f['user']);
         $f = app(DossierAccess::class)->facility($this->f['user'], $this->f['facility']);

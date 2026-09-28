@@ -128,30 +128,47 @@ class MissingReferenceSeeder extends Seeder
             $now = now();
             $facility = DB::table('facilities')->where('code', 'MBZ-ALEPPO')->value('id')
                 ?? throw new RuntimeException('Facility MBZ-ALEPPO not found.');
+            // These legacy identities are not defined in this repository. A code alone
+            // is not proof of identity, especially after earlier automatic generators.
+            $identities = config('reference_seeding.identities');
+            if ($identities === null) {
+                $path = storage_path('app/private/reference-identities.json');
+                $identities = is_file($path) ? json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR) : [];
+            }
+            foreach (['staff' => ['staff_code', 'full_name', ['DR-003', 'DR-005', 'DR-006', 'DR-007', 'DR-008', 'DR-009', 'DR-010', 'DR-011']],
+                'clinics' => ['code', 'name_ar', ['CLI-001', 'CLI-002']],
+                'services' => ['code', 'name_ar', ['SER-2-001']],
+                'procedures' => ['code', 'name_ar', ['PRO-006']]] as $table => [$column, $name, $codes]) {
+                foreach ($codes as $code) {
+                    $expected = $identities[$table][$code] ?? null;
+                    $row = DB::table($table)->where($column, $code)->when($table === 'clinics', fn ($q) => $q->where('facility_id', $facility))->lockForUpdate()->first();
+                    if (! is_string($expected) || ! $row || $expected !== $row->$name) {
+                        throw new RuntimeException("راجع هوية المرجع $table/$code في reference-identities.json؛ أُوقفت التهيئة دون تغيير البيانات.");
+                    }
+                }
+            }
             $doctorType = DB::table('staff')->where('staff_code', 'DR-006')->value('staff_type_id')
                 ?? throw new RuntimeException('Reference doctor DR-006 not found.');
 
             foreach (self::NEW_DOCTORS as $code => $name) {
-                DB::table('staff')->insertOrIgnore(['staff_code' => $code, 'full_name' => $name, 'search_name' => $name, 'staff_type_id' => $doctorType, 'is_active' => true, 'lock_version' => 1, 'created_at' => $now, 'updated_at' => $now]);
+                $this->reference('staff', ['staff_code' => $code], ['full_name' => $name, 'staff_type_id' => $doctorType], ['search_name' => $name, 'is_active' => true, 'lock_version' => 1, 'created_at' => $now, 'updated_at' => $now]);
             }
             foreach (self::NEW_CLINICS as $code => $name) {
-                DB::table('clinics')->insertOrIgnore(['facility_id' => $facility, 'code' => $code, 'name_ar' => $name, 'is_active' => true, 'lock_version' => 1, 'created_at' => $now, 'updated_at' => $now]);
+                $this->reference('clinics', ['facility_id' => $facility, 'code' => $code], ['name_ar' => $name], ['is_active' => true, 'lock_version' => 1, 'created_at' => $now, 'updated_at' => $now]);
             }
 
             $staff = DB::table('staff')->pluck('id', 'staff_code');
             $clinics = DB::table('clinics')->where('facility_id', $facility)->pluck('id', 'code');
 
-            // Backdate every existing open link that is the only period for its pair.
-            foreach (DB::table('clinic_staff')->whereNull('ends_on')->where('starts_on', '>', self::LINKS_START)->get() as $link) {
-                $periods = DB::table('clinic_staff')->where('clinic_id', $link->clinic_id)->where('staff_id', $link->staff_id)->count();
-                if ($periods === 1) {
-                    DB::table('clinic_staff')->where('id', $link->id)->update(['starts_on' => self::LINKS_START, 'updated_at' => $now]);
-                }
-            }
             foreach (self::LINKS as $clinic => $doctors) {
                 foreach ($doctors as $doctor) {
                     $key = ['clinic_id' => $clinics[$clinic] ?? throw new RuntimeException("Clinic $clinic missing."),
-                            'staff_id' => $staff[$doctor] ?? throw new RuntimeException("Doctor $doctor missing.")];
+                        'staff_id' => $staff[$doctor] ?? throw new RuntimeException("Doctor $doctor missing.")];
+                    // Only the explicitly verified reference pair may be backdated.
+                    $periods = DB::table('clinic_staff')->where($key)->lockForUpdate()->get();
+                    if ($periods->count() === 1 && $periods[0]->ends_on === null && $periods[0]->starts_on > self::LINKS_START) {
+                        DB::table('clinic_staff')->where('id', $periods[0]->id)->update(['starts_on' => self::LINKS_START, 'updated_at' => $now]);
+                    }
                     if (! DB::table('clinic_staff')->where($key)->exists()) {
                         DB::table('clinic_staff')->insert($key + ['starts_on' => self::LINKS_START, 'created_at' => $now, 'updated_at' => $now]);
                     }
@@ -162,7 +179,7 @@ class MissingReferenceSeeder extends Seeder
             $echoCategory = DB::table('services')->where('code', 'SER-2-001')->value('category_id')
                 ?? throw new RuntimeException('Reference service SER-2-001 not found.');
             foreach (['SC-BLOOD' => 'دم', 'SC-CONSULT' => 'معاينة'] as $code => $name) {
-                DB::table('service_categories')->insertOrIgnore(['code' => $code, 'name_ar' => $name, 'is_active' => true, 'created_at' => $now, 'updated_at' => $now]);
+                $this->reference('service_categories', ['code' => $code], ['name_ar' => $name], ['is_active' => true, 'created_at' => $now, 'updated_at' => $now]);
             }
             $cat = DB::table('service_categories')->pluck('id', 'code');
             $services = [
@@ -172,16 +189,31 @@ class MissingReferenceSeeder extends Seeder
                 ['SER-5-001', 'معاينة / استشارة عيادة', $cat['SC-CONSULT'], false],
             ];
             foreach ($services as [$code, $name, $category, $external]) {
-                DB::table('services')->insertOrIgnore(['code' => $code, 'name_ar' => $name, 'category_id' => $category, 'allow_external' => $external, 'is_active' => true, 'lock_version' => 1, 'created_at' => $now, 'updated_at' => $now]);
+                $this->reference('services', ['code' => $code], ['name_ar' => $name, 'category_id' => $category], ['allow_external' => $external, 'is_active' => true, 'lock_version' => 1, 'created_at' => $now, 'updated_at' => $now]);
             }
 
             // The hospital records consultation and examination as one procedure.
             $procType = DB::table('procedures')->where('code', 'PRO-006')->value('procedure_type_id');
-            DB::table('procedures')->insertOrIgnore(['code' => 'PRO-008', 'name_ar' => 'معاينة / استشارة', 'procedure_type_id' => $procType, 'is_active' => true, 'lock_version' => 1, 'created_at' => $now, 'updated_at' => $now]);
+            $this->reference('procedures', ['code' => 'PRO-008'], ['name_ar' => 'معاينة / استشارة', 'procedure_type_id' => $procType], ['is_active' => true, 'lock_version' => 1, 'created_at' => $now, 'updated_at' => $now]);
 
             foreach (self::NEW_DIAGNOSES as $code => $name) {
-                DB::table('diagnoses')->insertOrIgnore(['code' => $code, 'name_ar' => $name, 'is_active' => true, 'created_at' => $now, 'updated_at' => $now]);
+                $this->reference('diagnoses', ['code' => $code], ['name_ar' => $name], ['is_active' => true, 'created_at' => $now, 'updated_at' => $now]);
             }
         }, 3);
+    }
+
+    private function reference(string $table, array $key, array $identity, array $defaults): void
+    {
+        $row = DB::table($table)->where($key)->lockForUpdate()->first();
+        if ($row) {
+            foreach ($identity as $field => $value) {
+                if ((string) $row->$field !== (string) $value) {
+                    throw new RuntimeException('تصادم هوية المرجع '.$table.'/'.($key['code'] ?? $key['staff_code']).'؛ راجع السجل قبل إعادة التهيئة.');
+                }
+            }
+
+            return;
+        }
+        DB::table($table)->insert($key + $identity + $defaults);
     }
 }

@@ -4,6 +4,8 @@ namespace App\Services\Catalog;
 
 use App\Exceptions\CatalogException;
 use App\Services\Clinics\ClinicAudit;
+use App\Services\Directory\CreationRequests;
+use App\Services\Directory\IssuedCodes;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,18 +22,22 @@ class CatalogWriter
             'service' => 'service_category', 'procedure' => 'procedure_type', 'medication' => 'medication_category',
         };
         try {
-            return DB::transaction(function () use ($request, $facility, $data, $table, $entity) {
-                $fields = array_intersect_key($data, array_flip(['code', 'name_ar', 'is_active']));
+            $id = app(CreationRequests::class)->save($request, $facility, $data, 'classification:'.$kind, null, function () use ($request, $facility, $data, $table, $entity, $kind) {
+                $fields = array_intersect_key($data, array_flip(['name_ar', 'is_active']));
+                $fields['code'] = app(IssuedCodes::class)->classification($kind);
                 $id = DB::table($table)->insertGetId($fields + ['created_at' => now(), 'updated_at' => now()]);
                 app(ClinicAudit::class)->record($request, $facility['id'], $id, 'created', null, $fields, $entity);
-                $row = DB::table($table)->find($id, ['id', 'code', 'name_ar', 'is_active']);
-                $row->is_active = (bool) $row->is_active;
 
-                return $row;
+                return $id;
             });
+            $row = DB::table($table)->find($id, ['id', 'code', 'name_ar', 'is_active']);
+            abort_unless($row, 404);
+            $row->is_active = (bool) $row->is_active;
+
+            return $row;
         } catch (QueryException $exception) {
             if (($exception->errorInfo[1] ?? null) === 1062) {
-                throw ValidationException::withMessages(['code' => 'رمز الفئة مستخدم بالفعل؛ اختر رمزًا آخر.']);
+                throw ValidationException::withMessages(['code' => 'تعذّر إصدار رمز فريد للفئة؛ أعد المحاولة بالطلب نفسه.']);
             }
             throw $exception;
         }
@@ -82,7 +88,7 @@ class CatalogWriter
     {
         app(CatalogAccess::class)->directory($request->user(), $facility, $id ? 'update' : 'create');
         try {
-            return DB::transaction(function () use ($request, $facility, $kind, $data, $id) {
+            return app(CreationRequests::class)->save($request, $facility, $data, 'catalog:'.$kind, $id, function () use ($request, $facility, $kind, $data, $id) {
                 $row = $id ? $this->locked($kind, $id, $data['lock_version']) : null;
                 if ($row?->archived_at) {
                     throw new CatalogException('CATALOG_STATE_CONFLICT', 'استعد العنصر المؤرشف أولًا قبل تعديله.');
@@ -100,6 +106,8 @@ class CatalogWriter
                     $keys = [...$keys, 'default_unit', 'strength', 'dosage_form', 'reorder_level'];
                 }
                 $fields = array_intersect_key($data, array_flip($keys));
+                unset($fields['code']);
+                $fields['code'] = $row?->code ?? app(IssuedCodes::class)->catalog($kind);
                 $fields['description'] = $data['description'] ?? null;
                 $fields[$relation] = $value;
                 $fields['updated_at'] = now();
@@ -112,10 +120,10 @@ class CatalogWriter
                 $this->audit($request, $facility, $kind, $id, $row ? 'updated' : 'created', $row ? $this->snapshot($row) : null);
 
                 return $id;
-            }, 3);
+            });
         } catch (QueryException $exception) {
             if (($exception->errorInfo[1] ?? null) === 1062) {
-                throw ValidationException::withMessages(['code' => 'الكود مستخدم بالفعل ضمن هذا النوع؛ اختر كودًا آخر.']);
+                throw ValidationException::withMessages(['code' => 'تعذّر إصدار كود فريد؛ أعد المحاولة بالطلب نفسه.']);
             }
             throw $exception;
         }

@@ -5,6 +5,8 @@ namespace App\Services\MedicationStock;
 use App\Exceptions\StockException;
 use App\Services\Catalog\CatalogQueries;
 use App\Services\Clinics\ClinicAudit;
+use App\Services\Directory\CreationRequests;
+use App\Services\Directory\IssuedCodes;
 use App\Services\Dossiers\OncologyQueries;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -57,12 +59,13 @@ class StockDirectory
     public function save(Request $request, array $facility, string $directory, array $input, ?int $id): int
     {
         try {
-            return DB::transaction(function () use ($request, $facility, $directory, $input, $id) {
+            return app(CreationRequests::class)->save($request, $facility, $input, 'stock:'.$directory, $id, function () use ($request, $facility, $directory, $input, $id) {
                 $old = $id === null ? null : $this->locked($facility, $directory, $id, $input['lock_version']);
                 if ($old && $old['archived_at'] !== null) {
                     throw new StockException('STOCK_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله.');
                 }
-                $fields = Arr::only($input, self::fields($directory));
+                $fields = Arr::only($input, array_diff(self::fields($directory), ['code']));
+                $fields['code'] = $old['code'] ?? app(IssuedCodes::class)->stock($directory, $facility['id']);
                 $fields['updated_at'] = now();
                 $fields['updated_by'] = $request->user()->id;
                 if ($id === null) {
@@ -76,7 +79,7 @@ class StockDirectory
                 $this->audit($request, $facility, $directory, $id, $old ? 'updated' : 'created', $old);
 
                 return $id;
-            }, 3);
+            });
         } catch (QueryException $e) {
             if (($e->errorInfo[1] ?? null) === 1062) {
                 throw ValidationException::withMessages(['code' => 'الكود مستخدم في هذه المنشأة.']);

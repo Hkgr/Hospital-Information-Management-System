@@ -14,13 +14,14 @@ class SaveCategoryRequest extends FormRequest
 
     public function rules(): array
     {
-        return ['facility_id' => ['required', 'integer', 'min:1'], 'kind' => ['sometimes', Rule::in(['service', 'procedure', 'medication'])],
-            'code' => ['required', 'string', 'max:50'],
+        return ['facility_id' => ['required', 'integer', 'min:1'],
+            'request_id' => [$this->isMethod('POST') ? 'required' : 'prohibited', 'uuid'], 'kind' => ['sometimes', Rule::in(['service', 'procedure', 'medication'])],
+            'code' => ['prohibited'],
             'name_ar' => ['required', 'string', 'max:200'], 'is_active' => ['required', 'boolean']];
     }
 
     public function messages(): array
     {
-        return ['required' => 'هذا الحقل مطلوب.', 'max' => 'القيمة أطول من الحد المسموح (:max).', 'boolean' => 'الحالة غير صالحة.'];
+        return ['required' => 'هذا الحقل مطلوب.', 'max' => 'القيمة أطول من الحد المسموح (:max).', 'boolean' => 'الحالة غير صالحة.', 'code.prohibited' => 'يصدر النظام الكود تلقائيًا ولا يمكن تغييره.', 'uuid' => 'معرّف طلب الحفظ غير صالح.'];
     }
 }

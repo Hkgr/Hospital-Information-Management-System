@@ -5,7 +5,9 @@ namespace App\Services\Doctors;
 use App\Exceptions\DoctorException;
 use App\Services\Clinics\ClinicAudit;
 use App\Services\Directory\ClinicStaffLinks;
+use App\Services\Directory\CreationRequests;
 use App\Services\Directory\DirectoryLifecycle;
+use App\Services\Directory\IssuedCodes;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -30,13 +32,14 @@ class DoctorWriter
             throw ValidationException::withMessages(['clinic_add_ids' => 'لا يمكن إضافة العيادة وإزالتها في الطلب نفسه.']);
         }
         try {
-            return DB::transaction(function () use ($request, $facility, $input, $id, $linksOnly, $add, $remove) {
+            return app(CreationRequests::class)->save($request, $facility, $input, 'doctor:create', $id, function () use ($request, $facility, $input, $id, $linksOnly, $add, $remove) {
                 // Both writers acquire staff, then clinics, then period rows. Never reverse this order.
                 $old = $id === null ? null : $this->locked($id, $input['lock_version']);
                 if ($old && $old['archived_at'] !== null) {
                     throw new DoctorException('DOCTOR_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله أو إدارة ارتباطاته.');
                 }
                 if (! $linksOnly) {
+                    $input['code'] = $id === null ? app(IssuedCodes::class)->doctor() : $old['staff_code'];
                     $this->validateFields($input, $old);
                     $fields = Arr::only($input, ['description', 'staff_type_id', 'license_no', 'phone', 'is_active']);
                     $fields += ['staff_code' => $input['code'], 'full_name' => $input['name'], 'search_name' => $input['name'], 'updated_at' => now()];
@@ -78,7 +81,7 @@ class DoctorWriter
                 }
 
                 return $id;
-            }, 3);
+            });
         } catch (QueryException $e) {
             if (($e->errorInfo[1] ?? null) === 1062) {
                 throw ValidationException::withMessages(['code' => 'كود الطبيب مستخدم في الدليل المشترك.']);

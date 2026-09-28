@@ -103,13 +103,13 @@ test("editor preserves input on field errors, applies doctor deltas, blocks doub
   const { page, context, calls } = await setup({ override: async (route, url) => {
     if (route.request().method() !== "PUT" || !url.pathname.endsWith("/1")) return false;
     writes++; await gate;
-    await route.fulfill({ status: 422, json: { message: "Validation", errors: { code: ["كود العيادة مستخدم في هذه المنشأة."] } } }); return true;
+    await route.fulfill({ status: 422, json: { message: "Validation", errors: { name_ar: ["اسم العيادة مطلوب."] } } }); return true;
   } });
   try {
     const opener = page.getByRole("button", { name: "تعديل العيادة الداخلية", exact: true });
     await opener.click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel("كود العيادة *").fill("changed");
+    await dialog.getByLabel("اسم العيادة *").fill("اسم معدّل");
     await dialog.getByRole("checkbox", { name: /سامر النموذجي/ }).check();
     await dialog.getByRole("checkbox", { name: /أحمد الاختباري/ }).uncheck();
     await dialog.getByRole("button", { name: "حفظ العيادة" }).click();
@@ -117,10 +117,12 @@ test("editor preserves input on field errors, applies doctor deltas, blocks doub
     await page.keyboard.press("Escape");
     assert.equal(await dialog.count(), 1);
     release();
-    await dialog.getByText("كود العيادة مستخدم في هذه المنشأة.").waitFor();
+    await dialog.getByText("اسم العيادة مطلوب.").waitFor();
     assert.equal(writes, 1);
-    assert.equal(await dialog.getByLabel("كود العيادة *").inputValue(), "changed");
+    assert.equal(await dialog.getByLabel("اسم العيادة *").inputValue(), "اسم معدّل");
+    assert.equal(await dialog.getByLabel("كود العيادة", { exact: true }).getAttribute("readonly"), "");
     const body = calls.find(call => call.method === "PUT").body;
+    assert.equal(body.code, undefined);
     assert.deepEqual(body.doctor_add_ids, [3]); assert.deepEqual(body.doctor_remove_ids, [1]); assert.equal(body.lock_version, 1);
     const last = dialog.getByRole("button", { name: "إلغاء", exact: true });
     await last.focus(); await page.keyboard.press("Tab");
@@ -137,12 +139,12 @@ test("adding zero doctors is supported and deletion errors keep explicit deactiv
   } });
   try {
     await page.getByRole("button", { name: "إضافة عيادة جديدة", exact: true }).click();
-    await page.getByLabel("كود العيادة *").fill("NEW");
+    await page.getByText("يُمنح كود العيادة تلقائيًا عند الحفظ.").waitFor();
     await page.getByLabel("اسم العيادة *").fill("عيادة جديدة");
     await page.getByRole("button", { name: "حفظ العيادة" }).click();
     await page.getByRole("dialog").waitFor({ state: "detached" });
     const create = calls.find(call => call.method === "POST");
-    assert.deepEqual(create.body.doctor_add_ids, []); assert.equal(create.body.facility_id, 1);
+    assert.deepEqual(create.body.doctor_add_ids, []); assert.equal(create.body.facility_id, 1); assert.equal(create.body.code, undefined);
     await page.getByRole("button", { name: "حذف العيادة الداخلية", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: "حذف نهائي" }).click();
@@ -245,23 +247,24 @@ test("regression: version conflict keeps draft and offers explicit latest-versio
   try {
     await page.getByRole("button", { name: "تعديل العيادة الداخلية", exact: true }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel("كود العيادة *").fill("MY-CODE");
+    await dialog.getByLabel("اسم العيادة *").fill("اسم المسودة");
     await dialog.getByRole("checkbox", { name: /سامر النموذجي/ }).check();
     await dialog.getByRole("button", { name: "حفظ العيادة", exact: true }).click();
     await dialog.getByRole("alert").waitFor();
-    assert.equal(await dialog.getByLabel("كود العيادة *").inputValue(), "MY-CODE");
+    assert.equal(await dialog.getByLabel("اسم العيادة *").inputValue(), "اسم المسودة");
     assert.equal(await dialog.getByRole("checkbox", { name: /سامر النموذجي/ }).isChecked(), true);
     await dialog.getByRole("button", { name: "جلب أحدث نسخة", exact: true }).click();
     await dialog.getByRole("heading", { name: "مراجعة أحدث نسخة مع مسودتك" }).waitFor();
     assert.equal(calls.filter(call => call.method === "PUT").length, 1);
-    await dialog.getByRole("checkbox", { name: "تطبيق مسودتي: كود العيادة", exact: true }).check();
+    assert.equal(await dialog.getByRole("checkbox", { name: "تطبيق مسودتي: كود العيادة", exact: true }).count(), 0);
+    await dialog.getByRole("checkbox", { name: "تطبيق مسودتي: اسم العيادة", exact: true }).check();
     await dialog.getByRole("checkbox", { name: "تطبيق اختياري للطبيب: سامر النموذجي", exact: true }).check();
     await dialog.getByRole("button", { name: "اعتماد الاختيارات للمراجعة", exact: true }).click();
     assert.equal(await dialog.getByLabel("التوصيف").inputValue(), latest.description);
     await dialog.getByRole("button", { name: "حفظ العيادة", exact: true }).click();
     await dialog.waitFor({ state: "detached" });
     const body = calls.filter(call => call.method === "PUT").at(-1).body;
-    assert.equal(body.lock_version, 2); assert.equal(body.code, "MY-CODE"); assert.equal(body.description, latest.description);
+    assert.equal(body.lock_version, 2); assert.equal(body.code, undefined); assert.equal(body.name_ar, "اسم المسودة"); assert.equal(body.description, latest.description);
     assert.deepEqual(body.doctor_add_ids, [3]); assert.deepEqual(body.doctor_remove_ids, []);
   } finally { await context.close(); }
 });
@@ -352,24 +355,24 @@ for (const detail of [false, true]) test(`reload failure, retry and second confl
     const edit = () => page.getByRole("button", { name: detail ? "تعديل العيادة" : "تعديل العيادة الداخلية", exact: true });
     await edit().click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel("كود العيادة *").fill("MY-DRAFT");
+    await dialog.getByLabel("اسم العيادة *").fill("مسودة الاسم");
     await dialog.getByRole("button", { name: "حفظ العيادة", exact: true }).click();
     await dialog.getByRole("button", { name: "جلب أحدث نسخة", exact: true }).click();
     await dialog.getByText("تعذّر إتمام الطلب الآن. حاول مجددًا بعد قليل.", { exact: true }).waitFor();
-    assert.equal(await dialog.getByLabel("كود العيادة *").inputValue(), "MY-DRAFT");
+    assert.equal(await dialog.getByLabel("اسم العيادة *").inputValue(), "مسودة الاسم");
     assert.equal(await dialog.getByRole("button", { name: "حفظ العيادة", exact: true }).isDisabled(), true);
     await dialog.getByRole("button", { name: "جلب أحدث نسخة", exact: true }).click();
-    await dialog.getByRole("checkbox", { name: "تطبيق مسودتي: كود العيادة", exact: true }).check();
+    await dialog.getByRole("checkbox", { name: "تطبيق مسودتي: اسم العيادة", exact: true }).check();
     await dialog.getByRole("button", { name: "اعتماد الاختيارات للمراجعة" }).click();
     await dialog.getByRole("button", { name: "حفظ العيادة", exact: true }).click();
     await dialog.getByRole("button", { name: "جلب أحدث نسخة", exact: true }).waitFor();
-    assert.equal(await dialog.getByLabel("كود العيادة *").inputValue(), "MY-DRAFT");
+    assert.equal(await dialog.getByLabel("اسم العيادة *").inputValue(), "مسودة الاسم");
     assert.equal(calls.filter(call => call.method === "PUT").at(-1).body.lock_version, 2);
     await dialog.getByRole("button", { name: "جلب أحدث نسخة", exact: true }).click();
     await dialog.getByRole("heading", { name: "مراجعة أحدث نسخة مع مسودتك" }).waitFor();
     await page.keyboard.press("Escape");
     await edit().click();
-    assert.equal(await page.getByRole("dialog").getByLabel("كود العيادة *").inputValue(), "SERVER-3");
+    assert.equal(await page.getByRole("dialog").getByLabel("كود العيادة", { exact: true }).inputValue(), "SERVER-3");
     assert.equal(calls.filter(call => call.method === "PUT").length, 2);
   } finally { await context.close(); }
 });
@@ -443,7 +446,7 @@ test("doctor reload failure and a changing snapshot require retry; unavailable d
   try {
     await page.getByRole("button", { name: "تعديل العيادة الداخلية", exact: true }).click();
     const dialog = page.getByRole("dialog");
-    await dialog.getByLabel("كود العيادة *").fill("DRAFT");
+    await dialog.getByLabel("اسم العيادة *").fill("مسودة الاسم");
     await dialog.getByRole("checkbox", { name: /سامر النموذجي/ }).check();
     await dialog.getByRole("button", { name: "حفظ العيادة", exact: true }).click();
     await dialog.getByRole("button", { name: "جلب أحدث نسخة", exact: true }).click();
@@ -451,7 +454,7 @@ test("doctor reload failure and a changing snapshot require retry; unavailable d
     assert.equal(await dialog.getByRole("checkbox", { name: /سامر النموذجي/ }).isChecked(), true);
     await dialog.getByRole("button", { name: "جلب أحدث نسخة", exact: true }).click();
     await dialog.getByText("تغيرت العيادة أثناء جلب البيانات. مسودتك محفوظة؛ اجلب أحدث نسخة مجددًا.", { exact: true }).waitFor();
-    assert.equal(await dialog.getByLabel("كود العيادة *").inputValue(), "DRAFT");
+    assert.equal(await dialog.getByLabel("اسم العيادة *").inputValue(), "مسودة الاسم");
     assert.equal(await dialog.getByRole("heading", { name: "مراجعة أحدث نسخة مع مسودتك" }).count(), 0);
     await dialog.getByRole("button", { name: "جلب أحدث نسخة", exact: true }).click();
     const review = dialog.getByRole("region", { name: "مراجعة تعارض التعديل" });
@@ -459,12 +462,12 @@ test("doctor reload failure and a changing snapshot require retry; unavailable d
     assert.equal(await review.getByRole("checkbox", { name: /تطبيق اختياري للطبيب/ }).count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     if (process.env.CLINIC_REVIEW_CAPTURE) await page.screenshot({ path: process.env.CLINIC_REVIEW_CAPTURE });
-    await review.getByRole("checkbox", { name: "تطبيق مسودتي: كود العيادة", exact: true }).check();
+    await review.getByRole("checkbox", { name: "تطبيق مسودتي: اسم العيادة", exact: true }).check();
     await review.getByRole("button", { name: "اعتماد الاختيارات للمراجعة" }).click();
     await dialog.getByRole("button", { name: "حفظ العيادة", exact: true }).click();
     await dialog.waitFor({ state: "detached" });
     const body = calls.filter(call => call.method === "PUT").at(-1).body;
-    assert.equal(body.lock_version, 3); assert.equal(body.code, "DRAFT"); assert.equal(body.description, "نسخة 3");
+    assert.equal(body.lock_version, 3); assert.equal(body.code, undefined); assert.equal(body.name_ar, "مسودة الاسم"); assert.equal(body.description, "نسخة 3");
     assert.deepEqual(body.doctor_add_ids, []); assert.deepEqual(body.doctor_remove_ids, []);
   } finally { await context.close(); }
 });

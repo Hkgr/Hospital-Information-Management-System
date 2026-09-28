@@ -26,6 +26,9 @@ class CatalogWorkflowTest extends TestCase
 
     private function api(string $method, string $path, array $data = [], ?string $token = null)
     {
+        if ($method === 'POST' && in_array($path, ['', '/categories'], true)) {
+            $data += ['request_id' => (string) Str::uuid()];
+        }
         $this->app['auth']->forgetGuards();
 
         return $this->json($method, '/api/service-catalog'.$path, $data + ['facility_id' => $this->f['facility']], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
@@ -57,7 +60,7 @@ class CatalogWorkflowTest extends TestCase
 
     public function test_category_creation_requires_global_authority_and_validates_unique_code(): void
     {
-        $data = ['code' => 'NEW-CATEGORY', 'name_ar' => 'فئة جديدة', 'is_active' => true];
+        $data = ['name_ar' => 'فئة جديدة', 'is_active' => true];
         $viewer = $this->f['viewer']->createToken('workflow', ['api'])->plainTextToken;
         $this->api('POST', '/categories', $data, $viewer)->assertForbidden();
         $role = DB::table('facility_user_roles')->where('user_id', $this->f['viewer']->id)->value('role_id');
@@ -65,13 +68,14 @@ class CatalogWorkflowTest extends TestCase
         $this->api('POST', '/categories', $data, $viewer)->assertForbidden()->assertJsonPath('error.code', 'CATALOG_DIRECTORY_ACCESS_DENIED');
         $this->api('POST', '/categories', $data + ['facility_id' => $this->f['other']])->assertForbidden();
         $id = $this->api('POST', '/categories', $data)->assertCreated()->assertJsonPath('data.is_active', true)->json('data.id');
-        $this->assertDatabaseHas('service_categories', ['id' => $id] + $data);
+        $this->assertDatabaseHas('service_categories', ['id' => $id, 'name_ar' => 'فئة جديدة', 'is_active' => true]);
+        $this->assertMatchesRegularExpression('/^AUTO-SCG-\d{3,}$/', DB::table('service_categories')->where('id', $id)->value('code'));
         $this->assertContains($id, array_column($this->api('GET', '/classifications')->json('data.categories'), 'id'));
         $this->api('POST', '/categories', ['code' => 'new-category'] + $data)->assertUnprocessable()->assertJsonValidationErrors('code');
-        $this->api('POST', '/categories', ['code' => '', 'name_ar' => '', 'is_active' => 'invalid'])->assertUnprocessable()->assertJsonValidationErrors(['code', 'name_ar', 'is_active']);
-        $inactive = $this->api('POST', '/categories', ['code' => 'INACTIVE', 'is_active' => false] + $data)->assertCreated()->json('data.id');
+        $this->api('POST', '/categories', ['name_ar' => '', 'is_active' => 'invalid'])->assertUnprocessable()->assertJsonValidationErrors(['name_ar', 'is_active']);
+        $inactive = $this->api('POST', '/categories', ['is_active' => false] + $data)->assertCreated()->json('data.id');
         $this->assertNotContains($inactive, array_column($this->api('GET', '/classifications')->json('data.categories'), 'id'));
-        $this->api('POST', '', ['kind' => 'service', 'category_id' => $id, 'code' => 'WITH-CATEGORY', 'name_ar' => 'خدمة جديدة', 'is_active' => true])->assertCreated()->assertJsonPath('data.classification_name_ar', 'فئة جديدة');
+        $this->api('POST', '', ['kind' => 'service', 'category_id' => $id, 'name_ar' => 'خدمة جديدة', 'is_active' => true])->assertCreated()->assertJsonPath('data.classification_name_ar', 'فئة جديدة');
     }
 
     public function test_event_identity_eligibility_actual_dates_filters_and_full_totals(): void
@@ -127,8 +131,9 @@ class CatalogWorkflowTest extends TestCase
         $this->assertNotContains('dose_session_item:'.$voidedItem, array_column($result, 'key'));
         $this->api('GET', $path, ['from' => $yesterday, 'to' => $yesterday])->assertJsonPath('totals.presentations', 1)->assertJsonPath('totals.unique_patients', 1);
         $this->api('GET', "/medication/$id")->assertJsonPath('data.patient_count', 3);
-        $this->api('POST', '/categories', ['kind' => 'medication', 'code' => 'MED-CAT', 'name_ar' => 'فئة دواء', 'is_active' => true])->assertCreated();
-        $this->assertContains(DB::table('medication_categories')->where('code', 'MED-CAT')->value('id'), array_column($this->api('GET', '/classifications')->json('data.medication_categories'), 'id'));
+        $category = $this->api('POST', '/categories', ['kind' => 'medication', 'name_ar' => 'فئة دواء', 'is_active' => true])->assertCreated()->json('data');
+        $this->assertMatchesRegularExpression('/^AUTO-MCG-\d{3,}$/', $category['code']);
+        $this->assertContains($category['id'], array_column($this->api('GET', '/classifications')->json('data.medication_categories'), 'id'));
     }
 
     public function test_added_routes_match_the_published_openapi_contract(): void
@@ -138,7 +143,7 @@ class CatalogWorkflowTest extends TestCase
             $operation = $document['paths']['/api/service-catalog'.$schemaPath]['get'];
             $this->assertMatchesSchema($document, $operation['responses'][200]['content']['application/json']['schema'], $this->api('GET', $suffix)->assertOk()->json());
         }
-        $body = $this->api('POST', '/categories', ['code' => 'DOC', 'name_ar' => 'فئة', 'is_active' => true])->assertCreated()->json();
+        $body = $this->api('POST', '/categories', ['name_ar' => 'فئة', 'is_active' => true])->assertCreated()->json();
         $this->assertMatchesSchema($document, $document['paths']['/api/service-catalog/categories']['post']['responses'][201]['content']['application/json']['schema'], $body);
     }
 }

@@ -34,6 +34,7 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
             foreach ($path->operations as $operation) {
                 $operation->responses = [];
                 $operation->security = [new SecurityRequirement(['bearerAuth' => []])];
+                $operation->description .= '\nInternal codes are server-issued and immutable; code inputs are prohibited. Creates require a stable UUID request_id. Exact retries return the existing ID/code after current authorization; changed content with the same key returns 409 CREATION_REQUEST_CONFLICT without writes. Recovery replays the original payload/UUID, never searches by name.';
                 $operation->description .= "\nSanctum Bearer → active account → api ability → doctors.view in the selected active facility. Directory create/update/delete require doctors.directory.* through an explicit global_user_roles assignment; a facility role or super_admin name alone never grants global authority. Links require facility doctors.link; exports require facility doctors.export. Every response is private, no-store. Active clinic counts/current intervals use the facility timezone and [starts_on, ends_on). Cross-writer relationship mutations increment both staff and clinic versions, with staff then clinic locks in ascending id order. Stale writes return DOCTOR_VERSION_CONFLICT. Re-fetch and explicitly review draft choices, never auto-merge. Reports include all filtered rows, selected columns and the matching patients table, up to 1000 rows/5000 links/5000 patient rows; long text continues in an explicit appendix. Cairo is embedded in PDF and named in XLSX.";
                 $isCreate = $route === 'doctors' && $operation->method === 'post';
                 if ($isCreate || $operation->method === 'put') {
@@ -43,14 +44,18 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
                         $fields += ['lock_version' => (new IntegerType)->setMin(1), 'clinic_remove_ids' => $this->list((new IntegerType)->setMin(1))->setMax(200)];
                     }
                     if (! $linksOnly) {
-                        $fields += ['code' => (new StringType)->setMin(1)->setMax(40), 'name' => (new StringType)->setMin(1)->setMax(200), 'description' => (new StringType)->setMax(10000)->nullable(true), 'staff_type_id' => (new IntegerType)->setMin(1), 'specialty_ids' => $this->list((new IntegerType)->setMin(1))->setMax(100), 'license_no' => (new StringType)->setMax(60)->nullable(true), 'phone' => (new StringType)->setMax(30)->nullable(true), 'is_active' => new BooleanType];
+                        $fields += ['name' => (new StringType)->setMin(1)->setMax(200), 'description' => (new StringType)->setMax(10000)->nullable(true), 'staff_type_id' => (new IntegerType)->setMin(1), 'specialty_ids' => $this->list((new IntegerType)->setMin(1))->setMax(100), 'license_no' => (new StringType)->setMax(60)->nullable(true), 'phone' => (new StringType)->setMax(30)->nullable(true), 'is_active' => new BooleanType];
                     }
                     $required = ['facility_id'];
+                    if ($isCreate) {
+                        $fields['request_id'] = (new StringType)->format('uuid');
+                        $required[] = 'request_id';
+                    }
                     if (! $isCreate) {
                         $required[] = 'lock_version';
                     }
                     if (! $linksOnly) {
-                        $required = array_merge($required, ['code', 'name', 'staff_type_id', 'specialty_ids', 'is_active']);
+                        $required = array_merge($required, ['name', 'staff_type_id', 'specialty_ids', 'is_active']);
                     }
                     $body = $this->object($fields)->setRequired($required);
                     $operation->requestBodyObject->setContent('application/json', $document->components->addSchema($linksOnly ? 'UpdateDoctorClinicsRequest' : ($isCreate ? 'CreateDoctorRequest' : 'UpdateDoctorRequest'), Schema::fromType($body)));
@@ -94,7 +99,7 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
                     }
                     $operation->addResponse(Response::make($isCreate ? 201 : 200)->setDescription('Professional fields; facility-scoped counts and links.')->setContent('application/json', Schema::fromType($this->object($fields))));
                 }
-                foreach ([401 => ['UNAUTHENTICATED'], 403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'DOCTOR_ACCESS_DENIED', 'DOCTOR_DIRECTORY_ACCESS_DENIED'], 404 => ['DOCTOR_NOT_FOUND'], 409 => ['DOCTOR_VERSION_CONFLICT', 'DOCTOR_REFERENCED', 'DOCTOR_STATE_CONFLICT', 'CLINIC_PERIOD_CONFLICT'], 500 => ['DOCTORS_UNAVAILABLE']] as $status => $codes) {
+                foreach ([401 => ['UNAUTHENTICATED'], 403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'DOCTOR_ACCESS_DENIED', 'DOCTOR_DIRECTORY_ACCESS_DENIED'], 404 => ['DOCTOR_NOT_FOUND'], 409 => ['CREATION_REQUEST_CONFLICT', 'DOCTOR_VERSION_CONFLICT', 'DOCTOR_REFERENCED', 'DOCTOR_STATE_CONFLICT', 'CLINIC_PERIOD_CONFLICT'], 500 => ['DOCTORS_UNAVAILABLE']] as $status => $codes) {
                     $operation->addResponse(Response::make($status)->setDescription(implode(' / ', $codes))->setContent('application/json', Schema::fromType($this->object(['error' => $this->object(['code' => (new StringType)->enum($codes), 'message' => new StringType])]))));
                 }
                 $errors = new ObjectType;

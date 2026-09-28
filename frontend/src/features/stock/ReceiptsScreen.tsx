@@ -1,8 +1,9 @@
 "use client";
+import { useCreationRequest, CreationRecovery } from "../directory/useCreationRequest";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { LuPlus, LuHospital } from "react-icons/lu";
 import { apiRequest, AuthError } from "@/features/auth/api";
 import { useIdentity } from "@/features/auth/AuthenticatedLayout";
@@ -73,7 +74,7 @@ function Workspace({ facilityId, name, receiptId }: { facilityId: number; name: 
 }
 
 function ReceiptEditor({ facilityId, options, onClose, onSaved }: { facilityId: number; options: Options; onClose: () => void; onSaved: (row: Receipt) => void }) {
-  const [receiptNo, setReceiptNo] = useState("");
+  const creation = useCreationRequest();
   const [storeId, setStoreId] = useState(String(options.stores[0]?.id ?? ""));
   const [supplierId, setSupplierId] = useState(options.suppliers[0] ? String(options.suppliers[0].id) : "");
   const [source, setSource] = useState(options.medication_sources[0]?.code ?? "ministry_of_health");
@@ -85,24 +86,22 @@ function ReceiptEditor({ facilityId, options, onClose, onSaved }: { facilityId: 
   const [free, setFree] = useState("0");
   const [error, setError] = useState<AuthError | null>(null);
   const [busy, setBusy] = useState(false);
-  const request = useRef<{ body: string; id: string } | null>(null);
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (busy) return;
-    const payload = { facility_id: facilityId, store_id: Number(storeId), receipt_no: receiptNo, supplier_id: supplierId ? Number(supplierId) : null, medication_source: source, received_on: receivedOn,
+    const payload = { facility_id: facilityId, store_id: Number(storeId), supplier_id: supplierId ? Number(supplierId) : null, medication_source: source, received_on: receivedOn,
       items: medicationId && batch && expiry ? [{ medication_id: Number(medicationId), batch_number: batch, expiry_date: expiry, quantity: Number(quantity), free_quantity: Number(free) }] : [] };
-    const body = JSON.stringify(payload);
-    if (request.current?.body !== body) request.current = { body, id: crypto.randomUUID() };
     setBusy(true); setError(null);
     try {
-      const row = await apiRequest<Receipt>("stock/receipts", { method: "POST", body: JSON.stringify({ ...payload, request_id: request.current.id }) });
+      const row = await creation.request<Receipt>("stock/receipts", { method: "POST", body: JSON.stringify(payload) });
       onSaved(row);
     } catch (reason) { setError(reason instanceof AuthError ? reason : null); }
     finally { setBusy(false); }
   }
   return <Modal title="إذن استلام جديد" onClose={onClose}>
     <form className={styles.form} onSubmit={save}>
+      <CreationRecovery creation={creation} onSaved={onSaved} />
+      <p className={styles.hint}>يُصدر النظام رقم الإذن عند الحفظ. رقم الدفعة يحتفظ بقيمة المصنّع الأصلية.</p>
       {error && <p role="alert">{error.message}{error.fields.items ? ` — ${error.fields.items}` : ""}</p>}
-      <label>رقم الإذن<input value={receiptNo} onChange={e => setReceiptNo(e.target.value)} required maxLength={50} /></label>
       <label>المستودع<select value={storeId} onChange={e => setStoreId(e.target.value)} required>{options.stores.map(row => <option key={row.id} value={row.id}>{row.name_ar}</option>)}</select></label>
       <label>المورد<select value={supplierId} onChange={e => setSupplierId(e.target.value)}><option value="">بدون مورد</option>{options.suppliers.map(row => <option key={row.id} value={row.id}>{row.name_ar}</option>)}</select></label>
       <label>جهة التمويل<select value={source} onChange={e => setSource(e.target.value)} required>{options.medication_sources.map(row => <option key={row.code} value={row.code}>{row.name_ar}</option>)}</select></label>

@@ -24,6 +24,7 @@ async function setup({ limited = false, width = 1440, capOverrides = {}, access,
     const req = route.request(), url = new URL(req.url()), path = url.pathname;
     if (url.origin !== new URL(base).origin) return route.abort();
     if (!path.startsWith("/hospital-api/")) return route.continue();
+    if (path === "/hospital-api/session" || path === "/hospital-api/session/activity") return route.fulfill({ json: { data: { idle_timeout: null } } });
     const body = req.postDataJSON(); calls.push({ path, method: req.method(), url, body });
     if (path.endsWith("/user")) return route.fulfill({ json: { data: { user, access: access ?? [1, 2].map(id => ({ facility: { ...facility, id }, roles: [], permissions: ["catalog.view", "catalog.export", ...limited ? [] : ["catalog.beneficiaries", "catalog.audit"]] })) } } });
     if (path.endsWith("/context")) {
@@ -37,7 +38,7 @@ async function setup({ limited = false, width = 1440, capOverrides = {}, access,
     }
     if (path.endsWith("/classifications")) return route.fulfill({ json: { data: { categories: categories.filter(category => category.is_active), procedure_types: [], medication_categories: [] } } });
     if (path.endsWith("/categories")) {
-      if (categories.some(category => category.code === body.code)) return route.fulfill({ status: 422, json: { message: "تحقق", errors: { code: ["رمز الفئة مستخدم بالفعل"] } } });
+      if (categories.some(category => category.name_ar === body.name_ar)) return route.fulfill({ status: 422, json: { message: "تحقق", errors: { name_ar: ["اسم الفئة مستخدم بالفعل"] } } });
       const category = { ...body, id: categories.length + 1 }; categories.push(category); return route.fulfill({ status: 201, json: { data: category } });
     }
     if (path.includes("/export/")) return route.fulfill({ body: "synthetic report", contentType: "application/pdf", headers: { "Content-Disposition": 'attachment; filename="test.pdf"' } });
@@ -50,7 +51,7 @@ async function setup({ limited = false, width = 1440, capOverrides = {}, access,
       if (conflict) { conflict = false; return route.fulfill({ status: 409, json: { error: { code: "CATALOG_VERSION_CONFLICT", message: "تعارض" } } }); }
       Object.assign(row, body, { lock_version: row.lock_version + 1 }); return route.fulfill({ json: { data: row } });
     }
-    if (req.method() === "POST") return route.fulfill({ status: 422, json: { message: "تحقق", errors: { code: ["الكود مستخدم بالفعل"] } } });
+    if (req.method() === "POST") return route.fulfill({ status: 422, json: { message: "تحقق", errors: { name_ar: ["الاسم مستخدم بالفعل"] } } });
     if (/\/(service|procedure)\/1$/.test(path)) {
       if (detailGate) { const current = detailGate; detailGate = null; current.started.resolve(); await current.promise; }
       if (reloadFail) return route.fulfill({ status: 500, json: { error: { code: "CATALOG_UNAVAILABLE", message: "تعذّر التحميل" } } });
@@ -144,10 +145,10 @@ test("typed directory uses distinct identities, filters, and explicit create kin
     assert.equal(await s.page.getByRole("link", { name: "الخدمات والإجراءات", exact: true }).count(), 1);
     for (const [name, kind] of [["خدمة", "service"], ["إجراء", "procedure"]]) {
       await s.page.getByRole("button", { name: `إضافة ${name}`, exact: true }).click();
-      const dialog = s.page.getByRole("dialog"); await dialog.getByLabel("الكود *", { exact: true }).fill("DUP"); await dialog.getByLabel("الاسم *", { exact: true }).fill("مسودة باقية");
+      const dialog = s.page.getByRole("dialog"); await dialog.getByText("يُمنح الكود تلقائيًا عند الحفظ.").waitFor(); await dialog.getByLabel("الاسم *", { exact: true }).fill("مسودة باقية");
       if (kind === "service") await dialog.getByRole("combobox", { name: /فئة الخدمة/ }).selectOption("1");
-      await dialog.getByRole("button", { name: "حفظ التعريف" }).click(); await dialog.getByText("الكود مستخدم بالفعل", { exact: true }).waitFor();
-      assert.equal(s.calls.filter(c => c.method === "POST").at(-1).body.kind, kind); assert.equal(await dialog.getByLabel("الاسم *", { exact: true }).inputValue(), "مسودة باقية"); await s.page.keyboard.press("Escape");
+      await dialog.getByRole("button", { name: "حفظ التعريف" }).click(); await dialog.getByText("الاسم مستخدم بالفعل", { exact: true }).waitFor();
+      const posted = s.calls.filter(c => c.method === "POST").at(-1).body; assert.equal(posted.kind, kind); assert.equal(posted.code, undefined); assert.equal(await dialog.getByRole("textbox", { name: /الاسم/ }).inputValue(), "مسودة باقية"); await s.page.keyboard.press("Escape");
     }
     await s.page.getByRole("combobox", { name: "النوع", exact: true }).selectOption("procedure"); await s.page.getByRole("link", { name: "S001", exact: true }).waitFor({ state: "hidden" });
     await s.page.getByRole("link", { name: "P001", exact: true }).waitFor();
@@ -189,7 +190,10 @@ test("beneficiary identities require capability; detail navigation and actual hi
     await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=1&search=خدمة&kind=service")); await s.page.getByRole("link", { name: "P001", exact: true }).waitFor({ state: "hidden" });
     await s.page.getByRole("link", { name: "S001", exact: true }).click(); await s.page.getByRole("heading", { name: "خدمة اختبار", exact: true }).waitFor();
     await s.page.getByText("PAT01", { exact: true }).waitFor(); await s.page.getByText("2026-09-12", { exact: true }).waitFor(); assert.equal(await s.page.getByRole("button", { name: "سجل التغييرات", exact: true }).count(), 0);
-    await s.page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click(); assert.equal(await s.page.getByRole("searchbox").inputValue(), "خدمة");
+    await s.page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click();
+    await s.page.waitForURL(url => url.pathname === '/services-procedures' && url.searchParams.get('search') === 'خدمة');
+    await s.page.waitForFunction(() => document.querySelector('input[type="search"]')?.value === 'خدمة');
+    assert.equal(await s.page.getByRole("searchbox").inputValue(), "خدمة");
     await s.page.getByRole("searchbox").fill("قيمة معلقة"); await s.page.goBack(); await s.page.waitForTimeout(500); assert.ok(!s.page.url().includes(encodeURIComponent("قيمة معلقة")));
   } finally { await s.close(); }
 });
@@ -238,7 +242,7 @@ for (const width of [390, 768, 1440]) test(`catalog list/editor are readable and
     assert.ok(frame.heading.right <= frame.main.right, JSON.stringify(frame));
     await mkdir(".superdesign/catalog-review", { recursive: true }); await s.page.screenshot({ path: `.superdesign/catalog-review/list-${width}.png`, fullPage: true });
     assert.equal(await s.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
-    await s.page.getByRole("button", { name: "إضافة خدمة", exact: true }).click(); await s.page.getByRole("dialog").getByLabel("الكود *", { exact: true }).waitFor(); await s.page.screenshot({ path: `.superdesign/catalog-review/editor-${width}.png`, fullPage: true });
+    await s.page.getByRole("button", { name: "إضافة خدمة", exact: true }).click(); await s.page.getByRole("dialog").getByText("يُمنح الكود تلقائيًا عند الحفظ.").waitFor(); await s.page.screenshot({ path: `.superdesign/catalog-review/editor-${width}.png`, fullPage: true });
     await s.page.keyboard.press("Escape"); await s.page.getByRole("dialog").waitFor({ state: "hidden" }); assert.equal(await s.page.getByRole("button", { name: "إضافة خدمة", exact: true }).evaluate(el => el === document.activeElement), true);
   } finally { await s.close(); }
 });
@@ -256,10 +260,11 @@ test("inline category cancel, duplicate error and successful selection preserve 
     assert.equal(await editor.getByRole("button", { name: "إضافة فئة", exact: true }).evaluate(el => el === document.activeElement), true);
     await editor.getByRole("button", { name: "إضافة فئة", exact: true }).click();
     category = s.page.getByRole("dialog", { name: "إضافة فئة", exact: true });
-    await category.getByLabel("رمز الفئة", { exact: true }).fill("EXISTING"); await category.getByLabel("اسم الفئة", { exact: true }).fill("فئة جديدة");
-    await category.getByRole("button", { name: "حفظ الفئة", exact: true }).click(); await category.getByText("رمز الفئة مستخدم بالفعل", { exact: true }).waitFor();
-    assert.equal(await category.getByLabel("اسم الفئة", { exact: true }).inputValue(), "فئة جديدة");
-    await category.getByLabel("رمز الفئة", { exact: true }).fill("NEW"); await category.getByRole("button", { name: "حفظ الفئة", exact: true }).click(); await category.waitFor({ state: "hidden" });
+    await category.getByText("يُمنح رمز الفئة تلقائيًا عند الحفظ.").waitFor();
+    await category.getByLabel("اسم الفئة", { exact: true }).fill("فئة اختبار");
+    await category.getByRole("button", { name: "حفظ الفئة", exact: true }).click(); await category.getByText("اسم الفئة مستخدم بالفعل", { exact: true }).waitFor();
+    assert.equal(await category.getByLabel("اسم الفئة", { exact: true }).inputValue(), "فئة اختبار");
+    await category.getByLabel("اسم الفئة", { exact: true }).fill("فئة جديدة"); await category.getByRole("button", { name: "حفظ الفئة", exact: true }).click(); await category.waitFor({ state: "hidden" });
     await editor.getByText(/أضيفت الفئة.*واختيرت للخدمة/).waitFor();
     assert.equal(await editor.getByRole("combobox", { name: /فئة الخدمة/ }).inputValue(), "2");
     assert.equal(await editor.getByLabel("الاسم *", { exact: true }).inputValue(), "مسودة الخدمة باقية");

@@ -11,7 +11,6 @@ use App\Services\Dossiers\DossierMedicalWriter;
 use App\Services\Dossiers\DossierPersonalWriter;
 use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\DossierWrites;
-use App\Services\Dossiers\PatientCardCodes;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Arr;
@@ -145,7 +144,7 @@ class ImportBundle
         } else {
             $this->globalPermission($r, 'patients.create');
             $this->require(! $p['paper_file_number'] || ! isset($this->paperFiles[self::codeKey($p['paper_file_number'])]), 'paper_file_number', 'رقم الملف الورقي مستخدم؛ راجع الهوية ولا تنشئ نسخة تلقائيًا.');
-            $personal += ['person_mode' => 'new', 'code' => 'SYSTEM-GENERATED'];
+            $personal += ['person_mode' => 'new'];
         }
         if (! $dossier) {
             $this->facilityPermission($r, $f, 'create');
@@ -261,9 +260,6 @@ class ImportBundle
         $dossier = $bundle['dossier']['id'] ?? null;
         if (! $dossier) {
             $p = $bundle['personal'];
-            if ($p['person_mode'] === 'new') {
-                $p['code'] = app(PatientCardCodes::class)->next();
-            }
             $dossier = app(DossierPersonalWriter::class)->save($r, $f, $p + ['request_id' => (string) Str::uuid()], null, withoutVisit: true);
             $patientId = DB::table('patient_dossiers')->where('id', $dossier)->value('patient_id');
             if ($p['person_mode'] === 'new' && $bundle['source_patient']['paper_file_number']) {

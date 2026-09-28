@@ -4,7 +4,7 @@ import { apiRequest } from "@/features/auth/api";
 import ConflictReview, { readPages, readChoices, type ChoiceSnapshot } from "../directory/ConflictReview";
 import type { ClinicLink, Doctor, Options } from "./api";
 
-export const fieldLabels = { code: "كود الطبيب", name: "الاسم الكامل", description: "التوصيف المهني", staff_type_id: "نوع الطبيب", specialty_ids: "التخصصات", license_no: "رقم الترخيص", phone: "الهاتف", is_active: "الحالة" };
+export const fieldLabels = { name: "الاسم الكامل", description: "التوصيف المهني", staff_type_id: "نوع الطبيب", specialty_ids: "التخصصات", license_no: "رقم الترخيص", phone: "الهاتف", is_active: "الحالة" };
 export function doctorFields(doctor?: Doctor) {
   return { code: doctor?.code ?? "", name: doctor?.name ?? "", description: doctor?.description ?? "", staff_type_id: doctor?.staff_type.id ? String(doctor.staff_type.id) : "", specialty_ids: doctor?.specialties.map(s => s.id).sort((a,b) => a-b) ?? [], license_no: doctor?.license_no ?? "", phone: doctor?.phone ?? "", is_active: doctor?.is_active ?? true };
 }

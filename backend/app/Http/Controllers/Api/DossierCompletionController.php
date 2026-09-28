@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Dossiers\DossierReportRequest;
 use App\Http\Requests\Dossiers\SaveDossierSection;
 use App\Http\Requests\Dossiers\SaveVisitClinical;
+use App\Services\Directory\IssuedCodes;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierAttachments;
 use App\Services\Dossiers\DossierClinicalWriter;
@@ -141,22 +142,20 @@ class DossierCompletionController extends Controller
     {
         $f = $this->scope($r);
         app(DossierAccess::class)->global($r->user(), 'medications.create');
-        $data = $r->validate(['facility_id' => ['required', 'integer'], 'request_id' => ['required', 'uuid'], 'code' => ['required', 'string', 'max:50'], 'name_ar' => ['required', 'string', 'max:200']]);
+        $data = $r->validate(['facility_id' => ['required', 'integer'], 'request_id' => ['required', 'uuid'], 'code' => ['prohibited'], 'name_ar' => ['required', 'string', 'max:200']], ['prohibited' => 'الكود يصدره النظام ولا يُدخله المستخدم.']);
         $normalize = fn ($s) => trim(preg_replace('/\s+/u', ' ', $s));
-        $code = $normalize($data['code']);
         $name = $normalize($data['name_ar']);
-        if ($code === '' || $name === '') {
-            throw ValidationException::withMessages(['name_ar' => 'أدخل اسمًا وكودًا غير فارغين.']);
+        if ($name === '') {
+            throw ValidationException::withMessages(['name_ar' => 'أدخل اسمًا غير فارغ.']);
         }
-        $id = app(DossierWrites::class)->once($r, $f, $data, 'medication:new', function () use ($r, $f, $code, $name) {
+        $id = app(DossierWrites::class)->once($r, $f, $data, 'medication:new', function () use ($r, $f, $name) {
             $key = ['sequence_key' => 'medication_directory', 'scope_key' => 'global', 'period_key' => 'all'];
             DB::table('number_sequences')->insertOrIgnore($key);
             DB::table('number_sequences')->where($key)->lockForUpdate()->first();
-            foreach (['code' => $code, 'name_ar' => $name] as $field => $value) {
-                if (DB::table('medications')->whereRaw("TRIM(REGEXP_REPLACE($field, '[[:space:]]+', ' ')) = ?", [$value])->exists()) {
-                    throw ValidationException::withMessages([$field => 'القيمة موجودة في دليل الأدوية؛ اختر التعريف الموجود.']);
-                }
+            if (DB::table('medications')->whereRaw("TRIM(REGEXP_REPLACE(name_ar, '[[:space:]]+', ' ')) = ?", [$name])->exists()) {
+                throw ValidationException::withMessages(['name_ar' => 'القيمة موجودة في دليل الأدوية؛ اختر التعريف الموجود.']);
             }
+            $code = app(IssuedCodes::class)->catalog('medication');
             $id = DB::table('medications')->insertGetId(['code' => $code, 'name_ar' => $name, 'lock_version' => 1, 'archived_at' => null, 'created_at' => now(), 'updated_at' => now()]);
             app(DossierWrites::class)->audit($r, $f, 'medication', $id, null, ['code' => $code, 'name_ar' => $name]);
 

@@ -1,5 +1,8 @@
 # إدارة الخدمات والإجراءات
 
+> Current code/retry contract: [Automatic codes](automatic-codes.md). Internal codes are now server-issued; manual-code examples below describe the earlier phase and must not be sent by current clients.
+
+
 ## سياق المنشأة المشترك — إصلاح ما بعد PR #13
 
 لا يحتاج فتح القسم إلى `CATALOG_FACILITY_CODE`؛ أُزيل ملف إعداد catalog والقيمة النموذجية. غياب المتغير أو بقاء قيمة قديمة فيه لا يؤثر على اختيار المنشأة. لا يلزم إضافة إعداد خاص بالخدمات عند نشر هذا الإصلاح، ولم تُعدّل إعدادات الإنتاج.

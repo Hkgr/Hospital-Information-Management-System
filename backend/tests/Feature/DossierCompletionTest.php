@@ -63,13 +63,14 @@ class DossierCompletionTest extends DossierCompletionCase
 
     public function test_global_medication_creation_is_explicit_normalized_and_not_granted_by_facility_role(): void
     {
-        $data = ['code' => '  NEW   CODE  ', 'name_ar' => '  دواء   جديد  ', 'request_id' => (string) Str::uuid()];
-        $id = $this->callApi('POST', '/medications', $data)->assertCreated()->assertJsonPath('data.name_ar', 'دواء جديد')->json('data.id');
-        $this->callApi('POST', '/medications', $data)->assertCreated()->assertJsonPath('data.id', $id);
-        $this->callApi('POST', '/medications', ['code' => 'new code', 'name_ar' => 'اسم مختلف'])->assertUnprocessable()->assertJsonValidationErrors('code');
-        $this->callApi('POST', '/medications', ['code' => 'OTHER', 'name_ar' => 'دواء    جديد'])->assertUnprocessable()->assertJsonValidationErrors('name_ar');
+        $data = ['name_ar' => '  دواء   جديد  ', 'request_id' => (string) Str::uuid()];
+        $created = $this->callApi('POST', '/medications', $data)->assertCreated()->assertJsonPath('data.name_ar', 'دواء جديد')->json('data');
+        $this->assertMatchesRegularExpression('/^AUTO-MED-\d{3,}$/', $created['code']);
+        $this->callApi('POST', '/medications', $data)->assertCreated()->assertJsonPath('data.id', $created['id']);
+        $this->callApi('POST', '/medications', ['code' => 'new code', 'name_ar' => 'اسم مختلف', 'request_id' => (string) Str::uuid()])->assertUnprocessable()->assertJsonValidationErrors('code');
+        $this->callApi('POST', '/medications', ['name_ar' => 'دواء    جديد', 'request_id' => (string) Str::uuid()])->assertUnprocessable()->assertJsonValidationErrors('name_ar');
         DB::table('global_user_roles')->where('user_id', $this->f['user']->id)->delete();
-        $this->callApi('POST', '/medications', ['code' => 'NO', 'name_ar' => 'غير مسموح'])->assertForbidden();
+        $this->callApi('POST', '/medications', ['name_ar' => 'غير مسموح', 'request_id' => (string) Str::uuid()])->assertForbidden();
         $this->assertSame(0, DB::table('visit_prescriptions')->where('visit_id', $this->s['visit']['id'])->count());
     }
 

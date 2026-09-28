@@ -35,7 +35,8 @@ class DoctorApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['clinics.doctor_staff_types' => ['DOCTOR']]);
+        $typeCode = 'TEST-DOCTOR-'.Str::random(8);
+        config(['clinics.doctor_staff_types' => [$typeCode]]);
         $this->user = User::factory()->create(['username' => 'testadmin', 'name' => 'مُصدر تقارير اختباري']);
         $this->token = $this->user->createToken('doctor-test', ['api'])->plainTextToken;
         $this->facility = DB::table('facilities')->insertGetId(['code' => 'TEST-A', 'name_ar' => 'منشأة اختبار أ', 'timezone' => 'Asia/Damascus']);
@@ -53,8 +54,7 @@ class DoctorApiTest extends TestCase
         }
         DB::table('facility_user_roles')->insert(['user_id' => $this->user->id, 'role_id' => $this->role, 'facility_id' => $this->facility]);
         DB::table('global_user_roles')->insert(['user_id' => $this->user->id, 'role_id' => $this->role]);
-        DB::table('staff_types')->insertOrIgnore(['code' => 'DOCTOR', 'name_ar' => 'طبيب اختباري']);
-        $this->type = DB::table('staff_types')->where('code', 'DOCTOR')->value('id');
+        $this->type = DB::table('staff_types')->insertGetId(['code' => $typeCode, 'name_ar' => 'طبيب اختباري']);
         DB::table('specialties')->insertOrIgnore(['code' => 'INTERNAL', 'name_ar' => 'الطب الداخلي']);
         $this->specialty = DB::table('specialties')->where('code', 'INTERNAL')->value('id');
     }
@@ -67,6 +67,9 @@ class DoctorApiTest extends TestCase
 
     private function callApi(string $method, string $path = '', array $data = [], ?string $token = null)
     {
+        if ($method === 'POST' && $path === '') {
+            $data += ['request_id' => (string) Str::uuid()];
+        }
         $this->app['auth']->forgetGuards();
 
         return $this->json($method, '/api/doctors'.$path, $data + ['facility_id' => $this->facility], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
@@ -74,7 +77,9 @@ class DoctorApiTest extends TestCase
 
     private function input(array $extra = []): array
     {
-        return $extra + ['code' => '0001', 'name' => 'طبيب اختباري', 'description' => 'توصيف مهني', 'staff_type_id' => $this->type, 'specialty_ids' => [$this->specialty], 'is_active' => true, 'phone' => '0096300000', 'license_no' => '001'];
+        unset($extra['code']);
+
+        return $extra + ['name' => 'طبيب اختباري', 'description' => 'توصيف مهني', 'staff_type_id' => $this->type, 'specialty_ids' => [$this->specialty], 'is_active' => true, 'phone' => '0096300000', 'license_no' => '001'];
     }
 
     private function create(array $extra = []): array
@@ -94,7 +99,9 @@ class DoctorApiTest extends TestCase
         $this->assertSame(0, $doctor['clinic_count']);
         $this->assertSame($usersBefore, DB::table('users')->count());
         $this->assertDatabaseHas('staff_specialties', ['staff_id' => $doctor['id'], 'specialty_id' => $this->specialty]);
-        $this->callApi('POST', '', $this->input())->assertUnprocessable()->assertJsonValidationErrors('code');
+        $again = $this->callApi('POST', '', $this->input())->assertCreated()->json('data');
+        $this->assertNotSame($doctor['code'], $again['code']);
+        $this->callApi('POST', '', $this->input() + ['code' => 'DUP'])->assertUnprocessable()->assertJsonValidationErrors('code');
         $funding = DB::table('funding_sources')->insertGetId(['code' => 'FUND', 'name_ar' => 'تمويل اختباري']);
         DB::table('staff')->where('id', $doctor['id'])->update(['funding_source_id' => $funding]);
         $updated = $this->callApi('PUT', '/'.$doctor['id'], $this->input(['lock_version' => 1, 'name' => 'اسم معدل', 'funding_source_id' => null]))->assertOk()->json('data');
@@ -194,7 +201,7 @@ class DoctorApiTest extends TestCase
         $doctor = $this->create(['clinic_add_ids' => [$clinic, $second]]);
         $this->assertSame(2, $doctor['clinic_count']);
         $this->assertDatabaseHas('clinics', ['id' => $clinic, 'lock_version' => 2]);
-        $clinicInput = ['facility_id' => $this->facility, 'code' => 'CL-01', 'name_ar' => 'عيادة CL-01', 'is_active' => true, 'lock_version' => 1, 'doctor_remove_ids' => [$doctor['id']]];
+        $clinicInput = ['facility_id' => $this->facility, 'name_ar' => 'عيادة CL-01', 'is_active' => true, 'lock_version' => 1, 'doctor_remove_ids' => [$doctor['id']]];
         $this->json('PUT', '/api/clinics/'.$clinic, $clinicInput, ['Authorization' => 'Bearer '.$this->token])->assertConflict();
         $clinicInput['lock_version'] = 2;
         $this->json('PUT', '/api/clinics/'.$clinic, $clinicInput, ['Authorization' => 'Bearer '.$this->token])->assertOk()->assertJsonPath('data.doctor_count', 0);
@@ -218,7 +225,7 @@ class DoctorApiTest extends TestCase
         $unlisted = DB::table('staff_types')->insertGetId(['code' => 'UNLISTED', 'name_ar' => 'طبيب']);
         $this->callApi('POST', '', $this->input(['staff_type_id' => $unlisted]))->assertUnprocessable()->assertJsonValidationErrors('staff_type_id');
         $this->callApi('POST', '', $this->input(['specialty_ids' => []]))->assertUnprocessable()->assertJsonValidationErrors('specialty_ids');
-        $this->callApi('POST', '', $this->input(['code' => str_repeat('x', 41), 'name' => str_repeat('x', 201), 'phone' => str_repeat('0', 31), 'license_no' => str_repeat('x', 61)]))->assertUnprocessable()->assertJsonValidationErrors(['code', 'name', 'phone', 'license_no']);
+        $this->callApi('POST', '', $this->input(['name' => str_repeat('x', 201), 'phone' => str_repeat('0', 31), 'license_no' => str_repeat('x', 61)]))->assertUnprocessable()->assertJsonValidationErrors(['name', 'phone', 'license_no']);
         $doctor = $this->create();
         DB::table('specialties')->where('id', $this->specialty)->update(['is_active' => false]);
         $this->callApi('PUT', '/'.$doctor['id'], $this->input(['lock_version' => 1]))->assertOk(); // Preserve existing inactive specialty.
@@ -327,10 +334,10 @@ class DoctorApiTest extends TestCase
     {
         $clinic = $this->clinic();
         $this->create(['clinic_add_ids' => [$clinic]]);
-        $this->create(['code' => '0002', 'is_active' => false]);
-        $this->callApi('GET', '', ['search' => '0', 'per_page' => 1, 'page' => 2])->assertJsonPath('meta.total', 2)->assertJsonPath('data.0.code', '0002');
+        $inactive = $this->create(['is_active' => false]);
+        $this->callApi('GET', '', ['search' => '0', 'per_page' => 1, 'page' => 2])->assertJsonPath('meta.total', 2)->assertJsonPath('data.0.code', $inactive['code']);
         $this->callApi('GET', '', ['clinic_id' => $clinic, 'specialty_id' => $this->specialty, 'status' => 'active'])->assertJsonCount(1, 'data');
-        $this->callApi('GET', '', ['search' => 'توصيف', 'sort' => 'code', 'direction' => 'desc'])->assertJsonPath('data.0.code', '0002');
+        $this->callApi('GET', '', ['search' => 'توصيف', 'sort' => 'code', 'direction' => 'desc'])->assertJsonPath('data.0.code', $inactive['code']);
         $this->callApi('GET', '', ['sort' => 'staff.password', 'per_page' => 101])->assertUnprocessable();
         DB::enableQueryLog();
         $this->callApi('GET')->assertOk();
@@ -372,9 +379,9 @@ class DoctorApiTest extends TestCase
 
     public function test_reports_cairo_all_filtered_rows_safe_text_long_appendices_and_scope(): void
     {
-        $doctor = $this->create(['code' => '0001', 'name' => '=HYPERLINK("bad")', 'description' => str_repeat('توصيف عربي طويل ', 180)]);
-        $this->create(['code' => '0002', 'name' => '+SUM(1,2)']);
-        $this->create(['code' => '0003', 'is_active' => false]);
+        $doctor = $this->create(['name' => '=HYPERLINK("bad")', 'description' => str_repeat('توصيف عربي طويل ', 180)]);
+        $second = $this->create(['name' => '+SUM(1,2)']);
+        $this->create(['is_active' => false]);
         $response = $this->callApi('GET', '/export/xlsx', ['status' => 'active', 'per_page' => 1, 'page' => 2, 'columns' => ['code', 'name', 'description']])->assertOk();
         $file = tempnam(storage_path('framework/testing'), 'doctor-report');
         try {
@@ -382,8 +389,8 @@ class DoctorApiTest extends TestCase
             $book = IOFactory::load($file);
             $sheet = $book->getActiveSheet();
             $this->assertSame('Cairo', $book->getDefaultStyle()->getFont()->getName());
-            $this->assertSame('0001', $sheet->getCell('A9')->getValue());
-            $this->assertSame('0002', $sheet->getCell('A10')->getValue());
+            $this->assertSame($doctor['code'], $sheet->getCell('A9')->getValue());
+            $this->assertSame($second['code'], $sheet->getCell('A10')->getValue());
             $this->assertSame('=HYPERLINK("bad")', $sheet->getCell('B9')->getValue());
             $this->assertSame('s', $sheet->getCell('B9')->getDataType());
             $this->assertTrue($sheet->getRightToLeft());
@@ -460,7 +467,9 @@ class DoctorApiTest extends TestCase
         $this->assertContains('lock_version', $body['required']);
         $this->assertSame(200, $body['properties']['clinic_add_ids']['maxItems']);
         $create = $this->resolveSchema($document, $document['paths']['/api/doctors']['post']['requestBody']['content']['application/json']['schema']);
-        $this->assertSame(40, $create['properties']['code']['maxLength']);
+        $this->assertArrayNotHasKey('code', $create['properties']);
+        $this->assertContains('request_id', $create['required']);
+        $this->assertSame('uuid', $create['properties']['request_id']['format']);
         $this->assertSame(10000, $create['properties']['description']['maxLength']);
         $this->assertArrayHasKey('application/pdf', $document['paths']['/api/doctors/{doctor}/report']['get']['responses'][200]['content']);
         $this->assertArrayHasKey('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $document['paths']['/api/doctors/export/{format}']['get']['responses'][200]['content']);
