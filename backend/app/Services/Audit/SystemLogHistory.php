@@ -25,6 +25,7 @@ class SystemLogHistory
     ];
 
     public const ENTITIES = [
+        'facility_settings' => 'إعدادات المنشأة', 'system_session_policy' => 'سياسة جلسات مدير النظام',
         'anonymous_statistics' => 'تصدير الإحصاءات المجهلة',
         'patient_identity_correction' => 'طلب تصحيح الهوية', 'patient_duplicate_review' => 'مراجعة تكرار الهوية', 'reception_account' => 'حساب الاستقبال',
         'patient_dossier' => 'بطاقة المريض', 'patient' => 'بيانات الشخص', 'dossier_medical' => 'المعلومات الطبية والورمية',
@@ -55,6 +56,7 @@ class SystemLogHistory
     ];
 
     private const CATEGORY_OF = [
+        'facility_settings' => 'accounts', 'system_session_policy' => 'accounts',
         'anonymous_statistics' => 'other',
         'patient_identity_correction' => 'patient_card', 'patient_duplicate_review' => 'patient_card', 'reception_account' => 'accounts',
         'patient_dossier' => 'patient_card', 'patient' => 'patient_card', 'dossier_medical' => 'patient_card',
@@ -160,6 +162,14 @@ class SystemLogHistory
         $action = $void ? 'voided' : ($row->event === 'saved' ? ($row->old_values === null ? 'created' : 'updated') : $row->event);
         $category = self::CATEGORY_OF[$row->entity_type] ?? 'other';
         $changes = $presenter->changes($row->entity_type, $old, $new);
+        if (in_array($row->entity_type, ['facility_settings', 'system_session_policy'], true)) {
+            $changes = [];
+            foreach (['name_ar' => 'اسم المنشأة', 'idle_minutes' => 'مدة الخمول (دقائق)', 'reason' => 'سبب تغيير السياسة'] as $field => $label) {
+                if (array_key_exists($field, $new) && ($new[$field] !== ($old[$field] ?? null))) {
+                    $changes[] = ['field' => $field, 'label' => $label, 'before' => $old[$field] ?? null, 'after' => $new[$field], 'before_recorded' => array_key_exists($field, $old)];
+                }
+            }
+        }
         $operatorAssignment = $row->entity_type === 'role' && $row->event === 'assigned'
             && $row->actor_id === null && ($new['source'] ?? null) === 'operator_command';
         if ($operatorAssignment) {

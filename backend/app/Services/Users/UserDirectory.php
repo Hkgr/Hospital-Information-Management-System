@@ -3,6 +3,7 @@
 namespace App\Services\Users;
 
 use App\Models\User;
+use App\Services\Auth\GlobalAccess;
 use App\Services\Catalog\CatalogQueries;
 use App\Services\Clinics\ClinicAudit;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -58,6 +59,7 @@ class UserDirectory
     public function create(Request $request, array $f, array $input): array
     {
         return DB::transaction(function () use ($request, $f, $input) {
+            $f = app(UserAccess::class)->facility($request->user(), $f['id'], 'create');
             $role = app(RoleDirectory::class)->assertAssignable($f, (int) $input['role_id']);
             if (User::where('username', $input['username'])->lockForUpdate()->exists()) {
                 throw new HttpResponseException(response()->json(['error' => ['code' => 'USER_USERNAME_TAKEN', 'message' => 'اسم المستخدم مستخدم مسبقاً.']], 422));
@@ -77,7 +79,10 @@ class UserDirectory
             ]);
             app(ClinicAudit::class)->record($request, $f['id'], $user->id, 'created', null, ['username' => $user->username, 'role' => $role->code], 'auth_session');
 
-            return $this->present($f, $user->id);
+            $codes = array_column(app(PermissionCatalog::class)->codesFor([$role->id])[$role->id] ?? [], 'code');
+            $required = array_values(array_intersect(['reception.patients.search', 'reception.patients.create'], $codes));
+
+            return $this->present($f, $user->id) + ['pending_global_permissions' => array_values(array_diff($required, app(GlobalAccess::class)->codes($user)))];
         });
     }
 

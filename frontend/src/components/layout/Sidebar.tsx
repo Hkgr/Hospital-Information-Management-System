@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { LuPanelRightClose, LuPanelRightOpen, LuX } from "react-icons/lu";
 import { primaryNavigation } from "./navigation";
 import FrameOrnaments from "./FrameOrnaments";
@@ -29,14 +30,17 @@ export function SidebarContent({ pathname, granted, collapsed = false, onToggle,
 }
 
 function NavigationItems({ items, pathname, onNavigate }: { items: typeof primaryNavigation; pathname: string; onNavigate?: () => void }) {
-  return <ul className={styles.navigationList}>{items.map(({ label, icon: Icon, href }) => <li key={label}>
-    {href ? <Link href={href} className={styles.navigationItem} aria-label={label} aria-current={pathname === href || pathname.startsWith(`${href}/`) ? "page" : undefined} onClick={onNavigate} title={label}>
+  const facility = useSearchParams().get("facility_id");
+  return <ul className={styles.navigationList}>{items.map(({ label, icon: Icon, href: source }) => {
+    const href = source === "/guide" && facility !== null ? `/guide?facility_id=${encodeURIComponent(facility)}` : source;
+    return <li key={label}>
+    {href ? <Link href={href} className={styles.navigationItem} aria-label={label} aria-current={pathname === source || pathname.startsWith(`${source}/`) ? "page" : undefined} onClick={onNavigate} title={label}>
       <span className={styles.navigationIcon}><Icon aria-hidden="true" /></span><span className={styles.navigationText}>{label}</span>
     </Link> : <button type="button" className={styles.navigationItem} disabled aria-label={`${label} — قريبًا، غير متاح بعد`} title={`${label} — قريبًا`}>
       <span className={styles.navigationIcon}><Icon aria-hidden="true" /></span>
       <span className={styles.navigationText} aria-hidden="true"><span>{label}</span><small className={styles.comingSoon}>قريبًا</small></span>
     </button>}
-  </li>)}</ul>;
+  </li>; })}</ul>;
 }
 
 export default function Sidebar(props: Props) {

@@ -25,12 +25,13 @@ class RoleDirectory
             }
         }
         $data = [];
+        $globalRoles = DB::table('global_user_roles')->distinct()->pluck('role_id')->all();
         foreach ($roles as $role) {
             $codes = array_column($permissions[$role->id] ?? [], 'code');
             $data[] = [
                 'id' => (int) $role->id, 'code' => $role->code, 'name_ar' => $role->name_ar,
                 'permissions' => $permissions[$role->id] ?? [],
-                'manageable' => ! $role->is_system_super_admin && $role->code !== 'super_admin' && ! str_starts_with($role->code, 'reception-') && $this->catalog->within($f['permissions'], $codes),
+                'manageable' => ! $role->is_system_super_admin && $role->code !== 'super_admin' && ! str_starts_with($role->code, 'reception-') && (! in_array($role->id, $globalRoles) || ($f['can_manage_global_roles'] ?? false)) && $this->catalog->within($f['permissions'], $codes),
             ];
         }
 
@@ -40,6 +41,7 @@ class RoleDirectory
     public function create(Request $request, array $f, array $input): array
     {
         return DB::transaction(function () use ($request, $f, $input) {
+            $f = app(RoleAccess::class)->facility($request->user(), $f['id'], 'create');
             $granted = $this->grantable($f, $input['permission_ids']);
             $code = $this->uniqueCode();
             $id = DB::table('roles')->insertGetId([
@@ -60,6 +62,10 @@ class RoleDirectory
                 throw new HttpResponseException(response()->json(['error' => ['code' => 'ROLE_NOT_FOUND', 'message' => 'الدور غير موجود.']], 404));
             }
             $this->assertOrdinary($role);
+            $f = app(RoleAccess::class)->facility($request->user(), $f['id'], 'update');
+            if (! $f['can_manage_global_roles'] && DB::table('global_user_roles')->where('role_id', $id)->exists()) {
+                throw new HttpResponseException(response()->json(['error' => ['code' => 'GLOBAL_ROLE_PROTECTED', 'message' => 'هذا الدور مستخدم في تفويض عالمي؛ تعديله يتطلب مسؤول النظام.']], 403));
+            }
             $current = array_column($this->catalog->codesFor([$id])[$id] ?? [], 'code');
             if (! $this->catalog->within($f['permissions'], $current)) {
                 throw new HttpResponseException(response()->json(['error' => ['code' => 'ROLE_NOT_MANAGEABLE', 'message' => 'لا يمكن تعديل دور يملك صلاحيات خارج صلاحياتك.']], 403));

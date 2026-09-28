@@ -48,7 +48,7 @@ npm run build
 git diff --check
 ```
 
-The live suite uses fresh production standalone Next on loopback 3194, built with `LARAVEL_API_URL=http://127.0.0.1:8194/api`, and the safety-gated `tests/Support/dossier-server.php` on 8194. It uses no `page.route` or API mocking. Set `TEST_BASE_URL=http://127.0.0.1:3194` and `PLAYWRIGHT_CHANNEL=chrome` for the separate mocked browser suite. Real login/logout retain the 120-second deadline; repeated login scenarios use separate synthetic actors rather than disabling/flushing throttling.
+The live suite uses fresh production standalone Next on loopback 3194, built with `LARAVEL_API_URL=http://127.0.0.1:8194/api`, and the safety-gated `tests/Support/dossier-server.php` on 8194. It uses no `page.route` or API mocking. Set `TEST_BASE_URL=http://127.0.0.1:3194` and `PLAYWRIGHT_CHANNEL=chrome` for the separate mocked browser suite. These routing fixtures retain the default 120-second deadline (the policy is now configurable); repeated login scenarios use separate synthetic actors rather than disabling/flushing throttling.
 
 ## Deployment instructions (not executed)
 
@@ -56,4 +56,4 @@ The live suite uses fresh production standalone Next on loopback 3194, built wit
 2. Package the new standalone server **with its matching `.next/static` and `public` assets**, following the existing deployment layout, then restart that Next process. Do not reuse a pre-fix standalone build; rewrites are baked into the build.
 3. Verify authorized direct `/dashboard/general` redirects to a permitted facility before detail, and `/users` loads `options`, users and roles as JSON. Verify role GET/POST/PUT pass through to Laravel with the expected authorization failures for unauthorized accounts.
 
-No new permission grants, seeders or migrations are required for this repair. Keep Laravel's facility checks, protected super-admin assignments and 120-second web idle middleware enabled. Never use a generic proxy or disable idle expiry to work around routing.
+No new permission grants, seeders or migrations were required for this routing repair. Keep Laravel's facility checks, protected super-admin assignments and web idle middleware enabled. Idle policy is now configurable, with a two-minute default; see [facility settings](../../backend/docs/facility-settings-and-guides.md). Never use a generic proxy or disable idle expiry to work around routing.

@@ -11,7 +11,7 @@ class PrivateClinicResponse
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->is('api/statistics', 'api/statistics/*', 'api/session', 'api/session/*') && ! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit', 'api/audit/*', 'api/reports', 'api/reports/*', 'api/users', 'api/users/*', 'api/reception', 'api/reception/*')) {
+        if (! $request->is('api/settings', 'api/settings/*', 'api/guide', 'api/statistics', 'api/statistics/*', 'api/session', 'api/session/*') && ! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit', 'api/audit/*', 'api/reports', 'api/reports/*', 'api/users', 'api/users/*', 'api/reception', 'api/reception/*')) {
             return $next($request);
         }
         try {
@@ -53,6 +53,10 @@ class PrivateClinicResponse
         if ($request->is('api/users', 'api/users/*') && in_array($response->getStatusCode(), [404, 500], true)) {
             $status = $response->getStatusCode();
             $response = response()->json(['error' => ['code' => $status === 404 ? 'USERS_NOT_FOUND' : 'USERS_UNAVAILABLE', 'message' => $status === 404 ? 'المستخدم أو المسار غير موجود في المنشأة المحددة.' : 'تعذّر إتمام إدارة المستخدمين. حاول مجددًا.']], $status);
+        }
+        if ($request->is('api/settings', 'api/settings/*', 'api/guide') && in_array($response->getStatusCode(), [404, 500], true)) {
+            $status = $response->getStatusCode();
+            $response = response()->json(['error' => ['code' => 'SETTINGS_UNAVAILABLE', 'message' => 'تعذّر تحميل الإعدادات أو الدليل المطلوب.']], $status);
         }
         $response->headers->set('Cache-Control', 'private, no-store');
         if ($request->is('api/statistics', 'api/statistics/*') && in_array($response->getStatusCode(), [404, 500], true)) {
