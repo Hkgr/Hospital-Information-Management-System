@@ -33,7 +33,9 @@ class DossierWorkflowTest extends TestCase
 
     private function personal(array $overrides = []): array
     {
-        return $overrides + ['request_id' => (string) Str::uuid(), 'person_mode' => 'new', 'code' => ' HIST-2000 ', 'opening_date' => '2000-02-03', 'visit_date' => '2001-03-02', 'first_name' => 'أحمد', 'family_name' => 'محمد %_', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
+        unset($overrides['code']);
+
+        return $overrides + ['request_id' => (string) Str::uuid(), 'person_mode' => 'new', 'opening_date' => '2000-02-03', 'visit_date' => '2001-03-02', 'first_name' => 'أحمد', 'family_name' => 'محمد %_', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
     }
 
     private function legacyCard(): array
@@ -144,13 +146,13 @@ class DossierWorkflowTest extends TestCase
     {
         $before = DB::table('patients')->count();
         $input = $this->personal();
-        $d = $this->callApi('POST', '', $input)->assertCreated()->assertJsonPath('data.status', 'draft')->assertJsonPath('data.code', 'HIST-2000')->assertJsonPath('data.progress.0.state', 'saved')->json('data');
+        $d = $this->callApi('POST', '', $input)->assertCreated()->assertJsonPath('data.status', 'draft')->assertJsonPath('data.progress.0.state', 'saved')->json('data');
+        $this->assertMatchesRegularExpression('/^PC-\d{8}$/', $d['code']);
         $this->callApi('POST', '', $input)->assertCreated()->assertJsonPath('data.id', $d['id']);
-        $this->callApi('POST', '', array_replace($input, ['code' => 'different']))->assertConflict();
-        $this->callApi('POST', '', $this->personal())->assertUnprocessable()->assertJsonValidationErrors('code');
+        $this->callApi('POST', '', $input + ['code' => 'different'])->assertUnprocessable()->assertJsonValidationErrors('code');
         $this->assertSame($before + 1, DB::table('patients')->count());
         $this->assertSame(1, DB::table('visits')->where('dossier_id', $d['id'])->count());
-        $this->callApi('GET', '', ['search' => 'HIST-2000'])->assertOk()->assertJsonPath('data.0.id', $d['id']);
+        $this->callApi('GET', '', ['search' => $d['code']])->assertOk()->assertJsonPath('data.0.id', $d['id']);
         $this->callApi('GET', '/'.$d['id'].'/progress')->assertOk()->assertJsonPath('data.patient.first_name', 'أحمد');
         $this->callApi('POST', '', $this->personal(['code' => 'SECOND']))->assertCreated();
         $this->assertSame($before + 2, DB::table('patients')->count(), 'Same name must not merge patients');
@@ -184,7 +186,7 @@ class DossierWorkflowTest extends TestCase
         $this->callApi('POST', "/$id/visits", $this->visit())->assertCreated();
         $p = $d['patient'];
         unset($p['id'], $p['patient_code'], $p['lock_version']);
-        $this->callApi('PUT', "/$id/personal", $p + ['request_id' => (string) Str::uuid(), 'lock_version' => 3, 'patient_lock_version' => 1, 'code' => 'HIST-2000', 'opening_date' => '1999-01-01'])->assertOk()->assertJsonPath('data.visit.status', 'draft')->assertJsonPath('data.progress.2.state', 'in_progress');
+        $this->callApi('PUT', "/$id/personal", $p + ['request_id' => (string) Str::uuid(), 'lock_version' => 3, 'patient_lock_version' => 1, 'opening_date' => '1999-01-01'])->assertOk()->assertJsonPath('data.visit.status', 'draft')->assertJsonPath('data.progress.2.state', 'in_progress');
         $this->assertDatabaseHas('audit_logs', ['actor_id' => $this->f['user']->id, 'entity_type' => 'dossier_medical', 'entity_id' => $id]);
     }
 
@@ -262,11 +264,12 @@ class DossierWorkflowTest extends TestCase
     public function test_scopes_permissions_directory_creation_and_seed_idempotency(): void
     {
         $this->callApi('GET', '/options', ['facility_id' => $this->f['other']])->assertForbidden();
-        $input = ['request_id' => (string) Str::uuid(), 'code' => 'NEW-DX', 'name_ar' => 'تشخيص   جديد'];
-        $this->callApi('POST', '/diagnoses', $input)->assertCreated()->assertJsonPath('data.name_ar', 'تشخيص جديد');
-        $this->callApi('POST', '/diagnoses', $input)->assertCreated();
-        $this->callApi('POST', '/diagnoses', array_replace($input, ['request_id' => (string) Str::uuid(), 'name_ar' => 'اسم آخر للكود المكرر']))->assertUnprocessable()->assertJsonValidationErrors('code');
-        $this->callApi('POST', '/diagnoses', array_replace($input, ['request_id' => (string) Str::uuid(), 'code' => 'SECOND']))->assertUnprocessable()->assertJsonValidationErrors('name_ar');
+        $input = ['request_id' => (string) Str::uuid(), 'name_ar' => 'تشخيص   جديد'];
+        $created = $this->callApi('POST', '/diagnoses', $input)->assertCreated()->assertJsonPath('data.name_ar', 'تشخيص جديد')->json('data');
+        $this->assertMatchesRegularExpression('/^DOS-DX-\d{2,}$/', $created['code']);
+        $this->callApi('POST', '/diagnoses', $input)->assertCreated()->assertJsonPath('data.id', $created['id']);
+        $this->callApi('POST', '/diagnoses', $input + ['code' => 'NEW-DX', 'request_id' => (string) Str::uuid()])->assertUnprocessable()->assertJsonValidationErrors('code');
+        $this->callApi('POST', '/diagnoses', array_replace($input, ['request_id' => (string) Str::uuid()]))->assertUnprocessable()->assertJsonValidationErrors('name_ar');
         $count = DB::table('diagnoses')->count();
         app(DossierDiagnosisReferenceSeeder::class)->run();
         $this->assertSame($count, DB::table('diagnoses')->count());

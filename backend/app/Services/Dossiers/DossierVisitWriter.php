@@ -3,6 +3,7 @@
 namespace App\Services\Dossiers;
 
 use App\Services\Clinics\ClinicCounts;
+use App\Services\Directory\IssuedCodes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -47,7 +48,7 @@ class DossierVisitWriter
             if ($id) {
                 DB::table('visits')->where('id', $id)->update($fields);
             } else {
-                $id = DB::table('visits')->insertGetId($fields + ['facility_id' => $f['id'], 'patient_id' => $d['patient_id'], 'dossier_id' => $dossier, 'dossier_visit_kind' => $subsequent ? 'subsequent' : 'initial', 'phase_three' => $subsequent, 'reporting_period_id' => null, 'visit_no' => 'V-'.Str::uuid(), 'client_request_id' => $input['request_id'], 'entered_by' => $r->user()->id, 'status' => 'draft', 'created_at' => now()]);
+                $id = DB::table('visits')->insertGetId($fields + ['facility_id' => $f['id'], 'patient_id' => $d['patient_id'], 'dossier_id' => $dossier, 'dossier_visit_kind' => $subsequent ? 'subsequent' : 'initial', 'phase_three' => $subsequent, 'reporting_period_id' => null, 'visit_no' => app(IssuedCodes::class)->visit(), 'client_request_id' => $input['request_id'], 'entered_by' => $r->user()->id, 'status' => 'draft', 'created_at' => now()]);
             }
             $rows = DB::table('visit_diagnoses')->where('visit_id', $id)->where('facility_id', $f['id'])->whereNull('voided_at')->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             $dateChanged = $old && $old->visit_date !== $input['visit_date'];

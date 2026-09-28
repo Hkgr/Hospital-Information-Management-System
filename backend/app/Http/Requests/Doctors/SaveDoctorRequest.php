@@ -15,7 +15,7 @@ class SaveDoctorRequest extends FormRequest
     {
         $linksOnly = $this->routeIs('doctors.updateClinics');
         $fields = [
-            'code' => ['required', 'string', 'max:40'],
+            'code' => ['prohibited'],
             'name' => ['required', 'string', 'max:200'],
             'description' => ['nullable', 'string', 'max:10000'],
             'staff_type_id' => ['required', 'integer', 'min:1'],

@@ -45,7 +45,7 @@ export async function readChoices<T extends { id: number }>(path: string, touche
 }
 
 export default function ConflictReview<F extends object, T extends { id: number; code: string; is_linked: boolean }>({ labels, initial, latest, draft, display, currentLinks, linkName, linkTitle, changes, touched, choices, unavailable, onAccept }: {
-  labels: Record<keyof F, string>; initial: F; latest: F; draft: F;
+  labels: Partial<Record<keyof F, string>>; initial: F; latest: F; draft: F;
   display: (key: keyof F, value: F[keyof F], source: "initial" | "latest" | "draft") => string;
   currentLinks: T[]; linkName: (item: T) => string; linkTitle: string;
   changes: Record<number, boolean>; touched: Record<number, T>; choices: Record<number, T | undefined>;

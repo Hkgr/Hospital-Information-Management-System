@@ -4,7 +4,7 @@ import { apiRequest } from "@/features/auth/api";
 import type { Clinic, Doctor } from "./api";
 import ConflictReview, { readPages, readChoices, type ChoiceSnapshot } from "../directory/ConflictReview";
 
-export const fieldLabels = { code: "كود العيادة", name_ar: "اسم العيادة", description: "التوصيف", specialty_id: "التخصص", is_active: "الحالة" };
+export const fieldLabels = { name_ar: "اسم العيادة", description: "التوصيف", specialty_id: "التخصص", is_active: "الحالة" };
 export function clinicFields(clinic?: Clinic) {
   return { code: clinic?.code ?? "", name_ar: clinic?.name_ar ?? "", description: clinic?.description ?? "", specialty_id: clinic?.specialty ? String(clinic.specialty.id) : "", is_active: clinic?.is_active ?? true };
 }

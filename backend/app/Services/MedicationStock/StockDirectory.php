@@ -4,6 +4,7 @@ namespace App\Services\MedicationStock;
 
 use App\Exceptions\StockException;
 use App\Services\Catalog\CatalogQueries;
+use App\Services\Directory\IssuedCodes;
 use App\Services\Clinics\ClinicAudit;
 use App\Services\Dossiers\OncologyQueries;
 use Illuminate\Database\QueryException;
@@ -62,7 +63,8 @@ class StockDirectory
                 if ($old && $old['archived_at'] !== null) {
                     throw new StockException('STOCK_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله.');
                 }
-                $fields = Arr::only($input, self::fields($directory));
+                $fields = Arr::only($input, array_diff(self::fields($directory), ['code']));
+                $fields['code'] = $old['code'] ?? app(IssuedCodes::class)->stock($directory, $facility['id']);
                 $fields['updated_at'] = now();
                 $fields['updated_by'] = $request->user()->id;
                 if ($id === null) {

@@ -4,6 +4,7 @@ namespace App\Services\Catalog;
 
 use App\Exceptions\CatalogException;
 use App\Services\Clinics\ClinicAudit;
+use App\Services\Directory\IssuedCodes;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,8 +21,9 @@ class CatalogWriter
             'service' => 'service_category', 'procedure' => 'procedure_type', 'medication' => 'medication_category',
         };
         try {
-            return DB::transaction(function () use ($request, $facility, $data, $table, $entity) {
-                $fields = array_intersect_key($data, array_flip(['code', 'name_ar', 'is_active']));
+            return DB::transaction(function () use ($request, $facility, $data, $table, $entity, $kind) {
+                $fields = array_intersect_key($data, array_flip(['name_ar', 'is_active']));
+                $fields['code'] = app(IssuedCodes::class)->classification($kind);
                 $id = DB::table($table)->insertGetId($fields + ['created_at' => now(), 'updated_at' => now()]);
                 app(ClinicAudit::class)->record($request, $facility['id'], $id, 'created', null, $fields, $entity);
                 $row = DB::table($table)->find($id, ['id', 'code', 'name_ar', 'is_active']);
@@ -100,6 +102,8 @@ class CatalogWriter
                     $keys = [...$keys, 'default_unit', 'strength', 'dosage_form', 'reorder_level'];
                 }
                 $fields = array_intersect_key($data, array_flip($keys));
+                unset($fields['code']);
+                $fields['code'] = $row?->code ?? app(IssuedCodes::class)->catalog($kind);
                 $fields['description'] = $data['description'] ?? null;
                 $fields[$relation] = $value;
                 $fields['updated_at'] = now();

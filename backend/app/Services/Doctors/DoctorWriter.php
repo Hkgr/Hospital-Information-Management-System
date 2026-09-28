@@ -5,6 +5,7 @@ namespace App\Services\Doctors;
 use App\Exceptions\DoctorException;
 use App\Services\Clinics\ClinicAudit;
 use App\Services\Directory\ClinicStaffLinks;
+use App\Services\Directory\IssuedCodes;
 use App\Services\Directory\DirectoryLifecycle;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -37,6 +38,7 @@ class DoctorWriter
                     throw new DoctorException('DOCTOR_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله أو إدارة ارتباطاته.');
                 }
                 if (! $linksOnly) {
+                    $input['code'] = $id === null ? app(IssuedCodes::class)->doctor() : $old['staff_code'];
                     $this->validateFields($input, $old);
                     $fields = Arr::only($input, ['description', 'staff_type_id', 'license_no', 'phone', 'is_active']);
                     $fields += ['staff_code' => $input['code'], 'full_name' => $input['name'], 'search_name' => $input['name'], 'updated_at' => now()];

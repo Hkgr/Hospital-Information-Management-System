@@ -59,12 +59,15 @@ class MedicationStockTest extends TestCase
     public function test_suppliers_and_stores_crud_uniqueness_lifecycle_and_facility_scope(): void
     {
         foreach (['suppliers' => ['contact_person' => 'أحمد', 'phone' => '011', 'address_line' => 'حلب', 'note' => 'ملاحظة'], 'stores' => ['location' => 'الصيدلية']] as $directory => $fields) {
-            $created = $this->api('POST', '/'.$directory, ['code' => 'NEW-'.$directory, 'name_ar' => 'سجل '.$directory, 'is_active' => true] + $fields)
+            $created = $this->api('POST', '/'.$directory, ['name_ar' => 'سجل '.$directory, 'is_active' => true] + $fields)
                 ->assertCreated()->assertJsonPath('data.is_active', true)->json('data');
-            $this->api('GET', '/'.$directory.'/'.$created['id'])->assertOk()->assertJsonPath('data.code', 'NEW-'.$directory);
-            $this->api('PUT', '/'.$directory.'/'.$created['id'], ['code' => $created['code'], 'name_ar' => 'تعديل', 'is_active' => true, 'lock_version' => 1] + $fields)
-                ->assertOk()->assertJsonPath('data.name_ar', 'تعديل')->assertJsonPath('data.lock_version', 2);
-            $this->api('POST', '/'.$directory, ['code' => 'NEW-'.$directory, 'name_ar' => 'مكرر', 'is_active' => true] + $fields)
+            $this->assertMatchesRegularExpression('/^(SUP|STR)-\d{4,}$/', $created['code']);
+            $this->api('GET', '/'.$directory.'/'.$created['id'])->assertOk()->assertJsonPath('data.code', $created['code']);
+            $this->api('PUT', '/'.$directory.'/'.$created['id'], ['name_ar' => 'تعديل', 'is_active' => true, 'lock_version' => 1] + $fields)
+                ->assertOk()->assertJsonPath('data.name_ar', 'تعديل')->assertJsonPath('data.code', $created['code'])->assertJsonPath('data.lock_version', 2);
+            $other = $this->api('POST', '/'.$directory, ['name_ar' => 'مكرر', 'is_active' => true] + $fields)->assertCreated()->json('data');
+            $this->assertNotSame($created['code'], $other['code']);
+            $this->api('POST', '/'.$directory, ['code' => $created['code'], 'name_ar' => 'مرفوض', 'is_active' => true] + $fields)
                 ->assertUnprocessable()->assertJsonValidationErrors('code');
             $this->api('GET', '/'.$directory.'/'.$created['id'], ['facility_id' => $this->f['other']])->assertForbidden();
             $this->api('POST', '/'.$directory.'/'.$created['id'].'/deactivate', ['lock_version' => 2])->assertOk()->assertJsonPath('data.is_active', false);
@@ -163,7 +166,7 @@ class MedicationStockTest extends TestCase
             'request_id' => (string) Str::uuid(), 'store_id' => $this->f['store'], 'receipt_no' => 'DENIED',
             'medication_source' => 'ministry_of_health', 'received_on' => $this->f['today'],
         ], $this->f['viewer_token'])->assertForbidden()->assertJsonPath('error.code', 'STOCK_ACCESS_DENIED');
-        $this->api('POST', '/suppliers', ['code' => 'X', 'name_ar' => 'م', 'is_active' => true], $this->f['viewer_token'])->assertForbidden();
+        $this->api('POST', '/suppliers', ['name_ar' => 'م', 'is_active' => true], $this->f['viewer_token'])->assertForbidden();
         $this->api('GET', '/receipts/'.$row['id'], ['facility_id' => $this->f['other']])->assertForbidden();
         $this->api('GET', '/receipts/'.($row['id'] + 99999))->assertNotFound()->assertJsonPath('error.code', 'STOCK_NOT_FOUND');
     }

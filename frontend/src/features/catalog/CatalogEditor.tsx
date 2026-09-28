@@ -28,7 +28,7 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
   const choices = useCatalogRequest<Choices>(`service-catalog/classifications?facility_id=${facilityId}`, false, false, categoryRevision);
   const options = (kind === "service" ? choices.data?.categories : kind === "medication" ? choices.data?.medication_categories : choices.data?.procedure_types) ?? [];
   const relation = kind === "procedure" ? "procedure_type_id" : "category_id";
-  const visible = (Object.keys(labels) as (keyof Fields)[]).filter(key => kind === "medication" || !["default_unit", "strength", "dosage_form", "reorder_level"].includes(key));
+  const visible = (Object.keys(labels) as (keyof Fields)[]).filter(key => key !== "code" && (kind === "medication" || !["default_unit", "strength", "dosage_form", "reorder_level"].includes(key)));
   const fieldError = (name: string) => error?.fields[name] && <span id={`catalog-${name}-error`} className={styles.fieldError}>{error.fields[name]}</span>;
   const display = (key: keyof Fields, value: string | boolean) => key === "is_active" ? (value ? "فعال" : "غير فعال") : key === "classification" ? options.find(option => String(option.id) === value)?.name_ar ?? String(value || "دون تصنيف") : String(value || "—");
 
@@ -47,7 +47,7 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
     pending.current = true; setBusy(true); setError(null);
     const active = new AbortController(); controller.current = active;
     try {
-      const { classification, default_unit, strength, dosage_form, reorder_level, ...values } = fields;
+      const { classification, code: _issued, default_unit, strength, dosage_form, reorder_level, ...values } = fields;
       const extras = kind === "medication" ? { default_unit: default_unit || null, strength: strength || null, dosage_form: dosage_form || null, reorder_level: reorder_level === "" ? null : Number(reorder_level) } : {};
       await apiRequest<Item>(base ? itemPath(base) : "service-catalog", { method: base ? "PUT" : "POST", signal: active.signal,
         body: JSON.stringify({ ...values, ...extras, [relation]: classification ? Number(classification) : null, facility_id: facilityId, ...(base ? { lock_version: base.lock_version } : { kind }) }) });
@@ -72,7 +72,7 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
         }}>اعتماد الاختيارات للمراجعة</button>}
       </section>}
       <fieldset className={styles.fields} disabled={busy || conflict}>
-        <label>الكود *<input autoFocus required maxLength={50} dir="auto" value={fields.code} onChange={e => setFields({ ...fields, code: e.target.value })} aria-invalid={!!error?.fields.code} aria-describedby={error?.fields.code ? "catalog-code-error" : undefined} />{fieldError("code")}</label>
+        {item ? <label>الكود<input aria-label="الكود" value={fields.code} readOnly dir="ltr" /><small>الكود ثابت ويصدره النظام.</small></label> : <p className={styles.hint}>يُمنح الكود تلقائيًا عند الحفظ.</p>}
         <label>الاسم *<input required maxLength={200} value={fields.name_ar} onChange={e => setFields({ ...fields, name_ar: e.target.value })} aria-invalid={!!error?.fields.name_ar} />{fieldError("name_ar")}</label>
         <label className={styles.full}>الوصف<textarea maxLength={10000} rows={4} value={fields.description} onChange={e => setFields({ ...fields, description: e.target.value })} />{fieldError("description")}</label>
         {kind === "medication" && <><label>التركيز<input maxLength={60} value={fields.strength} onChange={e => setFields({ ...fields, strength: e.target.value })} />{fieldError("strength")}</label>

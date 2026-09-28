@@ -15,7 +15,7 @@ class SaveCategoryRequest extends FormRequest
     public function rules(): array
     {
         return ['facility_id' => ['required', 'integer', 'min:1'], 'kind' => ['sometimes', Rule::in(['service', 'procedure', 'medication'])],
-            'code' => ['required', 'string', 'max:50'],
+            'code' => ['prohibited'],
             'name_ar' => ['required', 'string', 'max:200'], 'is_active' => ['required', 'boolean']];
     }
 

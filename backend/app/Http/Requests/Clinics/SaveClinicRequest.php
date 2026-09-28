@@ -15,7 +15,7 @@ class SaveClinicRequest extends FormRequest
     {
         return [
             'facility_id' => ['required', 'integer', 'min:1'],
-            'code' => ['required', 'string', 'max:40'],
+            'code' => ['prohibited'],
             'name_ar' => ['required', 'string', 'max:200'],
             'description' => ['nullable', 'string', 'max:10000'],
             'specialty_id' => ['nullable', 'integer', 'min:1'],

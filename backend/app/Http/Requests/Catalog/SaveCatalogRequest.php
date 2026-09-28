@@ -19,7 +19,7 @@ class SaveCatalogRequest extends FormRequest
         $kind = $creating ? $this->input('kind') : $this->route('kind');
 
         return ['facility_id' => ['required', 'integer', 'min:1'], 'kind' => [$creating ? 'required' : 'prohibited', Rule::in(CatalogQueries::kinds())],
-            'code' => ['required', 'string', 'max:50'], 'name_ar' => ['required', 'string', 'max:200'], 'description' => ['nullable', 'string', 'max:10000'],
+            'code' => ['prohibited'], 'name_ar' => ['required', 'string', 'max:200'], 'description' => ['nullable', 'string', 'max:10000'],
             'is_active' => ['required', 'boolean'], 'lock_version' => [$creating ? 'prohibited' : 'required', 'integer', 'min:1'],
             'category_id' => [$kind === 'service' ? 'required' : ($kind === 'medication' ? 'nullable' : 'prohibited'), 'integer', 'min:1'],
             'procedure_type_id' => [$kind === 'procedure' ? 'nullable' : 'prohibited', 'integer', 'min:1'],

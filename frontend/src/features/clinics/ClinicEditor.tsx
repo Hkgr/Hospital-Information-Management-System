@@ -40,8 +40,9 @@ export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onR
     pending.current = true; setBusy(true); setError(null);
     const active = new AbortController(); controller.current = active;
     try {
+      const { code: _issued, ...editable } = fields;
       await apiRequest<Clinic>(`clinics${clinic ? `/${clinic.id}` : ""}`, { method: clinic ? "PUT" : "POST", signal: active.signal, body: JSON.stringify({
-        ...fields, facility_id: facilityId, specialty_id: fields.specialty_id ? Number(fields.specialty_id) : null,
+        ...editable, facility_id: facilityId, specialty_id: fields.specialty_id ? Number(fields.specialty_id) : null,
         ...(baseClinic ? { lock_version: baseClinic.lock_version, doctor_remove_ids: Object.keys(changes).filter(id => !changes[Number(id)]).map(Number) } : {}),
         doctor_add_ids: Object.keys(changes).filter(id => changes[Number(id)]).map(Number),
       }) });
@@ -65,7 +66,7 @@ export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onR
       }} />}
       <fieldset disabled={busy || conflict} className={styles.fields}>
         <div className={styles.sectionHeading}><span>01</span><div><h3>بيانات العيادة</h3><p>تعريف العيادة وتخصصها داخل المنشأة.</p></div></div>
-        <label>كود العيادة *<input autoFocus required maxLength={40} dir="auto" value={fields.code} onChange={e => setFields({ ...fields, code: e.target.value })} aria-invalid={!!error?.fields.code} aria-describedby={error?.fields.code ? "clinic-error-code" : undefined} />{fieldError("code")}</label>
+        {baseClinic ? <label>كود العيادة<input aria-label="كود العيادة" value={fields.code} readOnly /><small>الكود ثابت ويصدره النظام.</small></label> : <p className={styles.hint}>يُمنح كود العيادة تلقائيًا عند الحفظ.</p>}
         <label>اسم العيادة *<input required maxLength={200} value={fields.name_ar} onChange={e => setFields({ ...fields, name_ar: e.target.value })} aria-invalid={!!error?.fields.name_ar} aria-describedby={error?.fields.name_ar ? "clinic-error-name_ar" : undefined} />{fieldError("name_ar")}</label>
         <label className={styles.full}>التوصيف<textarea rows={3} maxLength={10000} value={fields.description} onChange={e => setFields({ ...fields, description: e.target.value })} />{fieldError("description")}</label>
         <label>التخصص<select value={fields.specialty_id} onChange={e => setFields({ ...fields, specialty_id: e.target.value })}><option value="">دون تخصص</option>{baseClinic?.specialty && !specialties.data?.some(s => s.id === baseClinic.specialty?.id) && <option value={baseClinic.specialty.id}>{baseClinic.specialty.name_ar}</option>}{specialties.data?.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}</select>{fieldError("specialty_id")}</label>

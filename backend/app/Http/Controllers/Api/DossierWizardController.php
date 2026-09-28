@@ -12,6 +12,7 @@ use App\Services\Dossiers\DossierPersonalWriter;
 use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\DossierWizardQueries;
 use App\Services\Dossiers\DossierWorkflowActions;
+use App\Services\Directory\IssuedCodes;
 use App\Services\Dossiers\DossierWrites;
 use Database\Seeders\DossierOutcomeSeeder;
 use Illuminate\Database\QueryException;
@@ -126,21 +127,19 @@ class DossierWizardController extends Controller
         $f = $this->scope($r);
         $this->access->global($r->user(), 'diagnoses.create');
         abort_unless(in_array('dossiers.visits.create', $f['permissions'], true) || in_array('dossiers.visits.update', $f['permissions'], true), 403);
-        $data = $r->validate(['facility_id' => ['required', 'integer'], 'request_id' => ['required', 'uuid'], 'code' => ['required', 'string', 'max:50'], 'name_ar' => ['required', 'string', 'max:200']], ['required' => 'هذا الحقل مطلوب.', 'max' => 'القيمة تتجاوز الحد المسموح.']);
+        $data = $r->validate(['facility_id' => ['required', 'integer'], 'request_id' => ['required', 'uuid'], 'code' => ['prohibited'], 'name_ar' => ['required', 'string', 'max:200']], ['required' => 'هذا الحقل مطلوب.', 'max' => 'القيمة تتجاوز الحد المسموح.', 'prohibited' => 'الكود يصدره النظام ولا يُدخله المستخدم.']);
         try {
             $id = app(DossierWrites::class)->once($r, $f, $data, 'diagnosis:new', function () use ($r, $f, $data) {
                 // Serialize wizard directory writers even when neither code nor name exists yet.
                 DB::table('number_sequences')->insertOrIgnore(['sequence_key' => 'diagnosis_directory', 'scope_key' => 'global', 'period_key' => 'all']);
                 DB::table('number_sequences')->where('sequence_key', 'diagnosis_directory')->where('scope_key', 'global')->where('period_key', 'all')->lockForUpdate()->first();
                 $name = trim(preg_replace('/\s+/u', ' ', $data['name_ar']));
-                if (DB::table('diagnoses')->where('code', $data['code'])->exists()) {
-                    throw ValidationException::withMessages(['code' => 'كود التشخيص مستخدم.']);
-                }
+                $code = app(IssuedCodes::class)->diagnosis();
                 if (DB::table('diagnoses')->whereRaw("TRIM(REGEXP_REPLACE(name_ar, '[[:space:]]+', ' ')) = ?", [$name])->exists()) {
                     throw ValidationException::withMessages(['name_ar' => 'هذا الاسم موجود في دليل التشخيصات.']);
                 }
-                $id = DB::table('diagnoses')->insertGetId(['code' => $data['code'], 'name_ar' => $name, 'created_at' => now(), 'updated_at' => now()]);
-                app(DossierWrites::class)->audit($r, $f, 'diagnosis', $id, null, ['code' => $data['code'], 'name_ar' => $name]);
+                $id = DB::table('diagnoses')->insertGetId(['code' => $code, 'name_ar' => $name, 'created_at' => now(), 'updated_at' => now()]);
+                app(DossierWrites::class)->audit($r, $f, 'diagnosis', $id, null, ['code' => $code, 'name_ar' => $name]);
 
                 return $id;
             });

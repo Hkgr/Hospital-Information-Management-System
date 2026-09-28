@@ -4,6 +4,7 @@ namespace App\Services\Clinics;
 
 use App\Exceptions\ClinicException;
 use App\Services\Directory\ClinicStaffLinks;
+use App\Services\Directory\IssuedCodes;
 use App\Services\Directory\DirectoryLifecycle;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -24,12 +25,12 @@ class ClinicWriter
                 if ($old && $old['archived_at'] !== null) {
                     throw new ClinicException('CLINIC_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله أو إدارة ارتباطاته.');
                 }
-                $fields = Arr::only($input, ['code', 'name_ar', 'description', 'specialty_id', 'is_active']);
+                $fields = Arr::only($input, ['name_ar', 'description', 'specialty_id', 'is_active']);
                 if (! empty($fields['specialty_id']) && $fields['specialty_id'] != ($old['specialty_id'] ?? null) && ! DB::table('specialties')->where('id', $fields['specialty_id'])->where('is_active', true)->exists()) {
                     throw ValidationException::withMessages(['specialty_id' => 'اختر تخصصًا فعالًا.']);
                 }
-                if (DB::table('clinics')->where('facility_id', $facility['id'])->where('code', $fields['code'])->when($id, fn ($q) => $q->where('id', '!=', $id))->exists()) {
-                    throw ValidationException::withMessages(['code' => 'كود العيادة مستخدم في هذه المنشأة.']);
+                if ($id === null) {
+                    $fields['code'] = app(IssuedCodes::class)->clinic();
                 }
                 $fields['updated_at'] = now();
                 if ($id === null) {

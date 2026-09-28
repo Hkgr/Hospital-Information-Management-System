@@ -26,7 +26,7 @@ class PatientWorkspaceTest extends TestCase
     public function test_registration_and_visit_correction_have_no_classification(): void
     {
         $input = ['facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid(), 'person_mode' => 'new',
-            'code' => 'WORK-'.Str::random(12), 'opening_date' => '2000-01-01', 'visit_date' => '2001-03-02',
+            'opening_date' => '2000-01-01', 'visit_date' => '2001-03-02',
             'first_name' => 'أحمد', 'family_name' => 'محمد', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
         $s = $this->postJson('/api/dossiers', $input)->assertCreated()->json('data');
         $this->assertArrayNotHasKey('visit_type_id', $s['visit']);

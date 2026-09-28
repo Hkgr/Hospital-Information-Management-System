@@ -54,7 +54,7 @@ function Workspace({ kind, facilityId, name }: { kind: DirectoryKind; facilityId
 }
 
 function DirectoryEditor({ kind, facilityId, row, onClose, onSaved }: { kind: DirectoryKind; facilityId: number; row?: DirectoryRow; onClose: () => void; onSaved: () => void }) {
-  const [code, setCode] = useState(row?.code ?? "");
+  const [code] = useState(row?.code ?? "");
   const [nameAr, setNameAr] = useState(row?.name_ar ?? "");
   const [extra, setExtra] = useState(kind === "stores" ? (row?.location ?? "") : (row?.contact_person ?? ""));
   const [active, setActive] = useState(row?.is_active ?? true);
@@ -64,7 +64,7 @@ function DirectoryEditor({ kind, facilityId, row, onClose, onSaved }: { kind: Di
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (pending.current) return;
     pending.current = true; setBusy(true); setError(null);
-    const body: Record<string, unknown> = { facility_id: facilityId, code, name_ar: nameAr, is_active: active };
+    const body: Record<string, unknown> = { facility_id: facilityId, name_ar: nameAr, is_active: active };
     if (kind === "stores") body.location = extra || null; else body.contact_person = extra || null;
     if (row) body.lock_version = row.lock_version;
     try {
@@ -76,7 +76,7 @@ function DirectoryEditor({ kind, facilityId, row, onClose, onSaved }: { kind: Di
   return <Modal title={row ? `تعديل ${row.name_ar}` : `إضافة إلى ${directoryName(kind)}`} onClose={onClose}>
     <form className={styles.form} onSubmit={save}>
       {error && <p role="alert">{error.message}</p>}
-      <label>الكود<input value={code} onChange={e => setCode(e.target.value)} required maxLength={50} /></label>
+      {row ? <label>الكود<input value={code} readOnly dir="ltr" /><small>الكود ثابت ويصدره النظام.</small></label> : <p className={styles.hint}>يُمنح الكود تلقائيًا عند الحفظ.</p>}
       <label>الاسم<input value={nameAr} onChange={e => setNameAr(e.target.value)} required maxLength={200} /></label>
       <label>{kind === "stores" ? "الموقع" : "جهة الاتصال"}<input value={extra} onChange={e => setExtra(e.target.value)} /></label>
       <label>الحالة<select value={active ? "1" : "0"} onChange={e => setActive(e.target.value === "1")}><option value="1">فعال</option><option value="0">غير فعال</option></select></label>

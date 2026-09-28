@@ -21,7 +21,7 @@ class SaveDossierSection extends FormRequest
         $section = $this->route('section');
         if ($section === 'personal') {
             $newPatient = $this->isMethod('PUT') || $this->input('person_mode') === 'new';
-            $rules += ['code' => [$this->input('person_mode') === 'existing' ? 'prohibited' : 'required', 'string', 'max:40'], 'opening_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'],
+            $rules += ['code' => ['prohibited'], 'opening_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'],
                 'person_mode' => [$this->isMethod('POST') ? 'required' : 'prohibited', Rule::in(['existing', 'new'])],
                 'patient_id' => [$this->input('person_mode') === 'existing' ? 'required' : 'prohibited', 'integer', 'min:1'],
                 'patient_lock_version' => [$this->isMethod('PUT') ? 'required' : 'prohibited', 'integer', 'min:1']];

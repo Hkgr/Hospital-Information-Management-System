@@ -69,19 +69,25 @@ class CatalogApiTest extends TestCase
 
     private function payload(string $kind, array $extra = []): array
     {
-        return $extra + ['kind' => $kind, 'code' => '0009', 'name_ar' => 'تعريف جديد', 'description' => 'وصف', 'is_active' => true, ...($kind === 'service' ? ['category_id' => $this->f['category']] : ($kind === 'medication' ? ['strength' => '500mg', 'dosage_form' => 'tablet', 'default_unit' => 'قرص', 'reorder_level' => '10'] : []))];
+        unset($extra['code']);
+
+        return $extra + ['kind' => $kind, 'name_ar' => 'تعريف جديد', 'description' => 'وصف', 'is_active' => true, ...($kind === 'service' ? ['category_id' => $this->f['category']] : ($kind === 'medication' ? ['strength' => '500mg', 'dosage_form' => 'tablet', 'default_unit' => 'قرص', 'reorder_level' => '10'] : []))];
     }
 
     #[DataProvider('kinds')]
     public function test_crud_unique_code_validation_versions_and_history(string $kind): void
     {
-        $id = $this->api('POST', '', $this->payload($kind))->assertCreated()->assertJsonPath('data.patient_count', 0)->json('data.id');
-        $this->api('POST', '', $this->payload($kind))->assertUnprocessable()->assertJsonValidationErrors('code');
-        $excluded = $this->api('POST', '', $this->payload($kind, ['code' => 'ABC', 'name_ar' => 'غير مطابق']))->assertCreated()->json('data.id');
-        $matches = $this->api('GET', '', ['kind' => $kind, 'search' => '0'])->assertOk()->json('data');
+        $created = $this->api('POST', '', $this->payload($kind))->assertCreated()->assertJsonPath('data.patient_count', 0)->json('data');
+        $id = $created['id'];
+        $this->assertMatchesRegularExpression('/^(SER|PRO|MED)-\d{3,}$/', $created['code']);
+        $again = $this->api('POST', '', $this->payload($kind))->assertCreated()->json('data');
+        $this->assertNotSame($created['code'], $again['code']);
+        $this->api('POST', '', $this->payload($kind) + ['code' => 'ABC'])->assertUnprocessable()->assertJsonValidationErrors('code');
+        $excluded = $this->api('POST', '', $this->payload($kind, ['name_ar' => 'غير مطابق']))->assertCreated()->json('data.id');
+        $matches = $this->api('GET', '', ['kind' => $kind, 'search' => 'تعريف جديد'])->assertOk()->json('data');
         $this->assertContains($id, array_column($matches, 'id'));
         $this->assertNotContains($excluded, array_column($matches, 'id'));
-        $this->api('POST', '', $this->payload($kind, ['code' => str_repeat('a', 51), 'name_ar' => '']))->assertUnprocessable()->assertJsonValidationErrors(['code', 'name_ar']);
+        $this->api('POST', '', $this->payload($kind, ['name_ar' => '']))->assertUnprocessable()->assertJsonValidationErrors('name_ar');
         $data = $this->payload($kind, ['lock_version' => 1, 'name_ar' => 'اسم معدل']);
         unset($data['kind']);
         $this->api('PUT', "/$kind/$id", $data)->assertOk()->assertJsonPath('data.lock_version', 2);

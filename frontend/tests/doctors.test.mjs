@@ -104,15 +104,15 @@ test('creation without clinics validates in place and blocks duplicate save, esc
   let release,writes=0;const gate=new Promise(resolve=>{release=resolve;});
   const {page,context,calls}=await setup({override:async(route,url)=>{
     if(route.request().method()!=='POST'||url.pathname!=='/hospital-api/doctors') return false;
-    writes++;await gate;await route.fulfill({status:422,json:{errors:{code:['كود الطبيب مستخدم.']}}});return true;
+    writes++;await gate;await route.fulfill({status:422,json:{errors:{name:['الاسم الكامل مطلوب.']}}});return true;
   }});
   try{
     const opener=page.getByRole('button',{name:'إضافة طبيب جديد',exact:true});await opener.click();
-    const dialog=page.getByRole('dialog');await dialog.getByLabel('كود الطبيب *').fill('NEW');await dialog.getByLabel('الاسم الكامل *').fill('طبيب جديد');
+    const dialog=page.getByRole('dialog');await dialog.getByText('يُمنح كود الطبيب تلقائيًا عند الحفظ.').waitFor();await dialog.getByLabel('الاسم الكامل *').fill('طبيب جديد');
     await dialog.getByLabel('نوع الطبيب *').selectOption('1');await dialog.getByRole('checkbox',{name:'الطب الداخلي',exact:true}).check();
     await dialog.getByRole('button',{name:'حفظ الطبيب',exact:true}).click();await page.keyboard.press('Escape');assert.equal(await dialog.count(),1);
-    release();await dialog.getByText('كود الطبيب مستخدم.',{exact:true}).waitFor();assert.equal(writes,1);
-    assert.equal(await dialog.getByLabel('كود الطبيب *').inputValue(),'NEW');assert.deepEqual(calls.find(c=>c.method==='POST').body.clinic_add_ids,[]);
+    release();await dialog.getByText('الاسم الكامل مطلوب.',{exact:true}).waitFor();assert.equal(writes,1);
+    assert.equal(await dialog.getByLabel('الاسم الكامل *').inputValue(),'طبيب جديد');assert.equal(calls.find(c=>c.method==='POST').body.code,undefined);assert.deepEqual(calls.find(c=>c.method==='POST').body.clinic_add_ids,[]);
     await page.keyboard.press('Escape');assert.equal(await opener.evaluate(el=>el===document.activeElement),true);
   }finally{release();await context.close();}
 });

@@ -3,13 +3,13 @@
 namespace App\Services\Dossiers;
 
 use App\Http\Requests\Dossiers\SaveDossierSection;
+use App\Services\Directory\IssuedCodes;
 use App\Services\Reception\IdentityCorrections;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class DossierPersonalWriter
@@ -48,7 +48,7 @@ class DossierPersonalWriter
                     }
                     // Serialize canonical-code/legacy-code reservations across facilities.
                     app(PatientCardCodes::class)->reserve();
-                    if ($automaticCode && $input['person_mode'] === 'new') {
+                    if (($input['person_mode'] ?? null) === 'new') {
                         $input['code'] = app(PatientCardCodes::class)->next();
                     }
                 }
@@ -56,9 +56,6 @@ class DossierPersonalWriter
                 $patient = $patientId ? DB::table('patients')->where('id', $patientId)->where('status', 'active')->lockForUpdate()->first() : null;
                 if ($patientId) {
                     abort_unless($patient, 404);
-                }
-                if ($old && $input['code'] !== $patient->patient_code) {
-                    throw ValidationException::withMessages(['code' => 'كود المريض ثابت؛ لا يُغيَّر من تعديل بيانات البطاقة.']);
                 }
                 if (! $patient && (DB::table('patients')->where('patient_code', $input['code'])->exists()
                     || DB::table('patient_dossiers')->where('code', $input['code'])->exists())) {
@@ -109,7 +106,7 @@ class DossierPersonalWriter
                         $visit = ['facility_id' => $f['id'], 'patient_id' => $patientId, 'dossier_id' => $id,
                             'visit_date' => $input['visit_date'],
                             'dossier_visit_kind' => 'initial', 'reporting_period_id' => null,
-                            'visit_no' => 'V-'.Str::uuid(), 'client_request_id' => $input['request_id'],
+                            'visit_no' => app(IssuedCodes::class)->visit(), 'client_request_id' => $input['request_id'],
                             'entered_by' => $r->user()->id, 'status' => 'draft', 'created_at' => now(), 'updated_at' => now()];
                         $visitId = DB::table('visits')->insertGetId($visit);
                         DB::table('patient_dossiers')->where('id', $id)->update(['registration_visit_id' => $visitId]);

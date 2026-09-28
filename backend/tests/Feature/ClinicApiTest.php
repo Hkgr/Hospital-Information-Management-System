@@ -78,14 +78,18 @@ class ClinicApiTest extends TestCase
 
     private function create(array $extra = []): array
     {
-        return $this->callApi('POST', '', $extra + ['code' => '001', 'name_ar' => 'العيادة الاختبارية', 'description' => 'توصيف عربي', 'is_active' => true])
+        unset($extra['code']);
+
+        return $this->callApi('POST', '', $extra + ['name_ar' => 'العيادة الاختبارية', 'description' => 'توصيف عربي', 'is_active' => true])
             ->assertCreated()->assertHeader('Cache-Control', 'no-store, private')->json('data');
     }
 
     private function edit(array $clinic, array $changes = [])
     {
+        unset($changes['code']);
+
         return $this->callApi('PUT', '/'.$clinic['id'], $changes + [
-            'code' => $clinic['code'], 'name_ar' => $clinic['name_ar'], 'description' => $clinic['description'],
+            'name_ar' => $clinic['name_ar'], 'description' => $clinic['description'],
             'is_active' => $clinic['is_active'], 'lock_version' => $clinic['lock_version'],
         ]);
     }
@@ -96,7 +100,7 @@ class ClinicApiTest extends TestCase
         $this->assertSame(0, $clinic['doctor_count']);
         $second = $this->staff('D002');
         $updated = $this->edit($clinic, ['doctor_add_ids' => [$this->doctor, $second]])->assertOk()->assertJsonPath('data.doctor_count', 2)->json('data');
-        $this->callApi('GET', '/'.$clinic['id'])->assertJsonPath('data.code', '001');
+        $this->callApi('GET', '/'.$clinic['id'])->assertJsonPath('data.code', $clinic['code']);
         $this->callApi('GET', '/'.$clinic['id'].'/doctors')->assertJsonPath('meta.total', 2)->assertJsonCount(2, 'data');
         $this->callApi('POST', '', ['code' => '001', 'name_ar' => 'مكرر', 'is_active' => true])->assertUnprocessable()->assertJsonValidationErrors('code');
         $other = $this->assign('TEST-B', ['view', 'create']);
@@ -118,7 +122,7 @@ class ClinicApiTest extends TestCase
         $unlisted = $this->staff('N1', ['staff_type_id' => $unlistedType]);
         $inactive = $this->staff('D2', ['is_active' => false]);
         foreach ([$unlisted, $inactive, 999999] as $id) {
-            $this->callApi('POST', '', ['code' => 'bad', 'name_ar' => 'رفض', 'is_active' => true, 'doctor_add_ids' => [$id]])->assertUnprocessable()->assertJsonValidationErrors('doctor_add_ids');
+            $this->callApi('POST', '', ['name_ar' => 'رفض', 'is_active' => true, 'doctor_add_ids' => [$id]])->assertUnprocessable()->assertJsonValidationErrors('doctor_add_ids');
         }
         $this->assertDatabaseCount('clinics', 0);
         $this->callApi('GET', '/options/doctors')->assertJsonPath('meta.total', 1);
@@ -242,11 +246,11 @@ class ClinicApiTest extends TestCase
     public function test_search_sort_pagination_and_bounded_queries(): void
     {
         $specialty = DB::table('specialties')->insertGetId(['code' => 'S', 'name_ar' => 'تخصص اختباري']);
-        $this->create(['code' => '010', 'specialty_id' => $specialty, 'doctor_add_ids' => [$this->doctor]]);
-        $this->create(['code' => '020', 'is_active' => false]);
-        $this->callApi('GET', '', ['search' => 'توصيف', 'per_page' => 1, 'page' => 2])->assertJsonPath('meta.total', 2)->assertJsonPath('data.0.code', '020');
+        $this->create(['specialty_id' => $specialty, 'doctor_add_ids' => [$this->doctor]]);
+        $inactive = $this->create(['is_active' => false]);
+        $this->callApi('GET', '', ['search' => 'توصيف', 'per_page' => 1, 'page' => 2])->assertJsonPath('meta.total', 2)->assertJsonPath('data.0.code', $inactive['code']);
         $this->callApi('GET', '', ['doctor_id' => $this->doctor, 'specialty_id' => $specialty, 'status' => 'active'])->assertJsonCount(1, 'data');
-        $this->callApi('GET', '', ['sort' => 'code', 'direction' => 'desc'])->assertJsonPath('data.0.code', '020');
+        $this->callApi('GET', '', ['sort' => 'code', 'direction' => 'desc'])->assertJsonPath('data.0.code', $inactive['code']);
         $this->callApi('GET', '', ['sort' => 'code; DROP TABLE clinics', 'per_page' => 101])->assertUnprocessable()->assertJsonValidationErrors(['sort', 'per_page']);
         DB::enableQueryLog();
         $this->callApi('GET')->assertOk();
@@ -258,15 +262,15 @@ class ClinicApiTest extends TestCase
         $this->callApi('GET')->assertOk();
         $this->assertSame($small, count(DB::getQueryLog()));
         DB::disableQueryLog();
-        $this->create(['code' => 'ABC']);
-        $this->callApi('GET', '', ['search' => '0'])->assertJsonPath('meta.total', 3);
+        $extra = $this->create();
+        $this->callApi('GET', '', ['search' => $extra['code']])->assertJsonPath('meta.total', 1);
     }
 
     public function test_real_excel_all_filtered_rows_columns_issuer_unique_numbers_and_injection(): void
     {
-        $this->create(['code' => '0001', 'name_ar' => '=HYPERLINK("bad")']);
-        $this->create(['code' => '0002', 'name_ar' => '+SUM(1,2)']);
-        $this->create(['code' => 'OTHER', 'is_active' => false]);
+        $first = $this->create(['name_ar' => '=HYPERLINK("bad")']);
+        $second = $this->create(['name_ar' => '+SUM(1,2)']);
+        $this->create(['is_active' => false]);
         $filters = ['per_page' => 1, 'page' => 2, 'status' => 'active', 'direction' => 'desc', 'columns' => ['code', 'name_ar']];
         $response = $this->callApi('GET', '/export/xlsx', $filters)->assertOk()->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         $file = tempnam(storage_path('framework/testing'), 'clinic-xlsx');
@@ -277,8 +281,8 @@ class ClinicApiTest extends TestCase
             $this->assertTrue($sheet->getRightToLeft());
             $this->assertSame('Cairo', $book->getDefaultStyle()->getFont()->getName());
             $this->assertSame('A9', $sheet->getFreezePane());
-            $this->assertSame('0002', $sheet->getCell('A9')->getValue());
-            $this->assertSame('0001', $sheet->getCell('A10')->getValue());
+            $this->assertSame($second['code'], $sheet->getCell('A9')->getValue());
+            $this->assertSame($first['code'], $sheet->getCell('A10')->getValue());
             $this->assertSame('s', $sheet->getCell('B10')->getDataType());
             $this->assertSame('=HYPERLINK("bad")', $sheet->getCell('B10')->getValue());
             $this->assertSame('B', $sheet->getHighestDataColumn());
