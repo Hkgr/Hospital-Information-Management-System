@@ -29,6 +29,8 @@ export default function UsersScreen() {
   const query = useSearchParams();
   const router = useRouter();
   const { allowed, facilityId, entry } = directoryFacility(access, "users.view", query.get("facility_id"));
+  const ids = query.getAll("facility_id");
+  if (ids.length > 1 || (ids.length === 1 && (!/^[1-9]\d*$/.test(ids[0]) || !Number.isSafeInteger(Number(ids[0])) || Number(ids[0]) > 2147483647))) return <section className={styles.status}><h2>تعذّر اختيار المنشأة</h2><p role="alert">معرّف المنشأة غير صالح. افتح رابطًا صحيحًا أو سجّل الخروج من قائمة الحساب.</p></section>;
   if (!entry) return <section className={styles.status}><h2>إدارة المستخدمين غير متاحة</h2><p role="alert">ليس لديك وصول إلى مستخدمي المنشأة المطلوبة.</p></section>;
   return <div className={styles.screen}>
     <div className={styles.context}><LuUsers aria-hidden="true" /><span>المنشأة</span>{allowed.length === 1 ? <strong>{entry.facility.name_ar}</strong> : <select aria-label="المنشأة" value={facilityId} onChange={event => { const next = new URLSearchParams(); next.set("facility_id", event.target.value); router.push(`/users?${next}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select>}</div>
@@ -52,7 +54,9 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
   if (page) query.set("page", page);
   if (perPage) query.set("per_page", perPage);
   if (committed) query.set("search", committed);
-  const options = useClinicRequest<Options>(`users/options?facility_id=${facilityId}`, true, true, revision);
+  // Options is the response's data object; lists alone retain their envelope.
+  // Never keep stale capability controls while options are reloading/failed.
+  const options = useClinicRequest<Options>(`users/options?facility_id=${facilityId}`, false, false, revision);
   const list = useClinicRequest<Page<Member>>(`users?${query}`, true, true, revision);
   const roles = useClinicRequest<{ data: ManagedRole[] }>(options.data?.capabilities.roles_view ? `users/roles?facility_id=${facilityId}` : "", true, true, revision);
   function filter(key: string, value: string) {
@@ -70,13 +74,15 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
         {tab === "roles" && caps?.roles_create && <button className={styles.primary} onClick={() => setCreatingRole(true)}><LuPlus aria-hidden="true" />إضافة دور</button>}
       </div>
     </header>
+    {options.loading && <p className={styles.status} role="status">جارٍ تحميل خيارات إدارة المستخدمين…</p>}
+    {options.error && <section className={styles.status}><p>تعذّر تحميل خيارات إدارة المستخدمين.</p><p role="alert">{options.error}</p><button className={styles.secondary} onClick={options.retry}>إعادة تحميل الخيارات</button></section>}
     {caps?.roles_view && <div className={styles.tabs} role="tablist" aria-label="أقسام إدارة المستخدمين">
       <button type="button" role="tab" aria-selected={tab === "users"} onClick={() => setTab("users")}>المستخدمون</button>
       <button type="button" role="tab" aria-selected={tab === "roles"} onClick={() => setTab("roles")}>الأدوار والصلاحيات</button>
     </div>}
     {tab === "users" && <section className={styles.panel} aria-label="قائمة المستخدمين">
       <div className={styles.toolbar}><label className={styles.search}><span><LuSearch aria-hidden="true" />البحث في المستخدمين</span><input type="search" placeholder="اسم المستخدم أو الاسم…" value={search} onChange={event => change(event.target.value)} /></label></div>
-      {list.error && !list.data && <div className={styles.status}><p role="alert">{list.error}</p><button className={styles.secondary} onClick={list.retry}>إعادة المحاولة</button></div>}
+      {list.error && <div className={styles.status}><p role="alert">{list.error}</p><button className={styles.secondary} onClick={list.retry}>إعادة المحاولة</button></div>}
       {!list.data && !list.error && <p className={styles.status} role="status">جارٍ تحميل المستخدمين…</p>}
       {list.data && <>
         <div className={styles.resultSummary}><strong>{list.data.meta.total} مستخدم</strong>{(searching || list.loading) && <span role="status">جارٍ تحديث النتائج…</span>}</div>
@@ -94,7 +100,7 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
       </>}
     </section>}
     {tab === "roles" && <section className={styles.panel} aria-label="قائمة الأدوار">
-      {roles.error && !roles.data && <div className={styles.status}><p role="alert">{roles.error}</p><button className={styles.secondary} onClick={roles.retry}>إعادة المحاولة</button></div>}
+      {roles.error && <div className={styles.status}><p role="alert">{roles.error}</p><button className={styles.secondary} onClick={roles.retry}>إعادة المحاولة</button></div>}
       {!roles.data && !roles.error && <p className={styles.status} role="status">جارٍ تحميل الأدوار…</p>}
       {roles.data && <>
         <div className={styles.resultSummary}><strong>{roles.data.data.length} دور</strong></div>

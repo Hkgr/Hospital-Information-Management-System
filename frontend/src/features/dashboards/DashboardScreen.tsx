@@ -31,15 +31,29 @@ function DashboardRequest({ dashboardKey, query }: { dashboardKey?: string; quer
       const facility = ids.length ? Number(ids[0]) : null;
       if (facility !== null && (!Number.isSafeInteger(facility) || facility > 2147483647)) throw new AuthError(422, "INVALID_FACILITY", "معرّف المنشأة غير صالح.");
       const catalog = await dashboardCatalog(controller.signal);
+      if (controller.signal.aborted) return;
       if (!dashboardKey) {
         const target = catalog.dashboards.find(item => item.key === catalog.default_dashboard_key);
-        const path = target && dashboardPath(target);
+        const path = target && dashboardPath(target, facility ?? target.default_facility_id);
+        if (target && facility !== null && !path) throw new AuthError(403, "INVALID_FACILITY", "المنشأة المطلوبة غير مسموحة لهذه اللوحة.");
         if (controller.signal.aborted) return;
         if (!path) { setState({ empty: true }); return; }
         router.replace(path);
         return;
       }
       if (!knownDashboard(dashboardKey)) throw new AuthError(404, "UNKNOWN_DASHBOARD", "لوحة التحكم المطلوبة غير متاحة في هذا التطبيق.");
+      if (facility === null) {
+        const descriptor = catalog.dashboards.find(item => item.key === dashboardKey);
+        if (!descriptor) { setState({ empty: true }); return; }
+        if (descriptor.requires_facility) {
+          const path = dashboardPath(descriptor);
+          if (!path) { setState({ empty: true }); return; }
+          // Canonicalize only an omitted facility, using Laravel's allowed
+          // default. The new URL owns the detail request and its cancellation.
+          router.replace(path);
+          return;
+        }
+      }
       // Always ask Laravel for details; catalog presence is not authorization.
       const data = await dashboardDetail(dashboardKey, facility, controller.signal);
       if (data.dashboard?.key !== dashboardKey || data.user?.id !== identity.user.id || data.selected_facility_id !== facility
@@ -61,7 +75,7 @@ function DashboardRequest({ dashboardKey, query }: { dashboardKey?: string; quer
   const retry = () => { setState({}); setAttempt(value => value + 1); };
   if (state.error || state.empty) return <section className={styles.status}>
     <h2>{state.empty ? "لا توجد لوحة تحكم متاحة" : "تعذّر عرض لوحة التحكم"}</h2>
-    <p role={state.error ? "alert" : "status"}>{state.error ?? "لا توجد لوحة مسموحة يدعمها هذا الإصدار. راجع مسؤول النظام عند الحاجة."}</p>
+    <p role={state.error ? "alert" : "status"}>{state.error ?? "لا توجد لوحة ومنشأة مسموحتان يدعمهما هذا الإصدار. راجع مسؤول النظام، أو سجّل الخروج من قائمة الحساب."}</p>
     <button type="button" onClick={retry}>إعادة المحاولة</button>
     {dashboardKey && <button type="button" onClick={() => router.replace("/")}>العودة إلى اللوحة الافتراضية</button>}
   </section>;
