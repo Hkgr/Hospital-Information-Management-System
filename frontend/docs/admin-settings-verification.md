@@ -2,6 +2,8 @@
 
 Based on develop `7ce69698e40d7b7fd5a16bba6907e9ba6ce6917d` (PR #61). See [backend activation and policy contract](../../backend/docs/facility-settings-and-guides.md). This change does not deploy, alter production, or change FastAPI.
 
+At the user's final direction, all nine facility dropdowns were removed. The current hospital name is read-only, and the existing authorized default is resolved automatically. The database/API scope and denial of explicit unauthorized IDs remain unchanged. Context-isolation regressions now navigate actual URLs rather than a removed selector. Older directory mock fixtures were given explicit noninteractive session responses so their clinical UI checks work with the existing idle middleware contract; they do not test real authentication.
+
 ## Functional verification
 
 Environment: PHP/Laravel with the MySQL driver, isolated local MariaDB **10.11.18**, database `blood_bank_cities_testing`, loopback `127.0.0.1:13416`. The database safety check passed. No SQLite or production connection was used.
@@ -13,7 +15,9 @@ Environment: PHP/Laravel with the MySQL driver, isolated local MariaDB **10.11.1
 | Token-lock subprocess test after adding missing-directory handling | **1 passed, 6 assertions**, 4.21s |
 | `settings-live.test.mjs` | **4 real integration cases passed** through rebuilt standalone Next → Laravel → MariaDB; no API interception |
 | `idle-session.test.mjs` | **6 browser cases passed using mocked session responses**; timing, sleep, offline, warning and peer-tab behavior, not a substitute for real integration |
-| Existing `dashboard-users-live.test.mjs` | **7 real integration cases passed** earlier in this branch, including dashboard context and explicit role rewrites |
+| Combined `dashboard-users-live.test.mjs`, `settings-live.test.mjs`, `statistics-live.test.mjs` after removing facility selectors | **15 real integration cases passed, 0 failed, 0 skipped**, 226.383s; includes default context, protected role rewrites, real tab renewal/expiry, reception replay and two PHP workers |
+| Affected directory/dashboard/audit/report browser suites after removing selectors | **81 functional cases passed, 0 failed, 0 skipped**, 200.806s; API fixtures, not live integration |
+| Audit suite after correcting conditional hook and rebuilding again | **3 passed, 0 failed, 0 skipped**, 8.136s; includes default → denied → default navigation |
 | `npx tsc --noEmit` | Passed |
 | ESLint for changed/new TypeScript, TSX and browser test files | Passed |
 | `npm run build` | Passed; fresh standalone artifact rebuilt with the local Laravel API URL |
@@ -31,6 +35,10 @@ Final browser command:
 ```sh
 node --test --test-concurrency=1 tests/settings-live.test.mjs tests/idle-session.test.mjs
 ```
+
+After the single-hospital UI change, the combined real run used `tests/dashboard-users-live.test.mjs tests/settings-live.test.mjs tests/statistics-live.test.mjs`. The 81-case mocked run used `tests/clinics.test.mjs tests/doctors.test.mjs tests/directory-lifecycle.test.mjs tests/directory-export-readiness.test.mjs tests/reports.test.mjs tests/audit.test.mjs tests/dashboards.test.mjs`, with `TEST_BASE_URL=http://127.0.0.1:3194` and `PLAYWRIGHT_CHANNEL=chrome`.
+
+Scoped lint exposed an existing conditional hook in `AuditLogScreen`: a denied context could change the number of hooks. The query hook now runs consistently with a null path when unauthorized, issuing no request and rendering no prior rows. A further functional regression covers default → denied → default URL navigation.
 
 The live fixture grants its synthetic administrator separate explicit patient-directory authorization solely to exercise the reception form. Newly created reception users do **not** receive a global grant. Their pending authorization message and a real 403 are checked. Fixture cleanup disables its accounts and revokes their tokens while retaining history.
 

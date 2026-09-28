@@ -21,19 +21,18 @@ import styles from "../clinics/clinics.module.css";
 const DoctorEditor = dynamic(() => import("./DoctorEditor"), { loading: () => <p role="status">جارٍ فتح النموذج…</p> });
 
 export default function DoctorScreen({ doctorId }: { doctorId?: string }) {
-  const { access } = useIdentity(); const query = useSearchParams(); const router = useRouter(); const cancelRef = useRef<(() => void) | null>(null);
-  const { allowed, facilityId, entry } = directoryFacility(access, "doctors.view", query.get("facility_id"));
+  const { access } = useIdentity(); const query = useSearchParams();
+  const { facilityId, entry } = directoryFacility(access, "doctors.view", query.get("facility_id"));
   if (!entry || (doctorId && !/^[1-9]\d*$/.test(doctorId))) return <section className={styles.status}><h2>الأطباء غير متاحين</h2><p role="alert">ليس لديك وصول إلى دليل الأطباء في المنشأة المطلوبة.</p><Link href="/">العودة إلى لوحة التحكم</Link></section>;
-  return <div className={styles.screen}><div className={styles.context}><LuHospital aria-hidden="true" /><span>سياق المنشأة</span>{allowed.length === 1 ? <strong>{entry.facility.name_ar}</strong> : <select aria-label="المنشأة" value={facilityId} onChange={e => { cancelRef.current?.(); router.push(`/doctors?facility_id=${e.target.value}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select>}<span className={styles.contextCaption}>الدليل مشترك · المؤشرات ضمن المنشأة</span></div>
-    <DoctorWorkspace key={`${facilityId}:${doctorId ?? "list"}`} facilityId={entry.facility.id} doctorId={doctorId} cancelRef={cancelRef} />
+  return <div className={styles.screen}><div className={styles.context}><LuHospital aria-hidden="true" /><span>سياق المنشأة</span><strong>{entry.facility.name_ar}</strong><span className={styles.contextCaption}>الدليل مشترك · المؤشرات ضمن المنشأة</span></div>
+    <DoctorWorkspace key={`${facilityId}:${doctorId ?? "list"}`} facilityId={entry.facility.id} doctorId={doctorId} />
   </div>;
 }
 
 type Action = "edit" | "clinics" | "links" | LifecycleAction;
-function DoctorWorkspace({ facilityId, doctorId, cancelRef }: { facilityId: number; doctorId?: string; cancelRef: React.RefObject<(() => void) | null> }) {
+function DoctorWorkspace({ facilityId, doctorId }: { facilityId: number; doctorId?: string }) {
   const router = useRouter(); const pathname = usePathname(); const params = useSearchParams();
   const { search, committed, change, searching, cancel } = useClinicSearch(pathname, params.toString(), facilityId);
-  useEffect(() => { cancelRef.current = cancel; return () => { cancelRef.current = null; }; }, [cancel, cancelRef]);
   const options = useDirectoryRequest<Options>(`doctors/options?facility_id=${facilityId}`);
   const [modal, setModal] = useState<{ type: Action; doctor?: Doctor } | null>(null); const [revision, setRevision] = useState(0);
   const [visible, setVisible] = useState<Column[]>(columnKeys); const [exporting, setExporting] = useState(false); const [exportError, setExportError] = useState("");

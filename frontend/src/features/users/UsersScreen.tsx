@@ -27,13 +27,12 @@ type Options = {
 export default function UsersScreen() {
   const { access } = useIdentity();
   const query = useSearchParams();
-  const router = useRouter();
-  const { allowed, facilityId, entry } = directoryFacility(access, "users.view", query.get("facility_id"));
+  const { entry } = directoryFacility(access, "users.view", query.get("facility_id"));
   const ids = query.getAll("facility_id");
   if (ids.length > 1 || (ids.length === 1 && (!/^[1-9]\d*$/.test(ids[0]) || !Number.isSafeInteger(Number(ids[0])) || Number(ids[0]) > 2147483647))) return <section className={styles.status}><h2>تعذّر اختيار المنشأة</h2><p role="alert">معرّف المنشأة غير صالح. افتح رابطًا صحيحًا أو سجّل الخروج من قائمة الحساب.</p></section>;
   if (!entry) return <section className={styles.status}><h2>إدارة المستخدمين غير متاحة</h2><p role="alert">ليس لديك وصول إلى مستخدمي المنشأة المطلوبة.</p></section>;
   return <div className={styles.screen}>
-    <div className={styles.context}><LuUsers aria-hidden="true" /><span>المنشأة</span>{allowed.length === 1 ? <strong>{entry.facility.name_ar}</strong> : <select aria-label="المنشأة" value={facilityId} onChange={event => { const next = new URLSearchParams(); next.set("facility_id", event.target.value); router.push(`/users?${next}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select>}</div>
+    <div className={styles.context}><LuUsers aria-hidden="true" /><span>المنشأة</span><strong>{entry.facility.name_ar}</strong></div>
     <UsersWorkspace key={entry.facility.id} facilityId={entry.facility.id} />
   </div>;
 }

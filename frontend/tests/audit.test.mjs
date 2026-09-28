@@ -64,6 +64,22 @@ test("system log table lists badges and opens a unique activity page", async () 
   } finally { await context.close(); }
 });
 
+test("audit defaults to the current hospital without a selector and clears rejected URL context", async () => {
+  const { context, page, calls, errors } = await setup();
+  try {
+    await page.goto(`${base}/audit`);
+    await page.getByRole("region", { name: "جدول سجل الحركة" }).getByText("مستخدم الاختبار", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("combobox", { name: "المنشأة", exact: true }).count(), 0);
+    await page.evaluate(() => history.pushState(null, "", "/audit?facility_id=999"));
+    await page.getByText("معرّف المنشأة غير صالح ضمن المنشآت المتاحة لك.").waitFor();
+    assert.equal(await page.getByRole("region", { name: "جدول سجل الحركة" }).count(), 0);
+    assert.ok(calls.every(path => !path.includes("facility_id=999")));
+    await page.evaluate(() => history.pushState(null, "", "/audit"));
+    await page.getByRole("region", { name: "جدول سجل الحركة" }).waitFor();
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
+
 test("operator assignment shows terminal actor, beneficiary and execution reference separately", async () => {
   const assignment = { ...event, actor: { id: null, name: "أمر طرفية — ليس جلسة مستخدم" }, entity: "role", entity_label: "الدور", category: "accounts", category_label: "الحسابات", action: "assigned", action_label: "إسناد دور محمي", reason: "approved assignment", changes: [
     { field: "user_id", label: "المستخدم المستفيد من التعيين", before: null, after: "1", before_recorded: false },

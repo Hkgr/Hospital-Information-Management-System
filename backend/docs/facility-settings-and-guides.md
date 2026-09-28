@@ -26,6 +26,8 @@ Copy `public` and `.next/static` to the standalone artifact as usual. Rewrites a
 
 ## Settings contract and scope
 
+The current installation operates as one hospital. Facility dropdowns have been removed throughout the frontend (including doctors, clinics, users, reports, audit, statistics, dashboards, settings and guides). Pages display the current hospital name and resolve an omitted context using the existing permitted default. No numeric ID is hardcoded. An explicitly invalid or unauthorized context is still rejected; server scope checks and token-wide policy calculations remain intact. This UI change does not merge facilities or alter their data.
+
 - `GET /api/settings?facility_id=…`: `settings.view`; returns facility, saved minutes, version, update capability, and (only for the protected global system role) system policy.
 - `PUT /api/settings`: `settings.view/update`, fields `facility_id`, `lock_version`, `name_ar`, `idle_minutes`, optional `reason` (required when duration changes). Minutes are whole integers 1–60. All extra fields are rejected. Server increments version and audits old/new allowed values and reason in the same transaction.
 - `PUT /api/settings/system-session`: same facility permission plus the explicit protected global system role; only `facility_id`, `lock_version`, `idle_minutes`, `reason`. Facility is the authorized audit anchor, not the policy scope.

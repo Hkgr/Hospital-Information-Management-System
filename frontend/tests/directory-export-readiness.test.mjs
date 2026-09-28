@@ -23,6 +23,8 @@ async function setup(kind, {initial = false, detail = false} = {}) {
     const req = route.request(), url = new URL(req.url());
     if (url.origin !== new URL(base).origin) return route.abort();
     if (!url.pathname.startsWith('/hospital-api/')) return route.continue();
+    // Directory fixtures use noninteractive tokens; idle timing has its own suite.
+    if (url.pathname === '/hospital-api/session' || url.pathname === '/hospital-api/session/activity') return route.fulfill({json:{data:{idle_timeout:null}}});
     calls.push({url, method: req.method()});
     if (url.pathname.endsWith('/user')) return route.fulfill({json:{data:{user,access:[1,2].map(id=>({facility:{...facility,id},permissions:['doctors.view','doctors.export','clinics.view','clinics.update','clinics.export'],roles:[]}))}}});
     if (url.pathname.endsWith('/options')) return route.fulfill({json:{data:options}});
@@ -118,7 +120,7 @@ for (const kind of ['doctors','clinics']) {
   });
   test(`${kind}: pending facility response cannot retain old export readiness`,async()=>{
     const s=await setup(kind);
-    try{await ready(s.page);const gate=s.hold();await s.page.getByRole('combobox',{name:'المنشأة',exact:true}).selectOption('2');await gate.started.promise;await assertBlocked(s.page,s.reports);gate.resolve({});await ready(s.page);}finally{await s.close();}
+    try{await ready(s.page);const gate=s.hold();await s.page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, '2');await gate.started.promise;await assertBlocked(s.page,s.reports);gate.resolve({});await ready(s.page);}finally{await s.close();}
   });
   test(`${kind}: detail report works without requesting a list`,async()=>{
     const s=await setup(kind,{detail:true});

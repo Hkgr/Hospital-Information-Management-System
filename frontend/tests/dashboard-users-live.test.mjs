@@ -44,9 +44,9 @@ for (const kind of ['single', 'multi']) test(`direct facility dashboard resolves
     await f.page.waitForURL(`${base}/dashboard/general?facility_id=${id}`);
     await f.page.locator('#welcome-heading').waitFor();
     assert.ok(f.calls.every(c => c.path !== '/hospital-api/dashboards/general'), JSON.stringify(f.calls));
-    assert.equal(await f.page.getByRole('combobox', { name: /^المنشأة/ }).inputValue(), String(id));
+    assert.equal(await f.page.getByRole('combobox', { name: /^المنشأة/ }).count(), 0);
     if (kind === 'multi') {
-      await f.page.getByRole('combobox', { name: /^المنشأة/ }).selectOption(String(fixture.facilities[1]));
+      await f.page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, String(fixture.facilities[1]));
       await f.page.waitForURL(`**/dashboard/general?facility_id=${fixture.facilities[1]}`);
       await f.page.getByRole('heading', { name: 'منشأة اختبار التوجيه B', exact: true }).waitFor();
       assert.equal(await f.page.getByRole('heading', { name: 'منشأة اختبار التوجيه A', exact: true }).count(), 0);
@@ -120,7 +120,7 @@ test('users direct and sidebar navigation load options, list and roles; real rol
     await f.page.locator('#desktop-navigation').getByRole('link', { name: 'المستخدمون', exact: true }).click();
     await f.page.getByRole('button', { name: 'إضافة مستخدم', exact: true }).waitFor();
     for (const path of ['users/options', 'users', 'users/roles']) assert.ok(f.calls.some(c => c.path === `/hospital-api/${path}?facility_id=${fixture.facilities[0]}` && c.status === 200), JSON.stringify(f.calls));
-    await f.page.getByLabel('المنشأة', { exact: true }).selectOption(String(fixture.facilities[1]));
+    await f.page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, String(fixture.facilities[1]));
     await f.page.waitForURL(`**/users?facility_id=${fixture.facilities[1]}`);
     await f.page.getByRole('row').filter({ hasText: fixture.users.multi.username }).waitFor();
     assert.equal(await f.page.getByText(fixture.users.single.username, { exact: true }).count(), 0);

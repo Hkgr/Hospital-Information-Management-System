@@ -17,6 +17,8 @@ async function setup(kind, {active=true, archived=false, reference=true, limited
  const hold=()=>{const g={...deferred(),started:deferred()};gates.push(g);nextList=g;return g;};
  await page.route('**/*',async route=>{
   const req=route.request(),url=new URL(req.url());if(url.origin!==new URL(base).origin)return route.abort();if(!url.pathname.startsWith('/hospital-api/'))return route.continue();
+    // Directory fixtures use noninteractive tokens; idle timing has its own suite.
+    if (url.pathname === '/hospital-api/session' || url.pathname === '/hospital-api/session/activity') return route.fulfill({json:{data:{idle_timeout:null}}});
   calls.push({url,method:req.method(),body:req.postDataJSON()});
   const path=url.pathname;
   if(path.endsWith('/user'))return route.fulfill({json:{data:{user,access:[1,2].map(id=>({facility:{...facility,id},roles:[],permissions:['doctors.view','doctors.link','clinics.view','doctors.export','clinics.export',...limited?[]:['clinics.delete','clinics.update']]}))}}});
@@ -42,7 +44,7 @@ for(const kind of ['doctors','clinics']){
   const s=await setup(kind);const gate=deferred();try{
    await s.page.route(`**/hospital-api/${kind}/1/deletion-preview*`,async route=>{if(new URL(route.request().url()).searchParams.get('facility_id')!=='1')return route.fallback();await gate.promise;try{await route.fulfill({json:{data:{action:'delete',organizational_links:0,has_other_references:false,lock_version:1,archived:false}}});}catch{}});
    await s.page.getByRole('button',{name:`حذف ${s.name}`,exact:true}).click();await s.page.getByRole('dialog').waitFor();await s.page.keyboard.press('Escape');
-   await s.page.getByRole('combobox',{name:'المنشأة',exact:true}).selectOption('2');await s.page.waitForURL(/facility_id=2/);
+   await s.page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, '2');await s.page.waitForURL(/facility_id=2/);
    await s.page.getByRole('button',{name:`حذف ${s.name}`,exact:true}).click();const modal=s.page.getByRole('dialog');await modal.getByRole('button',{name:'أرشفة وإزالة من الدليل',exact:true}).waitFor();
    gate.resolve();await s.page.waitForTimeout(100);assert.equal(await modal.getByRole('button',{name:'حذف نهائي',exact:true}).count(),0);assert.equal(s.calls.filter(c=>c.method==='POST'||c.method==='DELETE').length,0);
   }finally{gate.resolve();await s.close();}

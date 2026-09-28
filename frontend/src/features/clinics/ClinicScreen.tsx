@@ -23,25 +23,22 @@ const ClinicEditor = dynamic(() => import("./ClinicEditor"), { loading: () => <p
 export default function ClinicScreen({ clinicId }: { clinicId?: string }) {
   const { access } = useIdentity();
   const query = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
-  const cancelSearchRef = useRef<(() => void) | null>(null);
   // Keep the clinic screen's existing empty-parameter behavior.
-  const { allowed, facilityId, entry } = directoryFacility(access, "clinics.view", query.get("facility_id") || null);
+  const { facilityId, entry } = directoryFacility(access, "clinics.view", query.get("facility_id") || null);
   if (!entry || (clinicId && !/^[1-9]\d*$/.test(clinicId))) return <section className={styles.status}><h2>العيادات غير متاحة</h2><p role="alert">ليس لديك وصول إلى العيادات في المنشأة المطلوبة.</p><Link href="/">العودة إلى لوحة التحكم</Link></section>;
   return <div className={styles.screen}>
-    <div className={styles.context}><LuHospital aria-hidden="true" /><span>المنشأة</span>{allowed.length === 1 ? <strong>{entry.facility.name_ar}</strong> : <select aria-label="المنشأة" value={facilityId} onChange={event => { cancelSearchRef.current?.(); const next = new URLSearchParams(); next.set("facility_id", event.target.value); router.push(`/clinics?${next}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select>}</div>
-    <ClinicWorkspace key={`${facilityId}:${clinicId ?? "list"}`} facilityId={entry.facility.id} permissions={entry.permissions} clinicId={clinicId} pathname={pathname} cancelSearchRef={cancelSearchRef} />
+    <div className={styles.context}><LuHospital aria-hidden="true" /><span>المنشأة</span><strong>{entry.facility.name_ar}</strong></div>
+    <ClinicWorkspace key={`${facilityId}:${clinicId ?? "list"}`} facilityId={entry.facility.id} permissions={entry.permissions} clinicId={clinicId} pathname={pathname} />
   </div>;
 }
 
-function ClinicWorkspace({ facilityId, permissions, clinicId, pathname, cancelSearchRef }: { facilityId: number; permissions: string[]; clinicId?: string; pathname: string; cancelSearchRef: React.RefObject<(() => void) | null> }) {
+function ClinicWorkspace({ facilityId, permissions, clinicId, pathname }: { facilityId: number; permissions: string[]; clinicId?: string; pathname: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [modal, setModal] = useState<{ type: "edit" | "doctors" | LifecycleAction; clinic?: Clinic } | null>(null);
   const [revision, setRevision] = useState(0);
   const { search, committed, change: setSearch, cancel, searching } = useClinicSearch(pathname, searchParams.toString(), facilityId);
-  useEffect(() => { cancelSearchRef.current = cancel; return () => { cancelSearchRef.current = null; }; }, [cancel, cancelSearchRef]);
   const [visible, setVisible] = useState<Column[]>(columnKeys);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useIdentity } from "../auth/AuthenticatedLayout";
 import { apiRequest, AuthError } from "../auth/api";
 import { directoryFacility } from "../directory/facilityContext";
@@ -16,10 +16,10 @@ type Settings = Policy & { facility: { id: number; name_ar: string }; can_update
 type Session = { idle_timeout: number | null; applied_idle_timeout?: number; remaining_seconds?: number };
 
 export default function SettingsScreen() {
-  const { access } = useIdentity(), query = useSearchParams(), router = useRouter();
-  const { allowed, entry } = directoryFacility(access, "settings.view", query.get("facility_id"));
+  const { access } = useIdentity(), query = useSearchParams();
+  const { entry } = directoryFacility(access, "settings.view", query.get("facility_id"));
   if (!entry || query.getAll("facility_id").length > 1 || (query.has("facility_id") && !/^[1-9]\d*$/.test(query.get("facility_id")!))) return <section className={styles.status}><h2>الإعدادات غير متاحة</h2><p role="alert">تعذّر تحديد منشأة مسموحة. تحقق من الرابط أو تواصل مع المسؤول. يمكنك تسجيل الخروج من قائمة الحساب.</p></section>;
-  return <div className={styles.screen}><div className={styles.context}><span>المنشأة</span>{allowed.length > 1 ? <select aria-label="المنشأة" value={entry.facility.id} onChange={e => router.push(`/settings?facility_id=${e.target.value}`)}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select> : <strong>{entry.facility.name_ar}</strong>}</div><Workspace key={entry.facility.id} facility={entry.facility.id} /></div>;
+  return <div className={styles.screen}><div className={styles.context}><span>المنشأة</span><strong>{entry.facility.name_ar}</strong></div><Workspace key={entry.facility.id} facility={entry.facility.id} /></div>;
 }
 
 function Workspace({ facility }: { facility: number }) {

@@ -15,13 +15,13 @@ type Section = { key: string; title: string; definition: string; suppressed: boo
 type Data = { title: string; facility: { name_ar: string; timezone: string }; filters: { from_month: string; to_month: string }; privacy: { policy: string }; occupancy: { value: null; reason: string }; months: { month: string; sections: Section[] }[] };
 
 export default function StatisticsScreen() {
-  const identity = useIdentity(), params = useSearchParams(), router = useRouter();
-  const { entry, allowed } = directoryFacility(identity.access, "statistics.view", params.get("facility_id"));
+  const identity = useIdentity(), params = useSearchParams();
+  const { entry } = directoryFacility(identity.access, "statistics.view", params.get("facility_id"));
   if (!entry) return <section className={styles.panel}><h2>الإحصاءات المجهلة</h2><p role="alert">لا تتوفر صلاحية الإحصاء في المنشأة المطلوبة. يمكنك تسجيل الخروج من قائمة الحساب.</p></section>;
   // Default is merely a UI convenience; Laravel validates closed months in facility time.
   const parts = new Intl.DateTimeFormat("en", { timeZone: entry.facility.timezone, year: "numeric", month: "numeric" }).formatToParts(new Date());
   const previous = new Date(Date.UTC(Number(parts.find(p => p.type === "year")?.value), Number(parts.find(p => p.type === "month")?.value) - 2, 1)).toISOString().slice(0, 7);
-  return <>{allowed.length > 1 && <label className={styles.filters}>المنشأة<select aria-label="المنشأة" value={entry.facility.id} onChange={e => { const next = new URLSearchParams(params.toString()); next.set("facility_id", e.target.value); router.replace(`/statistics?${next}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select></label>}<Workspace key={`${entry.facility.id}:${params.toString()}`} facility={entry.facility.id} from={params.get("from_month") || previous} to={params.get("to_month") || previous} canExport={entry.permissions.includes("statistics.export")} /></>;
+  return <><div className={styles.context}><strong>{entry.facility.name_ar}</strong></div><Workspace key={`${entry.facility.id}:${params.toString()}`} facility={entry.facility.id} from={params.get("from_month") || previous} to={params.get("to_month") || previous} canExport={entry.permissions.includes("statistics.export")} /></>;
 }
 
 function Workspace({ facility, from, to, canExport }: { facility: number; from: string; to: string; canExport: boolean }) {

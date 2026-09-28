@@ -99,6 +99,7 @@ test('responsive real portals, long text, settings validation and user/role dial
         await f.page.goto(`${base}${path}?facility_id=${fixture.facilities[0]}`);
         await f.page.locator('#main-content').waitFor();
         await f.page.waitForLoadState('networkidle');
+        assert.equal(await f.page.getByRole('combobox', { name: /^(المنشأة|المشفى)$/ }).count(), 0, `${path}: current hospital is automatic`);
         assert.ok(await f.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${path} ${width} overflow`);
         await f.page.screenshot({ path: `test-results/settings/${path.replaceAll('/', '-')}-${width}.png` });
         if (path === '/reception') {
