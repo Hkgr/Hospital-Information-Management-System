@@ -35,7 +35,8 @@ class DoctorApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['clinics.doctor_staff_types' => ['DOCTOR']]);
+        $typeCode = 'TEST-DOCTOR-'.Str::random(8);
+        config(['clinics.doctor_staff_types' => [$typeCode]]);
         $this->user = User::factory()->create(['username' => 'testadmin', 'name' => 'مُصدر تقارير اختباري']);
         $this->token = $this->user->createToken('doctor-test', ['api'])->plainTextToken;
         $this->facility = DB::table('facilities')->insertGetId(['code' => 'TEST-A', 'name_ar' => 'منشأة اختبار أ', 'timezone' => 'Asia/Damascus']);
@@ -53,8 +54,7 @@ class DoctorApiTest extends TestCase
         }
         DB::table('facility_user_roles')->insert(['user_id' => $this->user->id, 'role_id' => $this->role, 'facility_id' => $this->facility]);
         DB::table('global_user_roles')->insert(['user_id' => $this->user->id, 'role_id' => $this->role]);
-        DB::table('staff_types')->insertOrIgnore(['code' => 'DOCTOR', 'name_ar' => 'طبيب اختباري']);
-        $this->type = DB::table('staff_types')->where('code', 'DOCTOR')->value('id');
+        $this->type = DB::table('staff_types')->insertGetId(['code' => $typeCode, 'name_ar' => 'طبيب اختباري']);
         DB::table('specialties')->insertOrIgnore(['code' => 'INTERNAL', 'name_ar' => 'الطب الداخلي']);
         $this->specialty = DB::table('specialties')->where('code', 'INTERNAL')->value('id');
     }
@@ -67,6 +67,9 @@ class DoctorApiTest extends TestCase
 
     private function callApi(string $method, string $path = '', array $data = [], ?string $token = null)
     {
+        if ($method === 'POST' && $path === '') {
+            $data += ['request_id' => (string) Str::uuid()];
+        }
         $this->app['auth']->forgetGuards();
 
         return $this->json($method, '/api/doctors'.$path, $data + ['facility_id' => $this->facility], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
@@ -464,7 +467,9 @@ class DoctorApiTest extends TestCase
         $this->assertContains('lock_version', $body['required']);
         $this->assertSame(200, $body['properties']['clinic_add_ids']['maxItems']);
         $create = $this->resolveSchema($document, $document['paths']['/api/doctors']['post']['requestBody']['content']['application/json']['schema']);
-        $this->assertSame(40, $create['properties']['code']['maxLength']);
+        $this->assertArrayNotHasKey('code', $create['properties']);
+        $this->assertContains('request_id', $create['required']);
+        $this->assertSame('uuid', $create['properties']['request_id']['format']);
         $this->assertSame(10000, $create['properties']['description']['maxLength']);
         $this->assertArrayHasKey('application/pdf', $document['paths']['/api/doctors/{doctor}/report']['get']['responses'][200]['content']);
         $this->assertArrayHasKey('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $document['paths']['/api/doctors/export/{format}']['get']['responses'][200]['content']);

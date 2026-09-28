@@ -1,6 +1,7 @@
 "use client";
+import { useCreationRequest, CreationRecovery } from "../directory/useCreationRequest";
 import { useEffect, useRef, useState } from "react";
-import { apiRequest, AuthError } from "../auth/api";
+import { AuthError } from "../auth/api";
 import Modal from "../clinics/Modal";
 import ClinicDoctorPicker from "./ClinicDoctorPicker";
 import Picker from "./DossierPicker";
@@ -24,18 +25,18 @@ export default function DiagnosisEditor({ row, index, facility, date, canCreate,
   </section>;
 }
 export function NewDirectoryEntry({ facility, onClose, onSaved, kind = "diagnosis" }: { kind?: "diagnosis" | "medication"; facility: number; onClose: () => void; onSaved: (choice: Choice) => void }) {
+  const creation = useCreationRequest();
   const noun = kind === "medication" ? "الدواء" : "التشخيص";
   const [name, setName] = useState(""); const [error, setError] = useState<AuthError | null>(null); const [busy, setBusy] = useState(false);
-  const pending = useRef<AbortController | null>(null); const reservation = useRef<{ body: string; id: string } | null>(null);
+  const pending = useRef<AbortController | null>(null);
   useEffect(() => () => pending.current?.abort(), []);
   async function save() {
     if (pending.current) return;
     const controller = new AbortController(); pending.current = controller; setBusy(true); setError(null);
     const fields = JSON.stringify({ facility_id: facility, name_ar: name });
-    if (reservation.current?.body !== fields) reservation.current = { body: fields, id: crypto.randomUUID() };
-    try { const row = await apiRequest<Choice>(kind === "medication" ? "dossiers/medications" : "dossiers/diagnoses", { method: "POST", signal: controller.signal, body: JSON.stringify({ ...JSON.parse(fields), request_id: reservation.current.id }) }); if (!controller.signal.aborted) onSaved(row); }
+    try { const row = await creation.request<Choice>(kind === "medication" ? "dossiers/medications" : "dossiers/diagnoses", { method: "POST", signal: controller.signal, body: fields }); if (!controller.signal.aborted) onSaved(row); }
     catch (e) { if (!controller.signal.aborted) setError(e as AuthError); }
     finally { pending.current = null; if (!controller.signal.aborted) setBusy(false); }
   }
-  return <Modal title={`إضافة ${noun} إلى الدليل المشترك`} size="compact" busy={busy} onClose={onClose}><div className={styles.form}><p className={styles.hint}>إضافة تعريف إلى الدليل؛ لا تحفظ بطاقة المريض أو الزيارة تلقائيًا. يُمنح الكود تلقائيًا عند الحفظ.</p><label>اسم {noun} *<input aria-label={`اسم ${noun} الجديد`} value={name} maxLength={200} onChange={e => setName(e.target.value)} />{error?.fields.name_ar && <small role="alert">{error.fields.name_ar}</small>}</label>{error && <p role="alert">{error.message}</p>}<div className={styles.actions}><button type="button" className={styles.primary} disabled={busy} onClick={() => void save()}>حفظ {noun}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div></div></Modal>;
+  return <Modal title={`إضافة ${noun} إلى الدليل المشترك`} size="compact" busy={busy} onClose={onClose}><div className={styles.form}><CreationRecovery creation={creation} onSaved={onSaved} /><p className={styles.hint}>إضافة تعريف إلى الدليل؛ لا تحفظ بطاقة المريض أو الزيارة تلقائيًا. يُمنح الكود تلقائيًا عند الحفظ.</p><label>اسم {noun} *<input aria-label={`اسم ${noun} الجديد`} value={name} maxLength={200} onChange={e => setName(e.target.value)} />{error?.fields.name_ar && <small role="alert">{error.fields.name_ar}</small>}</label>{error && <p role="alert">{error.message}</p>}<div className={styles.actions}><button type="button" className={styles.primary} disabled={busy} onClick={() => void save()}>حفظ {noun}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div></div></Modal>;
 }

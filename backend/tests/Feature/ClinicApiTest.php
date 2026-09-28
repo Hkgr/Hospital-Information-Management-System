@@ -35,11 +35,12 @@ class ClinicApiTest extends TestCase
     {
         parent::setUp();
         gc_collect_cycles();
-        config(['clinics.doctor_staff_types' => ['DOCTOR']]);
+        $typeCode = 'TEST-DOCTOR-'.Str::random(8);
+        config(['clinics.doctor_staff_types' => [$typeCode]]);
         $this->user = User::factory()->create(['name' => 'مُصدر التقرير الاختباري']);
         $this->token = $this->user->createToken('clinic-test', ['api'])->plainTextToken;
         $this->facility = $this->assign('TEST-A', ['view', 'create', 'update', 'delete', 'export']);
-        $this->type = DB::table('staff_types')->insertGetId(['code' => 'DOCTOR', 'name_ar' => 'نوع طبي اختباري']);
+        $this->type = DB::table('staff_types')->insertGetId(['code' => $typeCode, 'name_ar' => 'نوع طبي اختباري']);
         $this->doctor = $this->staff('D001');
     }
 
@@ -71,6 +72,9 @@ class ClinicApiTest extends TestCase
 
     private function callApi(string $method, string $path = '', array $data = [], ?string $token = null)
     {
+        if ($method === 'POST' && $path === '') {
+            $data += ['request_id' => (string) Str::uuid()];
+        }
         $this->app['auth']->forgetGuards();
 
         return $this->json($method, '/api/clinics'.$path, $data + ['facility_id' => $this->facility], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
@@ -124,7 +128,7 @@ class ClinicApiTest extends TestCase
         foreach ([$unlisted, $inactive, 999999] as $id) {
             $this->callApi('POST', '', ['name_ar' => 'رفض', 'is_active' => true, 'doctor_add_ids' => [$id]])->assertUnprocessable()->assertJsonValidationErrors('doctor_add_ids');
         }
-        $this->assertDatabaseCount('clinics', 0);
+        $this->assertSame(0, DB::table('clinics')->where('facility_id', $this->facility)->count());
         $this->callApi('GET', '/options/doctors')->assertJsonPath('meta.total', 1);
         DB::table('staff_types')->where('id', $this->type)->update(['is_active' => false]);
         $this->callApi('GET', '/options/doctors')->assertJsonPath('meta.total', 0);
@@ -143,9 +147,9 @@ class ClinicApiTest extends TestCase
         $this->edit($clinic)->assertConflict()->assertJsonPath('error.code', 'CLINIC_VERSION_CONFLICT');
         $updated = $this->edit($updated, ['doctor_add_ids' => [$this->doctor]])->assertOk()->assertJsonPath('data.doctor_count', 1)->json('data');
         $this->edit($updated, ['doctor_add_ids' => [$this->doctor]])->assertOk();
-        $this->assertDatabaseCount('clinic_staff', 1);
-        $this->assertSame(7, DB::table('audit_logs')->where('entity_type', 'clinic')->count());
-        $this->assertSame(3, DB::table('audit_logs')->where('entity_type', 'doctor')->where('event', 'clinics_changed')->count());
+        $this->assertSame(1, DB::table('clinic_staff')->where('clinic_id', $clinic['id'])->count());
+        $this->assertSame(7, DB::table('audit_logs')->where('facility_id', $this->facility)->where('entity_type', 'clinic')->count());
+        $this->assertSame(3, DB::table('audit_logs')->where('facility_id', $this->facility)->where('entity_type', 'doctor')->where('event', 'clinics_changed')->count());
         $this->assertDatabaseHas('staff', ['id' => $this->doctor, 'lock_version' => 4]);
         $this->travelBack();
     }
@@ -178,7 +182,7 @@ class ClinicApiTest extends TestCase
         DB::table('permissions')->where('code', 'clinics.view')->update(['is_active' => true]);
         $this->user->forceFill(['is_active' => false])->save();
         $this->callApi('GET')->assertForbidden()->assertJsonPath('error.code', 'ACCOUNT_INACTIVE');
-        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $this->assertSame(0, $this->user->tokens()->count());
     }
 
     public function test_patients_count_distinct_complete_visits_only_and_delete_protection(): void
@@ -211,7 +215,7 @@ class ClinicApiTest extends TestCase
         $this->callApi('GET', '', ['sort' => 'patient_count', 'direction' => 'desc', 'per_page' => 1, 'page' => 2])->assertJsonPath('data.0.patient_count', 0);
         $this->callApi('DELETE', '/'.$clinic['id'], ['lock_version' => 1])->assertConflict();
         $this->callApi('POST', '/'.$clinic['id'].'/deactivate', ['lock_version' => 1])->assertOk()->assertJsonPath('data.is_active', false);
-        $this->assertDatabaseCount('visits', 4);
+        $this->assertSame(4, DB::table('visits')->where('facility_id', $this->facility)->count());
     }
 
     public function test_search_matches_current_eligible_doctors_without_duplicate_clinics(): void

@@ -1,5 +1,8 @@
 # Unified Patient Cards — بطاقات المرضى
 
+> Current code/retry contract: [Automatic codes](automatic-codes.md). Internal codes are now server-issued; manual-code examples below describe the earlier phase and must not be sent by current clients.
+
+
 See [Patient Card browser routes and presentation](patient-card-concept.md) for the current `/patient-cards` paths and presentation contract.
 
 ## Identity and facility ownership

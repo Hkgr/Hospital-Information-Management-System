@@ -5,6 +5,7 @@ namespace App\Services\MedicationStock;
 use App\Exceptions\StockException;
 use App\Services\Catalog\CatalogQueries;
 use App\Services\Clinics\ClinicAudit;
+use App\Services\Directory\IssuedCodes;
 use App\Services\Dossiers\OncologyQueries;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -97,7 +98,8 @@ class StockReceipts
                     $this->requireStore($facility, (int) $input['store_id']);
                     $this->requireSupplier($facility, $input['supplier_id'] ?? null);
                     $this->requireSource($input['medication_source']);
-                    $fields = Arr::only($input, ['store_id', 'receipt_no', 'supplier_id', 'medication_source', 'received_on', 'invoice_number', 'note']);
+                    $fields = Arr::only($input, ['store_id', 'supplier_id', 'medication_source', 'received_on', 'invoice_number', 'note']);
+                    $fields['receipt_no'] = $old['receipt_no'] ?? app(IssuedCodes::class)->receipt();
                     $fields['supplier_id'] = $input['supplier_id'] ?? null;
                     $fields['invoice_number'] = $input['invoice_number'] ?? null;
                     $fields['note'] = $input['note'] ?? null;

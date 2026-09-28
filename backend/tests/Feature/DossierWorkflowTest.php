@@ -266,7 +266,7 @@ class DossierWorkflowTest extends TestCase
         $this->callApi('GET', '/options', ['facility_id' => $this->f['other']])->assertForbidden();
         $input = ['request_id' => (string) Str::uuid(), 'name_ar' => 'تشخيص   جديد'];
         $created = $this->callApi('POST', '/diagnoses', $input)->assertCreated()->assertJsonPath('data.name_ar', 'تشخيص جديد')->json('data');
-        $this->assertMatchesRegularExpression('/^DOS-DX-\d{2,}$/', $created['code']);
+        $this->assertMatchesRegularExpression('/^AUTO-DOS-DX-\d{2,}$/', $created['code']);
         $this->callApi('POST', '/diagnoses', $input)->assertCreated()->assertJsonPath('data.id', $created['id']);
         $this->callApi('POST', '/diagnoses', $input + ['code' => 'NEW-DX', 'request_id' => (string) Str::uuid()])->assertUnprocessable()->assertJsonValidationErrors('code');
         $this->callApi('POST', '/diagnoses', array_replace($input, ['request_id' => (string) Str::uuid()]))->assertUnprocessable()->assertJsonValidationErrors('name_ar');

@@ -35,8 +35,11 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
                 if (($route === 'service-catalog' && $operation->method === 'post') || $operation->method === 'put') {
                     $schema = $operation->requestBodyObject->content['application/json'];
                     $template = ($schema instanceof Reference ? $schema->resolve() : $schema)->type->clone();
-                    $required = ['facility_id', 'code', 'name_ar', 'is_active'];
+                    $required = ['facility_id', 'name_ar', 'is_active'];
+                    unset($template->properties['code']);
                     if ($operation->method === 'post') {
+                        $required[] = 'request_id';
+                        $template->addProperty('request_id', (new StringType)->format('uuid'));
                         $service = $template->clone();
                         unset($service->properties['lock_version'], $service->properties['procedure_type_id']);
                         $service->addProperty('kind', (new StringType)->enum(['service']))->setRequired([...$required, 'kind', 'category_id']);
@@ -51,13 +54,14 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
                             ->setRequired([...$required, 'kind']);
                         $operation->requestBodyObject->setContent('application/json', Schema::fromType((new AnyOf)->setItems([$service, $procedure, $medication])));
                     } else {
-                        unset($template->properties['kind']);
+                        unset($template->properties['kind'], $template->properties['request_id']);
                         $template->addProperty('procedure_type_id', (new IntegerType)->nullable(true))->setRequired([...$required, 'lock_version']);
                         $operation->requestBodyObject->setContent('application/json', $document->components->addSchema('UpdateCatalogRequest', Schema::fromType($template)));
                     }
                 }
                 $operation->security = [new SecurityRequirement(['bearerAuth' => []])];
-                $operation->description .= '\nRequires Sanctum Bearer with api ability and active account; all responses private, no-store. catalog.view in the selected active facility is always required. Definitions are GLOBAL, separate services/procedures/medications tables; identity is (kind,id), kind is immutable. Codes are manually supplied, unique per kind under MySQL collation, including archived records. No direct clinic definition relationship exists. Write authority additionally requires global_user_roles catalog.directory.create/update/delete, never a facility-only grant. Archive/delete require delete; deactivate/reactivate/restore require update. Restore is inactive, no treatment history changes. All existing-record writes require lock_version; 409 never silently retries. Options always exclude inactive/archived records. The frontend does not grant medical access via catalog.view: beneficiaries additionally needs catalog.beneficiaries; history needs catalog.audit and only exposes selected-facility audit records. No patient detail route exists yet. Export requires catalog.export; ALL matching rows, selected columns and the matching patients table, not current page, maximum 1000 items or 5000 patient rows or 422 without truncation. Classification choices come from existing service_categories (required for services), procedure_types (optional) and medication_categories (optional).';
+                $operation->description .= '\nInternal codes are server-issued and immutable; code inputs are prohibited. Creates require a stable UUID request_id. Exact retries return the existing ID/code after current authorization; changed content with the same key returns 409 CREATION_REQUEST_CONFLICT without writes. Recovery replays the original payload/UUID, never searches by name.';
+                $operation->description .= '\nRequires Sanctum Bearer with api ability and active account; all responses private, no-store. catalog.view in the selected active facility is always required. Definitions are GLOBAL, separate services/procedures/medications tables; identity is (kind,id), kind is immutable. Codes are issued transactionally in AUTO-* namespaces, unique per kind including archived records; legacy codes remain unchanged. No direct clinic definition relationship exists. Write authority additionally requires global_user_roles catalog.directory.create/update/delete, never a facility-only grant. Archive/delete require delete; deactivate/reactivate/restore require update. Restore is inactive, no treatment history changes. All existing-record writes require lock_version; 409 never silently retries. Options always exclude inactive/archived records. The frontend does not grant medical access via catalog.view: beneficiaries additionally needs catalog.beneficiaries; history needs catalog.audit and only exposes selected-facility audit records. No patient detail route exists yet. Export requires catalog.export; ALL matching rows, selected columns and the matching patients table, not current page, maximum 1000 items or 5000 patient rows or 422 without truncation. Classification choices come from existing service_categories (required for services), procedure_types (optional) and medication_categories (optional).';
                 $operation->description .= '\nBeneficiary definition: '.CatalogBeneficiaries::DEFINITION;
                 $operation->responses = array_values(array_filter($operation->responses ?? [], fn ($response) => (int) ($response instanceof Reference ? $response->resolve() : $response)->code < 200 || (int) ($response instanceof Reference ? $response->resolve() : $response)->code >= 300));
                 if ($operation->method === 'delete') {
@@ -86,7 +90,7 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
                     }
                     if (str_ends_with($route, '/categories')) {
                         $fields = ['data' => $this->object(['id' => new IntegerType, 'code' => new StringType, 'name_ar' => new StringType, 'is_active' => new BooleanType])];
-                        $operation->description .= '\nCategory creation requires GLOBAL catalog.directory.create plus selected-facility catalog.view; facility-only create is insufficient. Duplicate code is a field validation error. No grants are assigned automatically.';
+                        $operation->description .= '\nCategory creation requires GLOBAL catalog.directory.create plus selected-facility catalog.view; facility-only create is insufficient. Codes are server-issued; supplied codes are prohibited. No grants are assigned automatically.';
                     }
                     if (str_ends_with($route, '/events')) {
                         $fields = ['data' => $this->list($this->object(['key' => new StringType, 'source' => (new StringType)->enum(['visit_service', 'visit_procedure', 'blood_procedure', 'visit_medication', 'dose_session_item']), 'event_id' => new IntegerType, 'patient_code' => new StringType, 'patient_name' => new StringType, 'performed_on' => (new StringType)->nullable(true), 'visit_no' => (new StringType)->nullable(true)])), 'meta' => $meta, 'totals' => $this->object(['unique_patients' => new IntegerType, 'presentations' => new IntegerType])];
@@ -103,7 +107,7 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
                     }
                     $operation->addResponse(Response::make(in_array($route, ['service-catalog', 'service-catalog/categories'], true) && $operation->method === 'post' ? 201 : 200)->setDescription('Catalog response; patient identities require the authorized beneficiaries/events endpoints.')->setContent('application/json', Schema::fromType($this->object($fields))));
                 }
-                foreach ([401 => ['UNAUTHENTICATED'], 403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'CATALOG_ACCESS_DENIED', 'CATALOG_DIRECTORY_ACCESS_DENIED'], 404 => ['CATALOG_NOT_FOUND'], 409 => ['CATALOG_VERSION_CONFLICT', 'CATALOG_STATE_CONFLICT', 'CATALOG_REFERENCED'], 500 => ['CATALOG_UNAVAILABLE']] as $status => $codes) {
+                foreach ([401 => ['UNAUTHENTICATED'], 403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'CATALOG_ACCESS_DENIED', 'CATALOG_DIRECTORY_ACCESS_DENIED'], 404 => ['CATALOG_NOT_FOUND'], 409 => ['CREATION_REQUEST_CONFLICT', 'CATALOG_VERSION_CONFLICT', 'CATALOG_STATE_CONFLICT', 'CATALOG_REFERENCED'], 500 => ['CATALOG_UNAVAILABLE']] as $status => $codes) {
                     $operation->addResponse(Response::make($status)->setDescription(implode(' / ', $codes))->setContent('application/json', Schema::fromType($this->object(['error' => $this->object(['code' => (new StringType)->enum($codes), 'message' => new StringType])]))));
                 }
                 $errors = new ObjectType;

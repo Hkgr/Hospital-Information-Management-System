@@ -1,7 +1,8 @@
 "use client";
+import { useCreationRequest, CreationRecovery } from "../directory/useCreationRequest";
 
 import { useEffect, useRef, useState } from "react";
-import { apiRequest, AuthError } from "@/features/auth/api";
+import { AuthError } from "@/features/auth/api";
 import { useClinicRequest, type Clinic, type Doctor, type Specialty } from "./api";
 import ClinicConflictReview, { clinicFields, loadClinicSnapshot, type ClinicSnapshot } from "./ClinicConflictReview";
 import Modal from "./Modal";
@@ -9,6 +10,7 @@ import DoctorPicker from "./DoctorPicker";
 import styles from "./clinics.module.css";
 
 export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onReloaded }: { clinic?: Clinic; facilityId: number; onClose: () => void; onSaved: () => void; onReloaded: () => void }) {
+  const creation = useCreationRequest();
   const [baseClinic, setBaseClinic] = useState(clinic);
   const [fields, setFields] = useState(clinicFields(clinic));
   const [changes, setChanges] = useState<Record<number, boolean>>({});
@@ -40,8 +42,8 @@ export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onR
     pending.current = true; setBusy(true); setError(null);
     const active = new AbortController(); controller.current = active;
     try {
-      const { code: _issued, ...editable } = fields;
-      await apiRequest<Clinic>(`clinics${clinic ? `/${clinic.id}` : ""}`, { method: clinic ? "PUT" : "POST", signal: active.signal, body: JSON.stringify({
+      const editable = { name_ar: fields.name_ar, description: fields.description, is_active: fields.is_active };
+      await creation.request<Clinic>(`clinics${clinic ? `/${clinic.id}` : ""}`, { method: clinic ? "PUT" : "POST", signal: active.signal, body: JSON.stringify({
         ...editable, facility_id: facilityId, specialty_id: fields.specialty_id ? Number(fields.specialty_id) : null,
         ...(baseClinic ? { lock_version: baseClinic.lock_version, doctor_remove_ids: Object.keys(changes).filter(id => !changes[Number(id)]).map(Number) } : {}),
         doctor_add_ids: Object.keys(changes).filter(id => changes[Number(id)]).map(Number),
@@ -56,6 +58,7 @@ export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onR
   }
   return <Modal title={clinic ? "تعديل العيادة" : "إضافة عيادة جديدة"} onClose={onClose} busy={busy}>
     <form onSubmit={save} className={styles.form}>
+      <CreationRecovery creation={creation} onSaved={onSaved} />
       <p className={styles.hint}>بيانات العيادة وارتباطاتها ضمن المنشأة المحددة. الحقول المعلّمة * مطلوبة.</p>
       {error && <p role="alert" className={styles.error}>{conflict ? "عدّل مستخدم آخر هذه العيادة. مسودتك واختيارات الأطباء محفوظة. اجلب أحدث نسخة لمراجعة ما تريد تطبيقه." : error.message}</p>}
       {conflict && <div><button type="button" className={styles.secondary} disabled={fetching} onClick={() => void reload()}>{fetching ? "جارٍ جلب أحدث نسخة…" : "جلب أحدث نسخة"}</button>{reloadError && <p role="alert" className={styles.error}>{reloadError}</p>}</div>}

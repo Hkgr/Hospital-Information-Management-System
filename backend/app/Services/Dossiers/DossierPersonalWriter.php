@@ -126,7 +126,7 @@ class DossierPersonalWriter
             });
         } catch (QueryException $e) {
             if (($e->errorInfo[1] ?? null) === 1062) {
-                throw ValidationException::withMessages(['code' => 'الكود مستخدم في المنشأة. اختر كودًا مختلفًا دون تغيير هوية المريض.']);
+                throw ValidationException::withMessages(['code' => 'تعذّر إصدار كود فريد للهوية. أعد المحاولة بالطلب نفسه أو راجع المسؤول؛ لا تغيّر هوية المريض.']);
             }
             throw $e;
         }

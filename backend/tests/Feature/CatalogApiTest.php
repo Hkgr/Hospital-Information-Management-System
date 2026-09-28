@@ -7,6 +7,7 @@ use App\Services\Catalog\CatalogBeneficiaries;
 use App\Services\Catalog\CatalogQueries;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\AssertsOpenApi;
@@ -30,6 +31,9 @@ class CatalogApiTest extends TestCase
 
     private function api(string $method, string $path = '', array $data = [], ?string $token = null)
     {
+        if ($method === 'POST' && in_array($path, ['', '/categories'], true)) {
+            $data += ['request_id' => (string) Str::uuid()];
+        }
         $this->app['auth']->forgetGuards();
 
         return $this->json($method, '/api/service-catalog'.$path, $data + ['facility_id' => $this->f['facility']], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
@@ -79,7 +83,7 @@ class CatalogApiTest extends TestCase
     {
         $created = $this->api('POST', '', $this->payload($kind))->assertCreated()->assertJsonPath('data.patient_count', 0)->json('data');
         $id = $created['id'];
-        $this->assertMatchesRegularExpression('/^(SER|PRO|MED)-\d{3,}$/', $created['code']);
+        $this->assertMatchesRegularExpression('/^AUTO-(SER|PRO|MED)-\d{3,}$/', $created['code']);
         $again = $this->api('POST', '', $this->payload($kind))->assertCreated()->json('data');
         $this->assertNotSame($created['code'], $again['code']);
         $this->api('POST', '', $this->payload($kind) + ['code' => 'ABC'])->assertUnprocessable()->assertJsonValidationErrors('code');

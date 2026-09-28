@@ -17,6 +17,7 @@ class SaveStockDirectoryRequest extends FormRequest
 
         return [
             'facility_id' => ['required', 'integer', 'min:1'],
+            'request_id' => [$this->isMethod('POST') ? 'required' : 'prohibited', 'uuid'],
             'code' => ['prohibited'],
             'name_ar' => ['required', 'string', 'max:200'],
             'is_active' => ['required', 'boolean'],

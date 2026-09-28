@@ -1,10 +1,11 @@
 "use client";
+import { useCreationRequest, CreationRecovery } from "../directory/useCreationRequest";
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { LuPlus, LuSearch, LuHospital } from "react-icons/lu";
-import { apiRequest, AuthError } from "@/features/auth/api";
+import { AuthError } from "@/features/auth/api";
 import { useIdentity } from "@/features/auth/AuthenticatedLayout";
 import { DirectoryRowActions, DirectoryTable } from "../directory/DirectoryPrimitives";
 import { directoryFacility } from "../directory/facilityContext";
@@ -54,6 +55,7 @@ function Workspace({ kind, facilityId, name }: { kind: DirectoryKind; facilityId
 }
 
 function DirectoryEditor({ kind, facilityId, row, onClose, onSaved }: { kind: DirectoryKind; facilityId: number; row?: DirectoryRow; onClose: () => void; onSaved: () => void }) {
+  const creation = useCreationRequest();
   const [code] = useState(row?.code ?? "");
   const [nameAr, setNameAr] = useState(row?.name_ar ?? "");
   const [extra, setExtra] = useState(kind === "stores" ? (row?.location ?? "") : (row?.contact_person ?? ""));
@@ -68,13 +70,14 @@ function DirectoryEditor({ kind, facilityId, row, onClose, onSaved }: { kind: Di
     if (kind === "stores") body.location = extra || null; else body.contact_person = extra || null;
     if (row) body.lock_version = row.lock_version;
     try {
-      await apiRequest(`stock/${kind}${row ? `/${row.id}` : ""}`, { method: row ? "PUT" : "POST", body: JSON.stringify(body) });
+      await creation.request(`stock/${kind}${row ? `/${row.id}` : ""}`, { method: row ? "PUT" : "POST", body: JSON.stringify(body) });
       onSaved();
     } catch (reason) { setError(reason instanceof AuthError ? reason : null); }
     finally { pending.current = false; setBusy(false); }
   }
   return <Modal title={row ? `تعديل ${row.name_ar}` : `إضافة إلى ${directoryName(kind)}`} onClose={onClose}>
     <form className={styles.form} onSubmit={save}>
+      <CreationRecovery creation={creation} onSaved={onSaved} />
       {error && <p role="alert">{error.message}</p>}
       {row ? <label>الكود<input value={code} readOnly dir="ltr" /><small>الكود ثابت ويصدره النظام.</small></label> : <p className={styles.hint}>يُمنح الكود تلقائيًا عند الحفظ.</p>}
       <label>الاسم<input value={nameAr} onChange={e => setNameAr(e.target.value)} required maxLength={200} /></label>

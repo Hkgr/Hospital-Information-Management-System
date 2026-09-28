@@ -26,6 +26,9 @@ class CatalogWorkflowTest extends TestCase
 
     private function api(string $method, string $path, array $data = [], ?string $token = null)
     {
+        if ($method === 'POST' && in_array($path, ['', '/categories'], true)) {
+            $data += ['request_id' => (string) Str::uuid()];
+        }
         $this->app['auth']->forgetGuards();
 
         return $this->json($method, '/api/service-catalog'.$path, $data + ['facility_id' => $this->f['facility']], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
@@ -66,7 +69,7 @@ class CatalogWorkflowTest extends TestCase
         $this->api('POST', '/categories', $data + ['facility_id' => $this->f['other']])->assertForbidden();
         $id = $this->api('POST', '/categories', $data)->assertCreated()->assertJsonPath('data.is_active', true)->json('data.id');
         $this->assertDatabaseHas('service_categories', ['id' => $id, 'name_ar' => 'فئة جديدة', 'is_active' => true]);
-        $this->assertMatchesRegularExpression('/^SCG-\d{3,}$/', DB::table('service_categories')->where('id', $id)->value('code'));
+        $this->assertMatchesRegularExpression('/^AUTO-SCG-\d{3,}$/', DB::table('service_categories')->where('id', $id)->value('code'));
         $this->assertContains($id, array_column($this->api('GET', '/classifications')->json('data.categories'), 'id'));
         $this->api('POST', '/categories', ['code' => 'new-category'] + $data)->assertUnprocessable()->assertJsonValidationErrors('code');
         $this->api('POST', '/categories', ['name_ar' => '', 'is_active' => 'invalid'])->assertUnprocessable()->assertJsonValidationErrors(['name_ar', 'is_active']);
@@ -129,7 +132,7 @@ class CatalogWorkflowTest extends TestCase
         $this->api('GET', $path, ['from' => $yesterday, 'to' => $yesterday])->assertJsonPath('totals.presentations', 1)->assertJsonPath('totals.unique_patients', 1);
         $this->api('GET', "/medication/$id")->assertJsonPath('data.patient_count', 3);
         $category = $this->api('POST', '/categories', ['kind' => 'medication', 'name_ar' => 'فئة دواء', 'is_active' => true])->assertCreated()->json('data');
-        $this->assertMatchesRegularExpression('/^MCG-\d{3,}$/', $category['code']);
+        $this->assertMatchesRegularExpression('/^AUTO-MCG-\d{3,}$/', $category['code']);
         $this->assertContains($category['id'], array_column($this->api('GET', '/classifications')->json('data.medication_categories'), 'id'));
     }
 

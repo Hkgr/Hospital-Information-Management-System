@@ -1,5 +1,8 @@
 > Current identity/registration contract: [Unified Patient Cards](patient-card-correction.md). This phase record describes the earlier implementation; the correction supersedes separate dossier codes, delayed initial-visit creation, and per-facility card identity. Medical progress/activation remain facility-local.
 
+> Current code/retry contract: [Automatic codes](automatic-codes.md). Internal codes are now server-issued; manual-code examples below describe the earlier phase and must not be sent by current clients.
+
+
 # Patient dossiers — Phase 2
 
 ## Schema reassessment (before migrations)

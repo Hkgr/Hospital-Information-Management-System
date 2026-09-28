@@ -190,7 +190,10 @@ test("beneficiary identities require capability; detail navigation and actual hi
     await s.page.evaluate(() => history.pushState(null, "", "/services-procedures?facility_id=1&search=خدمة&kind=service")); await s.page.getByRole("link", { name: "P001", exact: true }).waitFor({ state: "hidden" });
     await s.page.getByRole("link", { name: "S001", exact: true }).click(); await s.page.getByRole("heading", { name: "خدمة اختبار", exact: true }).waitFor();
     await s.page.getByText("PAT01", { exact: true }).waitFor(); await s.page.getByText("2026-09-12", { exact: true }).waitFor(); assert.equal(await s.page.getByRole("button", { name: "سجل التغييرات", exact: true }).count(), 0);
-    await s.page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click(); assert.equal(await s.page.getByRole("searchbox").inputValue(), "خدمة");
+    await s.page.getByRole("link", { name: "العودة إلى الخدمات والإجراءات", exact: true }).click();
+    await s.page.waitForURL(url => url.pathname === '/services-procedures' && url.searchParams.get('search') === 'خدمة');
+    await s.page.waitForFunction(() => document.querySelector('input[type="search"]')?.value === 'خدمة');
+    assert.equal(await s.page.getByRole("searchbox").inputValue(), "خدمة");
     await s.page.getByRole("searchbox").fill("قيمة معلقة"); await s.page.goBack(); await s.page.waitForTimeout(500); assert.ok(!s.page.url().includes(encodeURIComponent("قيمة معلقة")));
   } finally { await s.close(); }
 });

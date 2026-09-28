@@ -1,12 +1,14 @@
 "use client";
+import { useCreationRequest, CreationRecovery } from "../directory/useCreationRequest";
 
 import { useEffect, useRef, useState } from "react";
-import { apiRequest, AuthError } from "@/features/auth/api";
+import { AuthError } from "@/features/auth/api";
 import Modal from "../clinics/Modal";
 import styles from "../clinics/clinics.module.css";
 
 export type Category = { id: number; code: string; name_ar: string; is_active: boolean };
 export default function CategoryEditor({ facilityId, kind = "service", onClose, onSaved }: { facilityId: number; kind?: "service" | "medication"; onClose: () => void; onSaved: (category: Category) => void }) {
+  const creation = useCreationRequest();
   const [fields, setFields] = useState({ name_ar: "", is_active: true });
   const [error, setError] = useState<AuthError | null>(null), [busy, setBusy] = useState(false);
   const pending = useRef(false), controller = useRef<AbortController | null>(null);
@@ -14,11 +16,12 @@ export default function CategoryEditor({ facilityId, kind = "service", onClose, 
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (pending.current) return;
     pending.current = true; setBusy(true); setError(null); const active = new AbortController(); controller.current = active;
-    try { const category = await apiRequest<Category>("service-catalog/categories", { method: "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, kind, ...fields }) }); if (!active.signal.aborted) onSaved(category); }
+    try { const category = await creation.request<Category>("service-catalog/categories", { method: "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, kind, ...fields }) }); if (!active.signal.aborted) onSaved(category); }
     catch (reason) { if (!active.signal.aborted) setError(reason instanceof AuthError ? reason : new AuthError(0, "FAILED", "تعذّر إنشاء الفئة. المدخلات محفوظة.")); }
     finally { if (!active.signal.aborted) { pending.current = false; setBusy(false); } }
   }
   return <Modal title="إضافة فئة" size="compact" busy={busy} onClose={onClose}><form className={styles.form} onSubmit={save}>
+      <CreationRecovery creation={creation} onSaved={onSaved} />
     <p className={styles.scopeNote}>الفئة تعريف مشترك بين المنشآت. الفئات الفعالة فقط متاحة للخدمات الجديدة.</p>
     {error && <p role="alert" className={styles.error}>{error.message}</p>}
     <p className={styles.hint}>يُمنح رمز الفئة تلقائيًا عند الحفظ.</p>

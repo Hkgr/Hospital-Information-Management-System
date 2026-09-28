@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use Illuminate\Foundation\Testing\DatabaseMigrations;
-use Illuminate\Foundation\Testing\RefreshDatabaseState;
+use App\Models\User;
+use App\Support\TestDatabaseSafety;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
@@ -12,26 +12,26 @@ use Tests\TestCase;
 
 class StockReceiptConcurrencyTest extends TestCase
 {
-    use DatabaseMigrations;
+    private ?User $fixtureUser = null;
 
-    public function runDatabaseMigrations()
+    protected function tearDown(): void
     {
-        $this->beforeRefreshingDatabase();
-        $this->refreshTestDatabase();
-        $this->afterRefreshingDatabase();
-        $this->beforeApplicationDestroyed(function () {
-            // Visit classification removal cannot roll back, and the workers need committed rows.
-            RefreshDatabaseState::$migrated = false;
-        });
+        $this->fixtureUser?->tokens()->delete();
+        $this->fixtureUser?->forceFill(['is_active' => false])->save();
+        parent::tearDown();
     }
 
     public function test_concurrent_confirmation_writes_one_set_of_transactions(): void
     {
+        // Workers need committed synthetic records, not a destructive schema refresh.
+        TestDatabaseSafety::assertAvailable($this->app);
         $f = StockFixture::make();
+        $this->fixtureUser = $f['user'];
+        $f['viewer']->tokens()->delete();
         $this->app['auth']->forgetGuards();
         $row = $this->json('POST', '/api/stock/receipts', [
             'facility_id' => $f['facility'], 'request_id' => (string) Str::uuid(),
-            'store_id' => $f['store'], 'receipt_no' => 'CONCURRENT', 'supplier_id' => $f['supplier'],
+            'store_id' => $f['store'], 'supplier_id' => $f['supplier'],
             'medication_source' => 'ministry_of_health', 'received_on' => $f['today'],
             'items' => [[
                 'medication_id' => $f['items']['medication'][1], 'batch_number' => 'C1',
@@ -50,6 +50,6 @@ class StockReceiptConcurrencyTest extends TestCase
         }
         $this->assertDatabaseHas('medication_receipts', ['id' => $row['id'], 'status' => 'confirmed']);
         $this->assertSame(1, DB::table('inventory_transactions')->where('reference_type', 'medication_receipt')->where('reference_id', $row['id'])->count());
-        $this->assertSame(1, DB::table('medication_batches')->where('batch_number', 'C1')->count());
+        $this->assertSame(1, DB::table('medication_batches')->where('facility_id', $f['facility'])->where('batch_number', 'C1')->count());
     }
 }

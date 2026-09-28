@@ -1,14 +1,16 @@
 "use client";
+import { useCreationRequest, CreationRecovery } from "../directory/useCreationRequest";
 
 import { useEffect, useRef, useState } from "react";
-import { apiRequest, AuthError } from "@/features/auth/api";
+import { AuthError } from "@/features/auth/api";
 import Modal from "../clinics/Modal";
 import ClinicPicker from "./ClinicPicker";
 import DoctorConflict, { doctorFields, loadDoctorSnapshot, type DoctorSnapshot } from "./DoctorConflict";
 import type { ClinicLink, Doctor, Options } from "./api";
 import styles from "../clinics/clinics.module.css";
 
-export default function DoctorEditor({ doctor, facilityId, options, linksOnly = false, initialClinic, onUncertainCreate, onClose, onSaved, onReloaded }: { doctor?: Doctor; facilityId: number; options: Options; linksOnly?: boolean; initialClinic?: ClinicLink; onUncertainCreate?: (code: string) => void; onClose: () => void; onSaved: (doctor: Doctor) => void; onReloaded: () => void }) {
+export default function DoctorEditor({ doctor, facilityId, options, linksOnly = false, initialClinic, onClose, onSaved, onReloaded }: { doctor?: Doctor; facilityId: number; options: Options; linksOnly?: boolean; initialClinic?: ClinicLink; onClose: () => void; onSaved: (doctor: Doctor) => void; onReloaded: () => void }) {
+  const creation = useCreationRequest();
   const [base, setBase] = useState(doctor); const [fields, setFields] = useState(doctorFields(doctor));
   const [changes, setChanges] = useState<Record<number, boolean>>(() => initialClinic && !doctor ? { [initialClinic.id]: true } : {}); const [touched, setTouched] = useState<Record<number, ClinicLink>>(() => initialClinic && !doctor ? { [initialClinic.id]: initialClinic } : {});
   const [conflict, setConflict] = useState(false); const [snapshot, setSnapshot] = useState<DoctorSnapshot | null>(null);
@@ -28,11 +30,10 @@ export default function DoctorEditor({ doctor, facilityId, options, linksOnly = 
     const active = new AbortController(); controller.current = active;
     const deltas = { clinic_add_ids: Object.keys(changes).filter(id => changes[Number(id)]).map(Number), ...(base ? { lock_version: base.lock_version, clinic_remove_ids: Object.keys(changes).filter(id => !changes[Number(id)]).map(Number) } : {}) };
     try {
-      const { code: _issued, ...editable } = fields;
-      const saved = await apiRequest<Doctor>(`doctors${base ? `/${base.id}${linksOnly ? "/clinics" : ""}` : ""}`, { method: base ? "PUT" : "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, ...(!linksOnly ? { ...editable, staff_type_id: Number(fields.staff_type_id) } : {}), ...deltas }) });
+      const editable = { name: fields.name, description: fields.description, license_no: fields.license_no, phone: fields.phone, is_active: fields.is_active, specialty_ids: fields.specialty_ids };
+      const saved = await creation.request<Doctor>(`doctors${base ? `/${base.id}${linksOnly ? "/clinics" : ""}` : ""}`, { method: base ? "PUT" : "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, ...(!linksOnly ? { ...editable, staff_type_id: Number(fields.staff_type_id) } : {}), ...deltas }) });
       if (!active.signal.aborted) onSaved(saved);
     } catch (reason) {
-      if (!active.signal.aborted && !base && (!(reason instanceof AuthError) || reason.status === 0 || reason.status >= 500)) onUncertainCreate?.(fields.name);
       if (!active.signal.aborted) { setError(reason instanceof AuthError ? reason : new AuthError(0, "FAILED", "تعذّر الحفظ. حاول مجددًا.")); if (reason instanceof AuthError && reason.code === "DOCTOR_VERSION_CONFLICT") { setConflict(true); setSnapshot(null); setReloadError(""); } }
     } finally { if (!active.signal.aborted) { pending.current = false; setBusy(false); } }
   }
@@ -40,6 +41,7 @@ export default function DoctorEditor({ doctor, facilityId, options, linksOnly = 
   const input = (key: "name" | "license_no" | "phone", label: string, max: number, required = false) => <label>{label}{required ? " *" : ""}<input autoFocus={key === "name"} required={required} maxLength={max} dir={key === "name" ? "auto" : "ltr"} value={fields[key]} onChange={e => setFields({ ...fields, [key]: e.target.value })} aria-invalid={!!error?.fields[key]} aria-describedby={error?.fields[key] ? `doctor-error-${key}` : undefined} />{fieldError(key)}</label>;
   return <Modal title={linksOnly ? "إدارة عيادات الطبيب" : doctor ? "تعديل الطبيب" : "إضافة طبيب جديد"} onClose={onClose} busy={busy} size={linksOnly ? "regular" : "wide"}>
     <form onSubmit={save} className={styles.form}>
+      <CreationRecovery creation={creation} onSaved={onSaved} />
       <p className={styles.scopeNote}>{linksOnly ? "تعدّل ارتباطات هذه المنشأة فقط. إزالة ارتباط لا تعطل الطبيب." : "بيانات الطبيب مشتركة بين المنشآت. تعديلها أو تعطيل الطبيب يسري عالميًا؛ اختيارات العيادات تخص المنشأة الحالية فقط."}</p>
       {error && <p role="alert" className={styles.error}>{conflict ? "تغيّرت بيانات الطبيب أو ارتباطاته. مسودتك واختيارات العيادات محفوظة. اجلب أحدث نسخة للمراجعة." : error.message}</p>}
       {conflict && <div><button type="button" className={styles.secondary} disabled={fetching} onClick={() => void reload()}>{fetching ? "جارٍ جلب أحدث نسخة…" : "جلب أحدث نسخة"}</button>{reloadError && <p role="alert" className={styles.error}>{reloadError}</p>}</div>}

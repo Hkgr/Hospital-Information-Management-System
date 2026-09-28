@@ -23,11 +23,12 @@ test("receipts list, create draft and confirm", async () => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname;
     if (url.origin !== new URL(base).origin) return route.abort();
     if (!path.startsWith("/hospital-api/")) return route.continue();
+    if (path === '/hospital-api/session' || path === '/hospital-api/session/activity') return route.fulfill({ json: { data: { idle_timeout: null } } });
     calls.push({ path, method: req.method(), body: req.postDataJSON() });
     if (path.endsWith("/user")) return route.fulfill({ json: { data: { user, access: [{ facility, roles: [], permissions: ["stock.view", "stock.receive", "stock.suppliers.manage"] }] } } });
     if (path.endsWith("/options")) return route.fulfill({ json: { data: { stores: [{ id: 1, code: "PH", name_ar: "صيدلية الاختبار" }], suppliers: [{ id: 1, code: "S", name_ar: "مورد" }], medications: [{ id: 2, code: "M1", name_ar: "دواء اختبار" }], medication_sources: [{ code: "ministry_of_health", name_ar: "وزارة الصحة" }, { code: "al_rowad", name_ar: "مؤسسة الرواد" }, { code: "other_organization", name_ar: "جهة أخرى" }, { code: "personal_expense", name_ar: "نفقة شخصية" }, { code: "none", name_ar: "لا يوجد" }] } } });
     if (path === "/hospital-api/stock/receipts" && req.method() === "GET") return route.fulfill({ json: { ...paginated([receipt]), capabilities: caps } });
-    if (path === "/hospital-api/stock/receipts" && req.method() === "POST") return route.fulfill({ status: 201, json: { data: { ...receipt, receipt_no: req.postDataJSON().receipt_no } } });
+    if (path === "/hospital-api/stock/receipts" && req.method() === "POST") return route.fulfill({ status: 201, json: { data: { ...receipt, receipt_no: 'AUTO-RCV-00000001' } } });
     if (path.endsWith("/confirm")) { receipt.status = "confirmed"; receipt.confirmed_at = "2026-09-16T12:00:00Z"; receipt.items[0].batch_id = 11; return route.fulfill({ json: { data: receipt } }); }
     if (/\/stock\/receipts\/\d+$/.test(path)) return route.fulfill({ json: { data: receipt, capabilities: caps } });
     return route.fulfill({ status: 404, json: { error: { code: "STOCK_NOT_FOUND", message: "غير موجود" } } });
@@ -35,7 +36,6 @@ test("receipts list, create draft and confirm", async () => {
   await page.goto(`${base}/stock/receipts?facility_id=1`);
   await page.getByRole("link", { name: "R-100" }).waitFor();
   await page.getByRole("button", { name: "إذن جديد" }).click();
-  await page.getByLabel("رقم الإذن").fill("R-200");
   await page.getByLabel("جهة التمويل").selectOption("al_rowad");
   await page.getByLabel("رقم الدفعة").fill("B9");
   await page.getByLabel("تاريخ الانتهاء").fill("2027-01-01");

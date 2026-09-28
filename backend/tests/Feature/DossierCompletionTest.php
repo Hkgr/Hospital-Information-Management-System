@@ -65,7 +65,7 @@ class DossierCompletionTest extends DossierCompletionCase
     {
         $data = ['name_ar' => '  دواء   جديد  ', 'request_id' => (string) Str::uuid()];
         $created = $this->callApi('POST', '/medications', $data)->assertCreated()->assertJsonPath('data.name_ar', 'دواء جديد')->json('data');
-        $this->assertMatchesRegularExpression('/^MED-\d{3,}$/', $created['code']);
+        $this->assertMatchesRegularExpression('/^AUTO-MED-\d{3,}$/', $created['code']);
         $this->callApi('POST', '/medications', $data)->assertCreated()->assertJsonPath('data.id', $created['id']);
         $this->callApi('POST', '/medications', ['code' => 'new code', 'name_ar' => 'اسم مختلف', 'request_id' => (string) Str::uuid()])->assertUnprocessable()->assertJsonValidationErrors('code');
         $this->callApi('POST', '/medications', ['name_ar' => 'دواء    جديد', 'request_id' => (string) Str::uuid()])->assertUnprocessable()->assertJsonValidationErrors('name_ar');

@@ -144,7 +144,7 @@ class ImportBundle
         } else {
             $this->globalPermission($r, 'patients.create');
             $this->require(! $p['paper_file_number'] || ! isset($this->paperFiles[self::codeKey($p['paper_file_number'])]), 'paper_file_number', 'رقم الملف الورقي مستخدم؛ راجع الهوية ولا تنشئ نسخة تلقائيًا.');
-            $personal += ['person_mode' => 'new', 'code' => 'SYSTEM-GENERATED'];
+            $personal += ['person_mode' => 'new'];
         }
         if (! $dossier) {
             $this->facilityPermission($r, $f, 'create');

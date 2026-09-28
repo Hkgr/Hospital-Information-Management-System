@@ -1,4 +1,5 @@
 "use client";
+import { useCreationRequest, CreationRecovery } from "../directory/useCreationRequest";
 
 import { useEffect, useRef, useState } from "react";
 import { apiRequest, AuthError } from "@/features/auth/api";
@@ -12,6 +13,7 @@ const labels: Record<keyof Fields, string> = { code: "الكود", name_ar: "ا�
 const fieldsOf = (item?: Item): Fields => ({ code: item?.code ?? "", name_ar: item?.name_ar ?? "", description: item?.description ?? "", classification: String(item?.category_id ?? item?.procedure_type_id ?? ""), is_active: item?.is_active ?? true, default_unit: item?.default_unit ?? "", strength: item?.strength ?? "", dosage_form: item?.dosage_form ?? "", reorder_level: item?.reorder_level ?? "" });
 
 export default function CatalogEditor({ kind, item, facilityId, canCreateCategory = false, onClose, onSaved, onRefresh }: { kind: Kind; item?: Item; facilityId: number; canCreateCategory?: boolean; onClose: () => void; onSaved: () => void; onRefresh: () => void }) {
+  const creation = useCreationRequest();
   const [base, setBase] = useState(item);
   const [fields, setFields] = useState<Fields>(() => fieldsOf(item));
   const [error, setError] = useState<AuthError | null>(null);
@@ -47,9 +49,10 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
     pending.current = true; setBusy(true); setError(null);
     const active = new AbortController(); controller.current = active;
     try {
-      const { classification, code: _issued, default_unit, strength, dosage_form, reorder_level, ...values } = fields;
+      const { classification, default_unit, strength, dosage_form, reorder_level } = fields;
+      const values = { name_ar: fields.name_ar, description: fields.description, is_active: fields.is_active };
       const extras = kind === "medication" ? { default_unit: default_unit || null, strength: strength || null, dosage_form: dosage_form || null, reorder_level: reorder_level === "" ? null : Number(reorder_level) } : {};
-      await apiRequest<Item>(base ? itemPath(base) : "service-catalog", { method: base ? "PUT" : "POST", signal: active.signal,
+      await creation.request<Item>(base ? itemPath(base) : "service-catalog", { method: base ? "PUT" : "POST", signal: active.signal,
         body: JSON.stringify({ ...values, ...extras, [relation]: classification ? Number(classification) : null, facility_id: facilityId, ...(base ? { lock_version: base.lock_version } : { kind }) }) });
       if (!active.signal.aborted) onSaved();
     } catch (reason) {
@@ -61,6 +64,7 @@ export default function CatalogEditor({ kind, item, facilityId, canCreateCategor
   }
   return <><Modal title={`${item ? "تعديل" : "إضافة"} ${kindName(kind)}`} onClose={onClose} busy={busy}>
     <form className={styles.form} onSubmit={save}>
+      <CreationRecovery creation={creation} onSaved={onSaved} />
       <p className={styles.scopeNote}>تعريف مشترك بين المنشآت، وليس تسجيل تقديم علاج لمريض. النوع ثابت؛ تغيير الحالة يؤثر في الاختيار الجديد في جميع المنشآت، ويحفظ التاريخ.</p>
       {error && <p role="alert" className={styles.error}>{conflict ? "عدّل مستخدم آخر العنصر. مسودتك محفوظة؛ اجلب أحدث نسخة وراجع التغييرات قبل الحفظ." : error.message}</p>}
       {conflict && <div><button type="button" className={styles.secondary} disabled={fetching} onClick={() => void reload()}>{fetching ? "جارٍ جلب أحدث نسخة…" : "جلب أحدث نسخة"}</button>{reloadError && <p role="alert">{reloadError}</p>}</div>}

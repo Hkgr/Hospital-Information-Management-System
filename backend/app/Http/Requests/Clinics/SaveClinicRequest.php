@@ -6,6 +6,11 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class SaveClinicRequest extends FormRequest
 {
+    public function messages(): array
+    {
+        return ['code.prohibited' => 'يصدر النظام الكود تلقائيًا ولا يمكن تغييره.', 'request_id.required' => 'معرّف طلب الحفظ مطلوب.', 'request_id.uuid' => 'معرّف طلب الحفظ غير صالح.'];
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -15,6 +20,7 @@ class SaveClinicRequest extends FormRequest
     {
         return [
             'facility_id' => ['required', 'integer', 'min:1'],
+            'request_id' => [$this->isMethod('POST') ? 'required' : 'prohibited', 'uuid'],
             'code' => ['prohibited'],
             'name_ar' => ['required', 'string', 'max:200'],
             'description' => ['nullable', 'string', 'max:10000'],

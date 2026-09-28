@@ -1,5 +1,8 @@
 # Patient Card legacy onboarding and offline capture
 
+> Current code/retry contract: [Automatic codes](automatic-codes.md). Internal codes are now server-issued; manual-code examples below describe the earlier phase and must not be sent by current clients.
+
+
 Base: `develop` at `e572a0130563f70a46b0ea68d0c4fe08a6ad6821` (merged PR #27).
 Branch: `feature/legacy-patient-import-and-offline-capture`. This is a draft release;
 do not merge/deploy without independent review and operator approval.

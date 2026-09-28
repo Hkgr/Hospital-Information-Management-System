@@ -4,8 +4,9 @@ namespace App\Services\Clinics;
 
 use App\Exceptions\ClinicException;
 use App\Services\Directory\ClinicStaffLinks;
-use App\Services\Directory\IssuedCodes;
+use App\Services\Directory\CreationRequests;
 use App\Services\Directory\DirectoryLifecycle;
+use App\Services\Directory\IssuedCodes;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -19,7 +20,7 @@ class ClinicWriter
     public function save(Request $request, array $facility, array $input, ?int $id): int
     {
         try {
-            return DB::transaction(function () use ($request, $facility, $input, $id) {
+            return app(CreationRequests::class)->save($request, $facility, $input, 'clinic:create', $id, function () use ($request, $facility, $input, $id) {
                 $this->links->lockStaff(array_merge($input['doctor_add_ids'] ?? [], $input['doctor_remove_ids'] ?? []));
                 $old = $id === null ? null : $this->locked($facility['id'], $id, $input['lock_version']);
                 if ($old && $old['archived_at'] !== null) {
@@ -51,7 +52,7 @@ class ClinicWriter
                 }
 
                 return $id;
-            }, 3);
+            });
         } catch (QueryException $e) {
             if (($e->errorInfo[1] ?? null) === 1062) {
                 throw ValidationException::withMessages(['code' => 'كود العيادة مستخدم في هذه المنشأة.']);

@@ -26,6 +26,9 @@ class MedicationStockTest extends TestCase
 
     private function api(string $method, string $path, array $data = [], ?string $token = null)
     {
+        if ($method === 'POST' && in_array($path, ['/suppliers', '/stores'], true)) {
+            $data += ['request_id' => (string) Str::uuid()];
+        }
         $this->app['auth']->forgetGuards();
 
         return $this->json($method, '/api/stock'.$path, $data + ['facility_id' => $this->f['facility']], ['Authorization' => 'Bearer '.($token ?? $this->f['token'])]);
@@ -34,7 +37,7 @@ class MedicationStockTest extends TestCase
     private function receipt(array $extra = [], ?array $items = null): array
     {
         $payload = $extra + [
-            'request_id' => (string) Str::uuid(), 'store_id' => $this->f['store'], 'receipt_no' => 'R-'.Str::upper(Str::random(6)),
+            'request_id' => (string) Str::uuid(), 'store_id' => $this->f['store'], 'invoice_number' => 'R-'.Str::upper(Str::random(6)),
             'supplier_id' => $this->f['supplier'], 'medication_source' => 'ministry_of_health',
             'received_on' => $this->f['today'],
             'items' => $items ?? [[
@@ -61,7 +64,7 @@ class MedicationStockTest extends TestCase
         foreach (['suppliers' => ['contact_person' => 'أحمد', 'phone' => '011', 'address_line' => 'حلب', 'note' => 'ملاحظة'], 'stores' => ['location' => 'الصيدلية']] as $directory => $fields) {
             $created = $this->api('POST', '/'.$directory, ['name_ar' => 'سجل '.$directory, 'is_active' => true] + $fields)
                 ->assertCreated()->assertJsonPath('data.is_active', true)->json('data');
-            $this->assertMatchesRegularExpression('/^(SUP|STR)-\d{4,}$/', $created['code']);
+            $this->assertMatchesRegularExpression('/^AUTO-(SUP|STR)-\d{4,}$/', $created['code']);
             $this->api('GET', '/'.$directory.'/'.$created['id'])->assertOk()->assertJsonPath('data.code', $created['code']);
             $this->api('PUT', '/'.$directory.'/'.$created['id'], ['name_ar' => 'تعديل', 'is_active' => true, 'lock_version' => 1] + $fields)
                 ->assertOk()->assertJsonPath('data.name_ar', 'تعديل')->assertJsonPath('data.code', $created['code'])->assertJsonPath('data.lock_version', 2);
@@ -76,7 +79,7 @@ class MedicationStockTest extends TestCase
             $this->assertDatabaseMissing($directory === 'stores' ? 'medication_stores' : 'medication_suppliers', ['id' => $created['id']]);
         }
         $this->api('POST', '/receipts', [
-            'request_id' => (string) Str::uuid(), 'store_id' => $this->f['store'], 'receipt_no' => 'KEEP',
+            'request_id' => (string) Str::uuid(), 'store_id' => $this->f['store'], 'invoice_number' => 'KEEP',
             'medication_source' => 'ministry_of_health', 'received_on' => $this->f['today'],
         ])->assertCreated();
         $this->api('DELETE', '/stores/'.$this->f['store'], ['lock_version' => 1])->assertConflict()->assertJsonPath('error.code', 'STOCK_REFERENCED');
@@ -114,7 +117,7 @@ class MedicationStockTest extends TestCase
         $this->api('POST', '/receipts/'.$bad['id'].'/confirm', ['lock_version' => 1])->assertUnprocessable()->assertJsonValidationErrors('items');
         $this->assertDatabaseHas('medication_receipts', ['id' => $bad['id'], 'status' => 'draft']);
         $this->assertDatabaseCount('inventory_transactions', 0);
-        $empty = $this->receipt(['receipt_no' => 'EMPTY-'.$this->f['tag']], []);
+        $empty = $this->receipt(['invoice_number' => 'EMPTY-'.$this->f['tag']], []);
         $this->api('POST', '/receipts/'.$empty['id'].'/confirm', ['lock_version' => 1])->assertUnprocessable()->assertJsonValidationErrors('items');
         $this->assertDatabaseHas('medication_receipts', ['id' => $empty['id'], 'status' => 'draft']);
     }
@@ -126,14 +129,14 @@ class MedicationStockTest extends TestCase
             'medication_id' => $this->f['items']['medication'][1], 'batch_number' => 'SHARED',
             'expiry_date' => $expiry, 'quantity' => 1,
         ]];
-        $first = $this->receipt(['receipt_no' => 'SRC-A-'.$this->f['tag']], $item);
+        $first = $this->receipt(['invoice_number' => 'SRC-A-'.$this->f['tag']], $item);
         $this->api('POST', '/receipts/'.$first['id'].'/confirm', ['lock_version' => 1])->assertOk();
-        $second = $this->receipt(['receipt_no' => 'SRC-B-'.$this->f['tag'], 'medication_source' => 'al_rowad'], $item);
+        $second = $this->receipt(['invoice_number' => 'SRC-B-'.$this->f['tag'], 'medication_source' => 'al_rowad'], $item);
         $this->api('POST', '/receipts/'.$second['id'].'/confirm', ['lock_version' => 1])
             ->assertConflict()->assertJsonPath('error.code', 'STOCK_BATCH_FUNDING_CONFLICT');
         $this->assertDatabaseHas('medication_receipts', ['id' => $second['id'], 'status' => 'draft']);
         $this->api('POST', '/receipts', [
-            'request_id' => (string) Str::uuid(), 'store_id' => $this->f['store'], 'receipt_no' => 'BAD-SOURCE',
+            'request_id' => (string) Str::uuid(), 'store_id' => $this->f['store'], 'invoice_number' => 'BAD-SOURCE',
             'medication_source' => 'catalog-row', 'received_on' => $this->f['today'],
         ])->assertUnprocessable()->assertJsonValidationErrors('medication_source');
     }
@@ -141,29 +144,29 @@ class MedicationStockTest extends TestCase
     public function test_replayed_create_returns_original_and_different_content_conflicts(): void
     {
         $request = (string) Str::uuid();
-        $first = $this->receipt(['request_id' => $request, 'receipt_no' => 'ONCE-1']);
+        $first = $this->receipt(['request_id' => $request, 'invoice_number' => 'ONCE-1']);
         $again = $this->api('POST', '/receipts', [
-            'request_id' => $request, 'store_id' => $this->f['store'], 'receipt_no' => 'ONCE-1',
+            'request_id' => $request, 'store_id' => $this->f['store'], 'invoice_number' => 'ONCE-1',
             'supplier_id' => $this->f['supplier'], 'medication_source' => 'ministry_of_health', 'received_on' => $this->f['today'],
             'items' => [['medication_id' => $this->f['items']['medication'][1], 'batch_number' => 'B1', 'expiry_date' => now()->addYear()->toDateString(), 'quantity' => 10, 'free_quantity' => 2]],
         ])->assertCreated()->json('data');
         $this->assertSame($first['id'], $again['id']);
         $this->api('POST', '/receipts', [
-            'request_id' => $request, 'store_id' => $this->f['store'], 'receipt_no' => 'ONCE-2',
+            'request_id' => $request, 'store_id' => $this->f['store'], 'invoice_number' => 'ONCE-2',
             'medication_source' => 'ministry_of_health', 'received_on' => $this->f['today'],
         ])->assertConflict()->assertJsonPath('error.code', 'STOCK_REQUEST_CONFLICT');
     }
 
     public function test_authentication_facility_scope_and_permission_pair(): void
     {
-        $row = $this->receipt(['receipt_no' => 'AUTH-'.$this->f['tag']]);
+        $row = $this->receipt(['invoice_number' => 'AUTH-'.$this->f['tag']]);
         $this->app['auth']->forgetGuards();
         $this->getJson('/api/stock/receipts')->assertUnauthorized()->assertHeader('Cache-Control', 'no-store, private');
         $this->api('GET', '/receipts', [], 'invalid')->assertUnauthorized();
         StockFixture::viewerStock($this->f, ['stock.view']);
         $this->api('GET', '/receipts', [], $this->f['viewer_token'])->assertOk();
         $this->api('POST', '/receipts', [
-            'request_id' => (string) Str::uuid(), 'store_id' => $this->f['store'], 'receipt_no' => 'DENIED',
+            'request_id' => (string) Str::uuid(), 'store_id' => $this->f['store'], 'invoice_number' => 'DENIED',
             'medication_source' => 'ministry_of_health', 'received_on' => $this->f['today'],
         ], $this->f['viewer_token'])->assertForbidden()->assertJsonPath('error.code', 'STOCK_ACCESS_DENIED');
         $this->api('POST', '/suppliers', ['name_ar' => 'م', 'is_active' => true], $this->f['viewer_token'])->assertForbidden();
@@ -173,7 +176,7 @@ class MedicationStockTest extends TestCase
 
     public function test_openapi_matches_directory_and_receipt_contracts(): void
     {
-        $row = $this->receipt(['receipt_no' => 'OA-'.$this->f['tag']]);
+        $row = $this->receipt(['invoice_number' => 'OA-'.$this->f['tag']]);
         $document = $this->getJson('/docs/api.json')->assertOk()->json();
         $list = $this->api('GET', '/suppliers')->assertOk()->json();
         $this->assertMatchesSchema($document, $document['paths']['/api/stock/suppliers']['get']['responses'][200]['content']['application/json']['schema'], $list);

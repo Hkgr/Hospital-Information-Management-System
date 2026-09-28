@@ -48,9 +48,9 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
             $required = [...$required, 'services', 'procedures'];
             $op->description .= ' Requires dossiers.clinical.update. performed_on is the visit date; correction propagates atomically to dossier-managed events.';
         } elseif ($route === 'dossiers/medications') {
-            $fields = ['facility_id' => $i(), 'request_id' => $s()->format('uuid'), 'code' => $s(), 'name_ar' => $s()];
+            $fields = ['facility_id' => $i(), 'request_id' => $s()->format('uuid'), 'name_ar' => $s()];
             $required = array_keys($fields);
-            $op->description .= ' Explicit global medications.create required; never a side effect of prescription save. Normalized duplicate code or name returns 422.';
+            $op->description .= ' Explicit global medications.create required; never a side effect of prescription save. Code is server-issued and client codes are prohibited. Normalized duplicate name returns 422. Stable request_id replays the existing definition; changed content returns 409.';
         } elseif (str_ends_with($route, '/medications')) {
             $item = $this->object($row + ['medication_id' => $i(), 'display_order' => $i()]);
             $item->required = ['medication_id', 'display_order'];

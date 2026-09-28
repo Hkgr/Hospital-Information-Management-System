@@ -22,7 +22,7 @@ class SaveStockReceiptRequest extends FormRequest
             'request_id' => [$creating ? 'required' : 'prohibited', 'uuid'],
             'lock_version' => [$creating ? 'prohibited' : 'required', 'integer', 'min:1'],
             'store_id' => ['required', 'integer', 'min:1'],
-            'receipt_no' => ['required', 'string', 'max:50'],
+            'receipt_no' => ['prohibited'],
             'supplier_id' => ['nullable', 'integer', 'min:1'],
             'medication_source' => ['required', 'string', Rule::in(array_keys(OncologyQueries::MEDICATION_SOURCES))],
             'received_on' => ['required', 'date'],
@@ -42,6 +42,6 @@ class SaveStockReceiptRequest extends FormRequest
 
     public function messages(): array
     {
-        return ['required' => 'هذا الحقل مطلوب.', 'uuid' => 'معرّف الحفظ غير صالح.', 'gt' => 'الكمية يجب أن تكون أكبر من صفر.'];
+        return ['required' => 'هذا الحقل مطلوب.', 'uuid' => 'معرّف الحفظ غير صالح.', 'gt' => 'الكمية يجب أن تكون أكبر من صفر.', 'receipt_no.prohibited' => 'يصدر النظام رقم الإذن تلقائيًا ولا يمكن تغييره.'];
     }
 }

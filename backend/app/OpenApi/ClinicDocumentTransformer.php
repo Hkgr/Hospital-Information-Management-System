@@ -114,6 +114,7 @@ class ClinicDocumentTransformer
                         $parameter->setSchema(Schema::fromType((new StringType)->enum(['xlsx', 'pdf'])));
                     }
                 }
+                $operation->description .= '\nInternal codes are server-issued and immutable; code inputs are prohibited. Creates require a stable UUID request_id. Exact retries return the existing ID/code after current authorization; changed content with the same key returns 409 CREATION_REQUEST_CONFLICT without writes. Recovery replays the original payload/UUID, never searches by name.';
                 $operation->description .= "\nRequires auth:sanctum → active account → api ability, then clinics.view and the operation permission in the SAME active facility. Deactivated accounts lose all tokens (403 ACCOUNT_INACTIVE). Every response is private, no-store. Staff is a global directory; eligible doctors have active staff/type and an explicitly configured staff_types.code. Current intervals are [starts_on, ends_on) in the facility timezone. Edits use lock_version plus doctor_add_ids/doctor_remove_ids, never replacement sync. Doctor/patient counts are distinct. Exports include ALL filtered rows, selected columns, the matching patients table, server issuer/number/timezone; caps 1000 clinics / 5000 current links / 5000 patient rows, 422 instead of truncation. Long texts continue in explicit appendices; Cairo is embedded in PDF and named in XLSX. Relationship writes also increment staff.lock_version and lock staff before clinics. Report bytes are never public.";
                 $operation->description .= $this->lifecycleDescription();
                 if ($operation->method === 'delete') {
@@ -153,7 +154,7 @@ class ClinicDocumentTransformer
                     401 => [AuthError::Unauthenticated->value],
                     403 => ['ACCOUNT_INACTIVE', 'MISSING_API_ABILITY', 'CLINIC_ACCESS_DENIED'],
                     404 => ['CLINIC_NOT_FOUND'],
-                    409 => ['CLINIC_VERSION_CONFLICT', 'CLINIC_PERIOD_CONFLICT', 'CLINIC_REFERENCED', 'CLINIC_STATE_CONFLICT'],
+                    409 => ['CREATION_REQUEST_CONFLICT', 'CLINIC_VERSION_CONFLICT', 'CLINIC_PERIOD_CONFLICT', 'CLINIC_REFERENCED', 'CLINIC_STATE_CONFLICT'],
                     500 => ['CLINICS_UNAVAILABLE'],
                 ];
                 foreach ($errors as $status => $codes) {
