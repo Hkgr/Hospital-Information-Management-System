@@ -27,7 +27,11 @@ class PermissionMatrixPhaseOneSeeder extends Seeder
             foreach (['data_entry' => ['مدخل البيانات', self::RECEPTION], 'hospital_admin' => ['إداري المشفى', self::ADMIN], 'statistics' => ['فريق الإحصاء', []], 'super_admin' => ['مدير النظام الشامل', []]] as $code => [$name, $permissions]) {
                 DB::table('roles')->insertOrIgnore(['code' => $code, 'name_ar' => $name, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()]);
                 $id = DB::table('roles')->where('code', $code)->lockForUpdate()->value('id');
-                $compatible = $code === 'data_entry' ? [...$permissions, 'reception.correct', 'reception.corrections.request'] : $permissions;
+                $compatible = match ($code) {
+                    'data_entry' => [...$permissions, 'reception.correct', 'reception.corrections.request'],
+                    'statistics' => ['statistics.view', 'statistics.export'],
+                    default => $permissions,
+                };
                 if (in_array($code, ['data_entry', 'statistics'], true) && DB::table('role_permissions as rp')->join('permissions as p', 'p.id', '=', 'rp.permission_id')->where('rp.role_id', $id)->whereNotIn('p.code', $compatible)->exists()) {
                     throw new \RuntimeException("Existing $code role has permissions outside the phase-one contract; operator review required. No grants changed.");
                 }

@@ -24,6 +24,7 @@ async function openShell({ width = 1440, height = 900, logoutFailure = false, cl
   await page.route("**/*", route => {
     const request = route.request();
     const url = new URL(request.url());
+    if (url.pathname === "/hospital-api/session") return route.fulfill({ json: { data: { idle_timeout: null } } });
     if (url.origin !== new URL(base).origin) return route.abort();
     if (url.pathname.startsWith("/hospital-api/")) {
       requests.push({ path: url.pathname, authorization: request.headers().authorization });

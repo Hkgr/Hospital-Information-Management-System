@@ -24,6 +24,7 @@ async function setup(fixture = event) {
   await context.addInitScript(() => sessionStorage.setItem("hospital.bearer", "audit-token"));
   await page.route("**/*", route => {
     const url = new URL(route.request().url());
+    if (url.pathname === "/hospital-api/session") return route.fulfill({ json: { data: { idle_timeout: null } } });
     if (url.origin !== new URL(base).origin) return route.abort();
     if (!url.pathname.startsWith("/hospital-api/")) return route.continue();
     calls.push(url.pathname + url.search);

@@ -19,9 +19,12 @@ function DashboardRequest({ dashboardKey, query }: { dashboardKey?: string; quer
   const router = useRouter();
   const [state, setState] = useState<{ catalog?: Catalog; data?: DashboardData; error?: string; empty?: boolean }>({});
   const [attempt, setAttempt] = useState(0);
+  const defaultStatistics = !identity.access.some(e => e.permissions.includes("dashboards.view"))
+    ? identity.access.find(e => e.permissions.includes("statistics.view"))?.facility.id : undefined;
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
+      if (!dashboardKey && defaultStatistics) { router.replace(`/statistics?facility_id=${defaultStatistics}`); return; }
       const ids = new URLSearchParams(query).getAll("facility_id");
       // Other query values (including returnTo/next) never affect navigation.
       if (ids.length > 1 || (ids.length && !/^[1-9]\d*$/.test(ids[0]))) throw new AuthError(422, "INVALID_FACILITY", "معرّف المنشأة غير صالح.");
@@ -53,7 +56,7 @@ function DashboardRequest({ dashboardKey, query }: { dashboardKey?: string; quer
       setState({ error: message });
     });
     return () => controller.abort();
-  }, [dashboardKey, query, identity.user.id, router, attempt]);
+  }, [dashboardKey, query, identity.user.id, defaultStatistics, router, attempt]);
 
   const retry = () => { setState({}); setAttempt(value => value + 1); };
   if (state.error || state.empty) return <section className={styles.status}>

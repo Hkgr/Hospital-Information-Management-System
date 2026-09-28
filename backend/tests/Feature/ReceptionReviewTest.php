@@ -247,6 +247,6 @@ class ReceptionReviewTest extends TestCase
         $this->assertSame(0, $this->clerk->tokens()->count());
         $this->seed(PermissionMatrixPhaseTwoSeeder::class);
         $this->seed(PermissionMatrixPhaseOneSeeder::class);
-        $this->assertSame(0, DB::table('role_permissions')->where('role_id', DB::table('roles')->where('code', 'statistics')->value('id'))->count());
+        $this->assertSame(0, DB::table('role_permissions as rp')->join('permissions as p', 'p.id', '=', 'rp.permission_id')->where('rp.role_id', DB::table('roles')->where('code', 'statistics')->value('id'))->whereNotIn('p.code', ['statistics.view', 'statistics.export'])->count());
     }
 }

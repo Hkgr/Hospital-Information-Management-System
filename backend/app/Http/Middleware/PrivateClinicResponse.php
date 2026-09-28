@@ -11,7 +11,7 @@ class PrivateClinicResponse
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit', 'api/audit/*', 'api/reports', 'api/reports/*', 'api/users', 'api/users/*', 'api/reception', 'api/reception/*')) {
+        if (! $request->is('api/statistics', 'api/statistics/*', 'api/session', 'api/session/*') && ! $request->is('api/clinics', 'api/clinics/*', 'api/doctors', 'api/doctors/*', 'api/service-catalog', 'api/service-catalog/*', 'api/blood-bank', 'api/blood-bank/*', 'api/dossiers', 'api/dossiers/*', 'api/stock', 'api/stock/*', 'api/audit', 'api/audit/*', 'api/reports', 'api/reports/*', 'api/users', 'api/users/*', 'api/reception', 'api/reception/*')) {
             return $next($request);
         }
         try {
@@ -55,6 +55,11 @@ class PrivateClinicResponse
             $response = response()->json(['error' => ['code' => $status === 404 ? 'USERS_NOT_FOUND' : 'USERS_UNAVAILABLE', 'message' => $status === 404 ? 'المستخدم أو المسار غير موجود في المنشأة المحددة.' : 'تعذّر إتمام إدارة المستخدمين. حاول مجددًا.']], $status);
         }
         $response->headers->set('Cache-Control', 'private, no-store');
+        if ($request->is('api/statistics', 'api/statistics/*') && in_array($response->getStatusCode(), [404, 500], true)) {
+            $status = $response->getStatusCode();
+            $response = response()->json(['error' => ['code' => 'STATISTICS_UNAVAILABLE', 'message' => 'تعذّر عرض الإحصاءات المطلوبة.']], $status);
+            $response->headers->set('Cache-Control', 'private, no-store');
+        }
         $response->headers->set('Vary', 'Authorization');
 
         return $response;

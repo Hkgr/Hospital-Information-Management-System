@@ -1,0 +1,14 @@
+.month { padding: 18px 22px; margin: 0; font-size: 18px; color: var(--mbz-action); }
+.metric { border-block-start: 1px solid #e5edf0; }
+.intro { display: grid; gap: 10px; padding: 18px 22px; }
+.intro h4, .intro p { margin: 0; }
+.intro h4 { font-size: 16px; }
+.total { color: var(--mbz-action); font-size: 13px; font-weight: 700; }
+.metric table { min-inline-size: 0; table-layout: fixed; }
+.metric th { white-space: normal; }
+.metric th:first-child { inline-size: 50%; }
+.metric th:not(:first-child), .metric td:not(:first-child) { text-align: center; }
+@media (max-width: 767px) {
+  .intro, .month { padding: 16px; }
+  .metric th, .metric td { padding: 12px 8px; }
+}

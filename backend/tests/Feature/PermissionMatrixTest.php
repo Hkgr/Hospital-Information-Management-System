@@ -157,7 +157,7 @@ class PermissionMatrixTest extends TestCase
         $this->seed(PermissionMatrixPhaseOneSeeder::class);
         $this->seed(PermissionMatrixPhaseOneSeeder::class);
         $this->assertSame($before, DB::table('facility_user_roles')->count());
-        $this->assertSame(0, DB::table('role_permissions')->where('role_id', DB::table('roles')->where('code', 'statistics')->value('id'))->count());
+        $this->assertSame(0, DB::table('role_permissions as rp')->join('permissions as p', 'p.id', '=', 'rp.permission_id')->where('rp.role_id', DB::table('roles')->where('code', 'statistics')->value('id'))->whereNotIn('p.code', ['statistics.view', 'statistics.export'])->count());
         $this->assertFalse(app(GlobalAccess::class)->allows($this->clerk, 'patients.search'));
         DB::table('facilities')->where('id', $this->facility)->update(['is_active' => false]);
         $this->api('GET', 'reception/options')->assertForbidden();

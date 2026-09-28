@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { AuthError, currentUser, getToken, logout, subscribeSession, type Identity } from "./api";
+import { AuthError, currentUser, getToken, logout, sessionExpiredByIdle, subscribeSession, type Identity } from "./api";
+import IdleSession from "./IdleSession";
 import AppShell from "@/components/layout/AppShell";
 import styles from "./login.module.css";
 
@@ -17,9 +18,9 @@ export function useIdentity() {
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const token = useSyncExternalStore(subscribeSession, getToken, () => null);
   const router = useRouter();
-  useEffect(() => { if (!getToken()) router.replace("/login"); }, [token, router]);
+  useEffect(() => { if (!getToken()) router.replace(sessionExpiredByIdle() ? "/login?reason=idle" : "/login"); }, [token, router]);
   // A session change unmounts all previous personalized state before rendering another user.
-  return token ? <AuthenticatedSession key={token}>{children}</AuthenticatedSession> : <p role="status">جارٍ التحقق من الدخول…</p>;
+  return token ? <IdleSession key={token}><AuthenticatedSession>{children}</AuthenticatedSession></IdleSession> : <p role="status">جارٍ التحقق من الدخول…</p>;
 }
 
 function AuthenticatedSession({ children }: { children: React.ReactNode }) {
@@ -28,6 +29,7 @@ function AuthenticatedSession({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  useEffect(() => { const refresh = () => setAttempt(value => value + 1); window.addEventListener("hospital-access-refresh", refresh); return () => window.removeEventListener("hospital-access-refresh", refresh); }, []);
   useEffect(() => {
     const controller = new AbortController();
     currentUser(controller.signal).then(result => {

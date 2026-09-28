@@ -22,6 +22,7 @@ async function pageFor({ mockDashboards = true, ...options } = {}) {
   await page.route("**/*", route => {
     if (new URL(route.request().url()).origin !== new URL(base).origin) return route.abort();
     const path = new URL(route.request().url()).pathname;
+    if (mockDashboards && path === "/hospital-api/session") return route.fulfill({ json: { data: { idle_timeout: null } } });
     if (mockDashboards && path.startsWith("/hospital-api/dashboards")) {
       const fixture = dashboardFixture(identity.user);
       return route.fulfill({ json: { data: path.endsWith("/general") ? fixture.detail : fixture.catalog } });
