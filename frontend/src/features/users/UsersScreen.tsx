@@ -17,7 +17,7 @@ type Role = { id: number; code: string; name_ar: string };
 type Permission = { id: number; code: string; name_ar: string };
 type Group = { key: string; name_ar: string; permissions: Permission[] };
 type ManagedRole = Role & { permissions: Permission[]; manageable: boolean };
-type Member = { id: number; username: string; name: string; email: string | null; is_active: boolean; last_login_at: string | null; roles: Role[] };
+type Member = { id: number; username: string; name: string; email: string | null; is_active: boolean; last_login_at: string | null; roles: Role[]; pending_global_permissions?: string[] };
 type Options = {
   roles: Role[];
   permission_groups: Group[];
@@ -27,13 +27,12 @@ type Options = {
 export default function UsersScreen() {
   const { access } = useIdentity();
   const query = useSearchParams();
-  const router = useRouter();
-  const { allowed, facilityId, entry } = directoryFacility(access, "users.view", query.get("facility_id"));
+  const { entry } = directoryFacility(access, "users.view", query.get("facility_id"));
   const ids = query.getAll("facility_id");
   if (ids.length > 1 || (ids.length === 1 && (!/^[1-9]\d*$/.test(ids[0]) || !Number.isSafeInteger(Number(ids[0])) || Number(ids[0]) > 2147483647))) return <section className={styles.status}><h2>تعذّر اختيار المنشأة</h2><p role="alert">معرّف المنشأة غير صالح. افتح رابطًا صحيحًا أو سجّل الخروج من قائمة الحساب.</p></section>;
   if (!entry) return <section className={styles.status}><h2>إدارة المستخدمين غير متاحة</h2><p role="alert">ليس لديك وصول إلى مستخدمي المنشأة المطلوبة.</p></section>;
   return <div className={styles.screen}>
-    <div className={styles.context}><LuUsers aria-hidden="true" /><span>المنشأة</span>{allowed.length === 1 ? <strong>{entry.facility.name_ar}</strong> : <select aria-label="المنشأة" value={facilityId} onChange={event => { const next = new URLSearchParams(); next.set("facility_id", event.target.value); router.push(`/users?${next}`); }}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select>}</div>
+    <div className={styles.context}><LuUsers aria-hidden="true" /><span>المنشأة</span><strong>{entry.facility.name_ar}</strong></div>
     <UsersWorkspace key={entry.facility.id} facilityId={entry.facility.id} />
   </div>;
 }
@@ -45,6 +44,7 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
   const [revision, setRevision] = useState(0);
   const [tab, setTab] = useState<"users" | "roles">("users");
   const [creating, setCreating] = useState(false);
+  const [notice, setNotice] = useState("");
   const [creatingRole, setCreatingRole] = useState(false);
   const [editingRole, setEditingRole] = useState<ManagedRole | null>(null);
   const [pending, setPending] = useState<Member | null>(null);
@@ -74,6 +74,7 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
         {tab === "roles" && caps?.roles_create && <button className={styles.primary} onClick={() => setCreatingRole(true)}><LuPlus aria-hidden="true" />إضافة دور</button>}
       </div>
     </header>
+    {notice && <p className={styles.status} role="status">{notice}</p>}
     {options.loading && <p className={styles.status} role="status">جارٍ تحميل خيارات إدارة المستخدمين…</p>}
     {options.error && <section className={styles.status}><p>تعذّر تحميل خيارات إدارة المستخدمين.</p><p role="alert">{options.error}</p><button className={styles.secondary} onClick={options.retry}>إعادة تحميل الخيارات</button></section>}
     {caps?.roles_view && <div className={styles.tabs} role="tablist" aria-label="أقسام إدارة المستخدمين">
@@ -115,14 +116,14 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
         </DirectoryTable>
       </>}
     </section>}
-    {creating && options.data && <UserEditor facilityId={facilityId} roles={options.data.roles} groups={options.data.permission_groups} canCreateRole={!!caps?.roles_create} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); setRevision(value => value + 1); }} />}
+    {creating && options.data && <UserEditor facilityId={facilityId} roles={options.data.roles} groups={options.data.permission_groups} canCreateRole={!!caps?.roles_create} onClose={() => setCreating(false)} onSaved={member => { setNotice(member.pending_global_permissions?.length ? "أُنشئ الحساب وإسناده المحلي. البحث وإنشاء هوية المريض ينتظران تفويضًا عالميًا من مسؤول النظام؛ الحساب ليس جاهزًا لهاتين العمليتين بعد." : "أُنشئ الحساب وأُسند الدور بنجاح."); setCreating(false); setRevision(value => value + 1); }} />}
     {creatingRole && options.data && <RoleEditor facilityId={facilityId} groups={options.data.permission_groups} onClose={() => setCreatingRole(false)} onSaved={() => { setCreatingRole(false); setRevision(value => value + 1); }} />}
     {editingRole && options.data && <RoleEditor facilityId={facilityId} groups={options.data.permission_groups} role={editingRole} onClose={() => setEditingRole(null)} onSaved={() => { setEditingRole(null); setRevision(value => value + 1); }} />}
     {pending && <ConfirmUserDelete member={pending} facilityId={facilityId} onClose={() => setPending(null)} onDeleted={() => { setPending(null); setRevision(value => value + 1); }} />}
   </>;
 }
 
-function UserEditor({ facilityId, roles, groups, canCreateRole, onClose, onSaved }: { facilityId: number; roles: Role[]; groups: Group[]; canCreateRole: boolean; onClose: () => void; onSaved: () => void }) {
+function UserEditor({ facilityId, roles, groups, canCreateRole, onClose, onSaved }: { facilityId: number; roles: Role[]; groups: Group[]; canCreateRole: boolean; onClose: () => void; onSaved: (member: Member) => void }) {
   const [fields, setFields] = useState({ username: "", name: "", email: "", password: "", role_id: roles[0] ? String(roles[0].id) : "" });
   const [choices, setChoices] = useState(roles);
   const [creatingRole, setCreatingRole] = useState(false);
@@ -135,11 +136,11 @@ function UserEditor({ facilityId, roles, groups, canCreateRole, onClose, onSaved
     if (pending.current) return;
     pending.current = true; setBusy(true); setError(null);
     try {
-      await apiRequest<Member>("users", { method: "POST", body: JSON.stringify({
+      const member = await apiRequest<Member>("users", { method: "POST", body: JSON.stringify({
         facility_id: facilityId, username: fields.username, name: fields.name, email: fields.email || null,
         password: fields.password, role_id: Number(fields.role_id),
       }) });
-      onSaved();
+      onSaved(member);
     } catch (reason) {
       setError(reason instanceof AuthError ? reason : new AuthError(0, "FAILED", "تعذّر الحفظ. حاول مجددًا."));
     } finally { pending.current = false; setBusy(false); }
@@ -153,6 +154,7 @@ function UserEditor({ facilityId, roles, groups, canCreateRole, onClose, onSaved
         <label>الاسم *<input required maxLength={200} value={fields.name} onChange={e => setFields({ ...fields, name: e.target.value })} aria-invalid={!!error?.fields.name} aria-describedby={error?.fields.name ? "user-error-name" : undefined} />{fieldError("name")}</label>
         <label>البريد الإلكتروني<input type="email" maxLength={190} value={fields.email} onChange={e => setFields({ ...fields, email: e.target.value })} aria-invalid={!!error?.fields.email} aria-describedby={error?.fields.email ? "user-error-email" : undefined} />{fieldError("email")}</label>
         <label>كلمة المرور *<input type="password" required minLength={8} maxLength={100} autoComplete="new-password" value={fields.password} onChange={e => setFields({ ...fields, password: e.target.value })} aria-invalid={!!error?.fields.password} aria-describedby={error?.fields.password ? "user-error-password" : undefined} />{fieldError("password")}</label>
+        {!choices.length && <p className={styles.hint}>لا يوجد دور فعال يمكنك إسناده ضمن صلاحياتك. تواصل مع مسؤول النظام.</p>}
         <label className={styles.full}>الدور *<select required value={fields.role_id} onChange={e => setFields({ ...fields, role_id: e.target.value })}>{choices.map(role => <option key={role.id} value={role.id}>{role.name_ar}</option>)}</select>{fieldError("role_id")}
           {canCreateRole && <button type="button" className={styles.textButton} onClick={() => setCreatingRole(true)}>إنشاء دور جديد وتحديد صلاحياته</button>}
         </label>

@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\OncologyController;
 use App\Http\Controllers\Api\ReceptionController;
 use App\Http\Controllers\Api\ReceptionReviewController;
 use App\Http\Controllers\Api\RoleController;
+use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WebSessionController;
@@ -28,6 +29,10 @@ use Illuminate\Support\Facades\Route;
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login');
 
 Route::middleware(['auth:sanctum', 'account.active', 'abilities:api', 'web.idle'])->group(function () {
+    Route::get('/guide', [SettingsController::class, 'guide'])->name('guide');
+    Route::get('/settings', [SettingsController::class, 'show'])->name('settings.show');
+    Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::put('/settings/system-session', [SettingsController::class, 'update'])->name('settings.system');
     Route::get('/statistics', [AnonymousStatisticsController::class, 'show'])->name('statistics.show');
     Route::post('/statistics/export/{format}', [AnonymousStatisticsController::class, 'export'])->whereIn('format', ['pdf', 'xlsx'])->name('statistics.export');
     Route::get('/session', [WebSessionController::class, 'show'])->name('session.show');

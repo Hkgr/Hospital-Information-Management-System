@@ -66,7 +66,7 @@ node --test tests/reception-live.test.mjs tests/reception-review-live.test.mjs
 
 These tests use real requests and MariaDB without API interception. The review suite additionally starts two independent PHP HTTP-kernel workers with a readiness barrier to test simultaneous version conflict and UUID replay. Synthetic tokens are revoked afterwards, and historical test rows remain on the isolated database. Never run these fixtures against a development/production database.
 
-Deferred: anonymized statistics/export, two-minute logout and 2FA. Clinical record reconciliation and cross-facility duplicate merges are deliberately blocked, not reported as successful merges.
+At Phase 2 delivery, anonymized statistics/export and idle logout were deferred to Phase 3. They are now implemented; idle duration is configurable with a two-minute default (see [settings](facility-settings-and-guides.md)). 2FA remains out of scope. Clinical record reconciliation and cross-facility duplicate merges are deliberately blocked, not reported as successful merges.
 
 ## Verification performed (2026-09-28)
 

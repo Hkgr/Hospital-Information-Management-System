@@ -1,4 +1,4 @@
-import { LuHouse, LuDroplet, LuFolderHeart, LuStethoscope, LuHospital, LuClipboardPlus, LuPill, LuPackage, LuChartNoAxesCombined, LuHistory, LuUsers } from "react-icons/lu";
+import { LuHouse, LuDroplet, LuFolderHeart, LuStethoscope, LuHospital, LuClipboardPlus, LuPill, LuPackage, LuChartNoAxesCombined, LuHistory, LuUsers, LuSettings, LuBookOpen } from "react-icons/lu";
 import type { IconType } from "react-icons";
 
 type NavigationItem = { label: string; icon: IconType; href?: string; permission?: string; anyPermission?: string[] };
@@ -20,4 +20,6 @@ export const primaryNavigation: NavigationItem[] = [
   { label: "تقارير", icon: LuChartNoAxesCombined, href: "/reports", permission: "reports.view" },
   { label: "السجل", icon: LuHistory, href: "/audit", permission: "audit.view" },
   { label: "المستخدمون", icon: LuUsers, href: "/users", permission: "users.view" },
+  { label: "الإعدادات", icon: LuSettings, href: "/settings", permission: "settings.view" },
+  { label: "دليل الاستخدام", icon: LuBookOpen, href: "/guide" },
 ];

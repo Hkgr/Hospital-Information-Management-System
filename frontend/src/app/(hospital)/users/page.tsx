@@ -1,6 +1,7 @@
+import PortalFrame from "@/features/settings/PortalFrame";
 import { Suspense } from "react";
 import UsersScreen from "@/features/users/UsersScreen";
 
 export default function UsersPage() {
-  return <Suspense fallback={<p role="status">جارٍ تحميل المستخدمين…</p>}><UsersScreen /></Suspense>;
+  return <Suspense fallback={<p role="status">جارٍ تحميل المستخدمين…</p>}><PortalFrame><UsersScreen /></PortalFrame></Suspense>;
 }

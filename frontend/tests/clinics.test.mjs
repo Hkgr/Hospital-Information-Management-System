@@ -20,6 +20,8 @@ async function setup({ width = 1440, access = [{ facility, permissions, roles: [
     const request = route.request(), url = new URL(request.url());
     if (url.origin !== new URL(base).origin) return route.abort();
     if (!url.pathname.startsWith("/hospital-api/")) return route.continue();
+    // Directory fixtures use noninteractive tokens; idle timing has its own suite.
+    if (url.pathname === '/hospital-api/session' || url.pathname === '/hospital-api/session/activity') return route.fulfill({json:{data:{idle_timeout:null}}});
     calls.push({ url, method: request.method(), body: request.postDataJSON(), auth: request.headers().authorization });
     if (await override(route, url)) return;
     if (url.pathname.endsWith("/deletion-preview")) return route.fulfill({json:{data:{action:"delete",organizational_links:0,has_other_references:false,lock_version:1,archived:false}}});
@@ -166,10 +168,10 @@ test("facility changes discard pending old results and close old editors", async
     return true;
   } });
   try {
-    await page.getByRole("combobox", { name: "المنشأة", exact: true }).waitFor();
+    assert.equal(await page.getByRole("combobox", { name: "المنشأة", exact: true }).count(), 0);
     await page.getByRole("button", { name: "إضافة عيادة جديدة", exact: true }).click();
     await page.keyboard.press("Escape");
-    await page.getByRole("combobox", { name: "المنشأة", exact: true }).selectOption("2");
+    await page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, "2");
     await page.getByText("سياق جديد", { exact: true }).waitFor();
     release(); await page.waitForTimeout(350);
     assert.equal(await page.getByText("سياق سابق", { exact: true }).count(), 0);
@@ -507,7 +509,7 @@ test("facility selection cancels pending search and filter changes commit the vi
   const { page, context, calls } = await setup({ access });
   try {
     await page.getByLabel("البحث في العيادات").fill("old-facility");
-    await page.getByRole("combobox", { name: "المنشأة", exact: true }).selectOption("2");
+    await page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, "2");
     await page.waitForURL(/facility_id=2/); await page.waitForTimeout(650);
     assert.equal(await page.getByLabel("البحث في العيادات").inputValue(), "");
     assert.ok(!new URL(page.url()).searchParams.has("search"));

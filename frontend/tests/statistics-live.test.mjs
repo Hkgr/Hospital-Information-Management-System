@@ -73,10 +73,10 @@ test('four actual roles, protected aggregate JSON and exports through Next; resp
         await page.getByRole('button', { name: 'تصدير Excel', exact: true }).waitFor();
         await page.getByText('مرضى فريدون: 11 — الوقائع: 12', { exact: true }).first().waitFor();
         if (role === 'super_admin') {
-          await page.getByLabel('المنشأة', { exact: true }).selectOption(String(fixture.other));
+          await page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, String(fixture.other));
           await page.getByText('محجوب لحماية الخصوصية', { exact: true }).first().waitFor();
           assert.equal(await page.getByText('مرضى فريدون: 11 — الوقائع: 12', { exact: true }).count(), 0);
-          await page.getByLabel('المنشأة', { exact: true }).selectOption(String(fixture.facility));
+          await page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, String(fixture.facility));
           await page.getByText('مرضى فريدون: 11 — الوقائع: 12', { exact: true }).first().waitFor();
         }
         if (role === 'statistics') {

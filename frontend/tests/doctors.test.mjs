@@ -18,6 +18,8 @@ async function setup({ width=1440, access=[{facility,permissions,roles:[]}], set
     const request=route.request(),url=new URL(request.url());
     if(url.origin!==new URL(base).origin) return route.abort();
     if(!url.pathname.startsWith('/hospital-api/')) return route.continue();
+    // Directory fixtures use noninteractive tokens; idle timing has its own suite.
+    if (url.pathname === '/hospital-api/session' || url.pathname === '/hospital-api/session/activity') return route.fulfill({json:{data:{idle_timeout:null}}});
     calls.push({url,method:request.method(),body:request.postDataJSON(),auth:request.headers().authorization});
     if(await override(route,url)) return;
     if(url.pathname.endsWith('/deletion-preview')) return route.fulfill({json:{data:{action:'delete',organizational_links:0,has_other_references:false,lock_version:1,archived:false}}});
@@ -71,7 +73,7 @@ test('refresh keeps current rows, ignores obsolete search responses and clears r
     await page.getByText('جارٍ تحديث النتائج…',{exact:true}).waitFor();
     await page.getByLabel('البحث في الأطباء').fill('أحدث');await page.getByRole('link',{name:'LATEST',exact:true}).waitFor();
     release();await page.waitForTimeout(150);assert.equal(await page.getByRole('link',{name:'STALE',exact:true}).count(),0);
-    await page.getByRole('combobox',{name:'المنشأة',exact:true}).selectOption('2');
+    await page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, '2');
     await page.getByRole('link',{name:'LATEST',exact:true}).waitFor({state:'detached'});
   }finally{release();await context.close();}
 });
@@ -273,7 +275,7 @@ test('facility switch aborts a pending conflict reload and closes the old draft'
   }});
   try{
     await page.getByRole('button',{name:'تعديل أحمد الاختباري',exact:true}).click();let dialog=page.getByRole('dialog');await dialog.getByRole('button',{name:'حفظ الطبيب',exact:true}).click();await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();await page.keyboard.press('Escape');
-    await page.getByRole('combobox',{name:'المنشأة',exact:true}).selectOption('2');release();await page.waitForTimeout(400);
+    await page.evaluate(id => { const url = new URL(location.href); url.searchParams.set("facility_id", id); window.history.pushState(null, "", url); }, '2');release();await page.waitForTimeout(400);
     assert.equal(await page.getByRole('dialog').count(),0);assert.equal(await page.getByText('استجابة قديمة',{exact:true}).count(),0);
     await page.getByRole('button',{name:'تعديل أحمد الاختباري',exact:true}).click();dialog=page.getByRole('dialog');assert.equal(await dialog.getByLabel('الاسم الكامل *').inputValue(),'أحمد الاختباري');
   }finally{release();await context.close();}

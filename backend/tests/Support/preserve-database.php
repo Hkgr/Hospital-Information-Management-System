@@ -17,6 +17,7 @@ if ($pending) {
     throw new RuntimeException('Apply reviewed additive migrations to the isolated test database first. This runner never migrates.');
 }
 RefreshDatabaseState::$migrated = true;
+define('PRESERVE_TEST_DATABASE', true);
 // PHPUnit captures its own handler stack after bootstrap. The temporary console
 // application must not leave Laravel handlers under every test application.
 restore_error_handler();

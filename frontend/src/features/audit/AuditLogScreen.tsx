@@ -24,13 +24,13 @@ export default function AuditLogScreen() {
   const pathname = usePathname();
   const router = useRouter();
   const { entry, allowed } = directoryFacility(access, "audit.view", params.get("facility_id"));
-  if (!entry) return <section className={styles.status}><h2>السجل غير متاح</h2><p role="alert">{allowed.length ? "معرّف المنشأة غير صالح ضمن المنشآت المتاحة لك." : "لا منشأة مرتبطة بهذا الدخول لعرض سجل الحركة."}</p></section>;
-  const facility = entry.facility.id;
+  const facility = entry?.facility.id;
   const q = new URLSearchParams({ facility_id: String(facility) });
   for (const key of ["from", "to", "category", "entity", "action", "page", "per_page"]) {
     const value = params.get(key); if (value) q.set(key, value);
   }
-  const history = useClinicRequest<History>(`audit?${q}`, true);
+  const history = useClinicRequest<History>(entry ? `audit?${q}` : null, true);
+  if (!entry) return <section className={styles.status}><h2>السجل غير متاح</h2><p role="alert">{allowed.length ? "معرّف المنشأة غير صالح ضمن المنشآت المتاحة لك." : "لا منشأة مرتبطة بهذا الدخول لعرض سجل الحركة."}</p></section>;
   function filter(key: string, value: string) {
     const next = new URLSearchParams(params.toString());
     next.set("facility_id", String(facility));
@@ -41,7 +41,6 @@ export default function AuditLogScreen() {
   const open = (id: number) => router.push(`/audit/${id}?facility_id=${facility}`);
   return <div className={styles.screen}>
     <div className={styles.context}><LuHospital aria-hidden="true" /><span>المشفى</span><strong>{entry.facility.name_ar}</strong></div>
-    {allowed.length > 1 && <label className={styles.filters}>المنشأة<select aria-label="المنشأة" value={String(facility)} onChange={e => filter("facility_id", e.target.value)}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select></label>}
     <section className={styles.panel} aria-labelledby="system-log-heading">
       <div className={styles.toolbar}><div><h2 id="system-log-heading">سجل الحركة</h2><p className={styles.hint}>جدول الحركات المسجلة. انقر الصف لفتح صفحة الحركة.</p></div></div>
       <div className={styles.filters}>

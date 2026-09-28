@@ -61,7 +61,6 @@ export default function ReportsScreen() {
       </section>
     </Reveal>
     <div className={clinic.context}><LuHospital aria-hidden="true" /><span>المشفى</span><strong>{selected.facility.name_ar}</strong></div>
-    {allowed.length > 1 && <label className={clinic.filters}>المنشأة<select aria-label="المنشأة" value={String(selected.facility.id)} onChange={e => setQuery({ facility_id: e.target.value })}>{allowed.map(item => <option key={item.facility.id} value={item.facility.id}>{item.facility.name_ar}</option>)}</select></label>}
     <Reveal delay={0.04}>
       <section className={styles.controls} aria-label="نطاق التقرير">
         <div role="radiogroup" aria-label="الفترة الزمنية" className={styles.switch}>

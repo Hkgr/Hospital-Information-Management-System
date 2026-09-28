@@ -5,12 +5,13 @@ import { apiRequest, clearLocalSession, expireLocalSession, getToken } from "./a
 import styles from "../clinics/clinics.module.css";
 import idleStyles from "./idle.module.css";
 
-type State = { idle_timeout: number | null; remaining_seconds?: number };
+type State = { idle_timeout: number | null; remaining_seconds?: number; warning_seconds?: number };
 
 /** Only trusted interaction schedules activity; the timer itself never renews. */
 export default function IdleSession({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false), [remaining, setRemaining] = useState<number | null>(null);
   const [started, setStarted] = useState(false);
+  const [warning, setWarning] = useState(0);
   const [verificationError, setVerificationError] = useState(false);
   const continueSession = useRef<() => void>(() => {});
   const retryVerification = useRef<() => void>(() => {});
@@ -28,6 +29,7 @@ export default function IdleSession({ children }: { children: React.ReactNode })
       try {
         const value = await apiRequest<State>(renew ? "session/activity" : "session", { method: renew ? "POST" : "GET", signal: abort.signal });
         if (abort.signal.aborted) return;
+        setWarning(value.warning_seconds ?? Math.ceil((value.idle_timeout ?? 0) / 4));
         deadline = value.idle_timeout === null ? Infinity : performance.now() + Math.max(0, (value.remaining_seconds ?? 0) * 1000 - (performance.now() - started));
         if (renew) { lastRenewal = performance.now(); if (key) channel?.postMessage({ key, kind: "refresh" }); }
         setRemaining(Number.isFinite(deadline) ? Math.max(0, Math.ceil((deadline - performance.now()) / 1000)) : null);
@@ -84,5 +86,5 @@ export default function IdleSession({ children }: { children: React.ReactNode })
   }, []);
   // A peer tab may have renewed while this tab slept. Keep the mounted draft
   // hidden during verification; actual expiration unmounts the session owner.
-  return <>{!ready && (verificationError ? <section className={styles.status}><p role="alert">تعذّر التحقق من الجلسة. لن تُعرض البيانات قبل نجاح الاتصال بالخادم.</p><button className={styles.primary} onClick={() => retryVerification.current()}>إعادة التحقق</button><button className={styles.secondary} onClick={clearLocalSession}>تسجيل الخروج من هذا المتصفح</button></section> : <p role="status">جارٍ التحقق من صلاحية الجلسة…</p>)}<div hidden={!ready} inert={!ready}>{ready && remaining !== null && remaining <= 30 && <section className={idleStyles.warning} role="alert" aria-label="تنبيه انتهاء الجلسة"><p>ستنتهي الجلسة بسبب الخمول خلال {remaining} ثانية. التغييرات غير المحفوظة لن تُستعاد تلقائيًا.</p><button className={styles.primary} onClick={() => continueSession.current()}>متابعة الجلسة</button></section>}{started && children}</div></>;
+  return <>{!ready && (verificationError ? <section className={styles.status}><p role="alert">تعذّر التحقق من الجلسة. لن تُعرض البيانات قبل نجاح الاتصال بالخادم.</p><button className={styles.primary} onClick={() => retryVerification.current()}>إعادة التحقق</button><button className={styles.secondary} onClick={clearLocalSession}>تسجيل الخروج من هذا المتصفح</button></section> : <p role="status">جارٍ التحقق من صلاحية الجلسة…</p>)}<div hidden={!ready} inert={!ready}>{ready && remaining !== null && remaining <= warning && <section className={idleStyles.warning} role="alert" aria-label="تنبيه انتهاء الجلسة"><p>ستنتهي الجلسة بسبب الخمول خلال {remaining} ثانية. التغييرات غير المحفوظة لن تُستعاد تلقائيًا.</p><button className={styles.primary} onClick={() => continueSession.current()}>متابعة الجلسة</button></section>}{started && children}</div></>;
 }

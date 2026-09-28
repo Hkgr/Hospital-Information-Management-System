@@ -3,6 +3,7 @@
 namespace App\Services\Users;
 
 use App\Models\User;
+use App\Services\Auth\GlobalAccess;
 use App\Services\Auth\UserAccessContext;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
@@ -14,7 +15,7 @@ class RoleAccess
             if ($entry['facility']['id'] === $id
                 && in_array('roles.view', $entry['permissions'], true)
                 && in_array('roles.'.$action, $entry['permissions'], true)) {
-                return $entry['facility'] + ['permissions' => $entry['permissions']];
+                return $entry['facility'] + ['permissions' => $entry['permissions'], 'can_manage_global_roles' => (bool) app(GlobalAccess::class)->systemRole($user)];
             }
         }
         throw new HttpResponseException(response()->json(['error' => ['code' => 'ROLES_ACCESS_DENIED', 'message' => 'لا يتوفر لك وصول إلى إدارة الأدوار في هذه المنشأة.']], 403));

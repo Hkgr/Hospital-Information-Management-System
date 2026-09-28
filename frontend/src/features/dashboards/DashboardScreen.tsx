@@ -90,13 +90,7 @@ function DashboardRequest({ dashboardKey, query }: { dashboardKey?: string; quer
         if (path) { setState({}); router.push(path); }
       }}>{choices.map(item => <option key={item.key} value={item.key}>{item.title}</option>)}</select>
     </label>}
-    {state.data.dashboard.requires_facility && <label className={styles.switcher}>المنشأة
-      <select value={state.data.selected_facility_id ?? ""} onChange={event => {
-        const descriptor = state.catalog?.dashboards.find(item => item.key === dashboardKey);
-        const path = descriptor && dashboardPath(descriptor, Number(event.target.value));
-        if (path) { setState({}); router.push(path); }
-      }}>{state.catalog.dashboards.find(item => item.key === dashboardKey)?.facilities.map(item => <option key={item.id} value={item.id}>{item.name_ar}</option>)}</select>
-    </label>}
+    {state.data.dashboard.requires_facility && <div className={styles.switcher}><strong>{state.data.facilities.find(item => item.id === state.data?.selected_facility_id)?.name_ar}</strong></div>}
     <View data={state.data} />
   </>;
 }
