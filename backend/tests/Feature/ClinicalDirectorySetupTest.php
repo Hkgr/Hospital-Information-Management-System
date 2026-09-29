@@ -18,6 +18,30 @@ class ClinicalDirectorySetupTest extends TestCase
         return DB::table('facilities')->insertGetId(['code' => 'SETUP-'.Str::random(8), 'name_ar' => 'منشأة اصطناعية', 'timezone' => 'Asia/Damascus']);
     }
 
+    public function test_explicit_and_automatic_clinic_matches_cannot_resolve_to_the_same_record(): void
+    {
+        app(ClinicalStaffTypesSeeder::class)->run();
+        $facility = $this->facility();
+        $clinic = DB::table('clinics')->insertGetId(['facility_id' => $facility, 'code' => 'COLLISION', 'name_ar' => 'عيادة جراحية']);
+        $snapshot = fn () => collect(['clinics', 'clinic_staff', 'staff', 'procedures', 'blood_components', 'audit_logs'])->mapWithKeys(fn ($t) => [$t => DB::table($t)->orderBy('id')->get()->toJson()])->all();
+        $before = $snapshot();
+        $setup = app(ClinicalDirectorySetup::class);
+        $mapping = ['primary' => $clinic];
+        $plan = $setup->preview($facility, '2001-01-01', $mapping);
+        $errors = implode(' ', $plan['errors']);
+        foreach (['primary', 'surgical', (string) $clinic] as $expected) {
+            $this->assertStringContainsString($expected, $errors);
+        }
+        $this->assertSame($before, $snapshot());
+        try {
+            $setup->apply($facility, '2001-01-01', $mapping, $plan['fingerprint'], 'test/collision');
+            $this->fail('Resolved clinic collision must prevent the entire write');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('primary', $e->getMessage());
+        }
+        $this->assertSame($before, $snapshot());
+    }
+
     public function test_preview_and_repeatable_setup_preserve_legacy_identity_and_links(): void
     {
         app(ClinicalStaffTypesSeeder::class)->run();

@@ -1,6 +1,5 @@
 <?php
 
-use App\Services\Directory\IssuedCodes;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -40,18 +39,10 @@ return new class extends Migration
             DB::statement("ALTER TABLE blood_bank_events ADD CONSTRAINT ck_blood_events_crossmatch CHECK (crossmatch_result IS NULL OR crossmatch_result IN ('compatible','incompatible'))");
         }
 
-        DB::transaction(function () {
-            $codes = app(IssuedCodes::class);
-            foreach (['استشارة جراحية', 'بزل', 'خزعة نقي العظم', 'خزعة موجهة بالإيكو', 'تغيير ضماد', 'لطاخة', 'خزعات نسجية'] as $name) {
-                if (! DB::table('procedures')->where('name_ar', $name)->exists()) {
-                    DB::table('procedures')->insert(['code' => $codes->catalog('procedure'), 'name_ar' => $name, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()]);
-                }
-            }
-            foreach (['whole' => 'دم كامل', 'red_cells' => 'كريات مكثفة', 'plasma' => 'بلازما', 'platelets' => 'صفيحات'] as $kind => $name) {
-                DB::table('blood_components')->where('registration_kind', $kind)->update(['name_ar' => $name, 'updated_at' => now()]);
-            }
-            $this->doctors();
-        });
+        // Schema only for installations that have not run this migration yet.
+        // Directory writes require directory:clinical-setup with an operator-reviewed preview.
+        // Already-applied installations retain their data; the corrective migration and
+        // reviewed command support them without replaying or rewriting migration history.
     }
 
     public function down(): void
@@ -76,51 +67,5 @@ return new class extends Migration
         Schema::table('staff', fn (Blueprint $t) => $t->dropColumn('practice_group'));
         Schema::table('clinics', fn (Blueprint $t) => $t->dropColumn(['care_setting', 'inpatient_kind']));
         Schema::table('patients', fn (Blueprint $t) => $t->dropUnique('unique_patients_national_id')->dropColumn('national_id'));
-    }
-
-    private function doctors(): void
-    {
-        $groups = [
-            'resident' => ['محمود مقرش', 'سدرة كوردي', 'بتول الحكيم', 'أديل خاجو', 'سليمان سروخان', 'زين دوبا', 'سمية طبشو', 'إيمان المحمد', 'سوزان محفوض', 'سدرة حياني', 'محمد سليم', 'رؤى شيط', 'نجوى ناصر', 'عبد الله طه', 'راما البر', 'هبة حاج صالح'],
-            'specialist' => ['محمد مواس', 'هماء المحمد', 'ياسمين قنينة', 'زينة زكور', 'ريما صناع', 'أوراما كورية', 'أحمد العيسى', 'إياد العريان', 'روعة سرميني', 'سامر نسطة', 'عدنان عكش'],
-        ];
-        $normalize = function (string $name): string {
-            $name = str_replace(['أ', 'إ', 'آ', 'ى', 'ة'], ['ا', 'ا', 'ا', 'ي', 'ه'], $name);
-
-            return trim((string) preg_replace('/\s+/u', ' ', $name));
-        };
-        $existing = DB::table('staff')->get(['id', 'full_name']);
-        $codes = array_values(array_filter(config('clinics.doctor_staff_types', []), fn ($code) => $code !== 'NURSE'));
-        if (! $codes) {
-            $codes = config('clinics.doctor_staff_types', []);
-        }
-        $typeId = $codes
-            ? DB::table('staff_types')->whereIn('code', $codes)->where('is_active', true)->orderBy('id')->value('id')
-            : DB::table('staff')->whereNotNull('staff_type_id')->orderBy('id')->value('staff_type_id');
-        foreach ($groups as $group => $names) {
-            foreach ($names as $name) {
-                $key = $normalize($name);
-                $match = $existing->first(fn ($row) => $normalize((string) $row->full_name) === $key);
-                if ($match) {
-                    DB::table('staff')->where('id', $match->id)->update(['practice_group' => $group, 'updated_at' => now()]);
-
-                    continue;
-                }
-                if (! $typeId) {
-                    continue;
-                }
-                $id = DB::table('staff')->insertGetId([
-                    'staff_code' => app(IssuedCodes::class)->doctor(),
-                    'full_name' => $name,
-                    'search_name' => $name,
-                    'staff_type_id' => $typeId,
-                    'practice_group' => $group,
-                    'is_active' => true,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-                $existing->push((object) ['id' => $id, 'full_name' => $name]);
-            }
-        }
     }
 };

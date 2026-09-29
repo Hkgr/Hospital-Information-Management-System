@@ -75,6 +75,17 @@ class ClinicalDirectorySetup
             }
             $plan['clinics'][$kind] = ['name' => $name, 'before' => $row, 'clinic_kind' => $target, 'care_setting' => $setting];
         }
+        $resolved = [];
+        foreach ($plan['clinics'] as $key => $entry) {
+            if ($entry['before']) {
+                $resolved[$entry['before']->id][] = $key;
+            }
+        }
+        foreach ($resolved as $id => $keys) {
+            if (count($keys) > 1) {
+                $errors[] = 'تعارض مطابقة العيادات: المعرف '.$id.' مستخدم للتصنيفات '.implode(', ', $keys).'.';
+            }
+        }
         if (count(array_unique(array_values($mapping))) !== count($mapping) || array_diff(array_keys($mapping), array_keys(self::CLINICS))) {
             $errors[] = 'خريطة العيادات تحتوي مفتاحًا غير معروف أو تعيينًا مكررًا.';
         }

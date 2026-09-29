@@ -57,7 +57,10 @@ class DossierClinicalWriter
                         $this->context->check($f, $row['clinic_id'], $doctorId, $v->visit_date, "$kind.$i.doctor_id", (bool) $unchanged, $manual);
                         $location = [];
                         if ($kind === 'procedures') {
-                            if (! $old || $row['catalog_id'] != $old->$catalog || ! $unchanged) {
+                            // Doctor/name corrections must not reinterpret a saved event using today's directory.
+                            // Only an explicit procedure or clinic correction adopts current location rules;
+                            // persist() audits both the old snapshot and the replacement under the row lock.
+                            if (! $old || $row['catalog_id'] != $old->$catalog || $row['clinic_id'] != $old->clinic_id) {
                                 $location = app(ProcedureLocation::class)->catalog($f, $row['clinic_id'], $row['catalog_id'], "$kind.$i.clinic_id");
                             } else {
                                 app(ProcedureLocation::class)->check($f, $row['clinic_id'], $old->execution_location_snapshot, "$kind.$i.clinic_id");

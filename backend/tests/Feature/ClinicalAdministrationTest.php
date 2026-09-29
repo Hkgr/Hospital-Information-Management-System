@@ -10,6 +10,77 @@ use Tests\Support\DossierCompletionCase;
 
 class ClinicalAdministrationTest extends DossierCompletionCase
 {
+    public function test_doctor_correction_preserves_saved_procedure_snapshot_after_directory_changes(): void
+    {
+        $this->correctDoctorWithSnapshot('radiology', 'ct');
+    }
+
+    public function test_doctor_correction_preserves_null_legacy_snapshot_after_directory_changes(): void
+    {
+        $this->correctDoctorWithSnapshot(null, null);
+    }
+
+    public function test_explicit_procedure_and_clinic_corrections_revalidate_and_audit_replacement_snapshots(): void
+    {
+        $procedure = $this->f['procedure'];
+        $clinic = $this->f['clinics'][0];
+        $surgical = $this->f['clinics'][1];
+        DB::table('clinics')->where('id', $clinic)->update(['care_setting' => 'radiology']);
+        DB::table('clinics')->where('id', $surgical)->update(['clinic_kind' => 'surgical']);
+        DB::table('procedures')->where('id', $procedure)->update(['execution_location' => 'radiology', 'guidance_method' => 'ct']);
+        $this->s = $this->saveSection('clinical', ['services' => [], 'procedures' => [['catalog_id' => $procedure] + $this->context()]])->assertOk()->json('data');
+        $saved = $this->s['clinical']['procedures'][0];
+        $moved = array_replace($saved, ['clinic_id' => $surgical, 'doctor_id' => $this->f['workflow_doctors'][1]]);
+        $this->saveSection('clinical', ['services' => [], 'procedures' => [$moved]])->assertUnprocessable();
+        $this->assertDatabaseHas('visit_procedures', ['id' => $saved['id'], 'clinic_id' => $clinic, 'guidance_method_snapshot' => 'ct']);
+        DB::table('procedures')->where('id', $procedure)->update(['execution_location' => 'surgical_clinic', 'guidance_method' => null]);
+        $this->s = $this->saveSection('clinical', ['services' => [], 'procedures' => [$moved]])->assertOk()->json('data');
+        $audit = DB::table('audit_logs')->where('entity_type', 'visit_procedures')->where('entity_id', $saved['id'])->orderByDesc('id')->first();
+        $this->assertSame('radiology', json_decode($audit->old_values, true)['execution_location_snapshot']);
+        $this->assertSame('ct', json_decode($audit->old_values, true)['guidance_method_snapshot']);
+        $this->assertSame('surgical_clinic', json_decode($audit->new_values, true)['execution_location_snapshot']);
+        $this->assertNull(json_decode($audit->new_values, true)['guidance_method_snapshot']);
+        $replacement = DB::table('procedures')->insertGetId(['code' => 'NEW-'.$this->f['tag'], 'name_ar' => 'خزعة بديلة اصطناعية', 'execution_location' => 'radiology', 'guidance_method' => 'ultrasound']);
+        $changed = array_replace($this->s['clinical']['procedures'][0], ['catalog_id' => $replacement]);
+        $this->saveSection('clinical', ['services' => [], 'procedures' => [$changed]])->assertUnprocessable();
+        $changed['clinic_id'] = $clinic;
+        $changed['doctor_id'] = $this->f['workflow_doctors'][0];
+        $this->saveSection('clinical', ['services' => [], 'procedures' => [$changed]])->assertOk();
+        $this->assertDatabaseHas('visit_procedures', ['id' => $saved['id'], 'procedure_id' => $replacement, 'execution_location_snapshot' => 'radiology', 'guidance_method_snapshot' => 'ultrasound']);
+    }
+
+    private function correctDoctorWithSnapshot(?string $location, ?string $guidance): void
+    {
+        $procedure = $this->f['procedure'];
+        $clinic = $this->f['clinics'][0];
+        DB::table('clinics')->where('id', $clinic)->update(['care_setting' => 'radiology']);
+        DB::table('procedures')->where('id', $procedure)->update(['execution_location' => $location, 'guidance_method' => $guidance]);
+        $this->s = $this->saveSection('clinical', ['services' => [], 'procedures' => [['catalog_id' => $procedure] + $this->context()]])->assertOk()->json('data');
+        DB::table('procedures')->where('id', $procedure)->update(['execution_location' => 'surgical_clinic', 'guidance_method' => null]);
+        $otherDoctor = $this->f['workflow_doctors'][1];
+        DB::table('clinic_staff')->insert(['clinic_id' => $clinic, 'staff_id' => $otherDoctor, 'starts_on' => '1990-01-01']);
+        foreach ([['doctor_id' => $otherDoctor, 'manual_doctor_name' => null], ['doctor_id' => null, 'manual_doctor_name' => 'تصحيح اسم الطبيب']] as $correction) {
+            $row = array_replace($this->s['clinical']['procedures'][0], $correction);
+            $this->s = $this->saveSection('clinical', ['services' => [], 'procedures' => [$row]])->assertOk()->json('data');
+            $saved = $this->s['clinical']['procedures'][0];
+            $this->assertSame($location, $saved['execution_location']);
+            $this->assertSame($guidance, $saved['guidance_method']);
+            $this->assertDatabaseHas('visit_procedures', ['id' => $saved['id'], 'execution_location_snapshot' => $location, 'guidance_method_snapshot' => $guidance]);
+        }
+        $this->callApi('GET', "/{$this->s['id']}/progress")->assertOk()->assertJsonPath('data.clinical.procedures.0.manual_doctor_name', 'تصحيح اسم الطبيب');
+        $this->s = $this->callApi('PUT', $this->path(), $this->visit(['lock_version' => $this->s['visit']['lock_version'], 'visit_date' => '2001-02-01', 'diagnoses' => []]))->assertOk()->json('data');
+        $this->s = $this->saveSection('medications', ['prescription' => null, 'outcome' => $this->outcome()])->assertOk()->json('data');
+        $this->callApi('POST', $this->path('/complete'), ['lock_version' => $this->s['visit']['lock_version'], 'dossier_lock_version' => $this->s['lock_version'], 'confirmed' => true, 'clinic_id' => $clinic, 'attending_staff_id' => $otherDoctor])->assertOk();
+        $this->assertDatabaseHas('visit_procedures', ['id' => $saved['id'], 'performed_on' => '2001-02-01', 'execution_location_snapshot' => $location, 'guidance_method_snapshot' => $guidance]);
+        $audit = DB::table('audit_logs')->where('entity_type', 'visit_procedures')->where('entity_id', $saved['id'])->where('new_values', 'like', '%manual_doctor_name%')->orderByDesc('id')->first();
+        $this->assertStringContainsString('تصحيح اسم الطبيب', json_encode(json_decode($audit->new_values), JSON_UNESCAPED_UNICODE));
+        $request = Request::create('/');
+        $request->setUserResolver(fn () => $this->f['user']);
+        $f = app(DossierAccess::class)->facility($this->f['user'], $this->f['facility']);
+        $report = app(DossierReports::class)->document($request, $f, [], $this->s['id'], $this->s['visit']['id']);
+        $this->assertStringContainsString('تصحيح اسم الطبيب', json_encode($report, JSON_UNESCAPED_UNICODE));
+    }
+
     public function test_options_and_writes_reject_inactive_archived_foreign_and_expired_contexts(): void
     {
         $clinic = $this->f['clinics'][0];
