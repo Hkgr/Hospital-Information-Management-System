@@ -105,7 +105,7 @@ class BloodBankProfileWorkflowTest extends TestCase
         }
         $this->assertSame($counts, [DB::table('governorates')->count(), DB::table('cities')->count()]);
         $options = $this->getJson('/api/blood-bank/options?facility_id='.$f['facility'])->assertOk()->json('data');
-        $this->assertSame(['كامل', 'ركازة', 'بلازما', 'صفيحات'], array_column($options['blood_components'], 'name_ar'));
+        $this->assertSame(['دم كامل', 'كريات مكثفة', 'بلازما', 'صفيحات'], array_column($options['blood_components'], 'name_ar'));
         $this->assertCount(14, $options['governorates']);
         foreach ($options['blood_components'] as $component) {
             $input = ['blood_component_id' => $component['id']] + $this->eventInput($f);

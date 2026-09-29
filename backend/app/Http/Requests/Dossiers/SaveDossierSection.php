@@ -8,7 +8,7 @@ use Illuminate\Validation\Rule;
 
 class SaveDossierSection extends FormRequest
 {
-    public const PERSON = [...SaveBloodProfile::PERSON, 'marital_status', 'permanent_address', 'occupation', 'smoking_status', 'alcohol_status'];
+    public const PERSON = [...SaveBloodProfile::PERSON, 'marital_status', 'permanent_address', 'occupation', 'smoking_status', 'alcohol_status', 'national_id'];
 
     public function authorize(): bool
     {
@@ -30,7 +30,7 @@ class SaveDossierSection extends FormRequest
                 $rules[$key] = $newPatient ? ['nullable'] : ['prohibited'];
             }
             if ($newPatient) {
-                foreach (['first_name' => 80, 'family_name' => 80, 'father_name' => 80, 'mother_name' => 120, 'phone' => 30, 'alt_phone' => 30, 'address_line' => 255, 'permanent_address' => 255, 'occupation' => 120] as $key => $max) {
+                foreach (['first_name' => 80, 'family_name' => 80, 'father_name' => 80, 'mother_name' => 120, 'phone' => 30, 'alt_phone' => 30, 'address_line' => 255, 'permanent_address' => 255, 'occupation' => 120, 'national_id' => 20] as $key => $max) {
                     $rules[$key] = [in_array($key, ['first_name', 'family_name']) ? 'required' : 'nullable', 'string', 'max:'.$max];
                 }
                 $rules['birth_date'] = ['nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'];

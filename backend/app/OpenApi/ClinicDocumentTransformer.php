@@ -77,7 +77,10 @@ class ClinicDocumentTransformer
         $clinic = $this->object([
             'id' => new IntegerType, 'facility_id' => new IntegerType, 'code' => (new StringType)->example('001'),
             'name_ar' => (new StringType)->example('عيادة اختبارية'), 'description' => (new StringType)->nullable(true),
-            'specialty' => (clone $specialty)->nullable(true), 'archived_at' => (new StringType)->nullable(true), 'is_active' => new BooleanType, 'lock_version' => (new IntegerType)->example(1),
+            'specialty' => (clone $specialty)->nullable(true),
+            'care_setting' => (new StringType)->enum(['outpatient', 'inpatient', 'surgical'])->nullable(true),
+            'inpatient_kind' => (new StringType)->enum(['blood', 'oncology', 'thalassemia', 'surgical'])->nullable(true),
+            'archived_at' => (new StringType)->nullable(true), 'is_active' => new BooleanType, 'lock_version' => (new IntegerType)->example(1),
             'doctor_count' => new IntegerType, 'patient_count' => new IntegerType,
             'doctors_preview' => $this->list($this->object(['id' => new IntegerType, 'name' => new StringType])),
             'patient_count_definition' => (new StringType)->example(ClinicCounts::PATIENT_DEFINITION),

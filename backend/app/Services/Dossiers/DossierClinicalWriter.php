@@ -45,14 +45,22 @@ class DossierClinicalWriter
 
                             continue;
                         }
-                        $unchanged = $old && $old->clinic_id == $row['clinic_id'] && $row['doctor_id'] == $old->$doctor;
-                        if (! $unchanged) {
-                            $this->context->check($f, $row['clinic_id'], $row['doctor_id'], $v->visit_date, "$kind.$i.doctor_id", false);
+                        $manual = trim((string) ($row['manual_doctor_name'] ?? '')) ?: null;
+                        $doctorId = $manual ? null : ($row['doctor_id'] ?? null);
+                        if (! $manual && ! $doctorId && empty($row['remove'])) {
+                            throw ValidationException::withMessages(["$kind.$i.doctor_id" => 'اختر طبيبًا من القائمة، أو اكتب الاسم عند اختيار غير ذلك.']);
+                        }
+                        $unchanged = $old && $old->clinic_id == $row['clinic_id'] && $doctorId == $old->$doctor && $manual === ($old->manual_doctor_name ?? null);
+                        if (! $unchanged && ! $manual) {
+                            $this->context->check($f, $row['clinic_id'], $doctorId, $v->visit_date, "$kind.$i.doctor_id", false);
+                        }
+                        if (! $unchanged && $manual && ! DB::table('clinics')->where('id', $row['clinic_id'])->where('facility_id', $f['id'])->where('is_active', true)->whereNull('archived_at')->exists()) {
+                            throw ValidationException::withMessages(["$kind.$i.clinic_id" => 'اختر عيادة فعالة في هذه المنشأة.']);
                         }
                         if ((! $old || $row['catalog_id'] != $old->$catalog) && ! DB::table($kind)->where('id', $row['catalog_id'])->where('is_active', true)->whereNull('archived_at')->exists()) {
                             throw ValidationException::withMessages(["$kind.$i.catalog_id" => 'اختر عنصرًا فعالًا غير مؤرشف من الدليل.']);
                         }
-                        $fields = [$catalog => $row['catalog_id'], 'clinic_id' => $row['clinic_id'], $doctor => $row['doctor_id'], 'note' => $row['note'] ?? null, 'performed_on' => $v->visit_date, 'dossier_managed' => true];
+                        $fields = [$catalog => $row['catalog_id'], 'clinic_id' => $row['clinic_id'], $doctor => $doctorId, 'manual_doctor_name' => $manual, 'note' => $row['note'] ?? null, 'performed_on' => $v->visit_date, 'dossier_managed' => true];
                         $this->persist($r, $f, $table, $old, $fields, ['visit_id' => $visit, 'facility_id' => $f['id'], 'reporting_period_id' => null, 'client_request_id' => (string) Str::uuid()]);
                     }
                 }

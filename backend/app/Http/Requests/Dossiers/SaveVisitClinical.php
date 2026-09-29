@@ -28,7 +28,7 @@ class SaveVisitClinical extends FormRequest
         if ($this->route('section') === 'clinical') {
             foreach (['services', 'procedures'] as $section) {
                 $rules[$section] = ['present', 'array', 'max:100'];
-                foreach ($row + ['catalog_id' => ['required', 'integer', 'min:1'], 'clinic_id' => ['required', 'integer', 'min:1'], 'doctor_id' => ['required', 'integer', 'min:1']] as $key => $value) {
+                foreach ($row + ['catalog_id' => ['required', 'integer', 'min:1'], 'clinic_id' => ['required', 'integer', 'min:1'], 'doctor_id' => ['nullable', 'integer', 'min:1'], 'manual_doctor_name' => ['nullable', 'string', 'max:200']] as $key => $value) {
                     $rules["$section.*.$key"] = str_replace('ROW', "$section.*", $value);
                 }
                 $rules["$section.*.id"][] = 'distinct';

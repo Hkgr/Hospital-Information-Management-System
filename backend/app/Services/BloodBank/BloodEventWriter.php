@@ -134,6 +134,8 @@ class BloodEventWriter
                 }
             }
             $fields = Arr::only($data, ['kind', 'benefit_kind', 'occurred_on', 'blood_component_id', 'clinic_id', 'responsible_staff_id', 'quantity', 'quantity_unit', 'beneficiary_entity', 'entity_address']);
+            $fields['hemoglobin_g_dl'] = ($data['benefit_kind'] ?? null) === 'transfusion' ? $data['hemoglobin_g_dl'] : null;
+            $fields['crossmatch_result'] = ($data['benefit_kind'] ?? null) === 'transfusion' ? $data['crossmatch_result'] : null;
             foreach (['blood_group', 'rh'] as $key) {
                 $fields[$key] = array_key_exists($key, $data) ? $data[$key] : ($old->$key ?? $person->$key);
             }

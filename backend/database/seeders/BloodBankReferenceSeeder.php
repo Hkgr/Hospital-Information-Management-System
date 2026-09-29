@@ -19,8 +19,8 @@ class BloodBankReferenceSeeder extends Seeder
     ];
 
     public const COMPONENTS = [
-        'whole' => ['WB', 'كامل', ['WB', 'WHOLE_BLOOD'], ['كامل', 'دم كامل']],
-        'red_cells' => ['PRBC', 'ركازة', ['PRBC', 'RBC', 'PACKED_RBC', 'PACKED_RED_CELLS'], ['ركازة', 'ركازة حمراء', 'كريات حمراء مركزة']],
+        'whole' => ['WB', 'دم كامل', ['WB', 'WHOLE_BLOOD'], ['كامل', 'دم كامل']],
+        'red_cells' => ['PRBC', 'كريات مكثفة', ['PRBC', 'RBC', 'PACKED_RBC', 'PACKED_RED_CELLS'], ['ركازة', 'ركازة حمراء', 'كريات حمراء مركزة', 'كريات مكثفة']],
         'plasma' => ['FFP', 'بلازما', ['FFP', 'PLASMA'], ['بلازما', 'بلازما طازجة مجمدة']],
         'platelets' => ['PLT', 'صفيحات', ['PLT', 'PLATELETS'], ['صفيحات', 'صفيحات دموية']],
     ];

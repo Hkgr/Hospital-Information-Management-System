@@ -84,14 +84,22 @@ class DossierWizardController extends Controller
             $this->access->global($r->user(), 'patients.search');
             abort_unless(in_array('dossiers.create', $f['permissions'], true), 403);
             $q = DB::table('patients')->where('status', 'active')->when($search === '', fn ($q) => $q->whereRaw('1=0'))
-                ->where(fn ($q) => $q->whereRaw("patient_code LIKE ? ESCAPE '!'", [$like])->orWhereExists(fn ($a) => $a->selectRaw('1')->from('patients as alias')->whereColumn('alias.merged_into_id', 'patients.id')->whereRaw("alias.patient_code LIKE ? ESCAPE '!'", [$like]))->orWhereExists(fn ($a) => $a->selectRaw('1')->from('patient_dossiers as legacy')->whereColumn('legacy.patient_id', 'patients.id')->whereRaw("legacy.code LIKE ? ESCAPE '!'", [$like]))->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', first_name, family_name), '[[:space:]]+', ' ') LIKE ? ESCAPE '!'", [$like]))
+                ->where(fn ($q) => $q->whereRaw("patient_code LIKE ? ESCAPE '!'", [$like])->orWhereRaw("national_id LIKE ? ESCAPE '!'", [$like])->orWhereExists(fn ($a) => $a->selectRaw('1')->from('patients as alias')->whereColumn('alias.merged_into_id', 'patients.id')->whereRaw("alias.patient_code LIKE ? ESCAPE '!'", [$like]))->orWhereExists(fn ($a) => $a->selectRaw('1')->from('patient_dossiers as legacy')->whereColumn('legacy.patient_id', 'patients.id')->whereRaw("legacy.code LIKE ? ESCAPE '!'", [$like]))->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', first_name, family_name), '[[:space:]]+', ' ') LIKE ? ESCAPE '!'", [$like]))
                 ->select('id', 'patient_code as code')->selectRaw("CONCAT_WS(' ', first_name, family_name) as name_ar")
                 ->selectSub(DB::table('patient_dossiers')->whereColumn('patient_id', 'patients.id')->where('facility_id', $f['id'])->select('id')->limit(1), 'dossier_id');
         } elseif ($kind === 'doctors') {
             $date = $r->input('visit_date', $f['today']);
-            $q = app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $date]))->where('c.id', $r->integer('clinic_id'))
-                ->where(fn ($q) => $q->whereRaw("s.full_name LIKE ? ESCAPE '!'", [$like])->orWhereRaw("s.staff_code LIKE ? ESCAPE '!'", [$like]))
-                ->select('s.id', 's.staff_code as code', 's.full_name as name_ar')->distinct();
+            $clinic = DB::table('clinics')->where('id', $r->integer('clinic_id'))->where('facility_id', $f['id'])->whereNull('archived_at')->first();
+            abort_unless($clinic, 404);
+            $match = fn ($q) => $q->whereRaw("s.full_name LIKE ? ESCAPE '!'", [$like])->orWhereRaw("s.staff_code LIKE ? ESCAPE '!'", [$like]);
+            if ($clinic->care_setting) {
+                $group = $clinic->care_setting === 'outpatient' ? 'resident' : 'specialist';
+                $q = app(ClinicCounts::class)->eligibleDoctors()->where('s.practice_group', $group)->where($match)
+                    ->select('s.id', 's.staff_code as code', 's.full_name as name_ar');
+            } else {
+                $q = app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $date]))->where('c.id', $clinic->id)
+                    ->where($match)->select('s.id', 's.staff_code as code', 's.full_name as name_ar')->distinct();
+            }
         } else {
             $table = ['cities' => 'cities', 'clinics' => 'clinics', 'diagnoses' => 'diagnoses', 'services' => 'services', 'procedures' => 'procedures', 'medications' => 'medications', 'outcomes' => 'visit_results'][$kind];
             $q = DB::table($table)->where(function ($q) use ($kind, $like) {
@@ -111,7 +119,7 @@ class DossierWizardController extends Controller
                     $q->whereIn('code', array_keys(DossierOutcomeSeeder::OUTCOMES));
                 }
                 if ($kind === 'clinics') {
-                    $q->where('facility_id', $f['id'])->whereNull('archived_at');
+                    $q->where('facility_id', $f['id'])->whereNull('archived_at')->addSelect('care_setting');
                 }
             }
         }

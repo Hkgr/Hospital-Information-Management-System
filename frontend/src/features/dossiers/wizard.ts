@@ -14,15 +14,15 @@ export type Snapshot = {
   prior_visit?: {
     id: number; visit_no: string; visit_date: string; status: string;
     diagnoses: { diagnosis_name: string; clinic_name: string | null; doctor_name: string; diagnosed_on: string | null }[];
-    services: { name_ar: string; clinic_name: string | null; doctor_name: string | null }[];
-    procedures: { name_ar: string; clinic_name: string | null; doctor_name: string | null }[];
+    services: { name_ar: string; clinic_name: string | null; doctor_name: string | null; manual_doctor_name?: string | null }[];
+    procedures: { name_ar: string; clinic_name: string | null; doctor_name: string | null; manual_doctor_name?: string | null }[];
     prescriptions?: { kind?: string; doctor_name: string; clinic_name?: string; items: { name_ar: string }[] }[];
     outcome: { name_ar: string; outcome_on: string; doctor_name?: string } | null;
     attachment_count?: number | null;
   } | null;
   visit: ({ id: number; status: string; lock_version: number; diagnoses: { id: number; lock_version: number; diagnosis_id: number; clinic_id: number | null; diagnosing_staff_id: number; diagnosis_name: string; clinic_name: string | null; doctor_name: string; diagnosed_on: string | null }[] } & Record<string, unknown>) | null;
 };
-export const personalLabels: Fields = { code: "كود المريض", opening_date: "بداية الملف الطبي في المشفى", first_name: "الاسم الأول", family_name: "اسم العائلة", father_name: "اسم الأب", mother_name: "اسم الأم", birth_date: "تاريخ الميلاد", birth_date_accuracy: "دقة الميلاد", gender: "الجنس", marital_status: "الوضع العائلي", phone: "الهاتف", alt_phone: "هاتف بديل", governorate_id: "المحافظة", city_id: "المدينة", address_line: "عنوان السكن", displacement_status: "حالة النزوح", permanent_address: "عنوان الإقامة الدائم", occupation: "المهنة", smoking_status: "التدخين", alcohol_status: "الكحول" };
+export const personalLabels: Fields = { code: "كود المريض", opening_date: "بداية الملف الطبي في المشفى", first_name: "الاسم الأول", family_name: "اسم العائلة", national_id: "الرقم الوطني", father_name: "اسم الأب", mother_name: "اسم الأم", birth_date: "تاريخ الميلاد", birth_date_accuracy: "دقة الميلاد", gender: "الجنس", marital_status: "الوضع العائلي", phone: "الهاتف", alt_phone: "هاتف بديل", governorate_id: "المحافظة", city_id: "المدينة", address_line: "عنوان السكن", displacement_status: "حالة النزوح", permanent_address: "عنوان الإقامة الدائم", occupation: "المهنة", smoking_status: "التدخين", alcohol_status: "الكحول" };
 export const personalChoices: Record<string, Record<string, string>> = {
   birth_date_accuracy: { unknown: "غير معروف", exact: "دقيق", year_only: "السنة فقط", estimated: "تقديري" },
   gender: { unknown: "غير معروف", male: "ذكر", female: "أنثى" },

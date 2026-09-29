@@ -25,6 +25,8 @@ class SaveClinicRequest extends FormRequest
             'name_ar' => ['required', 'string', 'max:200'],
             'description' => ['nullable', 'string', 'max:10000'],
             'specialty_id' => ['nullable', 'integer', 'min:1'],
+            'care_setting' => ['nullable', 'in:outpatient,inpatient,surgical'],
+            'inpatient_kind' => ['nullable', 'in:blood,oncology,thalassemia,surgical', 'required_if:care_setting,inpatient', 'prohibited_unless:care_setting,inpatient'],
             'is_active' => ['required', 'boolean'],
             'lock_version' => [$this->isMethod('POST') ? 'prohibited' : 'required', 'integer', 'min:1'],
             'doctor_add_ids' => ['sometimes', 'array', 'max:200'],

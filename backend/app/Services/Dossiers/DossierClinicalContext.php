@@ -55,6 +55,13 @@ class DossierClinicalContext
 
     public function check(array $f, ?int $clinic, ?int $doctor, string $date, string $field, bool $historical): void
     {
+        $setting = $clinic ? DB::table('clinics')->where('id', $clinic)->where('facility_id', $f['id'])->value('care_setting') : null;
+        if ($setting && $doctor) {
+            $group = $setting === 'outpatient' ? 'resident' : 'specialist';
+            if (app(ClinicCounts::class)->eligibleDoctors()->where('s.id', $doctor)->where('s.practice_group', $group)->exists()) {
+                return;
+            }
+        }
         $q = $historical
             ? DB::table('clinics as c')->join('clinic_staff as cs', 'cs.clinic_id', '=', 'c.id')->where('c.facility_id', $f['id'])->where('cs.staff_id', $doctor)->where('cs.starts_on', '<=', $date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))
             : app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $date]))->where('s.id', $doctor);

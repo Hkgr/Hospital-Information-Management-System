@@ -24,7 +24,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
     {
         $s = fn () => (new StringType)->nullable(true);
         $i = fn () => new IntegerType;
-        $row = $this->object(['id' => $i(), 'lock_version' => $i(), 'catalog_id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'clinic_id' => $i()->nullable(true), 'clinic_name' => $s(), 'doctor_id' => $i()->nullable(true), 'doctor_name' => $s(), 'note' => $s()]);
+        $row = $this->object(['id' => $i(), 'lock_version' => $i(), 'catalog_id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'clinic_id' => $i()->nullable(true), 'clinic_name' => $s(), 'doctor_id' => $i()->nullable(true), 'doctor_name' => $s(), 'manual_doctor_name' => $s(), 'note' => $s()]);
         $rx = $this->object(['id' => $i(), 'lock_version' => $i(), 'kind' => $s(), 'prescribing_clinic_id' => $i(), 'prescribing_staff_id' => $i(), 'clinic_name' => $s(), 'doctor_name' => $s(), 'prescribed_on' => $s(), 'note' => $s(), 'funding_source_id' => $i()->nullable(true), 'funding_name' => $s(), 'unavailable_reason' => $s(), 'items' => $this->list($this->object(['id' => $i(), 'lock_version' => $i(), 'medication_id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'note' => $s(), 'display_order' => $i()]))])->nullable(true);
         $out = $this->object(['id' => $i(), 'lock_version' => $i(), 'code' => $s(), 'name_ar' => $s(), 'clinic_id' => $i(), 'doctor_id' => $i(), 'clinic_name' => $s(), 'doctor_name' => $s(), 'outcome_on' => $s(), 'note' => $s(), 'referral_target' => $s(), 'outgoing_referral_date' => $s(), 'outgoing_referral_reason' => $s()])->nullable(true);
 
@@ -42,8 +42,8 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
         $required = array_keys($fields);
         $row = ['id' => $i(), 'lock_version' => $i(), 'remove' => new BooleanType, 'void_reason' => $null(), 'note' => $null()];
         if (str_ends_with($route, '/clinical')) {
-            $event = $this->object($row + ['catalog_id' => $i(), 'clinic_id' => $i(), 'doctor_id' => $i()]);
-            $event->required = ['catalog_id', 'clinic_id', 'doctor_id'];
+            $event = $this->object($row + ['catalog_id' => $i(), 'clinic_id' => $i(), 'doctor_id' => $i()->nullable(true), 'manual_doctor_name' => $null()]);
+            $event->required = ['catalog_id', 'clinic_id'];
             $fields += ['services' => $this->list($event), 'procedures' => $this->list($event)];
             $required = [...$required, 'services', 'procedures'];
             $op->description .= ' Requires dossiers.clinical.update. performed_on is the visit date; correction propagates atomically to dossier-managed events.';

@@ -27,6 +27,10 @@ class ClinicWriter
                     throw new ClinicException('CLINIC_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله أو إدارة ارتباطاته.');
                 }
                 $fields = Arr::only($input, ['name_ar', 'description', 'specialty_id', 'is_active']);
+                if (array_key_exists('care_setting', $input)) {
+                    $fields['care_setting'] = $input['care_setting'] ?: null;
+                    $fields['inpatient_kind'] = $fields['care_setting'] === 'inpatient' ? ($input['inpatient_kind'] ?: null) : null;
+                }
                 if (! empty($fields['specialty_id']) && $fields['specialty_id'] != ($old['specialty_id'] ?? null) && ! DB::table('specialties')->where('id', $fields['specialty_id'])->where('is_active', true)->exists()) {
                     throw ValidationException::withMessages(['specialty_id' => 'اختر تخصصًا فعالًا.']);
                 }
