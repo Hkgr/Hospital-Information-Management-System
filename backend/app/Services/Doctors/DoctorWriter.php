@@ -42,6 +42,8 @@ class DoctorWriter
                     $input['code'] = $id === null ? app(IssuedCodes::class)->doctor() : $old['staff_code'];
                     $this->validateFields($input, $old);
                     $fields = Arr::only($input, ['description', 'staff_type_id', 'license_no', 'phone', 'is_active']);
+                    $typeCode = DB::table('staff_types')->where('id', $input['staff_type_id'])->value('code');
+                    $fields['practice_group'] = ['RESIDENT' => 'resident', 'SPECIALIST' => 'specialist'][$typeCode] ?? null;
                     $fields += ['staff_code' => $input['code'], 'full_name' => $input['name'], 'search_name' => $input['name'], 'updated_at' => now()];
                     if ($id === null) {
                         $id = DB::table('staff')->insertGetId($fields + ['lock_version' => 1, 'created_at' => now()]);

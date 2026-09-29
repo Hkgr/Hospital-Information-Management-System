@@ -6,7 +6,7 @@ export type Doctor = { id: number; code: string; name: string; starts_on: string
 export type Clinic = {
   id: number; facility_id: number; code: string; name_ar: string; description: string | null;
   is_active: boolean; archived_at: string | null; lock_version: number; specialty: Specialty | null;
-  care_setting?: "outpatient" | "inpatient" | "surgical" | null; inpatient_kind?: "blood" | "oncology" | "thalassemia" | "surgical" | null;
+  care_setting?: "outpatient" | "inpatient" | "surgical" | "radiology" | null; clinic_kind?: "blood" | "oncology" | "thalassemia" | "surgical" | null;
   doctor_count: number; patient_count: number; doctors_preview: { id: number; name: string }[]; patient_count_definition: string;
 };
 export type Page<T> = { data: T[]; meta: { page: number; per_page: number; total: number; last_page: number }; doctor_types_configured?: boolean };

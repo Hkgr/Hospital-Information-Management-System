@@ -139,7 +139,7 @@ class DossierReports
                         'source' => $assessment ? 'قرار سريري محفوظ' : ($e->source === 'external' ? 'من جهة خارجية · '.$e->external_organization : 'ضمن المشفى'),
                         'report_number' => $assessment ? null : $e->report_number, 'requested_on' => $assessment ? null : $e->requested_on, 'collected_on' => $assessment ? null : $e->collected_on,
                         'specimen' => $assessment ? null : implode(' · ', array_filter([$e->specimen_type, $e->anatomical_site])), 'conclusion' => $assessment ? null : $e->conclusion,
-                        'clinic' => $e->clinic, 'doctor' => $e->doctor, 'note' => implode("\n", array_filter($notes))];
+                        'clinic' => $e->clinic, 'doctor' => $e->doctor ?: ($e->manual_doctor_name ?? null), 'note' => implode("\n", array_filter($notes))];
                 })->all();
                 $labels = ['name' => 'الحالة المسجلة', 'date' => 'تاريخ النتيجة أو التقييم', 'source' => 'المصدر'];
                 if ($table === 'visit_pathologies') {
@@ -175,11 +175,17 @@ class DossierReports
                     if (isset($e->quantity)) {
                         $note .= "\nالكمية المسجلة: ".$e->quantity;
                     }
+                    if ($table === 'visit_procedures' && $e->execution_location_snapshot) {
+                        $note .= "\nمكان التنفيذ المثبت: ".($e->execution_location_snapshot === 'radiology' ? 'قسم الأشعة' : 'عيادة جراحية');
+                        if ($e->guidance_method_snapshot) {
+                            $note .= ' · '.($e->guidance_method_snapshot === 'ct' ? 'بالطبقي' : 'بالإيكو');
+                        }
+                    }
                     if ($historical) {
                         $note .= "\n".$this->historicalState($e, $byId[$e->visit_id]);
                     }
 
-                    return ['id' => $e->id, 'code' => $byId[$e->visit_id]->visit_no, 'date' => $e->$date, 'name' => $e->label, 'clinic' => $e->clinic, 'doctor' => $e->doctor, 'note' => $note];
+                    return ['id' => $e->id, 'code' => $byId[$e->visit_id]->visit_no, 'date' => $e->$date, 'name' => $e->label, 'clinic' => $e->clinic, 'doctor' => $e->doctor ?: ($e->manual_doctor_name ?? null), 'note' => $note];
                 })->all();
                 $sections[] = $this->section($title, $common, $data, 'وقائع الزيارة المحفوظة؛ لا يُستنتج الطبيب من بيانات دخول المستخدم.', ['date' => 'date']);
             }
@@ -187,7 +193,7 @@ class DossierReports
             $rx = DB::table('visit_prescriptions as p')->join('visit_prescription_items as i', 'i.prescription_id', '=', 'p.id')->join('clinics as c', 'c.id', '=', 'p.prescribing_clinic_id')->join('staff as s', 's.id', '=', 'p.prescribing_staff_id')->leftJoin('funding_sources as fund', 'fund.id', '=', 'p.funding_source_id')->where('p.facility_id', $f['id'])->where('i.facility_id', $f['id'])->whereIn('p.visit_id', $ids)->when(! $historical, fn ($q) => $q->whereNull('p.voided_at')->whereNull('i.voided_at'))->orderBy('p.visit_id')->orderByRaw("FIELD(p.kind,'unlinked','dose_linked','outside')")->orderBy('i.display_order')->orderBy('i.id')->limit(config('dossiers.report_detail_limit') + 1)->get(['i.id', 'p.visit_id', 'p.kind', 'p.prescribed_on', 'p.note as general_note', 'p.unavailable_reason', 'fund.name_ar as funding_name', 'i.note', 'i.medication_code_snapshot', 'i.medication_name_snapshot', 'c.name_ar as clinic', 's.full_name as doctor', 'i.voided_at', 'i.void_reason', 'i.lock_version', 'p.voided_at as parent_voided_at', 'p.void_reason as parent_void_reason']);
             $total += $rx->count();
             $this->limit($total, config('dossiers.report_detail_limit'));
-            $sections[] = $this->section('الأدوية الموصوفة', $common, $rx->map(fn ($e) => ['id' => $e->id, 'code' => $byId[$e->visit_id]->visit_no, 'date' => $e->prescribed_on, 'name' => $e->medication_code_snapshot.' · '.$e->medication_name_snapshot, 'clinic' => $e->clinic, 'doctor' => $e->doctor, 'note' => implode("\n", array_filter([$rxKinds[$e->kind] ?? $e->kind, $e->funding_name ? 'تمويل الوصفة: '.$e->funding_name : null, $e->unavailable_reason ? 'سبب عدم التواجد في المشفى: '.$e->unavailable_reason : null, $e->general_note, $e->note, $historical ? $this->historicalState($e, $byId[$e->visit_id]) : null]))])->all(), 'وصفة فقط؛ لا تمثل صرفًا أو إعطاءً. تعريف الدواء محفوظ وقت إدراجه.', ['date' => 'date']);
+            $sections[] = $this->section('الأدوية الموصوفة', $common, $rx->map(fn ($e) => ['id' => $e->id, 'code' => $byId[$e->visit_id]->visit_no, 'date' => $e->prescribed_on, 'name' => $e->medication_code_snapshot.' · '.$e->medication_name_snapshot, 'clinic' => $e->clinic, 'doctor' => $e->doctor ?: ($e->manual_doctor_name ?? null), 'note' => implode("\n", array_filter([$rxKinds[$e->kind] ?? $e->kind, $e->funding_name ? 'تمويل الوصفة: '.$e->funding_name : null, $e->unavailable_reason ? 'سبب عدم التواجد في المشفى: '.$e->unavailable_reason : null, $e->general_note, $e->note, $historical ? $this->historicalState($e, $byId[$e->visit_id]) : null]))])->all(), 'وصفة فقط؛ لا تمثل صرفًا أو إعطاءً. تعريف الدواء محفوظ وقت إدراجه.', ['date' => 'date']);
             foreach (['dispensed' => 'الأدوية المصروفة', 'administered' => 'الأدوية المعطاة'] as $kind => $title) {
                 $q = $kind === 'dispensed' ? DB::table('visit_medications as e')->select('e.*', 'e.dispensed_on as date') : DB::table('dose_session_items as e')->join('dose_sessions as s', 's.id', '=', 'e.dose_session_id')->select('e.*', 's.visit_id', 's.administered_on as date', 's.voided_at as parent_voided_at', 's.void_reason as parent_void_reason')->when(! $historical, fn ($q) => $q->whereNull('s.voided_at'));
                 $alias = $kind === 'dispensed' ? 'e' : 's';

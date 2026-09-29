@@ -75,7 +75,7 @@ class ClinicQueries
             'id' => (int) $row->id, 'facility_id' => (int) $row->facility_id,
             'code' => $row->code, 'name_ar' => $row->name_ar, 'description' => $row->description,
             'specialty' => $row->specialty_id ? ['id' => (int) $row->specialty_id, 'name_ar' => $row->specialty_name] : null,
-            'care_setting' => $row->care_setting, 'inpatient_kind' => $row->inpatient_kind,
+            'care_setting' => $row->care_setting, 'clinic_kind' => $row->clinic_kind,
             'archived_at' => $row->archived_at, 'is_active' => (bool) $row->is_active, 'lock_version' => (int) $row->lock_version,
             'doctor_count' => (int) $row->doctor_count, 'patient_count' => (int) $row->patient_count,
             'doctors_preview' => ($doctors->get($row->id) ?? collect())->take(3)

@@ -31,6 +31,16 @@ class DossierImportTest extends TestCase
 
     private string $token;
 
+    public function test_import_preview_rejects_radiology_procedure_in_a_clinic(): void
+    {
+        DB::table('procedures')->where('id', $this->f['procedure'])->update(['execution_location' => 'radiology', 'guidance_method' => 'ultrasound']);
+        $sheets = $this->replaySheets();
+        $sheets['Procedures'] = [['source_record_id' => 'procedure-'.$this->f['tag'], 'local_visit_ref' => 'L1', 'catalog_id' => $this->f['procedure'], 'clinic_id' => $this->f['clinics'][0], 'doctor_id' => $this->f['workflow_doctors'][0]]];
+        $batch = $this->step($this->upload($sheets), 'validate');
+        $this->assertSame('needs_review', $batch['status']);
+        $this->assertDatabaseMissing('visit_procedures', ['procedure_id' => $this->f['procedure'], 'facility_id' => $this->f['facility']]);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

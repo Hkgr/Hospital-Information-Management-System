@@ -22,6 +22,7 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
         $link = $this->object(['id' => new IntegerType, 'code' => new StringType, 'name_ar' => new StringType, 'starts_on' => (new StringType)->nullable(true), 'is_linked' => new BooleanType, 'can_view' => new BooleanType]);
         $doctor = $this->object(['id' => new IntegerType, 'code' => new StringType, 'name' => new StringType, 'description' => (new StringType)->nullable(true),
             'staff_type' => $type, 'specialties' => $this->list($this->object(['id' => new IntegerType, 'name_ar' => new StringType, 'is_active' => new BooleanType])),
+            'practice_group' => (new StringType)->enum(['resident', 'specialist'])->nullable(true),
             'license_no' => (new StringType)->nullable(true), 'phone' => (new StringType)->nullable(true), 'archived_at' => (new StringType)->nullable(true), 'is_active' => new BooleanType, 'lock_version' => new IntegerType,
             'clinic_count' => new IntegerType, 'patient_count' => new IntegerType, 'clinics_preview' => $this->list($type), 'patient_count_definition' => (new StringType)->example(DoctorCounts::PATIENT_DEFINITION)]);
         $meta = $this->object(['page' => new IntegerType, 'per_page' => new IntegerType, 'total' => new IntegerType, 'last_page' => new IntegerType]);

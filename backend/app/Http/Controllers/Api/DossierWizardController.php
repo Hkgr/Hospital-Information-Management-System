@@ -6,13 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Dossiers\SaveDossierSection;
 use App\Services\Catalog\CatalogQueries;
 use App\Services\Clinics\ClinicCounts;
+use App\Services\Directory\IssuedCodes;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierMedicalWriter;
 use App\Services\Dossiers\DossierPersonalWriter;
 use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\DossierWizardQueries;
 use App\Services\Dossiers\DossierWorkflowActions;
-use App\Services\Directory\IssuedCodes;
 use App\Services\Dossiers\DossierWrites;
 use Database\Seeders\DossierOutcomeSeeder;
 use Illuminate\Database\QueryException;
@@ -92,14 +92,8 @@ class DossierWizardController extends Controller
             $clinic = DB::table('clinics')->where('id', $r->integer('clinic_id'))->where('facility_id', $f['id'])->whereNull('archived_at')->first();
             abort_unless($clinic, 404);
             $match = fn ($q) => $q->whereRaw("s.full_name LIKE ? ESCAPE '!'", [$like])->orWhereRaw("s.staff_code LIKE ? ESCAPE '!'", [$like]);
-            if ($clinic->care_setting) {
-                $group = $clinic->care_setting === 'outpatient' ? 'resident' : 'specialist';
-                $q = app(ClinicCounts::class)->eligibleDoctors()->where('s.practice_group', $group)->where($match)
-                    ->select('s.id', 's.staff_code as code', 's.full_name as name_ar');
-            } else {
-                $q = app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $date]))->where('c.id', $clinic->id)
-                    ->where($match)->select('s.id', 's.staff_code as code', 's.full_name as name_ar')->distinct();
-            }
+            $q = app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $date]))->where('c.id', $clinic->id)
+                ->where($match)->select('s.id', 's.staff_code as code', 's.full_name as name_ar')->distinct();
         } else {
             $table = ['cities' => 'cities', 'clinics' => 'clinics', 'diagnoses' => 'diagnoses', 'services' => 'services', 'procedures' => 'procedures', 'medications' => 'medications', 'outcomes' => 'visit_results'][$kind];
             $q = DB::table($table)->where(function ($q) use ($kind, $like) {
@@ -114,6 +108,9 @@ class DossierWizardController extends Controller
                 $q->where('is_active', true)->select('id', 'code', 'name_ar');
                 if (in_array($kind, ['services', 'procedures'])) {
                     $q->whereNull('archived_at');
+                    if ($kind === 'procedures') {
+                        $q->addSelect('execution_location', 'guidance_method');
+                    }
                 }
                 if ($kind === 'outcomes') {
                     $q->whereIn('code', array_keys(DossierOutcomeSeeder::OUTCOMES));

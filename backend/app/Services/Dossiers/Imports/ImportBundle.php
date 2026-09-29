@@ -11,6 +11,7 @@ use App\Services\Dossiers\DossierMedicalWriter;
 use App\Services\Dossiers\DossierPersonalWriter;
 use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\DossierWrites;
+use App\Services\Dossiers\ProcedureLocation;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Arr;
@@ -230,6 +231,9 @@ class ImportBundle
             foreach (['services', 'procedures'] as $kind) {
                 foreach ($clinical[$kind] as $x) {
                     $this->active($kind, $x['catalog_id'], 'catalog_id', true);
+                    if ($kind === 'procedures') {
+                        app(ProcedureLocation::class)->catalog($f, $x['clinic_id'], $x['catalog_id'], 'clinic_id');
+                    }
                     $this->context($f, $x['clinic_id'], $x['doctor_id'], $v['visit_date']);
                 }
             }

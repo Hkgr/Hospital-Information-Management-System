@@ -5,8 +5,8 @@ namespace App\Services\BloodBank;
 use App\Exceptions\BloodBankException;
 use App\Http\Requests\BloodBank\SaveBloodProfile;
 use App\Services\Clinics\ClinicAudit;
-use App\Services\Clinics\ClinicCounts;
 use App\Services\Directory\ClinicStaffLinks;
+use App\Services\Dossiers\DossierClinicalContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -114,9 +114,7 @@ class BloodEventWriter
             $links->lockStaff(array_filter([$data['responsible_staff_id'], $old->responsible_staff_id ?? null]));
             $links->lockClinics(array_filter([$data['clinic_id'], $old->clinic_id ?? null]));
             $same = $old && (int) $old->clinic_id === (int) $data['clinic_id'] && (int) $old->responsible_staff_id === (int) $data['responsible_staff_id'];
-            if (! $same && ! app(ClinicCounts::class)->currentDoctors($f)->where('c.id', $data['clinic_id'])->where('s.id', $data['responsible_staff_id'])->exists()) {
-                throw ValidationException::withMessages(['responsible_staff_id' => 'اختر طبيبًا مؤهلًا مرتبطًا حاليًا بالعيادة في المنشأة.']);
-            }
+            app(DossierClinicalContext::class)->check($f, $data['clinic_id'], $data['responsible_staff_id'], $data['occurred_on'], 'responsible_staff_id', (bool) $same);
             if ((! $old || $old->blood_component_id != $data['blood_component_id']) && ! DB::table('blood_components')->where('id', $data['blood_component_id'])->where('is_active', true)->exists()) {
                 throw ValidationException::withMessages(['blood_component_id' => 'اختر مكوّنًا فعالًا.']);
             }

@@ -44,7 +44,7 @@ class BloodBankReferenceSeeder extends Seeder
                     throw new RuntimeException("Ambiguous blood component mapping: $kind. Review the existing directory; no IDs were merged.");
                 }
                 $id = $rows->first()?->id ?? DB::table('blood_components')->insertGetId(['code' => $code, 'name_ar' => $name, 'created_at' => now()]);
-                DB::table('blood_components')->where('id', $id)->update(['registration_kind' => $kind]);
+                DB::table('blood_components')->where('id', $id)->update(['registration_kind' => $kind, 'name_ar' => $name]);
             }
         });
     }

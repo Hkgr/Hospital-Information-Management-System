@@ -20,7 +20,7 @@ class BloodBankFixture
         }
         $f['staff'] = DB::table('staff')->where('staff_code', 'CAT-'.$f['tag'])->value('id');
         $f['clinic'] = DB::table('clinics')->insertGetId(['facility_id' => $f['facility'], 'code' => 'BB-'.$f['tag'], 'name_ar' => 'عيادة بنك الدم الاختبارية']);
-        DB::table('clinic_staff')->insert(['clinic_id' => $f['clinic'], 'staff_id' => $f['staff'], 'starts_on' => $f['today']]);
+        DB::table('clinic_staff')->insert(['clinic_id' => $f['clinic'], 'staff_id' => $f['staff'], 'starts_on' => '1990-01-01']);
         $f['component'] = DB::table('blood_components')->where('code', 'CAT-'.$f['tag'])->value('id');
         $f['test'] = DB::table('screening_tests')->insertGetId(['code' => 'SYNTHETIC-'.$f['tag'], 'name_ar' => 'طريقة اختبار اصطناعية', 'blood_bank_analyte' => 'HCV']);
         $role = DB::table('facility_user_roles')->where('user_id', $f['viewer']->id)->value('role_id');

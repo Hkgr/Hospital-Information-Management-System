@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Services\Doctors\DoctorQueries;
+use Database\Seeders\ClinicalStaffTypesSeeder;
 use Database\Seeders\DoctorPermissionsSeeder;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -90,6 +91,17 @@ class DoctorApiTest extends TestCase
     private function clinic(string $code = 'CL-01', ?int $facility = null, bool $active = true): int
     {
         return DB::table('clinics')->insertGetId(['facility_id' => $facility ?? $this->facility, 'code' => $code, 'name_ar' => 'عيادة '.$code, 'is_active' => $active]);
+    }
+
+    public function test_practice_group_follows_the_explicit_type_without_replacing_identity(): void
+    {
+        app(ClinicalStaffTypesSeeder::class)->run();
+        config(['clinics.doctor_staff_types' => ['RESIDENT', 'SPECIALIST']]);
+        $resident = DB::table('staff_types')->where('code', 'RESIDENT')->value('id');
+        $specialist = DB::table('staff_types')->where('code', 'SPECIALIST')->value('id');
+        $doctor = $this->create(['staff_type_id' => $resident]);
+        $this->assertSame('resident', $doctor['practice_group']);
+        $this->callApi('PUT', '/'.$doctor['id'], $this->input(['staff_type_id' => $specialist, 'lock_version' => $doctor['lock_version']]))->assertOk()->assertJsonPath('data.practice_group', 'specialist')->assertJsonPath('data.code', $doctor['code'])->assertJsonPath('data.license_no', $doctor['license_no']);
     }
 
     public function test_crud_global_unique_code_specialties_and_unrelated_fields_survive(): void
