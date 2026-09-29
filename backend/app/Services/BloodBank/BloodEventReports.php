@@ -46,6 +46,13 @@ class BloodEventReports
                 $sections[] = $this->details('بيانات الشخص الحالية', $details, 'بيانات الشخص الحالية؛ زمرة كل واقعة ومعلوماتها التاريخية مستقلة.');
             }
             if ($event) {
+                if ($event['benefit_kind'] === 'transfusion') {
+                    $sections[] = $this->details('تحاليل ما قبل النقل الفعلي', [
+                        'الزمرة المثبتة للواقعة' => $this->blood($event),
+                        'خضاب الدم (غ/دل)' => $event['hemoglobin_g_dl'],
+                        'التصالب' => ['compatible' => 'متوافق', 'incompatible' => 'غير متوافق'][$event['crossmatch_result'] ?? ''] ?? 'غير مسجل',
+                    ], 'النتائج المحفوظة لهذه الواقعة فقط؛ لا تُستنتج نتائج للوقائع التاريخية الناقصة.');
+                }
                 $issue = $event['issue_event_id'] ? DB::table('blood_bank_events')->where('id', $event['issue_event_id'])->value('code') : null;
                 $transfusion = $event['linked_transfusion_id'] ? DB::table('blood_bank_events')->where('id', $event['linked_transfusion_id'])->value('code') : null;
                 $sections[] = $this->details('بيانات الواقعة', ['كود الواقعة' => $event['code'], 'النوع' => self::type($event), 'التاريخ الفعلي' => $event['occurred_on'], 'الكمية' => $event['quantity'], 'وحدة القياس' => $event['quantity_unit'] === 'kg' ? 'كغ' : 'وحدة (تاريخية)', 'الصرف المرتبط' => $issue, 'النقل الفعلي المرتبط' => $transfusion, 'جهة المستفيد' => $event['beneficiary_entity'], 'عنوان الجهة' => $event['entity_address'], 'عنوان تاريخي غير مصنف' => $event['legacy_address'], 'الأكواد السابقة' => $event['aliases']->implode('، ')], 'الصرف وحده لا يثبت نقل دم. تاريخ إنشاء الملف لا يمثل واقعة.');

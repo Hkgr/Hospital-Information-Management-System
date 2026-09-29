@@ -1,7 +1,7 @@
 export { useClinicRequest as useBloodRequest, useDebounced } from "../clinics/api";
 export type { Page } from "../clinics/api";
 export type Kind = "donor" | "recipient";
-export type Choice = { id: number; name_ar: string; code?: string };
+export type Choice = { id: number; name_ar: string; code?: string; execution_location?: "surgical_clinic" | "radiology" | null; guidance_method?: "ultrasound" | "ct" | null };
 export type Screen = { analyte: string; screening_test_id: number | null; status: string; result: string | null };
 export type Capabilities = { create: boolean; update: boolean; export: boolean; donations_create: boolean; donations_update: boolean; benefits_create: boolean; benefits_update: boolean; patients_search: boolean };
 export type Row = { id: number; kind: Kind; code: string; name: string; blood_group: string | null; rh: string | null; clinic_name: string | null; doctor_name: string | null; component_name?: string | null; updated_at: string | null };

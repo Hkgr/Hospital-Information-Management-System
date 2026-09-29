@@ -53,8 +53,19 @@ class DossierClinicalContext
         $links->lockClinics($targets[1]);
     }
 
-    public function check(array $f, ?int $clinic, ?int $doctor, string $date, string $field, bool $historical): void
+    public function check(array $f, ?int $clinic, ?int $doctor, string $date, string $field, bool $historical, ?string $manual = null): void
     {
+        if ($manual !== null && trim($manual) !== '') {
+            $q = DB::table('clinics')->where('id', $clinic)->where('facility_id', $f['id']);
+            if (! $historical) {
+                $q->where('is_active', true)->whereNull('archived_at');
+            }
+            if ($doctor || ! $q->exists()) {
+                throw ValidationException::withMessages([$field => 'الاسم اليدوي يحتاج عيادة صالحة في المنشأة ولا يُجمع مع طبيب من الدليل.']);
+            }
+
+            return;
+        }
         $q = $historical
             ? DB::table('clinics as c')->join('clinic_staff as cs', 'cs.clinic_id', '=', 'c.id')->where('c.facility_id', $f['id'])->where('cs.staff_id', $doctor)->where('cs.starts_on', '<=', $date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))
             : app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $date]))->where('s.id', $doctor);
@@ -87,7 +98,10 @@ class DossierClinicalContext
                 if (! $diagnoses && property_exists($row, 'dossier_managed') && ! $row->dossier_managed && ! $row->$clinic) {
                     continue;
                 }
-                $this->check($f, $row->$clinic, $row->$doctor, $date, "$field.$index.doctor_id", true);
+                $this->check($f, $row->$clinic, $row->$doctor, $date, "$field.$index.doctor_id", true, $row->manual_doctor_name ?? null);
+                if ($table === 'visit_procedures') {
+                    app(ProcedureLocation::class)->check($f, $row->$clinic, $row->execution_location_snapshot, "$field.$index.clinic_id");
+                }
             }
         }
     }

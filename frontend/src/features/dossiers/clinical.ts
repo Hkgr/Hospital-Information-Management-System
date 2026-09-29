@@ -2,7 +2,7 @@ import type { Choice } from "../blood-bank/api";
 import type { Snapshot } from "./wizard";
 
 export type SavedRow = { id?: number; lock_version?: number; remove?: boolean; void_reason?: string };
-export type Context = { clinic: Choice | null; doctor: Choice | null };
+export type Context = { clinic: Choice | null; doctor: Choice | null; other?: boolean; manualDoctorName?: string };
 export type Occurrence = SavedRow & Context & { key: string; catalog: Choice | null; note: string };
 export type Medication = SavedRow & { key: string; medication: Choice | null; note: string; display_order: number };
 export type PrescriptionKind = "unlinked" | "dose_linked" | "outside";
@@ -10,7 +10,7 @@ export type MedicationPane = PrescriptionKind | "outcome";
 export type Prescription = SavedRow & Context & { kind: PrescriptionKind; prescribed_on: string; note: string; funding_source_id: number | null; unavailable_reason: string; items: Medication[] };
 export type Outcome = SavedRow & Context & { code: string; outcome_on: string; note: string; referral_target: string; outgoing_referral_date: string; outgoing_referral_reason: string };
 export type ClinicalDraft = { services: Occurrence[]; procedures: Occurrence[]; prescriptions: Record<PrescriptionKind, Prescription | null>; outcome: Outcome | null };
-export type EventData = Required<Pick<SavedRow,"id"|"lock_version">> & { performed_on: string; quantity: number; catalog_id: number; code: string; name_ar: string; clinic_id: number | null; doctor_id: number | null; clinic_name: string | null; doctor_name: string | null; note: string | null };
+export type EventData = Required<Pick<SavedRow,"id"|"lock_version">> & { performed_on: string; quantity: number; catalog_id: number; code: string; name_ar: string; clinic_id: number | null; doctor_id: number | null; manual_doctor_name?: string | null; execution_location?: "surgical_clinic" | "radiology" | null; guidance_method?: "ultrasound" | "ct" | null; clinic_name: string | null; doctor_name: string | null; note: string | null };
 export type SavedPrescription = Required<Pick<SavedRow,"id"|"lock_version">> & { kind?: PrescriptionKind; prescribing_clinic_id: number; prescribing_staff_id: number; clinic_name: string; doctor_name: string; prescribed_on: string; note: string | null; funding_source_id?: number | null; funding_name?: string | null; unavailable_reason?: string | null; items: (Required<Pick<SavedRow,"id"|"lock_version">> & { medication_id: number; code: string; name_ar: string; note: string | null; display_order: number })[] };
 export type ClinicalData = { services: EventData[]; procedures: EventData[]; prescription: SavedPrescription | null; prescriptions?: SavedPrescription[]; outcome: (Required<Pick<SavedRow,"id"|"lock_version">> & { clinic_id: number; doctor_id: number; clinic_name: string; doctor_name: string; name_ar: string; code: string; outcome_on: string; note: string | null; referral_target: string | null; outgoing_referral_date: string | null; outgoing_referral_reason: string | null }) | null; attachment_count: number | null };
 const choice = (id: number | null, name: string | null): Choice | null => id ? { id, name_ar: name ?? "الاختيار المحفوظ" } : null;
@@ -39,7 +39,7 @@ export function emptyPrescriptions(): Record<PrescriptionKind, Prescription | nu
 }
 export function clinicalDraft(s?: Snapshot): ClinicalDraft {
   const d=s?.clinical;
-  const occurrences=(rows: EventData[] = []): Occurrence[]=>rows.map(r=>({ key:String(r.id),id:r.id,lock_version:r.lock_version,catalog:{id:r.catalog_id,name_ar:r.name_ar,code:r.code},clinic:choice(r.clinic_id,r.clinic_name),doctor:choice(r.doctor_id,r.doctor_name),note:r.note??"" }));
+  const occurrences=(rows: EventData[] = []): Occurrence[]=>rows.map(r=>({ key:String(r.id),id:r.id,lock_version:r.lock_version,catalog:{id:r.catalog_id,name_ar:r.name_ar,code:r.code,execution_location:r.execution_location,guidance_method:r.guidance_method},clinic:choice(r.clinic_id,r.clinic_name),doctor:choice(r.doctor_id,r.doctor_name),other:!r.doctor_id&&!!r.manual_doctor_name,manualDoctorName:r.manual_doctor_name??"",note:r.note??"" }));
   const prescriptions = emptyPrescriptions();
   const rows = d?.prescriptions?.length ? d.prescriptions : d?.prescription ? [d.prescription] : [];
   for (const row of rows) {
@@ -59,7 +59,7 @@ function serializePrescription(p: Prescription) {
   };
 }
 export function clinicalPayload(d: ClinicalDraft, section: number, pane: MedicationPane = "unlinked") {
-  if (section === 3) return Object.fromEntries((["services","procedures"] as const).map(k => [k, d[k].map(r => ({ ...saved(r), catalog_id: r.catalog?.id, clinic_id: r.clinic?.id, doctor_id: r.doctor?.id, note: r.note || null }))]));
+  if (section === 3) return Object.fromEntries((["services","procedures"] as const).map(k => [k, d[k].map(r => ({ ...saved(r), catalog_id: r.catalog?.id, clinic_id: r.clinic?.id, doctor_id: r.other ? null : r.doctor?.id, manual_doctor_name: r.other ? (r.manualDoctorName || null) : null, note: r.note || null }))]));
   const o = d.outcome;
   if (pane === "outcome") {
     return { prescription: null, outcome: o ? { ...saved(o), clinic_id: o.clinic?.id, doctor_id: o.doctor?.id, code: o.code, outcome_on: o.outcome_on, note: o.note || null, referral_target: o.code === "DOS-REFER" ? o.referral_target : null, outgoing_referral_date: o.code === "DOS-REFER" ? o.outgoing_referral_date : null, outgoing_referral_reason: o.code === "DOS-REFER" ? o.outgoing_referral_reason : null } : null };

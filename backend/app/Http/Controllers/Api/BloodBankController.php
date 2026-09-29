@@ -112,7 +112,7 @@ class BloodBankController extends Controller
     public function doctors(BloodBankQuery $request): JsonResponse
     {
         $f = $this->access->facility($request->user(), $request->integer('facility_id'));
-        $q = app(ClinicCounts::class)->currentDoctors($f)->where('c.id', $request->integer('clinic_id'));
+        $q = app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $request->input('occurred_on', $f['today'])]))->where('c.id', $request->integer('clinic_id'));
         $like = BloodBankQueries::like($request->input('search'));
         // Match the clinic directory's grouping: overlapping historical links must
         // not inflate the total or produce empty options pages.

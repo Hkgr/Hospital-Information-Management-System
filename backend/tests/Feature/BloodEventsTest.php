@@ -48,6 +48,39 @@ class BloodEventsTest extends TestCase
             'screenings' => [['analyte' => 'HCV', 'status' => 'pending']]];
     }
 
+    public function test_actual_transfusion_requires_each_lab_and_preserves_independent_and_linked_results(): void
+    {
+        foreach (['independent', 'linked'] as $mode) {
+            $issue = $mode === 'linked' ? $this->api('POST', '/events', $this->payload('benefit'))->assertCreated()->json('data') : null;
+            $input = ['benefit_kind' => 'transfusion', 'benefit_link_mode' => $mode, 'hemoglobin_g_dl' => '11.5', 'crossmatch_result' => 'compatible'] + $this->payload('benefit', $issue['person_id'] ?? null);
+            if ($issue) {
+                $input['issue_event_id'] = $issue['id'];
+            }
+            foreach (['hemoglobin_g_dl', 'blood_group', 'rh', 'crossmatch_result'] as $field) {
+                $bad = $input;
+                unset($bad[$field]);
+                $this->api('POST', '/events', $bad)->assertUnprocessable()->assertJsonValidationErrors($field);
+            }
+            $event = $this->api('POST', '/events', $input)->assertCreated()->json('data');
+            $this->api('GET', '/events/'.$event['id'])->assertOk()->assertJsonPath('data.hemoglobin_g_dl', '11.5')->assertJsonPath('data.crossmatch_result', 'compatible')->assertJsonPath('data.blood_group', 'O')->assertJsonPath('data.rh', 'positive');
+            $this->assertDatabaseHas('blood_bank_events', ['id' => $event['id'], 'hemoglobin_g_dl' => '11.5', 'crossmatch_result' => 'compatible']);
+            $request = Request::create('/');
+            $request->setUserResolver(fn () => $this->f['user']);
+            $facility = app(BloodBankAccess::class)->facility($this->f['user'], $this->f['facility']);
+            $document = app(BloodEventReports::class)->document($request, $facility, [], null, $event['id']);
+            $this->assertStringContainsString('تحاليل ما قبل النقل الفعلي', json_encode($document, JSON_UNESCAPED_UNICODE));
+            $this->assertStringContainsString('11.5', json_encode($document));
+        }
+    }
+
+    public function test_event_doctor_eligibility_uses_occurrence_date_and_retained_links_are_historical(): void
+    {
+        DB::table('clinic_staff')->where('clinic_id', $this->f['clinic'])->where('staff_id', $this->f['staff'])->update(['starts_on' => '2000-01-01', 'ends_on' => '2002-01-01']);
+        $this->api('GET', '/doctors', ['clinic_id' => $this->f['clinic'], 'occurred_on' => '2001-01-01'])->assertOk()->assertJsonFragment(['id' => $this->f['staff']]);
+        $event = $this->api('POST', '/events', ['occurred_on' => '2001-01-01'] + $this->payload())->assertCreated()->json('data');
+        $this->api('PUT', '/events/'.$event['id'], ['occurred_on' => '2003-01-01', 'lock_version' => $event['lock_version']] + $this->payload('donation', $event['person_id']))->assertUnprocessable();
+    }
+
     public function test_atomic_registration_retries_and_one_person_with_multiple_event_types(): void
     {
         $before = DB::table('blood_bank_people')->count();
@@ -85,6 +118,8 @@ class BloodEventsTest extends TestCase
                 if ($kind === 'transfusion') {
                     $input['benefit_kind'] = 'transfusion';
                     $input['benefit_link_mode'] = 'independent';
+                    $input['hemoglobin_g_dl'] = '11.5';
+                    $input['crossmatch_result'] = 'compatible';
                 }
                 $e = $this->api('POST', '/events', $input)->assertCreated()->assertJsonPath('data.reporting_period_id', null)->json('data');
                 foreach (['blood_donations' => 'blood_donation_id', 'blood_transfusions' => 'blood_transfusion_id'] as $table => $key) {
@@ -106,6 +141,8 @@ class BloodEventsTest extends TestCase
             if ($kind === 'transfusion') {
                 $input['benefit_kind'] = 'transfusion';
                 $input['benefit_link_mode'] = 'independent';
+                $input['hemoglobin_g_dl'] = '11.5';
+                $input['crossmatch_result'] = 'compatible';
             }
             $e = $this->api('POST', '/events', $input)->assertCreated()->json('data');
             $table = $kind === 'donation' ? 'blood_donations' : 'blood_transfusions';
@@ -141,7 +178,7 @@ class BloodEventsTest extends TestCase
         $before = DB::table('blood_transfusions')->count();
         $issue = $this->api('POST', '/events', $this->payload('benefit'))->assertCreated()->json('data');
         $this->assertDatabaseCount('blood_transfusions', $before);
-        $input = ['benefit_kind' => 'transfusion', 'benefit_link_mode' => 'linked', 'issue_event_id' => $issue['id']] + $this->payload('benefit', $issue['person_id']);
+        $input = ['benefit_kind' => 'transfusion', 'benefit_link_mode' => 'linked', 'issue_event_id' => $issue['id'], 'hemoglobin_g_dl' => '11.5', 'crossmatch_result' => 'compatible'] + $this->payload('benefit', $issue['person_id']);
         $transfer = $this->api('POST', '/events', $input)->assertCreated()->json('data');
         $this->assertDatabaseCount('blood_transfusions', $before + 1);
         $this->api('GET', '/events', ['person_id' => $issue['person_id']])->assertJsonPath('meta.total', 2)->assertJsonPath('totals.benefits', 1);
@@ -240,11 +277,11 @@ class BloodEventsTest extends TestCase
 
     public function test_event_correction_keeps_the_original_clinical_recipient_name_after_person_edit(): void
     {
-        $row = $this->api('POST', '/events', ['benefit_kind' => 'transfusion', 'benefit_link_mode' => 'independent'] + $this->payload('benefit'))->assertCreated()->json('data');
+        $row = $this->api('POST', '/events', ['benefit_kind' => 'transfusion', 'benefit_link_mode' => 'independent', 'hemoglobin_g_dl' => '11.5', 'crossmatch_result' => 'compatible'] + $this->payload('benefit'))->assertCreated()->json('data');
         $original = DB::table('blood_transfusions')->where('id', $row['blood_transfusion_id'])->value('external_recipient_name');
         $personal = ['first_name' => 'اسم مصحح'] + $this->payload()['person'];
         $this->api('PUT', '/people/'.$row['person_id'], ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'person' => $personal])->assertOk();
-        $this->api('PUT', '/events/'.$row['id'], ['benefit_kind' => 'transfusion', 'benefit_link_mode' => 'independent', 'lock_version' => 1, 'quantity' => '0.6000'] + $this->payload('benefit', $row['person_id']))->assertOk()->assertJsonPath('data.name', 'اسم مصحح محمد');
+        $this->api('PUT', '/events/'.$row['id'], ['benefit_kind' => 'transfusion', 'benefit_link_mode' => 'independent', 'hemoglobin_g_dl' => '11.5', 'crossmatch_result' => 'compatible', 'lock_version' => 1, 'quantity' => '0.6000'] + $this->payload('benefit', $row['person_id']))->assertOk()->assertJsonPath('data.name', 'اسم مصحح محمد');
         $this->assertDatabaseHas('blood_transfusions', ['id' => $row['blood_transfusion_id'], 'external_recipient_name' => $original, 'units' => '0.6000']);
     }
 

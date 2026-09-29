@@ -4,7 +4,7 @@ import { useCreationRequest, CreationRecovery } from "../directory/useCreationRe
 import { useEffect, useRef, useState } from "react";
 import { AuthError } from "@/features/auth/api";
 import { useClinicRequest, type Clinic, type Doctor, type Specialty } from "./api";
-import ClinicConflictReview, { clinicFields, loadClinicSnapshot, type ClinicSnapshot } from "./ClinicConflictReview";
+import ClinicConflictReview, { careSettingLabels, clinicFields, clinicKindLabels, loadClinicSnapshot, type ClinicSnapshot } from "./ClinicConflictReview";
 import Modal from "./Modal";
 import DoctorPicker from "./DoctorPicker";
 import styles from "./clinics.module.css";
@@ -45,6 +45,7 @@ export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onR
       const editable = { name_ar: fields.name_ar, description: fields.description, is_active: fields.is_active };
       await creation.request<Clinic>(`clinics${clinic ? `/${clinic.id}` : ""}`, { method: clinic ? "PUT" : "POST", signal: active.signal, body: JSON.stringify({
         ...editable, facility_id: facilityId, specialty_id: fields.specialty_id ? Number(fields.specialty_id) : null,
+        care_setting: fields.care_setting || null, clinic_kind: fields.clinic_kind || null,
         ...(baseClinic ? { lock_version: baseClinic.lock_version, doctor_remove_ids: Object.keys(changes).filter(id => !changes[Number(id)]).map(Number) } : {}),
         doctor_add_ids: Object.keys(changes).filter(id => changes[Number(id)]).map(Number),
       }) });
@@ -72,6 +73,8 @@ export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onR
         {baseClinic ? <label>كود العيادة<input aria-label="كود العيادة" value={fields.code} readOnly /><small>الكود ثابت ويصدره النظام.</small></label> : <p className={styles.hint}>يُمنح كود العيادة تلقائيًا عند الحفظ.</p>}
         <label>اسم العيادة *<input required maxLength={200} value={fields.name_ar} onChange={e => setFields({ ...fields, name_ar: e.target.value })} aria-invalid={!!error?.fields.name_ar} aria-describedby={error?.fields.name_ar ? "clinic-error-name_ar" : undefined} />{fieldError("name_ar")}</label>
         <label className={styles.full}>التوصيف<textarea rows={3} maxLength={10000} value={fields.description} onChange={e => setFields({ ...fields, description: e.target.value })} />{fieldError("description")}</label>
+        <label>مكان الرعاية<select value={fields.care_setting} onChange={e => setFields({ ...fields, care_setting: e.target.value })}><option value="">غير محدد</option>{Object.entries(careSettingLabels).filter(([value]) => value !== "surgical" || fields.care_setting === "surgical").map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{fieldError("care_setting")}</label>
+        <label>تصنيف العيادة<select value={fields.clinic_kind} onChange={e => setFields({ ...fields, clinic_kind: e.target.value })}><option value="">دون تصنيف</option>{Object.entries(clinicKindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>التصنيف مستقل عن كون العيادة داخلية أو خارجية.</small>{fieldError("clinic_kind")}</label>
         <label>التخصص<select value={fields.specialty_id} onChange={e => setFields({ ...fields, specialty_id: e.target.value })}><option value="">دون تخصص</option>{baseClinic?.specialty && !specialties.data?.some(s => s.id === baseClinic.specialty?.id) && <option value={baseClinic.specialty.id}>{baseClinic.specialty.name_ar}</option>}{specialties.data?.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}</select>{fieldError("specialty_id")}</label>
         <label>الحالة<select value={String(fields.is_active)} onChange={e => setFields({ ...fields, is_active: e.target.value === "true" })}><option value="true">فعالة</option><option value="false">غير فعالة</option></select></label>
         {specialties.error && <p role="alert" className={styles.full}>{specialties.error} <button type="button" onClick={specialties.retry}>إعادة تحميل التخصصات</button></p>}

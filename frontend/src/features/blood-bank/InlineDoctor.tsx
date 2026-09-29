@@ -7,7 +7,7 @@ import Modal from "../clinics/Modal";
 import { type Choice, type Page, useBloodRequest } from "./api";
 import styles from "../clinics/clinics.module.css";
 
-export default function InlineDoctor({ facilityId, clinic, onClose, onSelected }: { facilityId: number; clinic: Choice; onClose: () => void; onSelected: (value: Choice) => void }) {
+export default function InlineDoctor({ facilityId, clinic, date, onClose, onSelected }: { facilityId: number; date?: string; clinic: Choice; onClose: () => void; onSelected: (value: Choice) => void }) {
   const options = useBloodRequest<DoctorOptions>(`doctors/options?facility_id=${facilityId}`);
   const [created, setCreated] = useState<Doctor | null>(null); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
   const pending = useRef(false); const controller = useRef<AbortController | null>(null); useEffect(() => () => controller.current?.abort(), []);
@@ -15,7 +15,7 @@ export default function InlineDoctor({ facilityId, clinic, onClose, onSelected }
     if (pending.current) return; pending.current = true; setBusy(true); setMessage(""); const active = new AbortController(); controller.current = active;
     try {
       if (link) { const current = await apiRequest<Doctor>(`doctors/${doctor.id}?facility_id=${facilityId}`, { signal: active.signal }); await apiRequest(`doctors/${doctor.id}/clinics`, { method: "PUT", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, lock_version: current.lock_version, clinic_add_ids: [clinic.id], clinic_remove_ids: [] }) }); }
-      const response = await apiRequest<Page<Choice>>(`blood-bank/doctors?facility_id=${facilityId}&clinic_id=${clinic.id}&search=${encodeURIComponent(doctor.code)}`, { signal: active.signal }, "envelope");
+      const response = await apiRequest<Page<Choice>>(`blood-bank/doctors?facility_id=${facilityId}&clinic_id=${clinic.id}${date ? `&occurred_on=${date}` : ""}&search=${encodeURIComponent(doctor.code)}`, { signal: active.signal }, "envelope");
       const row = response.data.find(row => row.id === doctor.id);
       if (!active.signal.aborted) { if (row) onSelected(row); else setMessage("الطبيب محفوظ، لكن ارتباطه بهذه العيادة غير متاح. يمكنك استكمال الربط دون إنشائه مرة أخرى."); }
     } catch { if (!active.signal.aborted) setMessage("الطبيب محفوظ. تعذّر التحقق من ارتباطه أو تحديث الخيارات؛ أعد المحاولة دون إنشاء طبيب آخر."); }

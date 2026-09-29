@@ -18,6 +18,7 @@ class BloodBankQuery extends FormRequest
             'kind' => ['sometimes', Rule::in(['donor', 'recipient'])], 'page' => ['sometimes', 'integer', 'min:1'],
             'per_page' => ['sometimes', Rule::in([10, 20, 50, 100])], 'sort' => ['sometimes', Rule::in(['code', 'name', 'updated_at'])],
             'direction' => ['sometimes', Rule::in(['asc', 'desc'])], 'clinic_id' => ['nullable', 'integer', 'min:1'],
+            'occurred_on' => ['sometimes', 'date_format:Y-m-d'],
             'governorate_id' => ['nullable', 'integer', 'min:1']];
     }
 }

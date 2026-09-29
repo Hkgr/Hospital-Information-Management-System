@@ -77,7 +77,7 @@ class DoctorQueries
             'id' => (int) $s->id, 'code' => $s->staff_code, 'name' => $s->full_name, 'description' => $s->description,
             'staff_type' => ['id' => (int) $s->staff_type_id, 'code' => $s->type_code, 'name_ar' => $s->type_name],
             'specialties' => ($specialties->get($s->id) ?? collect())->map(fn ($sp) => ['id' => (int) $sp->id, 'name_ar' => $sp->name_ar, 'is_active' => (bool) $sp->is_active])->values()->all(),
-            'license_no' => $s->license_no, 'phone' => $s->phone, 'archived_at' => $s->archived_at, 'is_active' => (bool) $s->is_active, 'lock_version' => (int) $s->lock_version,
+            'practice_group' => $s->practice_group, 'license_no' => $s->license_no, 'phone' => $s->phone, 'archived_at' => $s->archived_at, 'is_active' => (bool) $s->is_active, 'lock_version' => (int) $s->lock_version,
             'clinic_count' => (int) $s->clinic_count, 'patient_count' => (int) $s->patient_count,
             'clinics_preview' => ($clinics->get($s->id) ?? collect())->take(3)->map(fn ($c) => ['id' => (int) $c->id, 'code' => $c->code, 'name_ar' => $c->name_ar])->values()->all(),
             'patient_count_definition' => DoctorCounts::PATIENT_DEFINITION,

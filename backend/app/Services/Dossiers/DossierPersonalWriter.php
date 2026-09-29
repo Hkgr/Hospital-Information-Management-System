@@ -78,6 +78,11 @@ class DossierPersonalWriter
                     if (($fields['displacement_status'] ?? '') !== 'idp') {
                         $fields['permanent_address'] = null;
                     }
+                    $nationalId = trim((string) ($fields['national_id'] ?? ''));
+                    $fields['national_id'] = $nationalId === '' ? null : $nationalId;
+                    if ($fields['national_id'] && DB::table('patients')->where('national_id', $fields['national_id'])->when($patientId, fn ($q) => $q->where('id', '<>', $patientId))->exists()) {
+                        throw ValidationException::withMessages(['national_id' => 'الرقم الوطني مستخدم لمريض آخر.']);
+                    }
                     if (($fields['birth_date'] && $fields['birth_date'] > $f['today']) || (! $fields['birth_date'] && $fields['birth_date_accuracy'] !== 'unknown')) {
                         throw ValidationException::withMessages(['birth_date' => 'أدخل ميلادًا غير مستقبلي، أو اختر غير معروف مع تاريخ فارغ.']);
                     }

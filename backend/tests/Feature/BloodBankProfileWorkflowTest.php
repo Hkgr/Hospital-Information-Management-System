@@ -86,6 +86,7 @@ class BloodBankProfileWorkflowTest extends TestCase
         $city = DB::table('cities')->where('governorate_id', $gov)->value('id');
         $other = DB::table('governorates')->where('code', 'SY-HM')->value('id');
         $counts = [DB::table('governorates')->count(), DB::table('cities')->count()];
+        $governorateIds = DB::table('governorates')->where('country_code', 'SY')->pluck('id')->all();
         foreach (['donation', 'benefit'] as $kind) {
             foreach ([['governorate_text' => 'محافظة خارجية', 'city_text' => 'مدينة خارجية'], ['governorate_id' => $gov, 'city_text' => 'مدينة غير مدرجة'], ['governorate_id' => $gov, 'city_id' => $city]] as $address) {
                 $input = $this->eventInput($f, $kind);
@@ -105,8 +106,12 @@ class BloodBankProfileWorkflowTest extends TestCase
         }
         $this->assertSame($counts, [DB::table('governorates')->count(), DB::table('cities')->count()]);
         $options = $this->getJson('/api/blood-bank/options?facility_id='.$f['facility'])->assertOk()->json('data');
-        $this->assertSame(['كامل', 'ركازة', 'بلازما', 'صفيحات'], array_column($options['blood_components'], 'name_ar'));
-        $this->assertCount(14, $options['governorates']);
+        $this->assertSame(['دم كامل', 'كريات مكثفة', 'بلازما', 'صفيحات'], array_column($options['blood_components'], 'name_ar'));
+        // A preserved populated test database may also contain synthetic directory rows.
+        $this->assertEqualsCanonicalizing($governorateIds, array_column($options['governorates'], 'id'));
+        foreach (BloodBankReferenceSeeder::GOVERNORATES as [$name]) {
+            $this->assertContains($name, array_column($options['governorates'], 'name_ar'));
+        }
         foreach ($options['blood_components'] as $component) {
             $input = ['blood_component_id' => $component['id']] + $this->eventInput($f);
             $this->postJson('/api/blood-bank/events', $input)->assertCreated()->assertJsonPath('data.blood_component_id', $component['id']);

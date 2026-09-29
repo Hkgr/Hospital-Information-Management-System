@@ -19,8 +19,8 @@ class BloodBankReferenceSeeder extends Seeder
     ];
 
     public const COMPONENTS = [
-        'whole' => ['WB', 'كامل', ['WB', 'WHOLE_BLOOD'], ['كامل', 'دم كامل']],
-        'red_cells' => ['PRBC', 'ركازة', ['PRBC', 'RBC', 'PACKED_RBC', 'PACKED_RED_CELLS'], ['ركازة', 'ركازة حمراء', 'كريات حمراء مركزة']],
+        'whole' => ['WB', 'دم كامل', ['WB', 'WHOLE_BLOOD'], ['كامل', 'دم كامل']],
+        'red_cells' => ['PRBC', 'كريات مكثفة', ['PRBC', 'RBC', 'PACKED_RBC', 'PACKED_RED_CELLS'], ['ركازة', 'ركازة حمراء', 'كريات حمراء مركزة', 'كريات مكثفة']],
         'plasma' => ['FFP', 'بلازما', ['FFP', 'PLASMA'], ['بلازما', 'بلازما طازجة مجمدة']],
         'platelets' => ['PLT', 'صفيحات', ['PLT', 'PLATELETS'], ['صفيحات', 'صفيحات دموية']],
     ];
@@ -44,7 +44,7 @@ class BloodBankReferenceSeeder extends Seeder
                     throw new RuntimeException("Ambiguous blood component mapping: $kind. Review the existing directory; no IDs were merged.");
                 }
                 $id = $rows->first()?->id ?? DB::table('blood_components')->insertGetId(['code' => $code, 'name_ar' => $name, 'created_at' => now()]);
-                DB::table('blood_components')->where('id', $id)->update(['registration_kind' => $kind]);
+                DB::table('blood_components')->where('id', $id)->update(['registration_kind' => $kind, 'name_ar' => $name]);
             }
         });
     }

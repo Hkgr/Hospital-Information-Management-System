@@ -249,6 +249,8 @@ class ClinicApiTest extends TestCase
 
     public function test_search_sort_pagination_and_bounded_queries(): void
     {
+        // Keep Sanctum last_used_at writes from changing across the wall-clock second.
+        $this->freezeTime();
         $specialty = DB::table('specialties')->insertGetId(['code' => 'S', 'name_ar' => 'تخصص اختباري']);
         $this->create(['specialty_id' => $specialty, 'doctor_add_ids' => [$this->doctor]]);
         $inactive = $this->create(['is_active' => false]);

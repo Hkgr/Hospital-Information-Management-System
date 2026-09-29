@@ -5,8 +5,8 @@ namespace App\Services\BloodBank;
 use App\Exceptions\BloodBankException;
 use App\Http\Requests\BloodBank\SaveBloodProfile;
 use App\Services\Clinics\ClinicAudit;
-use App\Services\Clinics\ClinicCounts;
 use App\Services\Directory\ClinicStaffLinks;
+use App\Services\Dossiers\DossierClinicalContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -114,9 +114,7 @@ class BloodEventWriter
             $links->lockStaff(array_filter([$data['responsible_staff_id'], $old->responsible_staff_id ?? null]));
             $links->lockClinics(array_filter([$data['clinic_id'], $old->clinic_id ?? null]));
             $same = $old && (int) $old->clinic_id === (int) $data['clinic_id'] && (int) $old->responsible_staff_id === (int) $data['responsible_staff_id'];
-            if (! $same && ! app(ClinicCounts::class)->currentDoctors($f)->where('c.id', $data['clinic_id'])->where('s.id', $data['responsible_staff_id'])->exists()) {
-                throw ValidationException::withMessages(['responsible_staff_id' => 'اختر طبيبًا مؤهلًا مرتبطًا حاليًا بالعيادة في المنشأة.']);
-            }
+            app(DossierClinicalContext::class)->check($f, $data['clinic_id'], $data['responsible_staff_id'], $data['occurred_on'], 'responsible_staff_id', (bool) $same);
             if ((! $old || $old->blood_component_id != $data['blood_component_id']) && ! DB::table('blood_components')->where('id', $data['blood_component_id'])->where('is_active', true)->exists()) {
                 throw ValidationException::withMessages(['blood_component_id' => 'اختر مكوّنًا فعالًا.']);
             }
@@ -134,6 +132,8 @@ class BloodEventWriter
                 }
             }
             $fields = Arr::only($data, ['kind', 'benefit_kind', 'occurred_on', 'blood_component_id', 'clinic_id', 'responsible_staff_id', 'quantity', 'quantity_unit', 'beneficiary_entity', 'entity_address']);
+            $fields['hemoglobin_g_dl'] = ($data['benefit_kind'] ?? null) === 'transfusion' ? $data['hemoglobin_g_dl'] : null;
+            $fields['crossmatch_result'] = ($data['benefit_kind'] ?? null) === 'transfusion' ? $data['crossmatch_result'] : null;
             foreach (['blood_group', 'rh'] as $key) {
                 $fields[$key] = array_key_exists($key, $data) ? $data[$key] : ($old->$key ?? $person->$key);
             }
