@@ -56,7 +56,14 @@ class DashboardHome
         $this->pushCounter($counters, $access, 'visits', 'الزيارات', 'dossiers.view', fn (array $ids) => (int) DB::table('visits')->whereIn('facility_id', $ids)->whereNull('voided_at')->whereIn('status', ['complete', 'draft'])->count());
         $this->pushCounter($counters, $access, 'clinics', 'العيادات', 'clinics.view', fn (array $ids) => (int) DB::table('clinics')->whereIn('facility_id', $ids)->where('is_active', true)->whereNull('archived_at')->count());
         $this->pushCounter($counters, $access, 'doctors', 'الأطباء', 'doctors.view', fn (array $ids) => $this->assignedDoctors($access, $ids));
-        $this->pushCounter($counters, $access, 'catalog', 'الخدمات والإجراءات', 'catalog.view', fn () => (int) DB::table('services')->whereNull('archived_at')->count() + (int) DB::table('procedures')->whereNull('archived_at')->count());
+        $this->pushCounter($counters, $access, 'catalog', 'الخدمات والإجراءات', 'catalog.view', function (array $ids): int {
+            if ($ids === []) {
+                return 0;
+            }
+
+            return (int) DB::table('visit_services')->whereIn('facility_id', $ids)->whereNull('voided_at')->count()
+                + (int) DB::table('visit_procedures')->whereIn('facility_id', $ids)->whereNull('voided_at')->count();
+        });
         $this->pushCounter($counters, $access, 'medications', 'الأدوية', 'catalog.view', fn () => (int) DB::table('medications')->whereNull('archived_at')->count());
         $this->pushCounter($counters, $access, 'stock', 'دفعات المخزون', 'stock.view', fn (array $ids) => (int) DB::table('medication_batches')->whereIn('facility_id', $ids)->where('status', 'active')->count());
         $this->pushCounter($counters, $access, 'blood_bank', 'وقائع بنك الدم', 'blood_bank.view', fn (array $ids) => (int) DB::table('blood_bank_events')->whereIn('facility_id', $ids)->whereNull('voided_at')->count());

@@ -116,6 +116,17 @@ class DashboardApiTest extends TestCase
         $this->visit($allowed, $patient, $clinic, $doctor, $user->id, 'draft', $dossier);
         $this->visit($denied, $hiddenPatient, $hiddenClinic, $otherDoctor, $user->id, 'complete');
         $this->visit($foreign, $foreignPatient, $foreignClinic, $otherDoctor, $outsider->id, 'complete', $foreignDossier);
+        $category = DB::table('service_categories')->insertGetId(['code' => 'HOME-SC', 'name_ar' => 'فئة رئيسية']);
+        $service = DB::table('services')->insertGetId(['code' => 'HOME-SRV', 'name_ar' => 'خدمة مسجلة', 'category_id' => $category]);
+        $procedure = DB::table('procedures')->insertGetId(['code' => 'HOME-PRC', 'name_ar' => 'إجراء مسجل']);
+        $allowedVisit = (int) DB::table('visits')->where('facility_id', $allowed)->value('id');
+        $foreignVisit = (int) DB::table('visits')->where('facility_id', $foreign)->value('id');
+        DB::table('visit_services')->insert(['visit_id' => $allowedVisit, 'facility_id' => $allowed, 'performed_on' => $today, 'service_id' => $service, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $user->id]);
+        DB::table('visit_services')->insert(['visit_id' => $allowedVisit, 'facility_id' => $allowed, 'performed_on' => $today, 'service_id' => $service, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $user->id, 'voided_at' => now(), 'voided_by' => $user->id, 'void_reason' => 'اختبار']);
+        DB::table('visit_services')->insert(['visit_id' => $foreignVisit, 'facility_id' => $foreign, 'performed_on' => $today, 'service_id' => $service, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $outsider->id]);
+        DB::table('visit_procedures')->insert([
+            'visit_id' => $allowedVisit, 'facility_id' => $allowed, 'performed_on' => $today, 'procedure_id' => $procedure, 'specialist_id' => $doctor, 'client_request_id' => (string) Str::uuid(), 'entered_by' => $user->id,
+        ]);
         $plan = DB::table('oncology_plans')->insertGetId(['facility_id' => $allowed, 'dossier_id' => $dossier, 'status' => 'active', 'client_request_id' => (string) Str::uuid(), 'entered_by' => $user->id]);
         $revision = DB::table('oncology_plan_revisions')->insertGetId([
             'plan_id' => $plan, 'dossier_id' => $dossier, 'facility_id' => $allowed, 'revision_number' => 1,
@@ -153,7 +164,7 @@ class DashboardApiTest extends TestCase
         $this->assertSame(1, $values['clinics']);
         $this->assertSame(1, $values['doctors']);
         $this->assertSame(1, $values['appointments']);
-        $this->assertArrayHasKey('catalog', $values);
+        $this->assertSame(2, $values['catalog']);
         $this->assertArrayHasKey('medications', $values);
         $this->assertArrayNotHasKey('stock', $values);
         $this->assertArrayNotHasKey('blood_bank', $values);
