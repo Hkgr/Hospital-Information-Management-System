@@ -31,10 +31,10 @@ class IdentityCorrections
         $window = DB::table('reception_identity_windows')->where('dossier_id', $d->id)->first();
         $reasons = app(IdentityImpact::class)->reasons($p, $d);
         if (! $window || (int) $window->entered_by !== (int) $r->user()->id || (int) $p->created_by !== (int) $r->user()->id) {
-            $reasons[] = 'التصحيح المباشر متاح لمن سجّل الهوية من الاستقبال فقط.';
+            $reasons[] = 'التصحيح المباشر متاح لمن سجّل الهوية من التسجيل الأساسي فقط.';
         }
         if ($window && ((int) $window->patient_version !== (int) $p->lock_version)) {
-            $reasons[] = 'تغيّرت الهوية خارج مسودة الاستقبال؛ قدّم طلب مراجعة.';
+            $reasons[] = 'تغيّرت الهوية خارج مسودة التسجيل؛ قدّم طلب مراجعة.';
         }
         $seconds = $window ? max(0, (int) ceil(now()->diffInSeconds(CarbonImmutable::parse($window->expires_at), false))) : 0;
         // The interval is [saved_at, saved_at + 15 minutes); at the deadline review is required.

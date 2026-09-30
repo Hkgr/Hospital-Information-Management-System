@@ -60,7 +60,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
 
     private function ready(): int
     {
-        $id = $this->callApi('POST', $this->path('/pathology'), ['source' => 'external', 'status' => 'completed', 'result_on' => '1999-01-01', 'external_organization' => 'مختبر', 'conclusion' => 'دليل مؤكد'])->assertCreated()->json('data.id');
+        $id = $this->callApi('POST', $this->path('/pathology'), $this->context() + ['source' => 'external', 'status' => 'completed', 'result_on' => '1999-01-01', 'external_organization' => 'مختبر', 'conclusion' => 'دليل مؤكد'])->assertCreated()->json('data.id');
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'pathology_confirmed', 'evidence_pathology_id' => $id, 'assessed_on' => '2001-03-02'])->assertOk();
 
         return $id;
@@ -76,6 +76,23 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->callApi('POST', $this->planPath($p['id']).'/sessions', ['lock_version' => $p['lock_version'], 'sessions' => [['session_number' => 1, 'planned_on' => $date], ['session_number' => 2, 'planned_on' => '2090-02-01']]])->assertCreated();
 
         return (array) DB::table('oncology_sessions')->where('plan_id', $p['id'])->orderBy('id')->first();
+    }
+
+    public function test_schedule_creation_task_cannot_correct_schedule_or_administer(): void
+    {
+        $this->ready();
+        $plan = $this->activate($this->makePlan())->assertOk()->json('data');
+        DB::table('role_permissions')->where('role_id', $this->f['dossier_role'])->delete();
+        foreach (['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view', 'dossiers.treatment.schedule.create'] as $code) {
+            DB::table('role_permissions')->insert(['role_id' => $this->f['dossier_role'], 'permission_id' => DB::table('permissions')->where('code', $code)->value('id')]);
+        }
+        $session = $this->schedule($plan);
+        $this->resolve($session)->assertForbidden();
+        $this->assertDatabaseHas('oncology_sessions', ['id' => $session['id'], 'lock_version' => $session['lock_version']]);
+        $caps = $this->callApi('GET', '/options')->assertOk()->json('data.capabilities');
+        $this->assertTrue($caps['treatment_schedule_create']);
+        $this->assertFalse($caps['treatment_schedule_update']);
+        $this->assertFalse($caps['treatment_administer']);
     }
 
     private function dose(array $s, array $extra = []): array

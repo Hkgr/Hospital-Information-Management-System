@@ -54,6 +54,19 @@ class RoleApiTest extends TestCase
         return $this->json($method, '/api/users'.$path, $data + ['facility_id' => $this->facility], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
     }
 
+    public function test_task_prerequisites_require_explicit_selection_and_templates_do_not_grant(): void
+    {
+        $codes = ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.services.update'];
+        $this->grant($codes);
+        $before = DB::table('role_permissions')->count();
+        $this->api('GET', '/options')->assertOk()->assertJsonCount(5, 'data.task_templates');
+        $this->assertSame($before, DB::table('role_permissions')->count());
+        $this->api('POST', '/roles', ['name_ar' => 'Service task', 'permission_ids' => [$this->permission('dossiers.services.update')]])->assertUnprocessable();
+        $role = $this->api('POST', '/roles', ['name_ar' => 'Service task', 'permission_ids' => array_map($this->permission(...), $codes)])->assertCreated()->json('data');
+        $this->assertEqualsCanonicalizing($codes, array_column($role['permissions'], 'code'));
+        $this->api('POST', '/roles', ['name_ar' => 'Escalated task', 'permission_ids' => [$this->permission('dossiers.procedures.update'), ...array_map($this->permission(...), $codes)]])->assertUnprocessable();
+    }
+
     public function test_create_update_role_from_owned_permissions_only(): void
     {
         $created = $this->api('POST', '/roles', [

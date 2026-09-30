@@ -92,7 +92,7 @@ class OncologyController extends Controller
 
     public function schedule(SaveOncology $r, int $dossier, int $plan)
     {
-        $f = $this->scope($r, 'schedule');
+        $f = $this->scope($r, 'schedule.create');
         app(OncologyWriter::class)->schedule($r, $f, $dossier, $plan, $r->validated());
 
         return response()->json(['data' => ['id' => $plan]], 201);
@@ -100,14 +100,14 @@ class OncologyController extends Controller
 
     public function updateSession(SaveOncology $r, int $dossier, int $session)
     {
-        $id = app(OncologyWriter::class)->session($r, $this->scope($r, 'schedule'), $dossier, $session, $r->validated());
+        $id = app(OncologyWriter::class)->session($r, $this->scope($r, 'schedule.update'), $dossier, $session, $r->validated());
 
         return response()->json(['data' => ['id' => $id]]);
     }
 
     public function sessionDose(SaveOncology $r, int $dossier, int $session, ?int $sessionDose = null)
     {
-        $f = $this->scope($r, 'schedule');
+        $f = $this->scope($r, $sessionDose ? 'schedule.update' : 'schedule.create');
         $id = app(OncologyWriter::class)->sessionDose($r, $f, $dossier, $session, $r->validated(), $sessionDose);
 
         return response()->json(['data' => ['id' => $id]], $sessionDose ? 200 : 201);
@@ -115,7 +115,7 @@ class OncologyController extends Controller
 
     public function appointment(SaveOncology $r, int $dossier)
     {
-        $id = app(OncologyWriter::class)->appointment($r, $this->scope($r, 'schedule'), $dossier, $r->validated());
+        $id = app(OncologyWriter::class)->appointment($r, $this->scope($r, 'schedule.create'), $dossier, $r->validated());
 
         return response()->json(['data' => ['id' => $id]], 201);
     }
@@ -123,7 +123,7 @@ class OncologyController extends Controller
     public function administer(SaveOncology $r, int $dossier, int $visit, ?int $dose = null)
     {
         $void = $r->operation() === 'void';
-        $f = $this->scope($r, $void ? 'void' : ($dose ? 'correct' : 'administer'));
+        $f = $this->scope($r, $void ? 'administration.void' : ($dose ? 'administration.correct' : 'administer'));
         $id = app(OncologyWriter::class)->administer($r, $f, $dossier, $visit, $r->validated(), $dose, $void);
 
         return response()->json(['data' => ['id' => $id]], $dose ? 200 : 201);
@@ -132,7 +132,7 @@ class OncologyController extends Controller
     public function dispense(SaveOncology $r, int $dossier, int $visit, ?int $dispensing = null)
     {
         $void = $r->operation() === 'void';
-        $f = $this->scope($r, $void ? 'void' : ($dispensing ? 'correct' : 'dispense'));
+        $f = $this->scope($r, $void ? 'dispensing.void' : ($dispensing ? 'dispensing.correct' : 'dispense'));
         $id = app(OncologyWriter::class)->dispense($r, $f, $dossier, $visit, $r->validated(), $dispensing, $void);
 
         return response()->json(['data' => ['id' => $id]], $dispensing ? 200 : 201);

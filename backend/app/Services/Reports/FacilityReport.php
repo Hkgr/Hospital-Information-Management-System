@@ -116,14 +116,14 @@ class FacilityReport
     private function counters(array $f, array $window): array
     {
         $counters = [];
-        $this->push($counters, $f, 'dossiers.view', 'visits', 'الزيارات', fn () => $this->visits($f, $window)->count());
-        $this->push($counters, $f, 'dossiers.view', 'completed_visits', 'زيارات مكتملة', fn () => $this->visits($f, $window)->where('status', 'complete')->count());
-        $this->push($counters, $f, 'dossiers.view', 'dossiers', 'بطاقات فُتحت', fn () => (int) DB::table('patient_dossiers')->where('facility_id', $f['id'])
+        $this->push($counters, $f, 'dossiers.visits.view', 'visits', 'الزيارات', fn () => $this->visits($f, $window)->count());
+        $this->push($counters, $f, 'dossiers.visits.view', 'completed_visits', 'زيارات مكتملة', fn () => $this->visits($f, $window)->where('status', 'complete')->count());
+        $this->push($counters, $f, 'dossiers.medical.view', 'dossiers', 'بطاقات فُتحت', fn () => (int) DB::table('patient_dossiers')->where('facility_id', $f['id'])
             ->whereBetween('opening_date', [$window['starts_on'], $window['ends_on']])->count());
-        $this->push($counters, $f, 'dossiers.view', 'services', 'خدمات منفّذة', fn () => $this->events($f, $window, 'visit_services', 'performed_on')->count());
-        $this->push($counters, $f, 'dossiers.view', 'procedures', 'إجراءات منفّذة', fn () => $this->events($f, $window, 'visit_procedures', 'performed_on')->count());
-        $this->push($counters, $f, 'dossiers.view', 'medications', 'صرف أدوية', fn () => $this->events($f, $window, 'visit_medications', 'dispensed_on')->count());
-        if ($this->can($f, 'dossiers.view') && $this->can($f, 'dossiers.treatment.view')) {
+        $this->push($counters, $f, 'dossiers.visits.view', 'services', 'خدمات منفّذة', fn () => $this->events($f, $window, 'visit_services', 'performed_on')->count());
+        $this->push($counters, $f, 'dossiers.visits.view', 'procedures', 'إجراءات منفّذة', fn () => $this->events($f, $window, 'visit_procedures', 'performed_on')->count());
+        $this->push($counters, $f, 'dossiers.visits.view', 'medications', 'صرف أدوية', fn () => $this->events($f, $window, 'visit_medications', 'dispensed_on')->count());
+        if ($this->can($f, 'dossiers.visits.view') && $this->can($f, 'dossiers.treatment.view')) {
             $counters[] = ['key' => 'doses', 'label' => 'جرعات علاجية', 'value' => $this->events($f, $window, 'dose_sessions', 'administered_on')->count()];
         }
         $this->push($counters, $f, 'clinics.view', 'clinics', 'عيادات نشطة', fn () => (int) DB::table('clinics')->where('facility_id', $f['id'])->where('is_active', true)->whereNull('archived_at')->count());
@@ -137,7 +137,7 @@ class FacilityReport
 
     private function visitStatus(array $f, array $window): array
     {
-        if (! $this->can($f, 'dossiers.view')) {
+        if (! $this->can($f, 'dossiers.visits.view')) {
             return [];
         }
         $found = $this->visits($f, $window)->select('status', DB::raw('COUNT(*) as value'))->groupBy('status')->pluck('value', 'status');
@@ -150,7 +150,7 @@ class FacilityReport
 
     private function series(array $f, array $window): array
     {
-        if (! $this->can($f, 'dossiers.view')) {
+        if (! $this->can($f, 'dossiers.visits.view')) {
             return [];
         }
         $found = $this->visits($f, $window)->select('visit_date', DB::raw('COUNT(*) as value'))->groupBy('visit_date')->pluck('value', 'visit_date');
@@ -166,10 +166,10 @@ class FacilityReport
     private function mix(array $f, array $window): array
     {
         $mix = [];
-        $this->push($mix, $f, 'dossiers.view', 'services', 'الخدمات', fn () => $this->events($f, $window, 'visit_services', 'performed_on')->count());
-        $this->push($mix, $f, 'dossiers.view', 'procedures', 'الإجراءات', fn () => $this->events($f, $window, 'visit_procedures', 'performed_on')->count());
-        $this->push($mix, $f, 'dossiers.view', 'medications', 'صرف الأدوية', fn () => $this->events($f, $window, 'visit_medications', 'dispensed_on')->count());
-        if ($this->can($f, 'dossiers.view') && $this->can($f, 'dossiers.treatment.view')) {
+        $this->push($mix, $f, 'dossiers.visits.view', 'services', 'الخدمات', fn () => $this->events($f, $window, 'visit_services', 'performed_on')->count());
+        $this->push($mix, $f, 'dossiers.visits.view', 'procedures', 'الإجراءات', fn () => $this->events($f, $window, 'visit_procedures', 'performed_on')->count());
+        $this->push($mix, $f, 'dossiers.visits.view', 'medications', 'صرف الأدوية', fn () => $this->events($f, $window, 'visit_medications', 'dispensed_on')->count());
+        if ($this->can($f, 'dossiers.visits.view') && $this->can($f, 'dossiers.treatment.view')) {
             $mix[] = ['key' => 'doses', 'label' => 'الجرعات', 'value' => $this->events($f, $window, 'dose_sessions', 'administered_on')->count()];
         }
         $this->push($mix, $f, 'blood_bank.view', 'blood_bank', 'بنك الدم', fn () => (int) DB::table('blood_bank_events')->where('facility_id', $f['id'])->whereNull('voided_at')
@@ -192,7 +192,7 @@ class FacilityReport
 
     private function procedureRanks(array $f, array $window): array
     {
-        if (! $this->can($f, 'dossiers.view')) {
+        if (! $this->can($f, 'dossiers.visits.view')) {
             return [];
         }
 
@@ -205,7 +205,7 @@ class FacilityReport
 
     private function patients(array $f, array $window): array
     {
-        if (! $this->can($f, 'dossiers.view')) {
+        if (! $this->can($f, 'dossiers.visits.view')) {
             return [];
         }
 
@@ -253,6 +253,7 @@ class FacilityReport
 
     private function can(array $f, string $permission): bool
     {
-        return in_array($permission, $f['permissions'], true);
+        return in_array($permission, $f['permissions'], true)
+            && ($permission !== 'dossiers.visits.view' || in_array('dossiers.medical.view', $f['permissions'], true));
     }
 }

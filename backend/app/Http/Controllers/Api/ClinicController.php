@@ -41,7 +41,7 @@ class ClinicController extends Controller
     /** Archive and close current/cancel future periods without deleting history. Requires delete permission. */
     public function archive(ClinicVersionRequest $request, int $clinic, DirectoryLifecycle $lifecycle): JsonResponse
     {
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'delete');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'archive');
         $lifecycle->apply($request, $facility, false, $clinic, $request->integer('lock_version'), 'archive');
 
         return response()->json(['data' => $this->queries->find($facility, $clinic)]);
@@ -50,7 +50,7 @@ class ClinicController extends Controller
     /** Restore as inactive; never reopen periods. Requires update permission. */
     public function restore(ClinicVersionRequest $request, int $clinic, DirectoryLifecycle $lifecycle): JsonResponse
     {
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'update');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'restore');
         $lifecycle->apply($request, $facility, false, $clinic, $request->integer('lock_version'), 'restore');
 
         return response()->json(['data' => $this->queries->find($facility, $clinic)]);
@@ -59,7 +59,7 @@ class ClinicController extends Controller
     /** Reactivate an inactive, unarchived record. Requires update permission. */
     public function reactivate(ClinicVersionRequest $request, int $clinic, DirectoryLifecycle $lifecycle): JsonResponse
     {
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'update');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'reactivate');
         $lifecycle->apply($request, $facility, false, $clinic, $request->integer('lock_version'), 'reactivate');
 
         return response()->json(['data' => $this->queries->find($facility, $clinic)]);
@@ -111,7 +111,7 @@ class ClinicController extends Controller
     /** Separate deactivation action. Requires clinics.update, preserves medical history. */
     public function deactivate(ClinicVersionRequest $request, int $clinic): JsonResponse
     {
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'update');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'deactivate');
         $this->writer->deactivate($request, $facility, $clinic, $request->integer('lock_version'));
 
         return response()->json(['data' => $this->queries->find($facility, $clinic)]);

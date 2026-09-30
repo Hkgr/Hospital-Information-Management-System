@@ -15,7 +15,7 @@ type Row = { id: number; dossier_id: number; visit_no: string; visit_date: strin
 export default function VisitsScreen() {
   const { access, user } = useIdentity();
   const params = useSearchParams();
-  const { entry } = directoryFacility(access, "dossiers.view", params.get("facility_id"));
+  const { entry } = directoryFacility(access, "dossiers.visits.view", params.get("facility_id"));
   if (!entry) return <p role="alert">تعذّر تحديد مشفى مصرح لك باستعراض زياراته.</p>;
   return <Listing key={`${user.id}:${entry.facility.id}`} facility={entry.facility.id} name={entry.facility.name_ar} />;
 }

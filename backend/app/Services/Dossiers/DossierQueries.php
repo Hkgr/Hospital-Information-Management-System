@@ -11,7 +11,8 @@ class DossierQueries
     public function actualVisits(array $facility): Builder
     {
         return DB::table('visits as v')->where('v.facility_id', $facility['id'])->whereNotNull('v.dossier_id')->whereIn('v.status', ['draft', 'complete'])
-            ->whereNull('v.voided_at')->where('v.visit_date', '<=', $facility['today']);
+            ->whereNull('v.voided_at')->where('v.visit_date', '<=', $facility['today'])
+            ->when(($facility['capabilities']['visits_view'] ?? true) === false, fn ($q) => $q->whereRaw('1=0'));
     }
 
     private function dossiers(array $f): Builder
@@ -121,6 +122,7 @@ class DossierQueries
 
     public function visitDirectory(array $f, array $input): array
     {
+        abort_unless($f['capabilities']['visits_view'] ?? true, 403);
         $q = $this->actualVisits($f)
             ->join('patient_dossiers as d', fn ($j) => $j->on('d.id', '=', 'v.dossier_id')->on('d.facility_id', '=', 'v.facility_id')->on('d.patient_id', '=', 'v.patient_id'))
             ->join('patients as p', 'p.id', '=', 'v.patient_id')->whereIn('d.status', ['draft', 'active']);
@@ -150,6 +152,7 @@ class DossierQueries
 
     public function visits(array $f, int $id, array $input): array
     {
+        abort_unless($f['capabilities']['visits_view'] ?? true, 403);
         abort_unless($this->dossiers($f)->where('d.id', $id)->exists(), 404);
         $q = $this->actualVisits($f)->where('v.dossier_id', $id);
         if (($input['status'] ?? 'all') !== 'all') {
@@ -172,6 +175,7 @@ class DossierQueries
 
     public function visit(array $f, int $id, int $visit): array
     {
+        abort_unless($f['capabilities']['visits_view'] ?? true, 403);
         abort_unless($this->dossiers($f)->where('d.id', $id)->exists(), 404);
         $v = $this->actualVisits($f)->where('v.dossier_id', $id)->where('v.id', $visit)
             ->leftJoin('clinics as c', fn ($j) => $j->on('c.id', '=', 'v.clinic_id')->on('c.facility_id', '=', 'v.facility_id'))

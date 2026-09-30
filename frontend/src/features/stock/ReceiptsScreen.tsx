@@ -49,7 +49,7 @@ function Workspace({ facilityId, name, receiptId }: { facilityId: number; name: 
       {confirmError && <p role="alert">{confirmError}</p>}
       {receipt && <>
         <header className={styles.header}><h1>إذن {receipt.receipt_no}</h1><p>{receiptStatus(receipt.status)} · {receipt.store_name_ar} · {receipt.funding_name_ar}</p>
-          {caps?.receive && receipt.status === "draft" && <button className={styles.primary} onClick={() => void confirm()}>تأكيد الاستلام</button>}</header>
+          {caps?.confirm && receipt.status === "draft" && <button className={styles.primary} onClick={() => void confirm()}>تأكيد الاستلام</button>}</header>
         <DirectoryTable label="بنود الإذن" headers={["الدواء", "الدفعة", "الانتهاء", "الكمية", "هدية"]}>
           {(receipt.items ?? []).map(item => <tr key={item.id}><td>{item.medication_name_ar}</td><td>{item.batch_number}</td><td>{item.expiry_date}</td><td>{item.quantity}</td><td>{item.free_quantity}</td></tr>)}
         </DirectoryTable>

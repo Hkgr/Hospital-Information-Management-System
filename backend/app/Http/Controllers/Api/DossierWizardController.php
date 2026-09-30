@@ -46,7 +46,10 @@ class DossierWizardController extends Controller
     {
         $dossier = (int) $r->route('dossier');
         $visit = $r->route('visit') ? (int) $r->route('visit') : null;
-        $f = $this->access->facility($r->user(), $r->integer('facility_id'), $visit ? 'visits.update' : 'visits.create');
+        $f = $this->access->facility($r->user(), $r->integer('facility_id'), $visit ? 'visits.view' : 'visits.create');
+        if ($visit) {
+            abort_unless($f['capabilities']['visits_update'] || $f['capabilities']['diagnoses_update'], 403);
+        }
         $saved = app(DossierVisitWriter::class)->save($r, $f, $dossier, $r->validated(), $visit);
 
         return response()->json(['data' => $this->queries->snapshot($f, $dossier, $saved)], $visit ? 200 : 201);
@@ -131,7 +134,7 @@ class DossierWizardController extends Controller
     {
         $f = $this->scope($r);
         $this->access->global($r->user(), 'diagnoses.create');
-        abort_unless(in_array('dossiers.visits.create', $f['permissions'], true) || in_array('dossiers.visits.update', $f['permissions'], true), 403);
+        abort_unless(in_array('dossiers.diagnoses.update', $f['permissions'], true) || in_array('dossiers.visits.create', $f['permissions'], true), 403);
         $data = $r->validate(['facility_id' => ['required', 'integer'], 'request_id' => ['required', 'uuid'], 'code' => ['prohibited'], 'name_ar' => ['required', 'string', 'max:200']], ['required' => 'هذا الحقل مطلوب.', 'max' => 'القيمة تتجاوز الحد المسموح.', 'prohibited' => 'الكود يصدره النظام ولا يُدخله المستخدم.']);
         try {
             $id = app(DossierWrites::class)->once($r, $f, $data, 'diagnosis:new', function () use ($r, $f, $data) {

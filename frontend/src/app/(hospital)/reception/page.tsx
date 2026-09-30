@@ -1,7 +1,11 @@
-import PortalFrame from "@/features/settings/PortalFrame";
-import { Suspense } from "react";
-import ReceptionScreen from "@/features/reception/ReceptionScreen";
+import { redirect } from "next/navigation";
 
-export default function Page() {
-  return <Suspense fallback={<p role="status">جارٍ تحميل الاستقبال…</p>}><PortalFrame><ReceptionScreen /></PortalFrame></Suspense>;
+// Keep bookmarks and explicit (including refused) facility context.
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(await searchParams)) {
+    for (const part of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, part);
+  }
+  query.set("view", "registration");
+  redirect(`/patient-cards?${query}`);
 }

@@ -65,7 +65,8 @@ class PermissionMatrixTest extends TestCase
         $input = $this->registration();
         $row = $this->api('POST', 'reception/registrations', $input)->assertCreated()->assertHeader('Cache-Control', 'no-store, private')->json('data');
         $this->assertMatchesRegularExpression('/^PC-\d+$/', $row['code']);
-        $this->assertSame(['id', 'patient_id', 'code', 'first_name', 'family_name', 'birth_date', 'gender', 'opening_date', 'status', 'lock_version', 'registration_visit_id'], array_keys($row));
+        $this->assertSame(['id', 'patient_id', 'code', 'first_name', 'family_name', 'birth_date', 'gender', 'opening_date', 'status', 'lock_version', 'registration_visit_id', 'workflow'], array_keys($row));
+        $this->assertNull($row['workflow']);
         $this->assertDatabaseHas('visits', ['id' => $row['registration_visit_id'], 'dossier_id' => $row['id'], 'status' => 'draft']);
         $this->api('POST', 'reception/registrations', $input)->assertCreated()->assertJsonPath('data.id', $row['id']);
         $this->api('POST', 'reception/registrations', array_replace($input, ['first_name' => 'تغيير']))->assertConflict();

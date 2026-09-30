@@ -26,7 +26,7 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
             'license_no' => (new StringType)->nullable(true), 'phone' => (new StringType)->nullable(true), 'archived_at' => (new StringType)->nullable(true), 'is_active' => new BooleanType, 'lock_version' => new IntegerType,
             'clinic_count' => new IntegerType, 'patient_count' => new IntegerType, 'clinics_preview' => $this->list($type), 'patient_count_definition' => (new StringType)->example(DoctorCounts::PATIENT_DEFINITION)]);
         $meta = $this->object(['page' => new IntegerType, 'per_page' => new IntegerType, 'total' => new IntegerType, 'last_page' => new IntegerType]);
-        $caps = $this->object(array_fill_keys(['create', 'update', 'delete', 'link', 'export', 'view_clinics'], new BooleanType));
+        $caps = $this->object(array_fill_keys(['create', 'update', 'delete', 'link', 'export', 'view_clinics', 'archive', 'restore', 'reactivate', 'deactivate'], new BooleanType));
         foreach ($document->paths as $path) {
             $route = preg_replace('#^api/#', '', trim($path->path, '/'));
             if ($route !== 'doctors' && ! str_starts_with($route, 'doctors/')) {

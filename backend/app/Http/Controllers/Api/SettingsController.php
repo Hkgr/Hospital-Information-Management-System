@@ -21,6 +21,7 @@ class SettingsController extends Controller
         abort_unless($entry && $entry['permissions'], 403);
 
         return response()->json(['data' => ['facility' => $entry['facility'], 'permissions' => $entry['permissions'],
+            'global_permissions' => app(GlobalAccess::class)->codes($request->user()),
             'system_admin' => (bool) app(GlobalAccess::class)->systemRole($request->user())]])->header('Cache-Control', 'private, no-store');
     }
 

@@ -1,3 +1,3 @@
 import { Suspense } from "react";
-import DossierScreen from "@/features/dossiers/DossierScreen";
+import DossierScreen from "@/features/dossiers/PatientCardsEntry";
 export default function Page() { return <Suspense fallback={<p role="status">جارٍ تحميل بطاقات المرضى…</p>}><DossierScreen /></Suspense>; }

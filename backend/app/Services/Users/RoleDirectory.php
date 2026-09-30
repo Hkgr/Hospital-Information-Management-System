@@ -17,7 +17,7 @@ class RoleDirectory
         $roles = DB::table('roles')->where('is_active', true)->orderBy('name_ar')->orderBy('id')->get(['id', 'code', 'name_ar', 'is_system_super_admin']);
         $permissions = $this->catalog->codesFor($roles->pluck('id')->all());
         if ($roles->contains(fn ($role) => (bool) $role->is_system_super_admin)) {
-            $all = DB::table('permissions')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name_ar'])->map(fn ($p) => (array) $p)->all();
+            $all = DB::table('permissions')->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name_ar'])->map(fn ($p) => $this->catalog->present($p))->all();
             foreach ($roles as $role) {
                 if ($role->is_system_super_admin) {
                     $permissions[$role->id] = $all;
@@ -129,6 +129,9 @@ class RoleDirectory
         }
         if (! $this->catalog->within($f['permissions'], array_values($granted))) {
             throw new HttpResponseException(response()->json(['error' => ['code' => 'ROLE_PERMISSIONS_INVALID', 'message' => 'لا يمكن منح صلاحية لا تملكها.']], 422));
+        }
+        if ($missing = $this->catalog->missingPrerequisites(array_values($granted))) {
+            throw new HttpResponseException(response()->json(['error' => ['code' => 'ROLE_PREREQUISITES_REQUIRED', 'message' => 'اختر المتطلبات الناقصة صراحة قبل حفظ الدور.', 'missing_permissions' => $missing]], 422));
         }
 
         return $granted;

@@ -23,6 +23,9 @@ class ClinicWriter
             return app(CreationRequests::class)->save($request, $facility, $input, 'clinic:create', $id, function () use ($request, $facility, $input, $id) {
                 $this->links->lockStaff(array_merge($input['doctor_add_ids'] ?? [], $input['doctor_remove_ids'] ?? []));
                 $old = $id === null ? null : $this->locked($facility['id'], $id, $input['lock_version']);
+                if ($old && array_key_exists('is_active', $input) && (bool) $old['is_active'] !== (bool) $input['is_active']) {
+                    app(ClinicAccess::class)->authorize($request->user(), $facility['id'], $input['is_active'] ? 'reactivate' : 'deactivate');
+                }
                 if ($old && $old['archived_at'] !== null) {
                     throw new ClinicException('CLINIC_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله أو إدارة ارتباطاته.');
                 }

@@ -59,6 +59,20 @@ class MedicationStockTest extends TestCase
         $this->assertDatabaseHas('permissions', ['code' => 'stock.receive', 'is_active' => false]);
     }
 
+    public function test_receipt_draft_task_cannot_confirm_or_manage_directories(): void
+    {
+        $roles = DB::table('facility_user_roles')->where('user_id', $this->f['user']->id)->pluck('role_id');
+        DB::table('role_permissions')->whereIn('role_id', $roles)->delete();
+        foreach (['stock.view', 'stock.receipts.write'] as $code) {
+            DB::table('role_permissions')->insert(['role_id' => $roles->first(), 'permission_id' => DB::table('permissions')->where('code', $code)->value('id')]);
+        }
+        $row = $this->receipt();
+        $this->api('POST', '/receipts/'.$row['id'].'/confirm', ['lock_version' => $row['lock_version']])->assertForbidden();
+        $this->api('POST', '/suppliers', ['name_ar' => 'Forbidden supplier', 'is_active' => true])->assertForbidden();
+        $this->api('POST', '/stores', ['name_ar' => 'Forbidden store', 'is_active' => true])->assertForbidden();
+        $this->assertDatabaseHas('medication_receipts', ['id' => $row['id'], 'status' => 'draft']);
+    }
+
     public function test_suppliers_and_stores_crud_uniqueness_lifecycle_and_facility_scope(): void
     {
         foreach (['suppliers' => ['contact_person' => 'أحمد', 'phone' => '011', 'address_line' => 'حلب', 'note' => 'ملاحظة'], 'stores' => ['location' => 'الصيدلية']] as $directory => $fields) {
@@ -116,7 +130,7 @@ class MedicationStockTest extends TestCase
         ]]);
         $this->api('POST', '/receipts/'.$bad['id'].'/confirm', ['lock_version' => 1])->assertUnprocessable()->assertJsonValidationErrors('items');
         $this->assertDatabaseHas('medication_receipts', ['id' => $bad['id'], 'status' => 'draft']);
-        $this->assertDatabaseCount('inventory_transactions', 0);
+        $this->assertSame(0, DB::table('inventory_transactions')->where('facility_id', $this->f['facility'])->count());
         $empty = $this->receipt(['invoice_number' => 'EMPTY-'.$this->f['tag']], []);
         $this->api('POST', '/receipts/'.$empty['id'].'/confirm', ['lock_version' => 1])->assertUnprocessable()->assertJsonValidationErrors('items');
         $this->assertDatabaseHas('medication_receipts', ['id' => $empty['id'], 'status' => 'draft']);

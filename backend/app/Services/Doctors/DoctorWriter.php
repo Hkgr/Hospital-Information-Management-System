@@ -35,6 +35,9 @@ class DoctorWriter
             return app(CreationRequests::class)->save($request, $facility, $input, 'doctor:create', $id, function () use ($request, $facility, $input, $id, $linksOnly, $add, $remove) {
                 // Both writers acquire staff, then clinics, then period rows. Never reverse this order.
                 $old = $id === null ? null : $this->locked($id, $input['lock_version']);
+                if (! $linksOnly && $old && array_key_exists('is_active', $input) && (bool) $old['is_active'] !== (bool) $input['is_active']) {
+                    $this->access->directory($request->user(), $input['is_active'] ? 'reactivate' : 'deactivate');
+                }
                 if ($old && $old['archived_at'] !== null) {
                     throw new DoctorException('DOCTOR_STATE_CONFLICT', 'استعد السجل المؤرشف قبل تعديله أو إدارة ارتباطاته.');
                 }

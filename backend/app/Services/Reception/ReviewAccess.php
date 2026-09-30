@@ -11,6 +11,7 @@ class ReviewAccess
 {
     public function facility(Request $r, string $permission): array
     {
+        $permission = ['reception.view' => 'patients.basic.view', 'reception.correct' => 'patients.own.correct', 'reception.corrections.request' => 'patients.corrections.request'][$permission] ?? $permission;
         $r->validate(['facility_id' => 'required|integer|min:1']);
         foreach (app(UserAccessContext::class)->forUser($r->user()) as $entry) {
             if ($entry['facility']['id'] === $r->integer('facility_id') && in_array($permission, $entry['permissions'], true)) {

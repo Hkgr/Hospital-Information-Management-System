@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiRequest, AuthError } from "../auth/api";
 
 export const identityLabels: Record<string, string> = { first_name: "الاسم الأول", family_name: "اسم العائلة", father_name: "اسم الأب", mother_name: "اسم الأم", birth_date: "تاريخ الميلاد", birth_date_accuracy: "دقة الميلاد", gender: "الجنس", phone: "الهاتف", alt_phone: "هاتف بديل", address_line: "عنوان السكن" };
-export const permissionLabels: Record<string, string> = { "reception.view": "عرض الاستقبال", "reception.register": "تسجيل بطاقة وزيارة أولى", "reception.correct": "التصحيح خلال المهلة", "reception.corrections.request": "طلب تصحيح" };
+export const permissionLabels: Record<string, string> = { "reception.view": "عرض البيانات الأساسية", "reception.register": "تسجيل بطاقة وزيارة أولى", "reception.correct": "التصحيح خلال المهلة", "reception.corrections.request": "طلب تصحيح" };
 export const statusLabel = (status: string) => ({ pending: "قيد المراجعة", approved: "موافق عليه", rejected: "مرفوض" }[status] || status);
 
 export function useReviewWrite() {

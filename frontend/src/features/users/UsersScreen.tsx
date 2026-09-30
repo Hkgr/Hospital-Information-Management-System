@@ -14,13 +14,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import styles from "@/features/clinics/clinics.module.css";
 
 type Role = { id: number; code: string; name_ar: string };
-type Permission = { id: number; code: string; name_ar: string };
+import TaskPermissionPicker, { missingRequirements, type Permission, type TaskTemplate } from "./TaskPermissionPicker";
 type Group = { key: string; name_ar: string; permissions: Permission[] };
 type ManagedRole = Role & { permissions: Permission[]; manageable: boolean };
 type Member = { id: number; username: string; name: string; email: string | null; is_active: boolean; last_login_at: string | null; roles: Role[]; pending_global_permissions?: string[] };
 type Options = {
   roles: Role[];
   permission_groups: Group[];
+  task_templates: TaskTemplate[];
   capabilities: { view: boolean; create: boolean; delete: boolean; roles_view: boolean; roles_create: boolean; roles_update: boolean };
 };
 
@@ -116,14 +117,14 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
         </DirectoryTable>
       </>}
     </section>}
-    {creating && options.data && <UserEditor facilityId={facilityId} roles={options.data.roles} groups={options.data.permission_groups} canCreateRole={!!caps?.roles_create} onClose={() => setCreating(false)} onSaved={member => { setNotice(member.pending_global_permissions?.length ? "أُنشئ الحساب وإسناده المحلي. البحث وإنشاء هوية المريض ينتظران تفويضًا عالميًا من مسؤول النظام؛ الحساب ليس جاهزًا لهاتين العمليتين بعد." : "أُنشئ الحساب وأُسند الدور بنجاح."); setCreating(false); setRevision(value => value + 1); }} />}
-    {creatingRole && options.data && <RoleEditor facilityId={facilityId} groups={options.data.permission_groups} onClose={() => setCreatingRole(false)} onSaved={() => { setCreatingRole(false); setRevision(value => value + 1); }} />}
-    {editingRole && options.data && <RoleEditor facilityId={facilityId} groups={options.data.permission_groups} role={editingRole} onClose={() => setEditingRole(null)} onSaved={() => { setEditingRole(null); setRevision(value => value + 1); }} />}
+    {creating && options.data && <UserEditor facilityId={facilityId} roles={options.data.roles} groups={options.data.permission_groups} templates={options.data.task_templates??[]} canCreateRole={!!caps?.roles_create} onClose={() => setCreating(false)} onSaved={member => { setNotice(member.pending_global_permissions?.length ? "أُنشئ الحساب وإسناده المحلي. البحث وإنشاء هوية المريض ينتظران تفويضًا عالميًا من مسؤول النظام؛ الحساب ليس جاهزًا لهاتين العمليتين بعد." : "أُنشئ الحساب وأُسند الدور بنجاح."); setCreating(false); setRevision(value => value + 1); }} />}
+    {creatingRole && options.data && <RoleEditor facilityId={facilityId} groups={options.data.permission_groups} templates={options.data.task_templates??[]} onClose={() => setCreatingRole(false)} onSaved={() => { setCreatingRole(false); setRevision(value => value + 1); }} />}
+    {editingRole && options.data && <RoleEditor facilityId={facilityId} groups={options.data.permission_groups} templates={options.data.task_templates??[]} role={editingRole} onClose={() => setEditingRole(null)} onSaved={() => { setEditingRole(null); setRevision(value => value + 1); }} />}
     {pending && <ConfirmUserDelete member={pending} facilityId={facilityId} onClose={() => setPending(null)} onDeleted={() => { setPending(null); setRevision(value => value + 1); }} />}
   </>;
 }
 
-function UserEditor({ facilityId, roles, groups, canCreateRole, onClose, onSaved }: { facilityId: number; roles: Role[]; groups: Group[]; canCreateRole: boolean; onClose: () => void; onSaved: (member: Member) => void }) {
+function UserEditor({ facilityId, roles, groups, templates, canCreateRole, onClose, onSaved }: { facilityId: number; roles: Role[]; groups: Group[]; templates: TaskTemplate[]; canCreateRole: boolean; onClose: () => void; onSaved: (member: Member) => void }) {
   const [fields, setFields] = useState({ username: "", name: "", email: "", password: "", role_id: roles[0] ? String(roles[0].id) : "" });
   const [choices, setChoices] = useState(roles);
   const [creatingRole, setCreatingRole] = useState(false);
@@ -161,27 +162,20 @@ function UserEditor({ facilityId, roles, groups, canCreateRole, onClose, onSaved
       </fieldset>
       <div className={styles.modalActions}><button className={styles.primary} type="submit" disabled={busy || creatingRole || !choices.length}>{busy ? "جارٍ الحفظ…" : "حفظ المستخدم"}</button><button type="button" className={styles.secondary} disabled={busy || creatingRole} onClick={onClose}>إلغاء</button></div>
     </form>
-    {creatingRole && <RoleEditor facilityId={facilityId} groups={groups} nested onClose={() => setCreatingRole(false)} onSaved={role => { setChoices(current => [...current, role]); setFields(current => ({ ...current, role_id: String(role.id) })); setCreatingRole(false); }} />}
+    {creatingRole && <RoleEditor facilityId={facilityId} groups={groups} templates={templates} nested onClose={() => setCreatingRole(false)} onSaved={role => { setChoices(current => [...current, role]); setFields(current => ({ ...current, role_id: String(role.id) })); setCreatingRole(false); }} />}
   </Modal>;
 }
 
-function RoleEditor({ facilityId, groups, role, nested = false, onClose, onSaved }: { facilityId: number; groups: Group[]; role?: ManagedRole; nested?: boolean; onClose: () => void; onSaved: (role: ManagedRole) => void }) {
+function RoleEditor({ facilityId, groups, templates, role, nested = false, onClose, onSaved }: { facilityId: number; groups: Group[]; templates: TaskTemplate[]; role?: ManagedRole; nested?: boolean; onClose: () => void; onSaved: (role: ManagedRole) => void }) {
   const [name, setName] = useState(role?.name_ar ?? "");
   const [selected, setSelected] = useState<number[]>(role?.permissions.map(item => item.id) ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AuthError | null>(null);
   const pending = useRef(false);
-  function toggle(id: number) {
-    setSelected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
-  }
-  function toggleGroup(group: Group) {
-    const ids = group.permissions.map(item => item.id);
-    const all = ids.every(id => selected.includes(id));
-    setSelected(current => all ? current.filter(id => !ids.includes(id)) : [...new Set([...current, ...ids])]);
-  }
+  const missing = missingRequirements(groups, selected);
   async function save(event: React.FormEvent) {
     event.preventDefault();
-    if (pending.current) return;
+    if (pending.current || missing.length) return;
     pending.current = true; setBusy(true); setError(null);
     try {
       const saved = await apiRequest<ManagedRole>(role ? `users/roles/${role.id}` : "users/roles", {
@@ -199,15 +193,9 @@ function RoleEditor({ facilityId, groups, role, nested = false, onClose, onSaved
       {error && <p role="alert" className={styles.error}>{error.message}</p>}
       <fieldset disabled={busy} className={styles.fields}>
         <label className={styles.full}>اسم الدور *<input autoFocus required maxLength={200} value={name} onChange={e => setName(e.target.value)} aria-invalid={!!error?.fields.name_ar} />{error?.fields.name_ar && <small className={styles.fieldError}>{error.fields.name_ar}</small>}</label>
-        <div className={styles.permissionGroups}>
-          {groups.map(group => <fieldset key={group.key} className={styles.permissionGroup}>
-            <legend>{group.name_ar}<button type="button" className={styles.textButton} onClick={() => toggleGroup(group)}>{group.permissions.every(item => selected.includes(item.id)) ? "إلغاء الكل" : "تحديد الكل"}</button></legend>
-            {group.permissions.map(item => <label key={item.id}><input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)} />{item.name_ar}</label>)}
-          </fieldset>)}
-          {!groups.length && <p className={styles.hint}>لا صلاحيات يمكن منحها من حسابك الحالي.</p>}
-        </div>
+        <TaskPermissionPicker groups={groups} templates={templates} selected={selected} onChange={setSelected} />
       </fieldset>
-      <div className={styles.modalActions}><button className={styles.primary} type="submit" disabled={busy || !selected.length}>{busy ? "جارٍ الحفظ…" : role ? "حفظ الدور" : "إنشاء الدور"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
+      <div className={styles.modalActions}><button className={styles.primary} type="submit" disabled={busy || !selected.length || !!missing.length}>{busy ? "جارٍ الحفظ…" : role ? "حفظ الدور" : "إنشاء الدور"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
     </form>
   </Modal>;
 }

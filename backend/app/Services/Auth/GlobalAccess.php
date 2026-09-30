@@ -26,8 +26,10 @@ class GlobalAccess
             return DB::table('permissions')->where('is_active', true)->orderBy('code')->pluck('code')->all();
         }
 
-        return DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
+        $codes = DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
             ->where('g.user_id', $user->id)->where('r.is_active', true)->where('p.is_active', true)->distinct()->orderBy('p.code')->pluck('p.code')->all();
+
+        return app(TaskPermissions::class)->effective($codes, true);
     }
 
     public function allows(User $user, string $permission): bool

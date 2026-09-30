@@ -12,7 +12,7 @@ import styles from "../clinics/clinics.module.css";
 
 type Kind = "corrections" | "duplicates" | "accounts";
 const scopes = { corrections: "identity_corrections.review", duplicates: "patient_duplicates.review", accounts: "reception_accounts.manage" };
-const labels = { corrections: "طلبات تصحيح الهوية", duplicates: "مراجعة التكرارات", accounts: "حسابات الاستقبال" };
+const labels = { corrections: "طلبات تصحيح الهوية", duplicates: "مراجعة التكرارات", accounts: "حسابات موظفي التسجيل" };
 type Row = { id: number; status: string; reason: string; created_at: string };
 type Account = { id: number; name: string; username: string; is_active: boolean; lock_version: number; permissions: string[]; blockers: string[] };
 type Preview = { can_merge: boolean; blockers: string[]; effect: string; canonical_code: string; duplicate_code: string; preview_hash: string };
@@ -23,10 +23,10 @@ export default function ReceptionAdmin() {
   const defaultKind = (Object.keys(scopes) as Kind[]).find(k => directoryFacility(identity.access, scopes[k], params.get("facility_id")).entry) || "corrections";
   const kind: Kind = params.get("tab") === "accounts" ? "accounts" : params.get("tab") === "duplicates" ? "duplicates" : params.has("tab") ? "corrections" : defaultKind;
   const { entry } = directoryFacility(identity.access, scopes[kind], params.get("facility_id"));
-  if (!entry) return <section className={styles.panel}><h2>مراجعات الاستقبال</h2><p role="alert">لا تملك صلاحية هذه المراجعة في المنشأة المحددة.</p></section>;
+  if (!entry) return <section className={styles.panel}><h2>مراجعة بيانات المرضى</h2><p role="alert">لا تملك صلاحية هذه المراجعة في المنشأة المحددة.</p></section>;
   const f = entry.facility.id;
   return <div className={styles.screen}><header className={styles.heading}><div><h2>{labels[kind]}</h2><p>{entry.facility.name_ar}</p></div></header>
-    <nav className={styles.actions} aria-label="مراجعات الاستقبال">{(Object.keys(scopes) as Kind[]).filter(k => entry.permissions.includes(scopes[k])).map(k => <Link className={styles.secondary} key={k} href={`/reception-admin?facility_id=${f}&tab=${k}`}>{labels[k]}</Link>)}</nav>
+    <nav className={styles.actions} aria-label="مراجعة بيانات المرضى">{(Object.keys(scopes) as Kind[]).filter(k => entry.permissions.includes(scopes[k])).map(k => <Link className={styles.secondary} key={k} href={`/reception-admin?facility_id=${f}&tab=${k}`}>{labels[k]}</Link>)}</nav>
     <Workspace key={`${f}:${kind}:${params.get("id") || "list"}`} facility={f} kind={kind} id={params.get("id")} page={Number(params.get("page")) || 1} />
   </div>;
 }

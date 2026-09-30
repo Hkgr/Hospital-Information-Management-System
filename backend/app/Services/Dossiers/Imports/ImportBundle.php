@@ -224,7 +224,11 @@ class ImportBundle
                 $this->require(! $x['diagnosed_on'] || $x['diagnosed_on'] <= $f['today'], 'diagnosed_on', 'تاريخ التشخيص مستقبلي.');
             }
             if ($clinical['services'] || $clinical['procedures'] || $medications['prescription'] || $medications['outcome']) {
-                $this->facilityPermission($r, $f, 'clinical.update');
+                foreach (['services' => $clinical['services'], 'procedures' => $clinical['procedures'], 'prescriptions' => $medications['prescription'], 'outcomes' => $medications['outcome']] as $task => $content) {
+                    if ($content) {
+                        $this->facilityPermission($r, $f, $task.'.update');
+                    }
+                }
                 $this->validateSection(SaveVisitClinical::class, 'clinical', $clinical, $f);
                 $this->validateSection(SaveVisitClinical::class, 'medications', $medications, $f);
             }

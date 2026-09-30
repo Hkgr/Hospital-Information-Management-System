@@ -16,6 +16,9 @@ class DossierVisitWriter
 
     public function save(Request $r, array $f, int $dossier, array $input, ?int $id, bool $subsequent = false, bool $import = false): int
     {
+        if (! $import && $id && ! empty($input['diagnoses'])) {
+            app(DossierAccess::class)->facility($r->user(), $f['id'], 'diagnoses.update');
+        }
         // Read lock targets before entering the transaction, so it does not establish
         // a repeatable-read snapshot before waiting for concurrent assignment writers.
         // A changed visit/diagnosis context is rejected by the locked visit version.
@@ -30,6 +33,14 @@ class DossierVisitWriter
                 DossierWrites::version((array) $old, $input['lock_version']);
                 if ($old->status !== 'draft' || $old->voided_at) {
                     DossierWrites::conflict('هذه الزيارة ليست مسودة قابلة للتعديل.');
+                }
+                if (! $import && ! ($f['capabilities']['visits_update'] ?? false)) {
+                    // Diagnosis entry is separate from changing the saved visit's date/referral.
+                    foreach (['visit_date', 'is_referred', 'referring_hospital', 'referral_date', 'referral_reason'] as $field) {
+                        if (($input[$field] ?? null) != ($old->$field ?? null)) {
+                            app(DossierAccess::class)->facility($r->user(), $f['id'], 'visits.draft.update');
+                        }
+                    }
                 }
             } else {
                 $old = null;

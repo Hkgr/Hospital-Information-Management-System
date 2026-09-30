@@ -27,7 +27,7 @@ class UserDocumentTransformer extends ClinicDocumentTransformer
                     : 'Facility user administration. Requires an active account, Sanctum Bearer api ability, facility membership, users.view, and users.create/users.delete for writes. Assigned roles must not exceed the actor\'s permissions. Definitions are seeded; this module never grants or reactivates permissions. Passwords are write-only. User 1 is not exempt. Last membership unlinks, revokes tokens and deactivates; the row is hard-deleted only when unreferenced. Self-delete returns 409. All responses private, no-store.';
                 $s = fn () => new StringType;
                 $i = fn () => new IntegerType;
-                $permission = $this->object(['id' => $i(), 'code' => $s(), 'name_ar' => $s()]);
+                $permission = $this->object(['id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'description' => $s(), 'scope' => $s(), 'prerequisites' => $this->list($s()), 'legacy_tasks' => $this->list($s())]);
                 $role = $this->object(['id' => $i(), 'code' => $s(), 'name_ar' => $s()]);
                 $managed = $this->object(['id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'permissions' => $this->list($permission), 'manageable' => new BooleanType]);
                 $user = $this->object(['id' => $i(), 'username' => $s(), 'name' => $s(), 'email' => $s()->nullable(true), 'is_active' => new BooleanType, 'last_login_at' => $s()->nullable(true), 'roles' => $this->list($role)]);
@@ -40,6 +40,7 @@ class UserDocumentTransformer extends ClinicDocumentTransformer
                     $op->addResponse(Response::make(200)->setDescription('Assignable roles, grantable permission groups, and scoped capabilities')->setContent('application/json', Schema::fromType($this->object(['data' => $this->object([
                         'roles' => $this->list($role),
                         'permission_groups' => $this->list($group),
+                        'task_templates' => $this->list($this->object(['name_ar' => $s(), 'codes' => $this->list($s())])),
                         'capabilities' => $this->object([
                             'view' => new BooleanType, 'create' => new BooleanType, 'delete' => new BooleanType,
                             'roles_view' => new BooleanType, 'roles_create' => new BooleanType, 'roles_update' => new BooleanType,

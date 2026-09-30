@@ -10,6 +10,7 @@ class ClinicAccess
 {
     public function authorize(User $user, int $facilityId, string $action = 'view'): array
     {
+        $action = ['update' => 'edit', 'delete' => 'destroy'][$action] ?? $action;
         foreach (app(UserAccessContext::class)->forUser($user) as $entry) {
             if ($entry['facility']['id'] === $facilityId
                 && in_array('clinics.view', $entry['permissions'], true)

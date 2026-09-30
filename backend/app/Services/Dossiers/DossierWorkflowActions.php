@@ -34,10 +34,10 @@ class DossierWorkflowActions
             $d = (array) $dossier;
             $visit = $visits->get($initialIds->get($d['id']));
             $sections = $progress->get($d['id'], collect())->filter(fn ($p) => $p->visit_id === null || $p->visit_id == $visit?->id)->keyBy('section');
-            $visitAction = $visit ? ($visit->status === 'draft' && ! $visit->voided_at && $caps['visits_update'] ? 'update' : null)
+            $visitAction = $visit ? ($visit->status === 'draft' && ! $visit->voided_at && ($caps['visits_update'] || $caps['diagnoses_update']) ? 'update' : null)
                 : ($d['status'] === 'draft' && $caps['visits_create'] ? 'create' : null);
             $editable = $visit && $visit->status === 'draft' && ! $visit->voided_at;
-            $allowed = [$caps['personal_update'] && $caps['patients_update'], $caps['medical_update'], $visitAction !== null, $editable && $caps['clinical_update'], $editable && $caps['clinical_update'], $editable && ($caps['visits_update'] || $caps['visits_complete'])];
+            $allowed = [$caps['personal_update'] && $caps['patients_update'], $caps['medical_update'], $visitAction !== null, $editable && ($caps['services_update'] || $caps['procedures_update']), $editable && ($caps['prescriptions_update'] || $caps['outcomes_update']), $editable && ($caps['visits_update'] || $caps['visits_complete'])];
             $resume = null;
             foreach ([false, true] as $includeSaved) {
                 foreach (['personal', 'medical', 'visit', 'clinical', 'medications', 'attachments'] as $index => $section) {

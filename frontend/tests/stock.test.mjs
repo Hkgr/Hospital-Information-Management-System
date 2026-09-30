@@ -9,7 +9,7 @@ let browser;
 before(async () => { browser = await chromium.launch({ channel: "chrome" }); });
 after(async () => { await browser?.close(); });
 
-const caps = { manage: true, receive: true, adjust: false, issue: false, return: false, export: false };
+const caps = { manage: true, receive: true, confirm: true, suppliers_write: true, stores_write: true, adjust: false, issue: false, return: false, export: false };
 const store = { id: 1, facility_id: 1, code: "PH", name_ar: "صيدلية الاختبار", location: "الأرضي", is_active: true, archived_at: null, lock_version: 1 };
 const receipt = { id: 4, facility_id: 1, store_id: 1, store_name_ar: "صيدلية الاختبار", receipt_no: "R-100", supplier_id: 1, supplier_name_ar: "مورد", medication_source: "ministry_of_health", funding_name_ar: "وزارة الصحة", received_on: "2026-09-16", invoice_number: null, status: "draft", note: null, confirmed_at: null, lock_version: 1,
   items: [{ id: 9, medication_id: 2, medication_code: "M1", medication_name_ar: "دواء اختبار", batch_number: "B9", expiry_date: "2027-01-01", manufactured_on: null, quantity: "10.0000", free_quantity: "2.0000", unit_cost: null, note: null, batch_id: null }] };

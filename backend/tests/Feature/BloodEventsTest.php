@@ -48,6 +48,19 @@ class BloodEventsTest extends TestCase
             'screenings' => [['analyte' => 'HCV', 'status' => 'pending']]];
     }
 
+    public function test_issue_task_cannot_record_a_transfusion_or_donation(): void
+    {
+        $roles = DB::table('facility_user_roles')->where('user_id', $this->f['user']->id)->pluck('role_id');
+        DB::table('role_permissions')->whereIn('role_id', $roles)->delete();
+        foreach (['blood_bank.view', 'blood_bank.create', 'blood_bank.issue.create'] as $code) {
+            DB::table('role_permissions')->insert(['role_id' => $roles->first(), 'permission_id' => DB::table('permissions')->where('code', $code)->value('id')]);
+        }
+        $issue = $this->api('POST', '/events', $this->payload('benefit'))->assertCreated()->json('data');
+        $this->api('POST', '/events', ['benefit_kind' => 'transfusion', 'benefit_link_mode' => 'independent', 'hemoglobin_g_dl' => '11.5', 'crossmatch_result' => 'compatible'] + $this->payload('benefit', $issue['person_id']))->assertForbidden();
+        $this->api('POST', '/events', $this->payload('donation', $issue['person_id']))->assertForbidden();
+        $this->assertSame(1, DB::table('blood_bank_events')->where('person_id', $issue['person_id'])->count());
+    }
+
     public function test_actual_transfusion_requires_each_lab_and_preserves_independent_and_linked_results(): void
     {
         foreach (['independent', 'linked'] as $mode) {

@@ -20,6 +20,7 @@ async function setup({ limited = false, width = 1440, capOverrides = {}, access,
   let eventsGate = null, contextGate = null;
   const categories = [{ id: 1, code: "EXISTING", name_ar: "فئة اختبار", is_active: true }];
   const caps = { ...(limited ? { ...capabilities, create: false, update: false, delete: false, beneficiaries: false, audit: false } : capabilities), ...capOverrides };
+  Object.assign(caps, { deactivate: caps.update, restore: caps.update, reactivate: caps.update, archive: caps.delete, destroy: caps.delete });
   await page.route("**/*", async route => {
     const req = route.request(), url = new URL(req.url()), path = url.pathname;
     if (url.origin !== new URL(base).origin) return route.abort();

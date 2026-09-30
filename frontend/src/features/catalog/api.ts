@@ -2,7 +2,7 @@ export { useClinicRequest as useCatalogRequest, downloadReport, useDebounced } f
 export type { Page } from "../clinics/api";
 export type Kind = "service" | "procedure" | "medication";
 export type Item = { id: number; kind: Kind; code: string; name_ar: string; description: string | null; category_id: number | null; procedure_type_id: number | null; classification_name_ar: string | null; default_unit: string | null; strength: string | null; dosage_form: string | null; reorder_level: string | null; is_active: boolean; archived_at: string | null; lock_version: number; patient_count: number; patient_count_definition: string };
-export type Capabilities = Record<"create" | "update" | "delete" | "export" | "beneficiaries" | "audit", boolean>;
+export type Capabilities = Record<"archive" | "destroy" | "deactivate" | "reactivate" | "restore" | "create" | "update" | "delete" | "export" | "beneficiaries" | "audit", boolean>;
 export type Choices = { categories: { id: number; name_ar: string }[]; procedure_types: { id: number; name_ar: string }[]; medication_categories: { id: number; name_ar: string }[] };
 export const columns = { number: "م", code: "الكود", name_ar: "الاسم", kind: "النوع", description: "الوصف", patient_count: "عدد المستفيدين", is_active: "الحالة" };
 export type Column = keyof typeof columns;
