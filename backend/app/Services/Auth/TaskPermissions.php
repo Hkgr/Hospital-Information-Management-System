@@ -26,7 +26,7 @@ class TaskPermissions
         'dossiers.treatment.schedule.create' => ['إضافة موعد علاج', 'facility', ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view'], [['dossiers.treatment.schedule']]],
         'dossiers.treatment.schedule.update' => ['تصحيح موعد علاج', 'facility', ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view'], [['dossiers.treatment.schedule']]],
         'dossiers.treatment.administration.correct' => ['تصحيح إعطاء جرعة', 'facility', ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view'], [['dossiers.treatment.correct']]],
-        'dossiers.treatment.administration.void' => ['إلغاء إعطاء جرعة بسبب موثق', 'facility', ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view'], [['dossiers.treatment.void']]],
+        'dossiers.treatment.administration.void' => ['إلغاء إعطاء جرعة بسبب موثق', 'facility', ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view', 'dossiers.treatment.schedule.update'], [['dossiers.treatment.void']]],
         'dossiers.treatment.dispensing.correct' => ['تصحيح صرف دواء', 'facility', ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view'], [['dossiers.treatment.correct']]],
         'dossiers.treatment.dispensing.void' => ['إلغاء صرف دواء بسبب موثق', 'facility', ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view'], [['dossiers.treatment.void']]],
         'blood_bank.issue.create' => ['تسجيل صرف مكوّن دم', 'facility', ['blood_bank.view'], [['blood_bank.benefits.create']]],
@@ -110,6 +110,10 @@ class TaskPermissions
             }
         }
 
-        return ['name_ar' => $task[0] ?? $name, 'description' => ($task[0] ?? $name).'؛ '.($scope === 'global' ? 'تفويض عالمي مستقل، ولا يمنح الوصول إلى بيانات منشأة غير مصرح بها.' : ($scope === 'allowed_records' ? 'للسجلات المسموحة فقط مع استمرار قيود الملكية والمهلة والمراجعة.' : 'داخل المشفى المصرح به فقط، مع استمرار فحوص الحالة والنسخة.')), 'scope' => $scope, 'prerequisites' => $required, 'legacy_tasks' => array_values(array_unique($legacy))];
+        $reason = $code === 'dossiers.treatment.administration.void'
+            ? ' يتطلب صلاحية تصحيح موعد علاج لأن الإلغاء يتضمن معالجة حالة الجلسة المرتبطة.'
+            : '';
+
+        return ['name_ar' => $task[0] ?? $name, 'description' => ($task[0] ?? $name).'؛ '.($scope === 'global' ? 'تفويض عالمي مستقل، ولا يمنح الوصول إلى بيانات منشأة غير مصرح بها.' : ($scope === 'allowed_records' ? 'للسجلات المسموحة فقط مع استمرار قيود الملكية والمهلة والمراجعة.' : 'داخل المشفى المصرح به فقط، مع استمرار فحوص الحالة والنسخة.')).$reason, 'scope' => $scope, 'prerequisites' => $required, 'legacy_tasks' => array_values(array_unique($legacy))];
     }
 }

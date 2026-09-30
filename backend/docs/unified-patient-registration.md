@@ -53,6 +53,21 @@
 
 ## الترقية والتراجع
 
+### متطلب إلغاء إعطاء الجرعة
+
+تتطلب `dossiers.treatment.administration.void` صلاحية `dossiers.treatment.schedule.update` إضافة إلى قراءة البطاقة والزيارات والعلاج: **الإلغاء يتضمن معالجة حالة الجلسة المرتبطة**، بإلغائها أو إعادة جدولتها وفق القواعد القائمة. يعرض وصف الصلاحية هذا السبب في محرر الأدوار، ويرفض حفظ دور جديد أو تعديل دور دقيق يفتقد المتطلب، دون إضافته تلقائيًا. يظل فحص الخادم داخل معاملة الإلغاء قائمًا، وقدرة `treatment_administration_void` في API لا تكون صحيحة إلا عند اكتمال الشرطين.
+
+لا تحتاج هذه المعالجة migration أو تشغيل Seeder، ولا تغير أي تعيين قائم. الدور القديم الناقص يظل ناقصًا والإلغاء غير متاح له حتى يراجع مسؤول مخوّل الصلاحيات ويضيف المتطلب صراحة. إلغاء صرف الدواء عملية مستقلة ولا يكتسب هذا المتطلب.
+
+اختبارا الانحدار الجديدان فشلا قبل الإصلاح (متطلب غير معلن وقدرة إلغاء معروضة رغم نقصه)، ثم نجحا بعده: 2 اختبار و54 تحققًا. يغطيان إنشاء الدور وتعديله وإعادة Seeder دون منح، ورفض الإلغاء عند نقص أي من الصلاحيتين، وعزل المنشأة ونسخ الواقعة والجلسة والخطة والحالة، والنجاح والتدقيق وإعادة الطلب. تُوثق نتائج إعادة تشغيل المجموعات الكاملة على SHA النهائي في PR #65.
+
+```bash
+php artisan test-db:check --connect --env=testing
+php artisan test --env=testing --bootstrap=tests/Support/preserve-database.php --filter='TaskPermissionsTest|RoleApiTest|OncologyTreatmentTest|DossierCompletionTest|DossierCompletionSafetyTest|DossierWorkflowTest|PermissionMatrixTest|UserApiTest'
+```
+
+اختبارات الواجهة المتأثرة: `users.test.mjs` و`unified-registration-live.test.mjs` و`oncology-live.test.mjs`. المجموعتان الأخيرتان تستخدمان Next وLaravel وقاعدة الاختبار فعليًا. إعداد اختبار الأورام يرسل عيادة وطبيب التقرير المطلوبين حاليًا ويقبل عنوان Next محليًا فقط.
+
 Migration إضافية: `2026_09_30_000002_define_task_permissions.php`. لا تعدّل المخطط الطبي أو migrations السابقة. تضيف تعريفات فقط باستخدام `insertOrIgnore` وتحافظ على التعريفات المعطلة والتعيينات. يمكن إعادة تثبيت التعريفات الناقصة بأمر مخصص، دون seeders عامة:
 
 ```bash

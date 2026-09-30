@@ -62,6 +62,8 @@ class DossierAccess
         foreach (['schedule_create', 'schedule_update', 'administration_correct', 'administration_void', 'dispensing_correct', 'dispensing_void'] as $action) {
             $caps['treatment_'.$action] = $caps['treatment_'.$action] && $caps['treatment_view'];
         }
+        // Voiding also resolves the linked session; retain the writer's independent check.
+        $caps['treatment_administration_void'] = $caps['treatment_administration_void'] && $caps['treatment_schedule_update'];
 
         return $caps;
     }

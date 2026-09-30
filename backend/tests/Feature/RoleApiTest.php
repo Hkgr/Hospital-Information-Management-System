@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Database\Seeders\SurfacePermissionsSeeder;
+use Database\Seeders\TaskPermissionsSeeder;
 use Database\Seeders\UserPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +66,34 @@ class RoleApiTest extends TestCase
         $role = $this->api('POST', '/roles', ['name_ar' => 'Service task', 'permission_ids' => array_map($this->permission(...), $codes)])->assertCreated()->json('data');
         $this->assertEqualsCanonicalizing($codes, array_column($role['permissions'], 'code'));
         $this->api('POST', '/roles', ['name_ar' => 'Escalated task', 'permission_ids' => [$this->permission('dossiers.procedures.update'), ...array_map($this->permission(...), $codes)]])->assertUnprocessable();
+    }
+
+    public function test_dose_void_role_requires_explicit_schedule_correction_on_create_and_update(): void
+    {
+        $base = ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view', 'dossiers.treatment.administration.void'];
+        $complete = [...$base, 'dossiers.treatment.schedule.update'];
+        $this->grant($complete);
+        $permissions = collect($this->api('GET', '/options')->assertOk()->json('data.permission_groups'))->pluck('permissions')->flatten(1);
+        $void = $permissions->firstWhere('code', 'dossiers.treatment.administration.void');
+        $this->assertContains('dossiers.treatment.schedule.update', $void['prerequisites']);
+        $this->assertStringContainsString('الإلغاء يتضمن معالجة حالة الجلسة المرتبطة', $void['description']);
+        $before = DB::table('role_permissions')->count();
+        $this->api('POST', '/roles', ['name_ar' => 'إلغاء ناقص', 'permission_ids' => array_map($this->permission(...), $base)])
+            ->assertUnprocessable()->assertJsonPath('error.code', 'ROLE_PREREQUISITES_REQUIRED')
+            ->assertJsonPath('error.missing_permissions', ['dossiers.treatment.schedule.update']);
+        $this->assertSame($before, DB::table('role_permissions')->count());
+        $created = $this->api('POST', '/roles', ['name_ar' => 'إلغاء ومعالجة الجلسة', 'permission_ids' => array_map($this->permission(...), $complete)])
+            ->assertCreated()->json('data');
+        $this->assertEqualsCanonicalizing($complete, array_column($created['permissions'], 'code'));
+        $this->api('PUT', '/roles/'.$created['id'], ['name_ar' => 'إلغاء ناقص', 'permission_ids' => array_map($this->permission(...), $base)])
+            ->assertUnprocessable()->assertJsonPath('error.code', 'ROLE_PREREQUISITES_REQUIRED');
+        $this->assertSame(count($complete), DB::table('role_permissions')->where('role_id', $created['id'])->count());
+
+        // Updating definitions must not silently repair an existing incomplete role.
+        DB::table('role_permissions')->where('role_id', $created['id'])->where('permission_id', $this->permission('dossiers.treatment.schedule.update'))->delete();
+        $existing = DB::table('role_permissions')->orderBy('id')->get()->toJson();
+        $this->seed(TaskPermissionsSeeder::class);
+        $this->assertSame($existing, DB::table('role_permissions')->orderBy('id')->get()->toJson());
     }
 
     public function test_create_update_role_from_owned_permissions_only(): void
