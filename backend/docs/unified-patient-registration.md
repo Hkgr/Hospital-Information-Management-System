@@ -66,7 +66,7 @@ php artisan test-db:check --connect --env=testing
 php artisan test --env=testing --bootstrap=tests/Support/preserve-database.php --filter='TaskPermissionsTest|RoleApiTest|OncologyTreatmentTest|DossierCompletionTest|DossierCompletionSafetyTest|DossierWorkflowTest|PermissionMatrixTest|UserApiTest'
 ```
 
-اختبارات الواجهة المتأثرة: `users.test.mjs` و`unified-registration-live.test.mjs` و`oncology-live.test.mjs`. المجموعتان الأخيرتان تستخدمان Next وLaravel وقاعدة الاختبار فعليًا. إعداد اختبار الأورام يرسل عيادة وطبيب التقرير المطلوبين حاليًا ويقبل عنوان Next محليًا فقط.
+اختبارات الواجهة المتأثرة: `users.test.mjs` و`unified-registration-live.test.mjs` و`oncology-live.test.mjs`. المجموعتان الأخيرتان تستخدمان Next وLaravel وقاعدة الاختبار فعليًا. صُحح في اختبار الأورام خطآن نحويان سابقان في محددات النص، وأزيل كود المريض اليدوي المحظور حاليًا من بيانات التهيئة. يرسل الاختبار عيادة وطبيب التقرير المطلوبين حاليًا ويقبل عنوان Next محليًا فقط؛ لم يُغيّر التطبيق لتجاوز هذه الضوابط.
 
 Migration إضافية: `2026_09_30_000002_define_task_permissions.php`. لا تعدّل المخطط الطبي أو migrations السابقة. تضيف تعريفات فقط باستخدام `insertOrIgnore` وتحافظ على التعريفات المعطلة والتعيينات. يمكن إعادة تثبيت التعريفات الناقصة بأمر مخصص، دون seeders عامة:
 
