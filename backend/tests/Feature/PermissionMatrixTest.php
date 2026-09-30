@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\Auth\GlobalAccess;
 use App\Services\Auth\UserAccessContext;
+use App\Services\Users\AccessConsolidation;
 use Database\Seeders\DossierAuditPermissionsSeeder;
 use Database\Seeders\DossierPermissionsSeeder;
 use Database\Seeders\PermissionMatrixPhaseOneSeeder;
@@ -116,16 +117,18 @@ class PermissionMatrixTest extends TestCase
         DB::table('facility_user_roles')->where('role_id', $role)->delete();
         DB::table('global_user_roles')->where('role_id', $role)->delete();
         $this->assertNull(app(GlobalAccess::class)->systemRole($user));
-        $this->artisan('access:super-admin', ['--apply' => true, '--execution-reference' => 'CHANGE-58/operator-test', '--reason' => 'synthetic matrix test'])->assertSuccessful();
-        $audit = DB::table('audit_logs')->where('facility_id', $this->facility)->where('entity_type', 'role')->where('event', 'assigned')->first();
+        $service = app(AccessConsolidation::class);
+        DB::table('roles')->where('id', $role)->update(['access_consolidated_at' => null]);
+        $service->apply($service->preview()['fingerprint'], 'CHANGE-58/operator-test', 'synthetic matrix test');
+        $audit = DB::table('audit_logs')->where('facility_id', $this->facility)->where('entity_type', 'role')->where('event', 'updated')->first();
         $this->assertNull($audit->actor_id, 'A CLI assignment must not impersonate its beneficiary.');
         $facts = json_decode($audit->new_values, true);
         $this->assertSame(1, $facts['user_id']);
         $this->assertSame('CHANGE-58/operator-test', $facts['execution_reference']);
-        $auditCount = DB::table('audit_logs')->where('event', 'assigned')->count();
-        $this->artisan('access:super-admin', ['--apply' => true, '--execution-reference' => 'CHANGE-58/operator-test', '--reason' => 'idempotent retry'])->assertSuccessful();
+        $auditCount = DB::table('audit_logs')->where('event', 'updated')->count();
+        $service->apply($service->preview()['fingerprint'], 'CHANGE-58/operator-test', 'idempotent retry');
         $this->assertEquals($before, $user->fresh()->getAttributes());
-        $this->assertSame($auditCount, DB::table('audit_logs')->where('event', 'assigned')->count());
+        $this->assertSame($auditCount, DB::table('audit_logs')->where('event', 'updated')->count());
         $this->assertSame(1, DB::table('global_user_roles')->where('user_id', 1)->where('role_id', $role)->count());
         $token = $user->createToken('system-test', ['api'])->plainTextToken;
         foreach (['audit?category=accounts', 'audit/'.$audit->id] as $path) {
@@ -142,9 +145,9 @@ class PermissionMatrixTest extends TestCase
         $new = DB::table('facilities')->insertGetId(['code' => 'MATRIX-'.Str::random(10), 'name_ar' => 'منشأة جديدة', 'timezone' => 'Asia/Damascus']);
         DB::table('permissions')->insert(['code' => 'matrix.new', 'name_ar' => 'صلاحية جديدة', 'is_active' => true]);
         $entries = collect(app(UserAccessContext::class)->forUser($user));
-        $this->assertContains('matrix.new', $entries->firstWhere('facility.id', $new)['permissions']);
+        $this->assertNotContains('matrix.new', $entries->firstWhere('facility.id', $new)['permissions']);
         $this->assertFalse(app(GlobalAccess::class)->allows($this->clerk, 'matrix.new'));
-        $this->api('PUT', 'users/roles/'.$role, ['name_ar' => 'تغيير', 'permission_ids' => [DB::table('permissions')->where('code', 'users.view')->value('id')]], $token)->assertForbidden();
+        $this->api('PUT', 'users/roles/'.$role, ['lock_version' => 0, 'reason' => 'reviewed test change', 'name_ar' => 'تغيير', 'permission_ids' => [DB::table('permissions')->where('code', 'users.view')->value('id')]], $token)->assertForbidden();
         $this->api('POST', 'users', ['username' => 'escalation-'.Str::random(8), 'name' => 'آخر', 'password' => 'secure-test-password', 'role_id' => $role], $token)->assertForbidden();
         $this->api('DELETE', 'users/1', [], $token)->assertForbidden();
         $user->is_active = false;
@@ -201,7 +204,7 @@ class PermissionMatrixTest extends TestCase
         $before = DB::table('global_user_roles')->get()->toJson();
         foreach (['', str_repeat('x', 256)] as $reference) {
             $this->artisan('access:super-admin', ['--apply' => true, '--reason' => 'reviewed change', '--execution-reference' => $reference])
-                ->expectsOutput('--execution-reference must contain 1 to 255 characters.')->assertFailed();
+                ->expectsOutput('Use access:consolidate-admin preview then --apply --fingerprint with an operator reference. This command no longer grants or replenishes permissions.')->assertFailed();
         }
         $this->assertSame($before, DB::table('global_user_roles')->get()->toJson());
     }

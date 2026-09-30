@@ -29,6 +29,8 @@ class SaveRoleRequest extends FormRequest
             'name_ar' => ['required', 'string', 'max:200'],
             'permission_ids' => ['required', 'array', 'min:1'],
             'permission_ids.*' => ['integer', 'min:1'],
+            'lock_version' => [$this->isMethod('PUT') ? 'required' : 'sometimes', 'integer', 'min:0'],
+            'reason' => [$this->isMethod('PUT') ? 'required' : 'sometimes', 'string', 'min:3', 'max:255'],
         ];
     }
 }

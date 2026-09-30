@@ -14,7 +14,7 @@ class UserAccess
             if ($entry['facility']['id'] === $id
                 && in_array('users.view', $entry['permissions'], true)
                 && in_array('users.'.$action, $entry['permissions'], true)) {
-                return $entry['facility'] + ['permissions' => $entry['permissions']];
+                return $entry['facility'] + ['permissions' => $entry['permissions'], 'can_manage_global_roles' => ProtectedRolePolicy::delegates($user)];
             }
         }
         throw new HttpResponseException(response()->json(['error' => ['code' => 'USERS_ACCESS_DENIED', 'message' => 'لا يتوفر لك وصول إلى إدارة المستخدمين في هذه المنشأة.']], 403));

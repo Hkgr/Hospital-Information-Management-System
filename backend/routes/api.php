@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AccountAccessController;
 use App\Http\Controllers\Api\AnonymousStatisticsController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
@@ -250,6 +251,11 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api', 'web.idle'
         Route::post('/', [UserController::class, 'store'])->name('store');
         Route::get('/options', [UserController::class, 'options'])->name('options');
         Route::get('/roles', [RoleController::class, 'index'])->name('roles.index');
+        Route::get('/{user}/access', [AccountAccessController::class, 'show'])->whereNumber('user')->name('access.show');
+        Route::put('/{user}/access', [AccountAccessController::class, 'update'])->whereNumber('user')->name('access.update');
+        Route::get('/roles/options', [RoleController::class, 'options'])->name('roles.options');
+        Route::get('/roles/{role}', [RoleController::class, 'show'])->whereNumber('role')->name('roles.show');
+        Route::put('/roles/{role}/protected-permissions', [RoleController::class, 'protectedUpdate'])->whereNumber('role')->name('roles.protected-update');
         Route::post('/roles', [RoleController::class, 'store'])->name('roles.store');
         Route::put('/roles/{role}', [RoleController::class, 'update'])->whereNumber('role')->name('roles.update');
         Route::delete('/{user}', [UserController::class, 'destroy'])->whereNumber('user')->name('destroy');

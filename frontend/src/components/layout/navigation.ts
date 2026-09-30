@@ -18,7 +18,7 @@ export const primaryNavigation: NavigationItem[] = [
   { label: "بنك الدم", icon: LuDroplet, href: "/blood-bank", permission: "blood_bank.view" },
   { label: "تقارير", icon: LuChartNoAxesCombined, href: "/reports", permission: "reports.view" },
   { label: "السجل", icon: LuHistory, href: "/audit", permission: "audit.view" },
-  { label: "المستخدمون", icon: LuUsers, href: "/users", permission: "users.view" },
+  { label: "المستخدمون", icon: LuUsers, href: "/users", anyPermission: ["users.view", "roles.view"] },
   { label: "الإعدادات", icon: LuSettings, href: "/settings", permission: "settings.view" },
   { label: "دليل الاستخدام", icon: LuBookOpen, href: "/guide" },
 ];

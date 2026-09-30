@@ -17,7 +17,7 @@ class PermissionCatalog
 
     public const GROUPS = [
         ['key' => 'home', 'name_ar' => 'الرئيسية', 'prefixes' => ['dashboards.']],
-        ['key' => 'registration', 'name_ar' => 'الهوية والتسجيل الأساسي', 'prefixes' => ['patients.basic.', 'patients.own.', 'patients.corrections.', 'patient_cards.', 'reception.']],
+        ['key' => 'registration', 'name_ar' => 'التسجيل والبيانات الأساسية', 'prefixes' => ['patients.basic.', 'patients.own.', 'patients.corrections.', 'patient_cards.', 'reception.']],
         ['key' => 'review', 'name_ar' => 'مراجعة بيانات المرضى', 'prefixes' => ['identity_corrections.', 'patients.identity.', 'patients.duplicates.', 'patient_duplicates.', 'reception_accounts.']],
         ['key' => 'dossiers', 'name_ar' => 'بطاقة المريض والعمل الطبي', 'prefixes' => ['dossiers.', 'patients.', 'diagnoses.', 'medications.']],
         ['key' => 'clinics', 'name_ar' => 'العيادات', 'prefixes' => ['clinics.']],

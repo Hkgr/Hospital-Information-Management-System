@@ -170,7 +170,7 @@ class SystemLogHistory
                 }
             }
         }
-        $operatorAssignment = $row->entity_type === 'role' && $row->event === 'assigned'
+        $operatorAssignment = $row->entity_type === 'role' && in_array($row->event, ['assigned', 'updated'], true)
             && $row->actor_id === null && ($new['source'] ?? null) === 'operator_command';
         if ($operatorAssignment) {
             $changes = [];
@@ -178,6 +178,16 @@ class SystemLogHistory
                 if (isset($new[$key]) && is_scalar($new[$key])) {
                     $changes[] = ['field' => $key, 'label' => $label, 'before' => null, 'after' => (string) $new[$key], 'before_recorded' => false];
                 }
+            }
+        }
+        if (in_array($row->entity_type, ['role', 'auth_session'], true) && ($new['source'] ?? null) === 'access_administration') {
+            $changes = [];
+            foreach (['permissions' => 'الصلاحيات', 'local_roles' => 'الأدوار داخل المشفى', 'name_ar' => 'اسم الدور', 'lock_version' => 'نسخة الوصول'] as $key => $label) {
+                if (! array_key_exists($key, $new) || ($old[$key] ?? null) === $new[$key]) {
+                    continue;
+                }
+                $display = static fn ($v) => is_array($v) ? implode('، ', array_filter($v, 'is_string')) : (is_scalar($v) ? (string) $v : null);
+                $changes[] = ['field' => $key, 'label' => $label, 'before' => $display($old[$key] ?? null), 'after' => $display($new[$key]), 'before_recorded' => array_key_exists($key, $old)];
             }
         }
         if ($changes === [] && in_array($row->entity_type, ['system_error', 'auth_session'], true)) {

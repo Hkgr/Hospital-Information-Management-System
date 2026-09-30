@@ -9,9 +9,13 @@ class TaskPermissions
 {
     public const TASKS = [
         // code => [Arabic name, scope, prerequisites, alternative legacy grants (AND within each)]
-        'patients.basic.view' => ['عرض البيانات التعريفية للمريض', 'facility', [], [['reception.view'], ['dossiers.view']]],
-        'patients.basic.search' => ['البحث المحدود عن مريض', 'global', [], [['reception.patients.search'], ['patients.search']]],
-        'patients.basic.create' => ['تسجيل هوية مريض جديد', 'global', [], [['reception.patients.create'], ['patients.create']]],
+        'roles.delegate' => ['إدارة التفويض دون امتلاك العمل الطبي', 'global', ['roles.view', 'roles.update'], []],
+        'users.global.view' => ['عرض التفويضات العالمية للحساب', 'global', ['users.view'], []],
+        'users.global.manage' => ['تعديل التفويضات العالمية للحساب', 'global', ['users.global.view', 'roles.delegate'], []],
+        'users.roles.assign' => ['إسناد الأدوار داخل المشفى', 'facility', ['users.view', 'roles.view'], []],
+        'patients.basic.view' => ['عرض بيانات المريض الأساسية — داخل المشفى', 'facility', [], [['reception.view'], ['dossiers.view']]],
+        'patients.basic.search' => ['البحث المحدود عن المريض — تفويض عالمي', 'global', [], [['reception.patients.search'], ['patients.search']]],
+        'patients.basic.create' => ['إنشاء هوية مريض جديد — تفويض عالمي', 'global', [], [['reception.patients.create'], ['patients.create']]],
         'patient_cards.register' => ['فتح بطاقة وتسجيل الزيارة الأولى', 'facility', ['patients.basic.view'], [['reception.register'], ['dossiers.create', 'dossiers.visits.create']]],
         'patients.own.correct' => ['تصحيح بيانات أدخلتها خلال المهلة', 'allowed_records', ['patients.basic.view'], [['reception.correct']]],
         'patients.corrections.request' => ['طلب تصحيح هوية المريض', 'allowed_records', ['patients.basic.view'], [['reception.corrections.request']]],

@@ -1,5 +1,10 @@
 # Permission matrix — Phase 1
 
+> Current upgrade: [explicit access administration](explicit-access-administration.md)
+> supersedes the historical automatic super-admin policy and assignment command
+> below. Use the fingerprinted consolidation preview/apply procedure. Do not rerun
+> Phase 1 grant seeders to overwrite reviewed role selections.
+
 The limited registration API remains separate from medical card reads. The current
 browser entry is `/patient-cards`; `/reception` redirects compatibly. See
 [unified registration](unified-patient-registration.md) for the new task names,
@@ -13,7 +18,7 @@ below are preserved, not automatically replaced or broadened.
 | `data_entry` | `reception.view`, `reception.register` | Separate explicit assignment for `reception.patients.search/create` |
 | `hospital_admin` | Explicit administration/report/audit allowlist in `PermissionMatrixPhaseOneSeeder::ADMIN`; authorized medical reads, not clinical writes | None by default |
 | `statistics` | None in Phase 1 | None |
-| `super_admin` | All active permissions in every active facility after protected assignment | All active permissions after protected global assignment |
+| `super_admin` | Explicit saved policy in every active facility after reviewed consolidation | Same explicit saved policy; future permissions need review |
 
 Ordinary facility membership never substitutes for global directory authority.
 Permissions from multiple roles are combined: do not assign medical/report roles to
@@ -28,7 +33,8 @@ After normal backup and release review, the operator runs:
 ```sh
 php artisan migrate --force
 php artisan db:seed --class=PermissionMatrixPhaseOneSeeder --force
-php artisan access:super-admin --apply --reason="approved assignment" --execution-reference="CHANGE-58/operator-or-job-reference"
+# Historical assignment replaced by access:consolidate-admin preview/apply;
+# follow explicit-access-administration.md before enabling the application.
 php artisan access:super-admin
 ```
 

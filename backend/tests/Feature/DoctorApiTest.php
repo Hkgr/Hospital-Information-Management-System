@@ -437,6 +437,9 @@ class DoctorApiTest extends TestCase
 
     public function test_explicit_grant_is_previewed_idempotent_and_never_guessed_from_role_name(): void
     {
+        // The legacy operator command may grant an ordinary approved role only;
+        // protected administrator policies have their own reviewed transition.
+        DB::table('roles')->where('id', $this->role)->update(['code' => 'DOC-GRANT-TEST', 'is_system_super_admin' => false]);
         DB::table('global_user_roles')->where('user_id', $this->user->id)->delete();
         $this->artisan('doctors:grant-access', ['--user' => 'testadmin', '--role' => DB::table('roles')->where('id', $this->role)->value('code'), '--facility' => ['TEST-A'], '--global' => true])->assertSuccessful();
         $this->assertSame(0, DB::table('global_user_roles')->where('user_id', $this->user->id)->count());

@@ -20,6 +20,11 @@ class GrantDoctorAccess extends Command
         }
         $user = DB::table('users')->where('username', $this->option('user'))->where('is_active', true)->first();
         $role = DB::table('roles')->where('code', $this->option('role'))->where('is_active', true)->first();
+        if ($role && ($role->is_system_super_admin || in_array($role->code, ['super_admin', 'full_access_user_1'], true) || str_starts_with($role->code, 'delegation-'))) {
+            $this->error('Protected and archived access roles cannot be replenished or assigned by this command. Use reviewed access administration.');
+
+            return self::FAILURE;
+        }
         $codes = array_values(array_unique($this->option('facility')));
         $facilities = DB::table('facilities')->whereIn('code', $codes)->where('is_active', true)->get();
         $permissions = DB::table('permissions')->whereIn('code', array_keys(DoctorPermissionsSeeder::PERMISSIONS))->where('is_active', true)->get();
@@ -36,6 +41,10 @@ class GrantDoctorAccess extends Command
             return self::SUCCESS;
         }
         DB::transaction(function () use ($user, $role, $facilities, $permissions) {
+            $locked = DB::table('roles')->where('id', $role->id)->lockForUpdate()->first();
+            if (! $locked?->is_active || $locked->is_system_super_admin || in_array($locked->code, ['super_admin', 'full_access_user_1'], true) || str_starts_with($locked->code, 'delegation-')) {
+                throw new \RuntimeException('Role changed or is protected. Nothing changed.');
+            }
             foreach ($permissions as $permission) {
                 DB::table('role_permissions')->insertOrIgnore(['role_id' => $role->id, 'permission_id' => $permission->id, 'created_at' => now()]);
             }
