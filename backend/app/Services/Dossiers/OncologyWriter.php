@@ -358,7 +358,7 @@ class OncologyWriter
                 }
             }
             if ($void) {
-                abort_unless(in_array('dossiers.treatment.schedule', $f['permissions'], true), 403);
+                abort_unless(in_array('dossiers.treatment.schedule.update', $f['permissions'], true), 403);
                 if (! in_array($data['session_resolution'] ?? null, ['scheduled', 'cancelled'], true)
                     || (($data['session_resolution'] ?? null) === 'scheduled' && empty($data['planned_on']))) {
                     OncologyIntegrity::reject('ONCOLOGY_INVALID_VOID_RESOLUTION', 'إبطال الإعطاء يحتاج اختيار حالة الجلسة وتاريخ زيارة صريحًا إن بقيت مجدولة.');

@@ -60,7 +60,7 @@ class OncologyTreatmentTest extends DossierCompletionCase
 
     private function ready(): int
     {
-        $id = $this->callApi('POST', $this->path('/pathology'), ['source' => 'external', 'status' => 'completed', 'result_on' => '1999-01-01', 'external_organization' => 'مختبر', 'conclusion' => 'دليل مؤكد'])->assertCreated()->json('data.id');
+        $id = $this->callApi('POST', $this->path('/pathology'), $this->context() + ['source' => 'external', 'status' => 'completed', 'result_on' => '1999-01-01', 'external_organization' => 'مختبر', 'conclusion' => 'دليل مؤكد'])->assertCreated()->json('data.id');
         $this->callApi('PUT', $this->path('/diagnostic-assessment'), ['lock_version' => 0, 'disposition' => 'pathology_confirmed', 'evidence_pathology_id' => $id, 'assessed_on' => '2001-03-02'])->assertOk();
 
         return $id;
@@ -76,6 +76,78 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->callApi('POST', $this->planPath($p['id']).'/sessions', ['lock_version' => $p['lock_version'], 'sessions' => [['session_number' => 1, 'planned_on' => $date], ['session_number' => 2, 'planned_on' => '2090-02-01']]])->assertCreated();
 
         return (array) DB::table('oncology_sessions')->where('plan_id', $p['id'])->orderBy('id')->first();
+    }
+
+    public function test_schedule_creation_task_cannot_correct_schedule_or_administer(): void
+    {
+        $this->ready();
+        $plan = $this->activate($this->makePlan())->assertOk()->json('data');
+        DB::table('role_permissions')->where('role_id', $this->f['dossier_role'])->delete();
+        foreach (['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view', 'dossiers.treatment.schedule.create'] as $code) {
+            DB::table('role_permissions')->insert(['role_id' => $this->f['dossier_role'], 'permission_id' => DB::table('permissions')->where('code', $code)->value('id')]);
+        }
+        $session = $this->schedule($plan);
+        $this->resolve($session)->assertForbidden();
+        $this->assertDatabaseHas('oncology_sessions', ['id' => $session['id'], 'lock_version' => $session['lock_version']]);
+        $caps = $this->callApi('GET', '/options')->assertOk()->json('data.capabilities');
+        $this->assertTrue($caps['treatment_schedule_create']);
+        $this->assertFalse($caps['treatment_schedule_update']);
+        $this->assertFalse($caps['treatment_administer']);
+    }
+
+    public function test_granular_dose_void_requires_both_tasks_and_preserves_scope_versions_state_and_audit(): void
+    {
+        $this->ready();
+        $plan = $this->activate($this->makePlan())->assertOk()->json('data');
+        $session = $this->historicalSession($plan);
+        $id = $this->callApi('POST', $this->path('/doses'), $this->dose($session))->assertCreated()->json('data.id');
+        $url = $this->path('/doses/'.$id.'/void');
+        $payload = ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'session_lock_version' => 2, 'plan_lock_version' => $this->dose($session)['plan_lock_version'], 'session_resolution' => 'cancelled', 'reason' => 'لم يحدث الإعطاء؛ إلغاء الجلسة المرتبطة'];
+        $base = ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view'];
+        $setTasks = function (array $tasks) use ($base): void {
+            DB::table('role_permissions')->where('role_id', $this->f['dossier_role'])->delete();
+            foreach ([...$base, ...$tasks] as $code) {
+                DB::table('role_permissions')->insert(['role_id' => $this->f['dossier_role'], 'permission_id' => DB::table('permissions')->where('code', $code)->value('id')]);
+            }
+        };
+        $auditCount = DB::table('audit_logs')->count();
+        $doseBefore = (array) DB::table('dose_sessions')->find($id);
+        $sessionBefore = (array) DB::table('oncology_sessions')->find($session['id']);
+        $setTasks(['dossiers.treatment.administration.void']);
+        $this->callApi('GET', '/options')->assertOk()->assertJsonPath('data.capabilities.treatment_administration_void', false);
+        $this->callApi('POST', $url, $payload)->assertForbidden();
+        $setTasks(['dossiers.treatment.schedule.update']);
+        $this->callApi('POST', $url, $payload)->assertForbidden();
+        $setTasks(['dossiers.treatment.administration.void', 'dossiers.treatment.schedule.update']);
+        $this->callApi('GET', '/options')->assertOk()->assertJsonPath('data.capabilities.treatment_administration_void', true);
+        $foreign = DB::table('facilities')->insertGetId(['code' => 'VOID-'.Str::random(10), 'name_ar' => 'منشأة أخرى', 'timezone' => 'Asia/Damascus']);
+        $this->callApi('POST', $url, ['facility_id' => $foreign] + $payload)->assertForbidden();
+        foreach (['lock_version', 'session_lock_version', 'plan_lock_version'] as $field) {
+            $this->callApi('POST', $url, [$field => $payload[$field] + 1] + $payload)->assertConflict();
+        }
+        $this->callApi('POST', $url, ['session_resolution' => 'completed'] + $payload)->assertUnprocessable();
+        $this->assertSame($doseBefore, (array) DB::table('dose_sessions')->find($id));
+        $this->assertSame($sessionBefore, (array) DB::table('oncology_sessions')->find($session['id']));
+        $this->assertSame($auditCount, DB::table('audit_logs')->count());
+
+        $this->callApi('POST', $url, $payload)->assertOk()->assertJsonPath('data.id', $id);
+        $this->assertDatabaseHas('dose_sessions', ['id' => $id, 'lock_version' => 2, 'voided_by' => $this->f['user']->id, 'void_reason' => $payload['reason']]);
+        $this->assertNotNull(DB::table('dose_sessions')->find($id)->voided_at);
+        $this->assertDatabaseHas('oncology_sessions', ['id' => $session['id'], 'status' => 'cancelled', 'lock_version' => 3]);
+        foreach (['dose_sessions' => $id, 'oncology_sessions' => $session['id']] as $entity => $entityId) {
+            $audit = DB::table('audit_logs')->where('entity_type', $entity)->where('entity_id', $entityId)->orderByDesc('id')->first();
+            $this->assertSame($this->f['user']->id, $audit->actor_id);
+            $this->assertSame($this->f['facility'], $audit->facility_id);
+            $this->assertNotNull($audit->occurred_at);
+            $before = json_decode($audit->old_values, true);
+            $after = json_decode($audit->new_values, true);
+            $this->assertSame($payload['reason'], $after[$entity === 'dose_sessions' ? 'void_reason' : 'reason']);
+            $this->assertSame($before['lock_version'] + 1, $after['lock_version']);
+        }
+        $auditCount = DB::table('audit_logs')->count();
+        $this->callApi('POST', $url, $payload)->assertOk();
+        $this->callApi('POST', $url, ['request_id' => (string) Str::uuid(), 'lock_version' => 2, 'session_lock_version' => 3] + $payload)->assertConflict();
+        $this->assertSame($auditCount, DB::table('audit_logs')->count());
     }
 
     private function dose(array $s, array $extra = []): array

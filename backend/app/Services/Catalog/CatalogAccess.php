@@ -31,8 +31,13 @@ class CatalogAccess
     {
         $global = app(GlobalAccess::class)->codes($user);
 
-        return ['create' => in_array('catalog.directory.create', $global, true), 'update' => in_array('catalog.directory.update', $global, true),
-            'delete' => in_array('catalog.directory.delete', $global, true), 'export' => in_array('catalog.export', $facility['permissions'], true),
+        $tasks = [];
+        foreach (['archive', 'destroy', 'deactivate', 'restore', 'reactivate'] as $task) {
+            $tasks[$task] = in_array('catalog.directory.'.$task, $global, true);
+        }
+
+        return $tasks + ['create' => in_array('catalog.directory.create', $global, true), 'update' => in_array('catalog.directory.edit', $global, true),
+            'delete' => $tasks['destroy'], 'export' => in_array('catalog.export', $facility['permissions'], true),
             'beneficiaries' => in_array('catalog.beneficiaries', $facility['permissions'], true), 'audit' => in_array('catalog.audit', $facility['permissions'], true)];
     }
 

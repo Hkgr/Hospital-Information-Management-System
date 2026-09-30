@@ -9,7 +9,7 @@ import Modal from "./Modal";
 import DoctorPicker from "./DoctorPicker";
 import styles from "./clinics.module.css";
 
-export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onReloaded }: { clinic?: Clinic; facilityId: number; onClose: () => void; onSaved: () => void; onReloaded: () => void }) {
+export default function ClinicEditor({ clinic, facilityId, canChangeStatus = false, onClose, onSaved, onReloaded }: { clinic?: Clinic; facilityId: number; canChangeStatus?: boolean; onClose: () => void; onSaved: () => void; onReloaded: () => void }) {
   const creation = useCreationRequest();
   const [baseClinic, setBaseClinic] = useState(clinic);
   const [fields, setFields] = useState(clinicFields(clinic));
@@ -76,7 +76,7 @@ export default function ClinicEditor({ clinic, facilityId, onClose, onSaved, onR
         <label>مكان الرعاية<select value={fields.care_setting} onChange={e => setFields({ ...fields, care_setting: e.target.value })}><option value="">غير محدد</option>{Object.entries(careSettingLabels).filter(([value]) => value !== "surgical" || fields.care_setting === "surgical").map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{fieldError("care_setting")}</label>
         <label>تصنيف العيادة<select value={fields.clinic_kind} onChange={e => setFields({ ...fields, clinic_kind: e.target.value })}><option value="">دون تصنيف</option>{Object.entries(clinicKindLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>التصنيف مستقل عن كون العيادة داخلية أو خارجية.</small>{fieldError("clinic_kind")}</label>
         <label>التخصص<select value={fields.specialty_id} onChange={e => setFields({ ...fields, specialty_id: e.target.value })}><option value="">دون تخصص</option>{baseClinic?.specialty && !specialties.data?.some(s => s.id === baseClinic.specialty?.id) && <option value={baseClinic.specialty.id}>{baseClinic.specialty.name_ar}</option>}{specialties.data?.map(s => <option key={s.id} value={s.id}>{s.name_ar}</option>)}</select>{fieldError("specialty_id")}</label>
-        <label>الحالة<select value={String(fields.is_active)} onChange={e => setFields({ ...fields, is_active: e.target.value === "true" })}><option value="true">فعالة</option><option value="false">غير فعالة</option></select></label>
+        <label>الحالة<select disabled={!!baseClinic&&!canChangeStatus} value={String(fields.is_active)} onChange={e => setFields({ ...fields, is_active: e.target.value === "true" })}><option value="true">فعالة</option><option value="false">غير فعالة</option></select></label>
         {specialties.error && <p role="alert" className={styles.full}>{specialties.error} <button type="button" onClick={specialties.retry}>إعادة تحميل التخصصات</button></p>}
         <div className={styles.full}><div className={styles.sectionHeading}><span>02</span><div><h3>فريق العيادة</h3><p>الأطباء العاملون، مع الاحتفاظ بسجل الارتباطات.</p></div></div><DoctorPicker key={baseClinic?.lock_version ?? "new"} clinicId={clinic?.id} facilityId={facilityId} changes={changes} onChange={(id, selected, original, doctor) => {
           setChanges(previous => { const next = { ...previous }; if (selected === original) delete next[id]; else next[id] = selected; return next; });

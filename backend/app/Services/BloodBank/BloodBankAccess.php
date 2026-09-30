@@ -34,10 +34,12 @@ class BloodBankAccess
     public function capabilities(User $user, array $facility): array
     {
         $caps = [];
-        foreach (['create', 'update', 'export', 'donations.create', 'donations.update', 'benefits.create', 'benefits.update'] as $action) {
+        foreach (['create', 'update', 'export', 'donations.create', 'donations.update', 'benefits.create', 'benefits.update', 'issue.create', 'issue.update', 'transfusion.create', 'transfusion.update'] as $action) {
             $caps[str_replace('.', '_', $action)] = in_array('blood_bank.'.$action, $facility['permissions'], true);
         }
         $caps['patients_search'] = ($caps['create'] || $caps['update']) && $this->canSearchPatients($user);
+        $caps['benefits_create'] = $caps['issue_create'] || $caps['transfusion_create'];
+        $caps['benefits_update'] = $caps['issue_update'] || $caps['transfusion_update'];
 
         return $caps;
     }

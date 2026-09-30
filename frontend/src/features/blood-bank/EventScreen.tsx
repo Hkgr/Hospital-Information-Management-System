@@ -65,7 +65,7 @@ function Workspace({ facilityId, personId, eventId }: { facilityId: number; pers
   if (options.error) return <RequestState error={options.error} retry={options.retry} />;
   if (!options.data) return <p role="status">جارٍ تحديد الوصول…</p>;
   const caps = options.data.capabilities;
-  const canEdit = (e: BloodEvent) => !e.voided_at && (e.kind === "donation" ? caps.donations_update && e.status === "pending" : caps.benefits_update);
+  const canEdit = (e: BloodEvent) => !e.voided_at && (e.kind === "donation" ? caps.donations_update && e.status === "pending" : e.benefit_kind === "issue" ? caps.issue_update : caps.transfusion_update);
   const exports = caps.export && <div className={styles.actions}><button className={styles.secondary} disabled={!ready || exporting} onClick={() => void exportFile("xlsx")}><LuDownload aria-hidden="true" />Excel</button><button className={styles.secondary} disabled={!ready || exporting} onClick={() => void exportFile("pdf")}><LuFileText aria-hidden="true" />PDF</button>{exporting && <span role="status">جارٍ إعداد التقرير…</span>}</div>;
   const register = <div className={styles.actions}>{(["donation", "benefit"] as EventKind[]).map(kind => (kind === "donation" ? caps.donations_create : caps.benefits_create) && <button key={kind} className={styles.primary} disabled={!!personId && (!person.data || person.loading || !person.data.is_active)} onClick={() => setEditor({ kind })}><LuPlus aria-hidden="true" />تسجيل {kind === "donation" ? "تبرع" : "استفادة"}</button>)}</div>;
   return <>

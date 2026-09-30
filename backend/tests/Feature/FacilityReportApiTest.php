@@ -41,6 +41,23 @@ class FacilityReportApiTest extends TestCase
         return $this->getJson('/api/reports'.$query, $token ? ['Authorization' => 'Bearer '.$token] : []);
     }
 
+    public function test_granular_medical_and_visit_reads_control_report_sections_without_legacy_grant(): void
+    {
+        $user = User::factory()->create(['username' => 'report-tasks-'.Str::uuid()]);
+        $facility = $this->assignment($user, 'TASK-REPORT', ['reports.view', 'dossiers.medical.view']);
+        $token = $this->token($user);
+        $query = '?facility_id='.$facility.'&period=day';
+        $before = $this->getReport($query, $token)->assertOk()->json('data');
+        $this->assertContains('dossiers', array_column($before['counters'], 'key'));
+        $this->assertNotContains('visits', array_column($before['counters'], 'key'));
+        $this->assertSame([], $before['patients']);
+        $role = DB::table('facility_user_roles')->where('user_id', $user->id)->value('role_id');
+        DB::table('role_permissions')->insert(['role_id' => $role, 'permission_id' => DB::table('permissions')->where('code', 'dossiers.visits.view')->value('id')]);
+        $after = $this->getReport($query, $token)->assertOk()->json('data');
+        $this->assertContains('visits', array_column($after['counters'], 'key'));
+        $this->assertCount(2, $after['visit_status']);
+    }
+
     public function test_reports_view_opens_empty_stats_and_user_one_does_not_bypass(): void
     {
         $user = User::factory()->create(['name' => 'مدير النظام']);

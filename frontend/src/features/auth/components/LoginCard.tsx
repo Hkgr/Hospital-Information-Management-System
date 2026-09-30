@@ -45,10 +45,10 @@ export default function LoginCard() {
     try {
       const identity = await login(username, password);
       setPassword("");
-      const reception = identity.access.find(entry => entry.permissions.includes("reception.view"));
+      const reception = identity.access.find(entry => entry.permissions.includes("patients.basic.view"));
       const statistics = identity.access.find(entry => entry.permissions.includes("statistics.view"));
-      const operational = identity.access.some(entry => entry.permissions.includes("dashboards.view") || entry.permissions.includes("dossiers.view"));
-      router.replace(!operational && statistics ? `/statistics?facility_id=${statistics.facility.id}` : reception && !operational ? `/reception?facility_id=${reception.facility.id}` : "/");
+      const operational = identity.access.some(entry => entry.permissions.includes("dashboards.view") || entry.permissions.includes("dossiers.medical.view"));
+      router.replace(!operational && statistics ? `/statistics?facility_id=${statistics.facility.id}` : reception && !operational ? `/patient-cards?facility_id=${reception.facility.id}` : "/");
     } catch (reason) {
       const failure = reason instanceof AuthError ? reason : new AuthError(0, "UNKNOWN", "تعذّر تسجيل الدخول. حاول مجددًا.");
       setError(failure.message);

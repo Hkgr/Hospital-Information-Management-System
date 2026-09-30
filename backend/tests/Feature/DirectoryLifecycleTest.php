@@ -34,20 +34,22 @@ class DirectoryLifecycleTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['clinics.doctor_staff_types' => ['DOCTOR']]);
+        $typeCode = 'LIFECYCLE-'.Str::random(12);
+        config(['clinics.doctor_staff_types' => [$typeCode]]);
         $this->travelTo(now()->setTime(12, 0));
-        $this->user = User::factory()->create();
+        $this->user = User::factory()->create(['username' => 'lifecycle-'.Str::uuid()]);
         $this->token = $this->user->createToken('lifecycle', ['api'])->plainTextToken;
         $this->facility = DB::table('facilities')->insertGetId(['code' => 'TEST-A', 'name_ar' => 'اختبار', 'timezone' => 'Asia/Damascus']);
         $this->other = DB::table('facilities')->insertGetId(['code' => 'SECRET-B', 'name_ar' => 'منشأة محجوبة', 'timezone' => 'Pacific/Honolulu']);
         $role = DB::table('roles')->insertGetId(['code' => 'lifecycle', 'name_ar' => 'اختبار']);
         foreach (['doctors.view', 'doctors.link', 'doctors.directory.update', 'doctors.directory.delete', 'clinics.view', 'clinics.update', 'clinics.delete'] as $code) {
-            $permission = DB::table('permissions')->insertGetId(['code' => $code, 'name_ar' => $code]);
+            DB::table('permissions')->insertOrIgnore(['code' => $code, 'name_ar' => $code]);
+            $permission = DB::table('permissions')->where('code', $code)->value('id');
             DB::table('role_permissions')->insert(['role_id' => $role, 'permission_id' => $permission]);
         }
         DB::table('facility_user_roles')->insert(['user_id' => $this->user->id, 'facility_id' => $this->facility, 'role_id' => $role]);
         DB::table('global_user_roles')->insert(['user_id' => $this->user->id, 'role_id' => $role]);
-        $this->type = DB::table('staff_types')->insertGetId(['code' => 'DOCTOR', 'name_ar' => 'طبيب']);
+        $this->type = DB::table('staff_types')->insertGetId(['code' => $typeCode, 'name_ar' => 'طبيب']);
         $this->doctor = DB::table('staff')->insertGetId(['staff_code' => 'D1', 'full_name' => 'طبيب اختبار', 'search_name' => 'اختبار', 'staff_type_id' => $this->type]);
         $this->clinic = DB::table('clinics')->insertGetId(['facility_id' => $this->facility, 'code' => 'C1', 'name_ar' => 'عيادة اختبار']);
     }
@@ -55,6 +57,22 @@ class DirectoryLifecycleTest extends TestCase
     public static function directories(): array
     {
         return [['doctors'], ['clinics']];
+    }
+
+    #[DataProvider('directories')]
+    public function test_archive_task_does_not_allow_destroy_restore_or_reactivate(string $kind): void
+    {
+        $role = DB::table('facility_user_roles')->where('user_id', $this->user->id)->value('role_id');
+        DB::table('role_permissions')->where('role_id', $role)->delete();
+        $prefix = $kind === 'doctors' ? 'doctors.directory' : 'clinics';
+        foreach ([$kind.'.view', $prefix.'.archive'] as $code) {
+            DB::table('role_permissions')->insert(['role_id' => $role, 'permission_id' => DB::table('permissions')->where('code', $code)->value('id')]);
+        }
+        $this->api($kind, 'DELETE', '', ['lock_version' => 1])->assertForbidden();
+        $this->act($kind, 'archive', 1)->assertOk();
+        $this->act($kind, 'restore')->assertForbidden();
+        $this->act($kind, 'reactivate')->assertForbidden();
+        $this->assertDatabaseHas($this->table($kind), ['id' => $this->id($kind), 'is_active' => false]);
     }
 
     private function id(string $kind): int
@@ -106,19 +124,19 @@ class DirectoryLifecycleTest extends TestCase
     public function test_deactivation_with_links_succeeds_and_reactivation_preserves_dates(string $kind): void
     {
         $this->link();
-        $before = DB::table('clinic_staff')->first();
+        $before = DB::table('clinic_staff')->where('clinic_id', $this->clinic)->first();
         $this->act($kind, 'deactivate')->assertOk()->assertJsonPath('data.is_active', false);
-        $this->assertEquals($before, DB::table('clinic_staff')->first());
+        $this->assertEquals($before, DB::table('clinic_staff')->where('clinic_id', $this->clinic)->first());
         $this->act($kind, 'reactivate')->assertOk()->assertJsonPath('data.is_active', true);
-        $this->assertEquals($before, DB::table('clinic_staff')->first());
+        $this->assertEquals($before, DB::table('clinic_staff')->where('clinic_id', $this->clinic)->first());
         $this->api($kind, 'GET')->assertJsonPath('data.'.($kind === 'doctors' ? 'clinic_count' : 'doctor_count'), 1);
     }
 
     public function test_inactive_clinic_cannot_receive_a_new_doctor_link(): void
     {
         DB::table('clinics')->where('id', $this->clinic)->update(['is_active' => false]);
-        $this->api('clinics', 'PUT', '', ['lock_version' => 1, 'code' => 'C1', 'name_ar' => 'عيادة اختبار', 'is_active' => false, 'doctor_add_ids' => [$this->doctor]])->assertUnprocessable();
-        $this->assertDatabaseCount('clinic_staff', 0);
+        $this->api('clinics', 'PUT', '', ['lock_version' => 1, 'name_ar' => 'عيادة اختبار', 'is_active' => false, 'doctor_add_ids' => [$this->doctor]])->assertUnprocessable();
+        $this->assertSame(0, DB::table('clinic_staff')->where('clinic_id', $this->clinic)->count());
     }
 
     #[DataProvider('directories')]
@@ -197,7 +215,7 @@ class DirectoryLifecycleTest extends TestCase
         $this->act('doctors', 'deactivate')->assertOk();
         DB::table('staff_types')->where('id', $this->type)->update(['is_active' => false]);
         $this->act('doctors', 'reactivate')->assertUnprocessable()->assertJsonValidationErrors('staff_type_id');
-        $this->api('doctors', 'PUT', '', ['code' => 'D1', 'name' => 'طبيب', 'staff_type_id' => $this->type, 'specialty_ids' => [], 'lock_version' => 2, 'is_active' => true])->assertUnprocessable()->assertJsonValidationErrors('staff_type_id');
+        $this->api('doctors', 'PUT', '', ['name' => 'طبيب', 'staff_type_id' => $this->type, 'specialty_ids' => [], 'lock_version' => 2, 'is_active' => true])->assertUnprocessable()->assertJsonValidationErrors('staff_type_id');
         $this->assertDatabaseHas('staff', ['id' => $this->doctor, 'is_active' => false, 'lock_version' => 2]);
     }
 
@@ -233,12 +251,12 @@ class DirectoryLifecycleTest extends TestCase
     {
         $this->link();
         $this->act($kind, 'archive')->assertOk();
-        $fields = $kind === 'doctors' ? ['code' => 'D1', 'name' => 'طبيب', 'staff_type_id' => $this->type, 'specialty_ids' => []] : ['code' => 'C1', 'name_ar' => 'عيادة'];
+        $fields = $kind === 'doctors' ? ['name' => 'طبيب', 'staff_type_id' => $this->type, 'specialty_ids' => []] : ['name_ar' => 'عيادة'];
         $this->api($kind, 'PUT', '', $fields + ['lock_version' => 2, 'is_active' => true])->assertConflict();
         $opposite = $kind === 'doctors' ? 'clinics' : 'doctors';
         $this->api($opposite, 'GET')->assertJsonPath('data.lock_version', 2)->assertJsonPath('data.'.($kind === 'doctors' ? 'doctor_count' : 'clinic_count'), 0);
         $path = $kind === 'doctors' ? '/api/clinics/options/doctors' : '/api/doctors/options/clinics';
-        $this->getJson($path.'?facility_id='.$this->facility, ['Authorization' => 'Bearer '.$this->token])->assertJsonCount(0, 'data');
+        $this->getJson($path.'?facility_id='.$this->facility.'&search='.($kind === 'doctors' ? 'D1' : 'C1'), ['Authorization' => 'Bearer '.$this->token])->assertJsonCount(0, 'data');
     }
 
     public function test_reference_inventory_covers_all_current_foreign_keys(): void
@@ -286,7 +304,8 @@ class DirectoryLifecycleTest extends TestCase
     public function test_archived_filter_exports_the_same_records_and_detail_reports_stay_available(string $kind): void
     {
         $role = DB::table('global_user_roles')->where('user_id', $this->user->id)->value('role_id');
-        $permission = DB::table('permissions')->insertGetId(['code' => $kind.'.export', 'name_ar' => 'تصدير']);
+        DB::table('permissions')->insertOrIgnore(['code' => $kind.'.export', 'name_ar' => 'تصدير']);
+        $permission = DB::table('permissions')->where('code', $kind.'.export')->value('id');
         DB::table('role_permissions')->insert(['role_id' => $role, 'permission_id' => $permission]);
         $this->link();
         $this->act($kind, 'archive')->assertOk();
@@ -317,11 +336,11 @@ class DirectoryLifecycleTest extends TestCase
         $this->act($kind, 'restore')->assertOk();
         $this->act($kind, 'reactivate')->assertOk();
         $fields = $kind === 'doctors'
-            ? ['code' => 'D1', 'name' => 'طبيب', 'staff_type_id' => $this->type, 'specialty_ids' => [], 'clinic_add_ids' => [$this->clinic]]
-            : ['code' => 'C1', 'name_ar' => 'عيادة', 'doctor_add_ids' => [$this->doctor]];
+            ? ['name' => 'طبيب', 'staff_type_id' => $this->type, 'specialty_ids' => [], 'clinic_add_ids' => [$this->clinic]]
+            : ['name_ar' => 'عيادة', 'doctor_add_ids' => [$this->doctor]];
         $this->api($kind, 'PUT', '', $fields + ['lock_version' => 4, 'is_active' => true])->assertOk();
         $this->assertDatabaseHas('clinic_staff', ['id' => $future, 'starts_on' => $futureDate, 'ends_on' => $futureDate]);
         $this->assertDatabaseHas('clinic_staff', ['clinic_id' => $this->clinic, 'staff_id' => $this->doctor, 'starts_on' => now('Asia/Damascus')->toDateString(), 'ends_on' => null]);
-        $this->assertDatabaseCount('clinic_staff', 2);
+        $this->assertSame(2, DB::table('clinic_staff')->where('clinic_id', $this->clinic)->where('staff_id', $this->doctor)->count());
     }
 }

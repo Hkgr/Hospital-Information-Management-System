@@ -8,8 +8,8 @@ class DashboardHome
 {
     /** Known local destinations only. The API never returns URLs. */
     private const LINKS = [
-        'patient-cards' => ['title' => 'بطاقة المريض', 'permission' => 'dossiers.view'],
-        'visits' => ['title' => 'الزيارات', 'permission' => 'dossiers.view'],
+        'patient-cards' => ['title' => 'بطاقة المريض', 'permission' => 'patients.basic.view'],
+        'visits' => ['title' => 'الزيارات', 'permission' => 'dossiers.visits.view'],
         'doctors' => ['title' => 'الأطباء', 'permission' => 'doctors.view'],
         'clinics' => ['title' => 'العيادات', 'permission' => 'clinics.view'],
         'services-procedures' => ['title' => 'الخدمات والإجراءات', 'permission' => 'catalog.view'],
@@ -41,8 +41,8 @@ class DashboardHome
 
         return [
             'counters' => $this->counters($access, count($appointments)),
-            'visit_status' => $this->statusSeries($access, 'dossiers.view', 'visits', ['complete' => 'مكتملة', 'draft' => 'مسودة'], fn ($query) => $query->whereNull('voided_at')->whereIn('status', ['complete', 'draft'])),
-            'dossier_status' => $this->statusSeries($access, 'dossiers.view', 'patient_dossiers', ['active' => 'فعّالة', 'draft' => 'مسودة']),
+            'visit_status' => $this->statusSeries($access, 'dossiers.visits.view', 'visits', ['complete' => 'مكتملة', 'draft' => 'مسودة'], fn ($query) => $query->whereNull('voided_at')->whereIn('status', ['complete', 'draft'])),
+            'dossier_status' => $this->statusSeries($access, 'dossiers.medical.view', 'patient_dossiers', ['active' => 'فعّالة', 'draft' => 'مسودة']),
             'clinics' => $this->clinicRanks($access),
             'doctors' => $this->doctorRanks($access),
             'appointments' => $appointments,
@@ -52,15 +52,15 @@ class DashboardHome
     private function counters(array $access, int $upcoming): array
     {
         $counters = [];
-        $this->pushCounter($counters, $access, 'dossiers', 'بطاقات المرضى', 'dossiers.view', fn (array $ids) => (int) DB::table('patient_dossiers')->whereIn('facility_id', $ids)->count());
-        $this->pushCounter($counters, $access, 'visits', 'الزيارات', 'dossiers.view', fn (array $ids) => (int) DB::table('visits')->whereIn('facility_id', $ids)->whereNull('voided_at')->whereIn('status', ['complete', 'draft'])->count());
+        $this->pushCounter($counters, $access, 'dossiers', 'بطاقات المرضى', 'dossiers.medical.view', fn (array $ids) => (int) DB::table('patient_dossiers')->whereIn('facility_id', $ids)->count());
+        $this->pushCounter($counters, $access, 'visits', 'الزيارات', 'dossiers.visits.view', fn (array $ids) => (int) DB::table('visits')->whereIn('facility_id', $ids)->whereNull('voided_at')->whereIn('status', ['complete', 'draft'])->count());
         $this->pushCounter($counters, $access, 'clinics', 'العيادات', 'clinics.view', fn (array $ids) => (int) DB::table('clinics')->whereIn('facility_id', $ids)->where('is_active', true)->whereNull('archived_at')->count());
         $this->pushCounter($counters, $access, 'doctors', 'الأطباء', 'doctors.view', fn (array $ids) => $this->assignedDoctors($access, $ids));
         $this->pushCounter($counters, $access, 'catalog', 'الخدمات والإجراءات', 'catalog.view', fn () => (int) DB::table('services')->whereNull('archived_at')->count() + (int) DB::table('procedures')->whereNull('archived_at')->count());
         $this->pushCounter($counters, $access, 'medications', 'الأدوية', 'catalog.view', fn () => (int) DB::table('medications')->whereNull('archived_at')->count());
         $this->pushCounter($counters, $access, 'stock', 'دفعات المخزون', 'stock.view', fn (array $ids) => (int) DB::table('medication_batches')->whereIn('facility_id', $ids)->where('status', 'active')->count());
         $this->pushCounter($counters, $access, 'blood_bank', 'وقائع بنك الدم', 'blood_bank.view', fn (array $ids) => (int) DB::table('blood_bank_events')->whereIn('facility_id', $ids)->whereNull('voided_at')->count());
-        $this->pushCounter($counters, $access, 'appointments', 'المواعيد القادمة', 'dossiers.treatment.view', fn () => $upcoming, ['dossiers.view']);
+        $this->pushCounter($counters, $access, 'appointments', 'المواعيد القادمة', 'dossiers.treatment.view', fn () => $upcoming, ['dossiers.medical.view']);
 
         return $counters;
     }
@@ -153,7 +153,7 @@ class DashboardHome
 
     private function appointments(array $access): array
     {
-        $entries = $this->entries($this->entries($access, 'dossiers.view'), 'dossiers.treatment.view');
+        $entries = $this->entries($this->entries($access, 'dossiers.medical.view'), 'dossiers.treatment.view');
         if ($entries === []) {
             return [];
         }
@@ -191,7 +191,8 @@ class DashboardHome
 
     private function entries(array $access, string $permission): array
     {
-        return array_values(array_filter($access, fn ($entry) => in_array($permission, $entry['permissions'], true)));
+        return array_values(array_filter($access, fn ($entry) => in_array($permission, $entry['permissions'], true)
+            && ($permission !== 'dossiers.visits.view' || in_array('dossiers.medical.view', $entry['permissions'], true))));
     }
 
     private function ids(array $entries): array

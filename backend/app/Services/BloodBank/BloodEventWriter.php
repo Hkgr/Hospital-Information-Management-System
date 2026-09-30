@@ -81,7 +81,7 @@ class BloodEventWriter
 
     public function save(Request $request, array $f, array $data, ?int $id = null): int
     {
-        $this->access->facility($request->user(), $f['id'], ($data['kind'] === 'donation' ? 'donations.' : 'benefits.').($id ? 'update' : 'create'));
+        $this->access->facility($request->user(), $f['id'], ($data['kind'] === 'donation' ? 'donations.' : $data['benefit_kind'].'.').($id ? 'update' : 'create'));
 
         return app(BloodBankWriter::class)->once($request, $f, $data, 'unified-event:'.($id ?? 'new'), function () use ($request, $f, $data, $id) {
             DB::table('facilities')->where('id', $f['id'])->lockForUpdate()->first();

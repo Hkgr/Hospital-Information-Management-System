@@ -8,7 +8,7 @@ export type Doctor = {
   is_active: boolean; archived_at: string | null; lock_version: number; clinic_count: number; patient_count: number;
   clinics_preview: Pick<ClinicLink, "id" | "code" | "name_ar">[]; patient_count_definition: string;
 };
-export type Capabilities = { create: boolean; update: boolean; delete: boolean; link: boolean; export: boolean; view_clinics: boolean };
+export type Capabilities = { archive: boolean; deactivate: boolean; restore: boolean; reactivate: boolean; create: boolean; update: boolean; delete: boolean; link: boolean; export: boolean; view_clinics: boolean };
 export type Options = { staff_types: Doctor["staff_type"][]; specialties: Doctor["specialties"]; doctor_types_configured: boolean; capabilities: Capabilities };
 export const columns = { number: "م", code: "كود الطبيب", name: "اسم الطبيب", specialties: "التخصصات", description: "التوصيف المهني", clinics: "العيادات الحالية", clinic_count: "عدد العيادات", patient_count: "عدد المرضى", is_active: "الحالة" };
 export type Column = keyof typeof columns;

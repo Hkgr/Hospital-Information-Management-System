@@ -90,6 +90,9 @@ class CatalogWriter
         try {
             return app(CreationRequests::class)->save($request, $facility, $data, 'catalog:'.$kind, $id, function () use ($request, $facility, $kind, $data, $id) {
                 $row = $id ? $this->locked($kind, $id, $data['lock_version']) : null;
+                if ($row && array_key_exists('is_active', $data) && (bool) $row->is_active !== (bool) $data['is_active']) {
+                    app(CatalogAccess::class)->directory($request->user(), $facility, $data['is_active'] ? 'reactivate' : 'deactivate');
+                }
                 if ($row?->archived_at) {
                     throw new CatalogException('CATALOG_STATE_CONFLICT', 'استعد العنصر المؤرشف أولًا قبل تعديله.');
                 }
@@ -131,7 +134,7 @@ class CatalogWriter
 
     public function apply(Request $request, array $facility, string $kind, int $id, int $version, string $action): void
     {
-        app(CatalogAccess::class)->directory($request->user(), $facility, in_array($action, ['delete', 'archive'], true) ? 'delete' : 'update');
+        app(CatalogAccess::class)->directory($request->user(), $facility, $action === 'delete' ? 'destroy' : $action);
         try {
             DB::transaction(function () use ($request, $facility, $kind, $id, $version, $action) {
                 $row = $this->locked($kind, $id, $version);

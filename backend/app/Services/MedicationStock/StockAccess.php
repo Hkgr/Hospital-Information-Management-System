@@ -25,8 +25,11 @@ class StockAccess
         $permissions = $facility['permissions'];
 
         return [
-            'manage' => in_array('stock.suppliers.manage', $permissions, true),
-            'receive' => in_array('stock.receive', $permissions, true),
+            'manage' => in_array('stock.suppliers.write', $permissions, true) || in_array('stock.stores.write', $permissions, true),
+            'suppliers_write' => in_array('stock.suppliers.write', $permissions, true),
+            'stores_write' => in_array('stock.stores.write', $permissions, true),
+            'receive' => in_array('stock.receipts.write', $permissions, true),
+            'confirm' => in_array('stock.receipts.confirm', $permissions, true),
             'adjust' => in_array('stock.adjust', $permissions, true),
             'issue' => in_array('stock.issue', $permissions, true),
             'return' => in_array('stock.return', $permissions, true),

@@ -67,7 +67,7 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname }: { faci
     if (key !== "page") next.delete("page");
     router.replace(`${pathname}?${next}`, { scroll: false });
   };
-  const can = (action: string) => permissions.includes(`clinics.${action}`);
+  const can = (action: string) => permissions.includes(`clinics.${action === "update" ? "edit" : action === "delete" ? "destroy" : action}`);
   const [notice, setNotice] = useState("");
   const saved = () => { setModal(null); setRevision(value => value + 1); };
   async function exportFile(format: "xlsx" | "pdf") {
@@ -104,9 +104,9 @@ function ClinicWorkspace({ facilityId, permissions, clinicId, pathname }: { faci
     </>}
     {notice && <p role="status">{notice}</p>}
     {exportError && <p role="alert" className={styles.error}>{exportError}</p>}
-    {modal?.type === "edit" && <ClinicEditor clinic={modal.clinic} facilityId={facilityId} onClose={() => setModal(null)} onSaved={saved} onReloaded={() => setRevision(value => value + 1)} />}
+    {modal?.type === "edit" && <ClinicEditor canChangeStatus={!!(modal.clinic?.is_active ? can("deactivate") : can("reactivate"))} clinic={modal.clinic} facilityId={facilityId} onClose={() => setModal(null)} onSaved={saved} onReloaded={() => setRevision(value => value + 1)} />}
     {modal?.type === "doctors" && modal.clinic && <ClinicDoctors clinic={modal.clinic} onClose={() => setModal(null)} />}
-    {(modal?.type === "delete" || modal?.type === "deactivate" || modal?.type === "reactivate" || modal?.type === "restore") && modal.clinic && <LifecycleDialog kind="clinics" record={modal.clinic} name={modal.clinic.name_ar} facilityId={facilityId} action={modal.type} onClose={() => setModal(null)} onSaved={(message, action) => { setNotice(message); saved(); if (clinicId && action === "delete") router.push(returnPath); }} onRefresh={saved} />}
+    {(modal?.type === "archive" || modal?.type === "delete" || modal?.type === "deactivate" || modal?.type === "reactivate" || modal?.type === "restore") && modal.clinic && <LifecycleDialog canArchive={can("archive")} kind="clinics" record={modal.clinic} name={modal.clinic.name_ar} facilityId={facilityId} action={modal.type} onClose={() => setModal(null)} onSaved={(message, action) => { setNotice(message); saved(); if (clinicId && action === "delete") router.push(returnPath); }} onRefresh={saved} />}
   </>;
 }
 
@@ -123,7 +123,7 @@ function ClinicTable({ query, searching, visible, can, onAction, onPage, onPageS
         : key === "description" ? <LongText text={clinic.description} />
         : key === "doctors" ? <button className={styles.textButton} onClick={() => onAction("doctors", clinic)}>{clinic.doctors_preview.map(doctor => doctor.name).join("، ") || "لا يوجد أطباء"}{clinic.doctor_count > 3 ? ` +${clinic.doctor_count - 3}` : ""}</button>
         : key === "doctor_count" ? <button className={styles.countButton} aria-label={`أطباء ${clinic.name_ar}: ${clinic.doctor_count}`} onClick={() => onAction("doctors", clinic)}>{clinic.doctor_count}</button>
-        : clinic.patient_count}</td>)}<td><DirectoryRowActions name={clinic.name_ar} href={`/clinics/${clinic.id}?${query}`} onEdit={can("update") && !clinic.archived_at ? () => onAction("edit", clinic) : undefined} onDelete={can("delete") ? () => onAction("delete", clinic) : undefined}><LifecycleActions record={clinic} name={clinic.name_ar} canUpdate={can("update")} onAction={action => onAction(action, clinic)} /></DirectoryRowActions></td></tr>)}
+        : clinic.patient_count}</td>)}<td><DirectoryRowActions name={clinic.name_ar} href={`/clinics/${clinic.id}?${query}`} onEdit={can("update") && !clinic.archived_at ? () => onAction("edit", clinic) : undefined} onDelete={can("delete") ? () => onAction("delete", clinic) : undefined}><LifecycleActions record={clinic} name={clinic.name_ar} capabilities={{archive:can("archive"),restore:can("restore"),deactivate:can("deactivate"),reactivate:can("reactivate")}} onAction={action => onAction(action, clinic)} /></DirectoryRowActions></td></tr>)}
       {!data.length && <tr><td colSpan={visible.length + 1}><div className={styles.status}>لا توجد عيادات مطابقة. عدّل البحث والفلاتر أو أضف عيادة جديدة إن كانت لديك الصلاحية.</div></td></tr>}
     </DirectoryTable><Pagination meta={meta} onPage={onPage} onPageSize={onPageSize} />
   </>;
@@ -134,7 +134,7 @@ function ClinicDetail({ id, facilityId, can, onAction, returnPath, exports }: { 
   if (result.error) return <div className={styles.status}><p role="alert">{result.error}</p><button className={styles.secondary} onClick={result.retry}>إعادة المحاولة</button><Link href={returnPath}>العودة إلى القائمة</Link></div>;
   if (!result.data) return <p role="status" className={styles.status}>جارٍ تحميل العيادة…</p>;
   const clinic = result.data;
-  return <><DirectoryBack href={returnPath}>العودة إلى قائمة العيادات</DirectoryBack><div className={styles.heading}><div><p className={styles.eyebrow}>بطاقة العيادة · <bdi>{clinic.code}</bdi></p><h2>{clinic.name_ar}</h2><p>{(clinic.care_setting || clinic.clinic_kind) ? `${[clinic.care_setting ? careSettingLabels[clinic.care_setting] : "", clinic.clinic_kind ? clinicKindLabels[clinic.clinic_kind] : ""].filter(Boolean).join(" · ")} · ` : ""}{clinic.specialty?.name_ar || "دون تخصص محدد"} · {clinic.archived_at ? "مؤرشفة" : clinic.is_active ? "فعالة" : "غير فعالة"}</p></div><div className={styles.actions}>{can("update") && !clinic.archived_at && <button className={styles.primary} onClick={() => onAction("edit", clinic)}><LuSquarePen aria-hidden="true" />تعديل العيادة</button>}{can("delete") && <button className={styles.secondary} onClick={() => onAction("delete", clinic)} aria-label={`حذف ${clinic.name_ar}`}>حذف أو أرشفة</button>}<LifecycleActions record={clinic} name={clinic.name_ar} canUpdate={can("update")} onAction={action => onAction(action, clinic)} />{exports}</div></div>
+  return <><DirectoryBack href={returnPath}>العودة إلى قائمة العيادات</DirectoryBack><div className={styles.heading}><div><p className={styles.eyebrow}>بطاقة العيادة · <bdi>{clinic.code}</bdi></p><h2>{clinic.name_ar}</h2><p>{(clinic.care_setting || clinic.clinic_kind) ? `${[clinic.care_setting ? careSettingLabels[clinic.care_setting] : "", clinic.clinic_kind ? clinicKindLabels[clinic.clinic_kind] : ""].filter(Boolean).join(" · ")} · ` : ""}{clinic.specialty?.name_ar || "دون تخصص محدد"} · {clinic.archived_at ? "مؤرشفة" : clinic.is_active ? "فعالة" : "غير فعالة"}</p></div><div className={styles.actions}>{can("update") && !clinic.archived_at && <button className={styles.primary} onClick={() => onAction("edit", clinic)}><LuSquarePen aria-hidden="true" />تعديل العيادة</button>}{can("delete") && <button className={styles.secondary} onClick={() => onAction("delete", clinic)} aria-label={`حذف ${clinic.name_ar}`}>حذف أو أرشفة</button>}<LifecycleActions record={clinic} name={clinic.name_ar} capabilities={{archive:can("archive"),restore:can("restore"),deactivate:can("deactivate"),reactivate:can("reactivate")}} onAction={action => onAction(action, clinic)} />{exports}</div></div>
     <section className={styles.detailPanel}><h3>توصيف العيادة</h3><p className={styles.description}>{clinic.description || "لا يوجد توصيف مسجل لهذه العيادة."}</p><div className={styles.metrics}><div><span>الأطباء الحاليون</span><strong>{clinic.doctor_count}</strong></div><div><span>المرضى المختلفون</span><strong>{clinic.patient_count}</strong></div></div></section>
     <LinkHistory kind="clinics" id={clinic.id} facilityId={facilityId} />
     <section className={styles.detailPanel}><h3>أطباء العيادة الحاليون</h3><DoctorList clinic={clinic} /></section>

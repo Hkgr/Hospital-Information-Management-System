@@ -1,7 +1,10 @@
 # Permission matrix — Phase 1
 
-`/reception` is separate from medical card reads. Existing medical, import,
-oncology and blood-bank workflows retain their permissions.
+The limited registration API remains separate from medical card reads. The current
+browser entry is `/patient-cards`; `/reception` redirects compatibly. See
+[unified registration](unified-patient-registration.md) for the new task names,
+one-way legacy compatibility and illustrated guide. The historical role codes
+below are preserved, not automatically replaced or broadened.
 
 ## Roles
 

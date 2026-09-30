@@ -42,13 +42,13 @@ function Workspace({ kind, facilityId, name }: { kind: DirectoryKind; facilityId
     <header className={styles.header}><h1>{directoryName(kind)}</h1>
       <nav className={styles.actions}><Link className={styles.secondary} href={`/stock/receipts?facility_id=${facilityId}`}>أذونات الاستلام</Link>
         <Link className={styles.secondary} href={`/${kind === "stores" ? "stock/suppliers" : "stock/stores"}?facility_id=${facilityId}`}>{kind === "stores" ? "الموردون" : "المستودعات"}</Link>
-        {caps?.manage && <button className={styles.primary} onClick={() => setEditor("new")}><LuPlus aria-hidden="true" />إضافة</button>}</nav>
+        {caps?.[`${kind}_write`] && <button className={styles.primary} onClick={() => setEditor("new")}><LuPlus aria-hidden="true" />إضافة</button>}</nav>
     </header>
     <label className={styles.search}><LuSearch aria-hidden="true" /><input value={params.get("search") ?? ""} onChange={event => filter("search", event.target.value)} placeholder="بحث" aria-label="بحث" /></label>
     {list.error && <p role="alert">{list.error}</p>}
     <DirectoryTable label={directoryName(kind)} busy={!ready} headers={["الكود", "الاسم", "الحالة", "إجراءات"]}>
       {(list.data?.data ?? []).map(row => <tr key={row.id}><td><Link href={`/stock/${kind}?facility_id=${facilityId}`}>{row.code}</Link></td><td>{row.name_ar}</td><td>{statusName(row)}</td>
-        <td><DirectoryRowActions name={row.name_ar} href={`/stock/${kind}?facility_id=${facilityId}`} onEdit={caps?.manage && !row.archived_at ? () => setEditor(row) : undefined} /></td></tr>)}
+        <td><DirectoryRowActions name={row.name_ar} href={`/stock/${kind}?facility_id=${facilityId}`} onEdit={caps?.[`${kind}_write`] && !row.archived_at ? () => setEditor(row) : undefined} /></td></tr>)}
     </DirectoryTable>
     {editor && <DirectoryEditor kind={kind} facilityId={facilityId} row={editor === "new" ? undefined : editor} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); setRevision(v => v + 1); }} />}
   </div>;

@@ -9,14 +9,14 @@ import styles from "../clinics/clinics.module.css";
 
 export type Action = "delete" | "archive" | "restore" | "deactivate" | "reactivate";
 export const actionNames: Record<Action, string> = { delete: "حذف", archive: "أرشفة وإزالة من الدليل", restore: "استعادة كغير فعال", deactivate: "تعطيل", reactivate: "إعادة تفعيل" };
-export function CatalogLifecycle({ item, action, facilityId, onClose, onSaved }: { item: Item; action: Action; facilityId: number; onClose: () => void; onSaved: (action: Action) => void }) {
+export function CatalogLifecycle({ item, action, facilityId, canArchive = false, onClose, onSaved }: { item: Item; action: Action; facilityId: number; canArchive?: boolean; onClose: () => void; onSaved: (action: Action) => void }) {
   const preview = useCatalogRequest<{ action: "delete" | "archive"; has_references: boolean; lock_version: number; archived: boolean }>(action === "delete" ? `${itemPath(item)}/deletion-preview?facility_id=${facilityId}` : null);
   const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [conflict, setConflict] = useState(false);
   const pending = useRef(false); const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   const actual = action === "delete" ? preview.data?.action : action;
   async function confirm() {
-    if (!actual || pending.current || preview.loading || preview.error || conflict) return;
+    if (actual === "archive" && !canArchive || !actual || pending.current || preview.loading || preview.error || conflict) return;
     pending.current = true; setBusy(true); setError(""); const active = new AbortController(); controller.current = active;
     try {
       await apiRequest(`${itemPath(item)}${actual === "delete" ? "" : `/${actual}`}`, { method: actual === "delete" ? "DELETE" : "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, lock_version: preview.data?.lock_version ?? item.lock_version }) });
@@ -31,7 +31,7 @@ export function CatalogLifecycle({ item, action, facilityId, onClose, onSaved }:
     {actual === "delete" && <p>لا توجد مراجع حاليًا. الحذف نهائي ويُعاد فحص الموانع عند التنفيذ.</p>}
     {actual === "restore" && <p>ستتم الاستعادة كغير فعال. إعادة التفعيل قرار مستقل.</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}{conflict && <p>أغلق النافذة وأعد تحميل العنصر ثم راجع العملية؛ لن نكررها تلقائيًا.</p>}
-    <div className={styles.modalActions}><button className={styles.danger} disabled={busy || !actual || preview.loading || !!preview.error || conflict || (actual === "archive" && !!preview.data?.archived)} onClick={() => void confirm()}>{busy ? "جارٍ التنفيذ…" : `تأكيد ${actionNames[actual ?? action]}`}</button><button className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
+    <div className={styles.modalActions}><button className={styles.danger} disabled={actual === "archive" && !canArchive || busy || !actual || preview.loading || !!preview.error || conflict || (actual === "archive" && !!preview.data?.archived)} onClick={() => void confirm()}>{busy ? "جارٍ التنفيذ…" : `تأكيد ${actionNames[actual ?? action]}`}</button><button className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
   </div></Modal>;
 }
 

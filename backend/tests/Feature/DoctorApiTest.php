@@ -45,7 +45,7 @@ class DoctorApiTest extends TestCase
         // Never mutate or acquire the protected system role from a populated database.
         $this->role = DB::table('roles')->insertGetId(['code' => 'doctor-api-'.Str::random(16), 'name_ar' => 'دور اختباري']);
         $this->seed(DoctorPermissionsSeeder::class);
-        foreach (DB::table('permissions')->pluck('id') as $permission) {
+        foreach (DB::table('permissions')->whereIn('code', array_keys(DoctorPermissionsSeeder::PERMISSIONS))->pluck('id') as $permission) {
             DB::table('role_permissions')->insert(['role_id' => $this->role, 'permission_id' => $permission]);
         }
         foreach (['clinics.view', 'clinics.update'] as $code) {

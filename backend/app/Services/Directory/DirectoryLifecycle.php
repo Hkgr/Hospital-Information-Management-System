@@ -26,7 +26,7 @@ class DirectoryLifecycle
 
     public function apply(Request $request, array $facility, bool $doctor, int $id, int $version, string $action): void
     {
-        $this->authorize($request, $doctor, in_array($action, ['delete', 'archive']) ? 'delete' : 'update');
+        $this->authorize($request, $doctor, $action === 'delete' ? 'destroy' : $action);
         try {
             DB::transaction(function () use ($request, $facility, $doctor, $id, $version, $action) {
                 if (! $doctor) {

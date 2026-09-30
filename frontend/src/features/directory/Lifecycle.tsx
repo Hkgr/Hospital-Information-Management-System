@@ -7,28 +7,28 @@ import Modal from "../clinics/Modal";
 import { Pagination } from "./Controls";
 import styles from "../clinics/clinics.module.css";
 
-export type LifecycleAction = "delete" | "deactivate" | "reactivate" | "restore";
+export type LifecycleAction = "delete" | "archive" | "deactivate" | "reactivate" | "restore";
 type CompletedAction = LifecycleAction | "archive";
 type RecordState = { id: number; code: string; is_active: boolean; archived_at?: string | null; lock_version: number };
 type Preview = { action: "delete" | "archive"; organizational_links: number; has_other_references: boolean; lock_version: number; archived: boolean };
 const labels = { delete: "حذف نهائي", archive: "أرشفة وإزالة من الدليل", deactivate: "تعطيل مؤقت", reactivate: "إعادة تفعيل", restore: "استعادة كغير فعال" };
 const messages = { delete: "تم الحذف النهائي.", archive: "تمت الأرشفة وحفظ التاريخ.", deactivate: "تم التعطيل مع حفظ الارتباطات.", reactivate: "تمت إعادة التفعيل.", restore: "تمت الاستعادة كغير فعال دون إعادة فتح الارتباطات." };
 
-export function LifecycleActions({ record, name, canUpdate, onAction, disabled = false }: { record: RecordState; name: string; canUpdate: boolean; onAction: (action: LifecycleAction) => void; disabled?: boolean }) {
-  if (!canUpdate) return null;
+export function LifecycleActions({ record, name, canUpdate, capabilities, onAction, disabled = false }: { record: RecordState; name: string; canUpdate?: boolean; capabilities?: Partial<Record<LifecycleAction, boolean>>; onAction: (action: LifecycleAction) => void; disabled?: boolean }) {
   const action = record.archived_at ? "restore" : record.is_active ? "deactivate" : "reactivate";
+  const allowed = capabilities ? capabilities[action] : canUpdate;
   const label = action === "restore" ? "استعادة" : action === "deactivate" ? "تعطيل" : "إعادة تفعيل";
-  return <button className={styles.textButton} disabled={disabled || undefined} onClick={() => onAction(action)} aria-label={`${label} ${name}`}>{label}</button>;
+  return <>{allowed && <button className={styles.textButton} disabled={disabled || undefined} onClick={() => onAction(action)} aria-label={`${label} ${name}`}>{label}</button>}{capabilities?.archive && !record.archived_at && <button className={styles.textButton} disabled={disabled || undefined} onClick={() => onAction("archive")} aria-label={`أرشفة ${name}`}>أرشفة</button>}</>;
 }
 
-export default function LifecycleDialog({ kind, record, name, facilityId, action, onClose, onSaved, onRefresh }: { kind: "doctors" | "clinics"; record: RecordState; name: string; facilityId: number; action: LifecycleAction; onClose: () => void; onSaved: (message: string, action: CompletedAction) => void; onRefresh: () => void }) {
+export default function LifecycleDialog({ kind, record, name, facilityId, action, canArchive = false, onClose, onSaved, onRefresh }: { canArchive?: boolean; kind: "doctors" | "clinics"; record: RecordState; name: string; facilityId: number; action: LifecycleAction; onClose: () => void; onSaved: (message: string, action: CompletedAction) => void; onRefresh: () => void }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [stale, setStale] = useState(false);
   const pending = useRef(false), controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   const preview = useClinicRequest<Preview>(action === "delete" ? `${kind}/${record.id}/deletion-preview?facility_id=${facilityId}` : null);
   const outdated = stale || (action === "delete" && !!preview.data && preview.data.lock_version !== record.lock_version);
   const chosen = action === "delete" ? preview.data?.action : action;
-  const blocked = busy || outdated || !chosen || (action === "delete" && (preview.loading || !!preview.error || (preview.data?.archived && chosen === "archive")));
+  const blocked = chosen === "archive" && !canArchive || busy || outdated || !chosen || (action === "delete" && (preview.loading || !!preview.error || (preview.data?.archived && chosen === "archive")));
   async function confirm() {
     if (pending.current || blocked || !chosen) return;
     pending.current = true; setBusy(true); setError("");

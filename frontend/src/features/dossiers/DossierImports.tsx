@@ -20,7 +20,7 @@ const actions: Record<string, string> = { new_patient: "مريض وبطاقة ج
 export default function DossierImports() {
   const { access, user } = useIdentity();
   const params = useSearchParams();
-  const { entry } = directoryFacility(access, "dossiers.view", params.get("facility_id"));
+  const { entry } = directoryFacility(access, "dossiers.medical.view", params.get("facility_id"));
   if (!entry || !entry.permissions.includes("dossiers.import.view")) return <section className={styles.status}><h2>الاستيراد غير متاح</h2><p role="alert">لا يتوفر تفويض لاستيراد بطاقات المرضى في المشفى المحدد.</p></section>;
   return <Workspace key={`${user.id}:${entry.facility.id}`} facility={entry.facility.id} name={entry.facility.name_ar} permissions={entry.permissions} />;
 }

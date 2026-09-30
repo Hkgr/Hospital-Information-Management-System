@@ -43,7 +43,7 @@ class StockController extends Controller
 
     public function store(SaveStockDirectoryRequest $request, string $directory): JsonResponse
     {
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'suppliers.manage');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), $directory.'.write');
         $id = $this->directory->save($request, $facility, $directory, $request->validated(), null);
 
         return response()->json(['data' => $this->directory->find($facility, $directory, $id)], 201);
@@ -52,7 +52,7 @@ class StockController extends Controller
     public function update(SaveStockDirectoryRequest $request, int $item): JsonResponse
     {
         $directory = (string) $request->route('directory');
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'suppliers.manage');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), $directory.'.write');
         $this->directory->save($request, $facility, $directory, $request->validated(), $item);
 
         return response()->json(['data' => $this->directory->find($facility, $directory, $item)]);
@@ -61,7 +61,7 @@ class StockController extends Controller
     public function destroy(StockVersionRequest $request, int $item): Response
     {
         $directory = (string) $request->route('directory');
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'suppliers.manage');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), $directory.'.write');
         $this->directory->apply($request, $facility, $directory, $item, $request->integer('lock_version'), 'delete');
 
         return response()->noContent();
@@ -71,7 +71,7 @@ class StockController extends Controller
     {
         $directory = (string) $request->route('directory');
         $action = basename($request->path());
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'suppliers.manage');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), $directory.'.write');
         $this->directory->apply($request, $facility, $directory, $item, $request->integer('lock_version'), $action);
 
         return response()->json(['data' => $this->directory->find($facility, $directory, $item)]);
@@ -80,7 +80,7 @@ class StockController extends Controller
     public function deletionPreview(StockQueryRequest $request, int $item): JsonResponse
     {
         $directory = (string) $request->route('directory');
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'suppliers.manage');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), $directory.'.write');
 
         return response()->json(['data' => $this->directory->preview($facility, $directory, $item)]);
     }
@@ -101,7 +101,7 @@ class StockController extends Controller
 
     public function createReceipt(SaveStockReceiptRequest $request): JsonResponse
     {
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'receive');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'receipts.write');
         $id = $this->receipts->save($request, $facility, $request->validated(), null);
 
         return response()->json(['data' => $this->receipts->find($facility, $id)], 201);
@@ -109,7 +109,7 @@ class StockController extends Controller
 
     public function updateReceipt(SaveStockReceiptRequest $request, int $receipt): JsonResponse
     {
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'receive');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'receipts.write');
         $this->receipts->save($request, $facility, $request->validated(), $receipt);
 
         return response()->json(['data' => $this->receipts->find($facility, $receipt)]);
@@ -117,7 +117,7 @@ class StockController extends Controller
 
     public function confirm(StockVersionRequest $request, int $receipt): JsonResponse
     {
-        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'receive');
+        $facility = $this->access->authorize($request->user(), $request->integer('facility_id'), 'receipts.confirm');
         $id = $this->receipts->confirm($request, $facility, $receipt, $request->integer('lock_version'));
 
         return response()->json(['data' => $this->receipts->find($facility, $id)]);

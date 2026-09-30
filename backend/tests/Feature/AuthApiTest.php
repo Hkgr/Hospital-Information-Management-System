@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\PersonalAccessToken;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -274,16 +275,17 @@ class AuthApiTest extends TestCase
         $this->assertNull($user->fresh()->last_login_at);
     }
 
-    public function test_access_filters_deduplicates_sorts_and_stays_dynamic_in_one_query(): void
+    public function test_access_filters_deduplicates_sorts_and_stays_dynamic_in_bounded_queries(): void
     {
-        $user = User::factory()->create(['username' => 'admin']);
+        $tag = Str::random(8).'-';
+        $user = User::factory()->create(['username' => $tag.'admin']);
         $facility = fn (string $code, bool $active = true) => DB::table('facilities')->insertGetId([
-            'code' => $code, 'name_ar' => 'مشفى '.$code, 'timezone' => 'Asia/Damascus', 'is_active' => $active,
+            'code' => $tag.$code, 'name_ar' => 'مشفى '.$code, 'timezone' => 'Asia/Damascus', 'is_active' => $active,
         ]);
         $role = fn (string $code, bool $active = true) => DB::table('roles')->insertGetId([
-            'code' => $code, 'name_ar' => 'دور '.$code, 'name_en' => null, 'is_active' => $active,
+            'code' => $tag.$code, 'name_ar' => 'دور '.$code, 'name_en' => null, 'is_active' => $active,
         ]);
-        $permission = fn (string $code, bool $active = true) => DB::table('permissions')->insertGetId([
+        $permission = fn (string $code, bool $active = true) => DB::table('permissions')->where('code', $code)->value('id') ?? DB::table('permissions')->insertGetId([
             'code' => $code, 'name_ar' => $code, 'is_active' => $active,
         ]);
         $z = $facility('Z');
@@ -306,14 +308,15 @@ class AuthApiTest extends TestCase
         DB::enableQueryLog();
         DB::flushQueryLog();
         $access = app(UserAccessContext::class)->forUser($user);
-        $this->assertCount(1, DB::getQueryLog());
+        // System-role check, joined access rows, active task definitions: independent of facility count.
+        $this->assertCount(3, DB::getQueryLog());
         DB::disableQueryLog();
-        $this->assertSame(['A', 'Z'], array_column(array_column($access, 'facility'), 'code'));
-        $this->assertSame(['ADMIN', 'READER'], array_column($access[0]['roles'], 'code'));
+        $this->assertSame([$tag.'A', $tag.'Z'], array_column(array_column($access, 'facility'), 'code'));
+        $this->assertSame([$tag.'ADMIN', $tag.'READER'], array_column($access[0]['roles'], 'code'));
         $this->assertSame(['patients.create', 'patients.view'], $access[0]['permissions']);
-        $this->assertSame(['EMPTY'], array_column($access[1]['roles'], 'code'));
+        $this->assertSame([$tag.'EMPTY'], array_column($access[1]['roles'], 'code'));
         $this->assertSame([], $access[1]['permissions']);
-        $login = $this->login()->assertOk()->assertJsonPath('data.access', $access);
+        $login = $this->login(['username' => $user->username])->assertOk()->assertJsonPath('data.access', $access);
         $plain = $login->json('data.token');
         $this->bearer('GET', '/api/user', $plain)->assertOk()->assertJsonPath('data.access', $access);
         $doc = $this->getJson('/docs/api.json')->assertOk()->json();

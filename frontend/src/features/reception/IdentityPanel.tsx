@@ -55,8 +55,8 @@ function Editor({ data, facility, refresh }: { data: Snapshot; facility: number;
     </label>)}</div><label>سبب التصحيح<textarea value={reason} maxLength={255} onChange={e => setReason(e.target.value)} /></label></fieldset>
     {write.error && <p role="alert">{write.error}</p>}{message && <p role="status">{message}</p>}
     <div className={styles.actions}>
-      {permissions.includes("reception.correct") && <button className={styles.primary} disabled={!ready || !data.correction.can_correct || !remaining || selected.some(k => !data.correction.editable_fields.includes(k))} onClick={() => void submit(true)}>حفظ التصحيح خلال المهلة</button>}
-      {permissions.includes("reception.corrections.request") && <button className={styles.secondary} disabled={!ready} onClick={() => void submit(false)}>إرسال طلب تصحيح</button>}
+      {permissions.includes("patients.own.correct") && <button className={styles.primary} disabled={!ready || !data.correction.can_correct || !remaining || selected.some(k => !data.correction.editable_fields.includes(k))} onClick={() => void submit(true)}>حفظ التصحيح خلال المهلة</button>}
+      {permissions.includes("patients.corrections.request") && <button className={styles.secondary} disabled={!ready} onClick={() => void submit(false)}>إرسال طلب تصحيح</button>}
     </div>
     <DirectoryTable label="حالة طلبات التصحيح" headers={["الطلب", "الحالة", "السبب", "قرار المراجعة"]}>{data.requests.map(q => <tr key={q.id}><td>{q.id}</td><td>{statusLabel(q.status)}</td><td>{q.reason}</td><td>{q.decision_reason || "لم يُتخذ قرار بعد"}</td></tr>)}</DirectoryTable>
   </>;

@@ -56,11 +56,14 @@ class UserAccessContext
             }
         }
 
-        return array_values(array_map(function (array $entry): array {
+        $tasks = app(TaskPermissions::class);
+        $activeTasks = $tasks->activeTasks();
+
+        return array_values(array_map(function (array $entry) use ($tasks, $activeTasks): array {
             ksort($entry['roles'], SORT_STRING);
             ksort($entry['permissions'], SORT_STRING);
             $entry['roles'] = array_values($entry['roles']);
-            $entry['permissions'] = array_values($entry['permissions']);
+            $entry['permissions'] = $tasks->effective(array_values($entry['permissions']), false, $activeTasks);
 
             return $entry;
         }, $access));

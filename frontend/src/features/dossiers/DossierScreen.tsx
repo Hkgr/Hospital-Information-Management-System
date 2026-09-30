@@ -28,7 +28,7 @@ import { prescriptionKindLabels } from "./clinical";
 
 export default function DossierScreen({ id }: { id?: string }) {
   const { access, user } = useIdentity(); const params = useSearchParams();
-  const { entry } = directoryFacility(access, "dossiers.view", params.get("facility_id"));
+  const { entry } = directoryFacility(access, "dossiers.medical.view", params.get("facility_id"));
   if (!entry || (id && !/^[1-9]\d*$/.test(id))) return <section className={styles.status}><h2>بطاقات المرضى غير متاحة</h2><p role="alert">تعذّر تحديد مشفى مصرح لك بالوصول إلى بطاقات مرضاه. راجع مسؤول الصلاحيات.</p></section>;
   return <div className={styles.screen}><div className={styles.context}><LuHospital aria-hidden="true" /><span>المشفى</span><strong>{entry.facility.name_ar}</strong></div>{id ? <Detail key={`${user.id}:${entry.facility.id}:${id}`} id={id} facility={entry.facility.id} /> : <Listing key={`${user.id}:${entry.facility.id}`} facility={entry.facility.id} />}</div>;
 }
@@ -38,6 +38,8 @@ function StatusBadge({ status, visit = false }: { status: "draft" | "active" | "
   return <span className={status === "draft" ? styles.badge : styles.active} aria-label={`${visit ? "حالة الزيارة" : "حالة بطاقة المريض"}: ${text}`}>{text}</span>;
 }
 function Listing({ facility }: { facility: number }) {
+  const { access } = useIdentity();
+  const canRegister = access.find(e => e.facility.id === facility)?.permissions.includes("patient_cards.register") ?? false;
   const [chosenColumns,setColumns]=useState<(keyof typeof reportColumns)[]>(defaultColumns);
   const [revision,setRevision]=useState(0);
   const [pending,setPending]=useState<DossierRow|null>(null);
@@ -53,7 +55,7 @@ function Listing({ facility }: { facility: number }) {
   function filter(key: string, value: string) { cancel(); const next = new URLSearchParams(q); if (value) next.set(key, value); else next.delete(key); if (key !== "page") next.delete("page"); window.history.replaceState(null, "", `${pathname}?${next}`); }
   const exportQuery=new URLSearchParams(q);columns.forEach(c=>exportQuery.append("columns[]",c));
   const headings = [...columns.map(k=>reportColumns[k]),"الإجراءات"];
-  return <><header className={styles.heading}><div><h2>بطاقات المرضى</h2><p>ملفات المرضى ومسوداتهم في المشفى</p></div><div>{options.data?.creation.allowed ? <Link className={styles.primary} href={`/patient-cards/new?${q}`}><LuPlus aria-hidden="true" />تسجيل بطاقة مريض</Link> : <button type="button" className={styles.primary} disabled aria-describedby="add-dossier-note"><LuPlus aria-hidden="true" />تسجيل بطاقة مريض</button>}<p id="add-dossier-note" className={styles.hint}>{options.data?.creation.allowed ? "احفظ البيانات على مراحل، وتابع المسودة لاحقًا." : options.loading ? "جارٍ التحقق من إمكانية الإضافة…" : options.error ? "تعذّر التحقق من إمكانية الإضافة؛ أعد المحاولة." : options.data?.creation.reason}</p>{options.error && <button className={styles.secondary} onClick={options.retry}>إعادة التحقق من إمكانية الإضافة</button>}</div></header>
+  return <><header className={styles.heading}><div><h2>بطاقات المرضى</h2><p>ملفات المرضى ومسوداتهم في المشفى</p></div><div>{canRegister ? <Link className={styles.primary} href={`/patient-cards/new?${q}`}><LuPlus aria-hidden="true" />تسجيل بطاقة مريض</Link> : <button type="button" className={styles.primary} disabled aria-describedby="add-dossier-note"><LuPlus aria-hidden="true" />تسجيل بطاقة مريض</button>}<p id="add-dossier-note" className={styles.hint}>{canRegister ? "احفظ البيانات على مراحل، وتابع المسودة لاحقًا." : options.loading ? "جارٍ التحقق من إمكانية الإضافة…" : options.error ? "تعذّر التحقق من إمكانية الإضافة؛ أعد المحاولة." : options.data?.creation.reason}</p>{options.error && <button className={styles.secondary} onClick={options.retry}>إعادة التحقق من إمكانية الإضافة</button>}</div></header>
     {options.data?.capabilities.import_view && <Link className={styles.secondary} href={`/patient-cards/imports?facility_id=${facility}`}>استيراد بطاقات المرضى من Excel</Link>}
     <section className={styles.panel}><div className={`${styles.toolbar} ${cardStyles.toolbar}`}><DossierReports path="dossiers/export" filters={exportQuery.toString()} ready={!!list.data&&!list.loading&&!list.error&&!searching} allowed={!!options.data?.capabilities.export}/><ColumnMenu<string> labels={availableColumns} visible={columns} onChange={next=>setColumns(next.filter((key):key is keyof typeof reportColumns=>key in availableColumns))}/><label className={styles.search}><span><LuSearch aria-hidden="true" />البحث</span><input type="search" aria-label="البحث في بطاقات المرضى" placeholder="كود المريض أو الاسم أو معرّف قديم…" value={search} onChange={e => change(e.target.value)} /></label></div><div className={styles.filters}>
       <label>حالة بطاقة المريض<select value={params.get("status") ?? "all"} onChange={e => filter("status", e.target.value)}><option value="all">الكل</option><option value="draft">مسودة</option><option value="active">فعالة</option></select></label>

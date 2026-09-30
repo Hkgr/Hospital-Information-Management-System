@@ -11,6 +11,11 @@ before(async () => { browser = await chromium.launch({ channel: process.env.PLAY
 after(async () => { await browser?.close(); });
 
 async function setup({ width = 1440, access = [{ facility, permissions, roles: [] }], override = () => false } = {}) {
+  // Model the server's one-way compatibility expansion in authenticated identity fixtures.
+  access = access.map(entry => ({ ...entry, permissions: [...entry.permissions,
+    ...(entry.permissions.includes('clinics.update') ? ['clinics.edit', 'clinics.deactivate', 'clinics.restore', 'clinics.reactivate'] : []),
+    ...(entry.permissions.includes('clinics.delete') ? ['clinics.archive', 'clinics.destroy'] : []),
+  ] }));
   const context = await browser.newContext({ viewport: { width, height: 900 }, reducedMotion: "reduce" });
   await context.addInitScript(() => sessionStorage.setItem("hospital.bearer", "clinic-ui-fixture"));
   const page = await context.newPage();

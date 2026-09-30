@@ -4,6 +4,7 @@ namespace App\Services\Users;
 
 use App\Models\User;
 use App\Services\Auth\GlobalAccess;
+use App\Services\Auth\TaskPermissions;
 use App\Services\Catalog\CatalogQueries;
 use App\Services\Clinics\ClinicAudit;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -46,7 +47,7 @@ class UserDirectory
     {
         $roles = app(RoleDirectory::class)->assignable($f);
 
-        return ['data' => ['roles' => $roles, 'permission_groups' => app(PermissionCatalog::class)->grouped($f['permissions']), 'capabilities' => [
+        return ['data' => ['roles' => $roles, 'permission_groups' => app(PermissionCatalog::class)->grouped($f['permissions']), 'task_templates' => PermissionCatalog::TEMPLATES, 'capabilities' => [
             'view' => in_array('users.view', $f['permissions'], true),
             'create' => in_array('users.create', $f['permissions'], true),
             'delete' => in_array('users.delete', $f['permissions'], true),
@@ -80,7 +81,7 @@ class UserDirectory
             app(ClinicAudit::class)->record($request, $f['id'], $user->id, 'created', null, ['username' => $user->username, 'role' => $role->code], 'auth_session');
 
             $codes = array_column(app(PermissionCatalog::class)->codesFor([$role->id])[$role->id] ?? [], 'code');
-            $required = array_values(array_intersect(['reception.patients.search', 'reception.patients.create'], $codes));
+            $required = array_values(array_filter($codes, fn ($code) => app(TaskPermissions::class)->describe($code, $code)['scope'] === 'global'));
 
             return $this->present($f, $user->id) + ['pending_global_permissions' => array_values(array_diff($required, app(GlobalAccess::class)->codes($user)))];
         });

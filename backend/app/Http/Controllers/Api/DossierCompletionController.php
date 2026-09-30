@@ -24,6 +24,7 @@ class DossierCompletionController extends Controller
     public function report(DossierReportRequest $r)
     {
         $f = $this->scope($r, 'export');
+        $this->scope($r, 'visits.view');
 
         return app(DossierReports::class)->export($r, $f, $r->validated(), $r->route('format'), $r->route('dossier') ? (int) $r->route('dossier') : null, $r->route('visit') ? (int) $r->route('visit') : null);
     }
@@ -64,7 +65,19 @@ class DossierCompletionController extends Controller
 
     public function clinical(SaveVisitClinical $r, int $dossier, int $visit)
     {
-        $f = $this->scope($r, 'clinical.update');
+        $f = $this->scope($r, 'visits.view');
+        $fields = $r->route('section') === 'clinical'
+            ? ['services' => 'services.update', 'procedures' => 'procedures.update']
+            : ['prescription' => 'prescriptions.update', 'outcome' => 'outcomes.update'];
+        $allowed = false;
+        foreach ($fields as $field => $action) {
+            $can = in_array('dossiers.'.$action, $f['permissions'], true);
+            $allowed = $allowed || $can;
+            if ($r->input($field)) {
+                $this->scope($r, $action);
+            }
+        }
+        abort_unless($allowed, 403);
         app(DossierClinicalWriter::class)->save($r, $f, $dossier, $visit, $r->route('section'), $r->validated());
 
         return $this->snapshot($f, $dossier, $visit);

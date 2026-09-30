@@ -24,7 +24,7 @@ class CatalogDocumentTransformer extends ClinicDocumentTransformer
             'is_active' => new BooleanType, 'archived_at' => (new StringType)->nullable(true), 'lock_version' => new IntegerType, 'patient_count' => new IntegerType,
             'patient_count_definition' => (new StringType)->example(CatalogBeneficiaries::DEFINITION)]);
         $meta = $this->object(['page' => new IntegerType, 'per_page' => new IntegerType, 'total' => new IntegerType, 'last_page' => new IntegerType]);
-        $caps = $this->object(array_fill_keys(['create', 'update', 'delete', 'export', 'beneficiaries', 'audit'], new BooleanType));
+        $caps = $this->object(array_fill_keys(['create', 'update', 'delete', 'export', 'beneficiaries', 'audit', 'archive', 'destroy', 'deactivate', 'restore', 'reactivate'], new BooleanType));
         $choice = $this->object(['id' => new IntegerType, 'name_ar' => new StringType]);
         foreach ($document->paths as $path) {
             $route = preg_replace('#^api/#', '', trim($path->path, '/'));

@@ -22,11 +22,12 @@ class DoctorAccess
 
     public function globalPermissions(User $user): array
     {
-        return array_values(array_intersect(app(GlobalAccess::class)->codes($user), ['doctors.directory.create', 'doctors.directory.update', 'doctors.directory.delete']));
+        return array_values(array_filter(app(GlobalAccess::class)->codes($user), fn ($code) => str_starts_with($code, 'doctors.directory.')));
     }
 
     public function directory(User $user, string $action): void
     {
+        $action = ['update' => 'edit', 'delete' => 'destroy'][$action] ?? $action;
         if (! in_array('doctors.directory.'.$action, $this->globalPermissions($user), true)) {
             throw new DoctorException('DOCTOR_DIRECTORY_ACCESS_DENIED', 'تعديل دليل الأطباء المشترك يحتاج تفويضًا عالميًا صريحًا.', 403);
         }
@@ -35,10 +36,14 @@ class DoctorAccess
     public function capabilities(User $user, array $facility): array
     {
         $global = $this->globalPermissions($user);
+        $tasks = [];
+        foreach (['archive', 'restore', 'reactivate', 'deactivate'] as $task) {
+            $tasks[$task] = in_array('doctors.directory.'.$task, $global, true);
+        }
 
-        return ['create' => in_array('doctors.directory.create', $global, true),
-            'update' => in_array('doctors.directory.update', $global, true),
-            'delete' => in_array('doctors.directory.delete', $global, true),
+        return $tasks + ['create' => in_array('doctors.directory.create', $global, true),
+            'update' => in_array('doctors.directory.edit', $global, true),
+            'delete' => in_array('doctors.directory.destroy', $global, true),
             'link' => in_array('doctors.link', $facility['permissions'], true),
             'export' => in_array('doctors.export', $facility['permissions'], true),
             'view_clinics' => in_array('clinics.view', $facility['permissions'], true)];

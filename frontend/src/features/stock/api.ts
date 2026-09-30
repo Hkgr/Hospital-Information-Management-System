@@ -1,6 +1,6 @@
 export { useClinicRequest as useStockRequest } from "../clinics/api";
 export type Page<T> = { data: T[]; meta: { page: number; per_page: number; total: number; last_page: number }; capabilities?: Capabilities };
-export type Capabilities = Record<"manage" | "receive" | "adjust" | "issue" | "return" | "export", boolean>;
+export type Capabilities = Record<"suppliers_write" | "stores_write" | "confirm" | "manage" | "receive" | "adjust" | "issue" | "return" | "export", boolean>;
 export type DirectoryKind = "suppliers" | "stores";
 export type DirectoryRow = { id: number; facility_id: number; code: string; name_ar: string; location?: string | null; contact_person?: string | null; phone?: string | null; address_line?: string | null; note?: string | null; is_active: boolean; archived_at: string | null; lock_version: number };
 export type ReceiptItem = { id: number; medication_id: number; medication_code: string | null; medication_name_ar: string | null; batch_number: string; expiry_date: string; manufactured_on: string | null; quantity: string; free_quantity: string; unit_cost: string | null; note: string | null; batch_id: number | null };

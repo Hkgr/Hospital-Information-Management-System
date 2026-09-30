@@ -10,6 +10,7 @@ let browser;
 before(async () => { browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined }); });
 after(async () => { await browser?.close(); });
 async function setup({ width=1440, access=[{facility,permissions,roles:[]}], settings=options, path='/doctors', override=()=>false }={}) {
+  settings = { ...settings, capabilities: { ...settings.capabilities, deactivate: settings.capabilities.update, restore: settings.capabilities.update, reactivate: settings.capabilities.update, archive: settings.capabilities.delete, destroy: settings.capabilities.delete } };
   const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce'});
   await context.addInitScript(()=>sessionStorage.setItem('hospital.bearer','doctor-ui-fixture'));
   const page=await context.newPage(); const calls=[],errors=[];
