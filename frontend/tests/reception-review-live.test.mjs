@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
 
-const base = 'http://127.0.0.1:3194';
+const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3198';
+assert.ok(['localhost', '127.0.0.1'].includes(new URL(base).hostname));
 const backend = fileURLToPath(new URL('../../backend/', import.meta.url));
 let fixture, browser;
 function setup(mode) {
@@ -45,7 +46,7 @@ test('real UI corrects own identity, preserves invalid draft, requests and appro
   try {
     await page.goto(`${base}/reception?facility_id=${fixture.facility}`);
     await page.getByRole('searchbox').fill(record.code);
-    await page.getByRole('button', { name: 'فتح ملخص الاستقبال', exact: true }).click();
+    await page.getByRole('button', { name: 'فتح البطاقة', exact: true }).click();
     const editor = page.getByRole('region', { name: 'تصحيح الهوية وطلبات المراجعة' });
     await editor.getByRole('checkbox', { name: 'تصحيح الاسم الأول' }).check();
     await editor.getByLabel('الاسم الأول', { exact: true }).fill('');
@@ -69,6 +70,7 @@ test('real UI corrects own identity, preserves invalid draft, requests and appro
     const admin = await pageFor(true);
     try {
       await admin.page.goto(`${base}/reception-admin?facility_id=${fixture.facility}&tab=corrections&id=${request}`);
+      await admin.page.waitForURL(/\/patient-cards\/reviews\?/);
       await admin.page.getByLabel('سبب القرار').fill('مراجعة تعريفية مؤكدة');
       await admin.page.getByRole('checkbox', { name: 'راجعت القيم الحالية وأثر القرار' }).check();
       const approved = admin.page.waitForResponse(r => r.url().endsWith('/decision') && r.status() === 200);
@@ -105,7 +107,7 @@ test('independent PHP workers serialize edits and identical UUID replay on real 
   await race(await card(), true);
 });
 
-test('real duplicate review blocks clinical relinking; account UI freeze revokes the clerk session', async () => {
+test('real duplicate review blocks clinical relinking; old account UI redirects to users and retired writes leave the clerk unchanged', async () => {
   const first = await card(), second = await card();
   const preview = await api(`reception/reviews/duplicates/preview&canonical_dossier_id=${first.id}&duplicate_dossier_id=${second.id}`.replace('preview&', 'preview?'), undefined, true);
   assert.equal(preview.status, 200); assert.equal(preview.json.data.can_merge, false);
@@ -116,12 +118,10 @@ test('real duplicate review blocks clinical relinking; account UI freeze revokes
   const { context, page } = await pageFor(true);
   try {
     await page.goto(`${base}/reception-admin?facility_id=${fixture.facility}&tab=accounts`);
-    await page.getByRole('row').filter({ hasText: fixture.clerk.name }).getByRole('button', { name: 'إدارة الحساب' }).click();
-    const editor = page.getByRole('region', { name: 'إدارة حساب الاستقبال' });
-    await editor.getByLabel('الحساب فعال').uncheck();
-    await editor.getByLabel('سبب تغيير الحساب').fill('تجميد اختباري');
-    const frozen = page.waitForResponse(r => r.url().endsWith(`/accounts/${fixture.clerk.id}`) && r.status() === 200);
-    await editor.getByRole('button', { name: 'تأكيد تغيير الحساب' }).click(); await frozen;
-    assert.equal((await api('reception/options')).status, 401);
+    await page.waitForURL(/\/users\?/);
+    const retired = await api(`reception/reviews/accounts/${fixture.clerk.id}`, { request_id: randomUUID(), lock_version: 1, is_active: false, permissions: [], reason: 'retired route' }, true, 'PUT');
+    assert.equal(retired.status, 410);
+    assert.equal(retired.json.error.code, 'RECEPTION_ACCOUNTS_RETIRED');
+    assert.equal((await api('patient-cards/options')).status, 200, 'Retired account write did not freeze the account');
   } finally { await context.close(); }
 });

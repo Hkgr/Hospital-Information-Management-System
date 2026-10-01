@@ -1,5 +1,8 @@
 # Permission matrix — Phase 1
 
+> Current card entry/access and retired reception-account routes: [Direct patient-card entry](direct-patient-card-entry.md). Earlier phase-specific routes and global-grant prerequisites below describe the historical implementation, not a required setup for the current local card flow.
+
+
 > Current upgrade: [explicit access administration](explicit-access-administration.md)
 > supersedes the historical automatic super-admin policy and assignment command
 > below. Use the fingerprinted consolidation preview/apply procedure. Do not rerun

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Dossiers\RegisterReception;
-use App\Services\Auth\GlobalAccess;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierPersonalWriter;
 use App\Services\Dossiers\DossierWorkflowActions;
@@ -17,9 +16,9 @@ class ReceptionController extends Controller
     public function options(Request $r)
     {
         $f = $this->scope($r);
-        $global = app(GlobalAccess::class);
+        $register = in_array('patient_cards.register', $f['permissions'], true);
 
-        return response()->json(['data' => ['today' => $f['today'], 'can_manage_global_access' => in_array('users.view', $f['permissions'], true) && $global->allows($r->user(), 'users.global.view'), 'can_search' => $global->allows($r->user(), 'patients.basic.search'), 'can_create_patient' => $global->allows($r->user(), 'patients.basic.create'), 'can_register' => in_array('patient_cards.register', $f['permissions'], true)]]);
+        return response()->json(['data' => ['today' => $f['today'], 'can_search' => true, 'can_create_patient' => $register, 'can_register' => $register]]);
     }
 
     private function scope(Request $r, string $action = 'view'): array
@@ -32,14 +31,13 @@ class ReceptionController extends Controller
     public function search(Request $r)
     {
         $f = $this->scope($r);
-        app(ReceptionAccess::class)->patients($r->user(), 'search');
         $r->validate(['search' => ['required', 'string', 'max:100']]);
         $term = trim(preg_replace('/\s+/u', ' ', $r->string('search')));
         if (mb_strlen($term) < 3) {
             return response()->json(['data' => []]);
         }
         $like = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $term).'%';
-        $rows = DB::table('patients as p')->where('p.status', 'active')->where(fn ($q) => $q->where('p.patient_code', $term)->orWhere('p.national_id', $term)->orWhereExists(fn ($a) => $a->selectRaw('1')->from('patients as alias')->whereColumn('alias.merged_into_id', 'p.id')->where('alias.patient_code', $term))->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', p.first_name, p.family_name), '[[:space:]]+', ' ') LIKE ? ESCAPE '!'", [$like]))
+        $rows = app(ReceptionAccess::class)->scopePatients(DB::table('patients as p'), $r->user(), $f)->where('p.status', 'active')->where(fn ($q) => $q->where('p.patient_code', $term)->orWhere('p.national_id', $term)->orWhereExists(fn ($a) => $a->selectRaw('1')->from('patients as alias')->whereColumn('alias.merged_into_id', 'p.id')->where('alias.patient_code', $term))->orWhereRaw("REGEXP_REPLACE(CONCAT_WS(' ', p.first_name, p.family_name), '[[:space:]]+', ' ') LIKE ? ESCAPE '!'", [$like]))
             ->select('p.id', 'p.patient_code as code', 'p.first_name', 'p.family_name', 'p.birth_date', 'p.gender')
             ->selectSub(DB::table('patient_dossiers as d')->whereColumn('d.patient_id', 'p.id')->where('d.facility_id', $f['id'])->select('d.id')->limit(1), 'dossier_id')->orderBy('p.first_name')->orderBy('p.id')->limit(10)->get();
 

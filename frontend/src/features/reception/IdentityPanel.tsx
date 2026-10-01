@@ -12,7 +12,7 @@ type Snapshot = { id: number; code: string; patient_version: number; dossier_ver
   requests: { id: number; status: string; reason: string; decision_reason: string | null }[] };
 
 export default function IdentityPanel({ facility, id }: { facility: number; id: number }) {
-  const result = useClinicRequest<Snapshot>(`reception/cards/${id}/identity?facility_id=${facility}`, false, true);
+  const result = useClinicRequest<Snapshot>(`patient-cards/cards/${id}/identity?facility_id=${facility}`, false, true);
   return <section className={styles.panel} aria-label="تصحيح الهوية وطلبات المراجعة">
     <h3>تصحيح الهوية الشخصية</h3>
     {result.error && <p role="alert">{result.error}</p>}
@@ -38,7 +38,7 @@ function Editor({ data, facility, refresh }: { data: Snapshot; facility: number;
   async function submit(direct: boolean) {
     if (!ready) return;
     const changes = Object.fromEntries(selected.map(key => [key, draft[key] || null]));
-    const saved = await write.save(`reception/cards/${data.id}/${direct ? "correct" : "corrections"}`, { facility_id: facility, ...versions, changes, reason });
+    const saved = await write.save(`patient-cards/cards/${data.id}/${direct ? "correct" : "corrections"}`, { facility_id: facility, ...versions, changes, reason });
     if (saved) { setMessage(direct ? "حُفظ التصحيح. المهلة الأصلية لا تتجدد." : "أُرسل الطلب للمراجعة دون تغيير الهوية."); setSelected([]); refresh(); }
   }
   return <>

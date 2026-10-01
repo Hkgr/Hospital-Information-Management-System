@@ -25,8 +25,8 @@ if ($mode === 'prepare') {
         foreach (['أ', 'ب'] as $i => $name) {
             $f['facilities'][] = DB::table('facilities')->insertGetId(['code' => 'UNIFIED-'.$tag.'-'.$i, 'name_ar' => 'مشفى التدريب '.$name, 'timezone' => 'Asia/Damascus']);
         }
-        $basic = ['patients.basic.view', 'patient_cards.register', 'patients.basic.search', 'patients.basic.create', 'patients.own.correct', 'patients.corrections.request'];
-        $medical = [...$basic, 'dossiers.medical.view', 'dossiers.visits.view', 'dossiers.medical.update', 'dossiers.visits.create', 'dossiers.visits.draft.update', 'dossiers.diagnoses.update', 'dossiers.services.update', 'dossiers.procedures.update', 'dossiers.prescriptions.update', 'dossiers.outcomes.update', 'dossiers.visits.complete'];
+        $basic = ['patients.basic.view', 'patient_cards.register', 'patients.own.correct', 'patients.corrections.request'];
+        $medical = [...$basic, 'patients.basic.search', 'patients.basic.create', 'dossiers.medical.view', 'dossiers.visits.view', 'dossiers.medical.update', 'dossiers.visits.create', 'dossiers.visits.draft.update', 'dossiers.diagnoses.update', 'dossiers.services.update', 'dossiers.procedures.update', 'dossiers.prescriptions.update', 'dossiers.outcomes.update', 'dossiers.visits.complete'];
         $manager = array_unique([...array_keys(TaskPermissions::TASKS), ...$medical, 'users.view', 'users.create', 'roles.view', 'roles.create', 'roles.update', 'stock.view', 'blood_bank.view', 'clinics.view', 'doctors.view', 'catalog.view', 'dossiers.treatment.view']);
         foreach (['clerk' => $basic, 'medical' => $medical, 'manager' => $manager, 'service' => ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.services.update'], 'none' => []] as $kind => $codes) {
             $u = User::factory()->create(['username' => 'unified-'.$tag.'-'.$kind, 'name' => 'مستخدم تدريب '.$kind]);
@@ -40,7 +40,7 @@ if ($mode === 'prepare') {
                 DB::table('role_permissions')->insert(['role_id' => $role, 'permission_id' => $permission]);
             }
             DB::table('facility_user_roles')->insert(['facility_id' => $f['facilities'][0], 'user_id' => $u->id, 'role_id' => $role]);
-            if (in_array($kind, ['clerk', 'medical', 'manager'])) {
+            if (in_array($kind, ['medical', 'manager'])) {
                 DB::table('global_user_roles')->insert(['user_id' => $u->id, 'role_id' => $role]);
             }
             $f['users'][$kind] = ['id' => $u->id, 'username' => $u->username];

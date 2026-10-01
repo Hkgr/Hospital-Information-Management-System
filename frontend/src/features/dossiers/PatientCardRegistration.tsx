@@ -11,38 +11,38 @@ import { DirectoryBack, DirectoryTable } from "../directory/DirectoryPrimitives"
 import { useClinicRequest } from "../clinics/api";
 import useClinicSearch from "../clinics/useClinicSearch";
 import { personalChoices, type WorkflowActions } from "../dossiers/wizard";
-import IdentityPanel from "./IdentityPanel";
+import IdentityPanel from "../reception/IdentityPanel";
 import styles from "../clinics/clinics.module.css";
 import layout from "../dossiers/wizard.module.css";
 
 type Patient = { id: number; code: string; first_name: string; family_name: string; birth_date: string | null; gender: string; dossier_id: number | null };
 type Card = Omit<Patient, "dossier_id"> & { patient_id: number; status: string; opening_date: string; registration_visit_id: number | null; workflow: WorkflowActions | null };
-type Options = { can_manage_global_access?: boolean; today: string; can_search: boolean; can_create_patient: boolean; can_register: boolean };
+type Options = { today: string; can_search: boolean; can_create_patient: boolean; can_register: boolean };
 const initialDraft = { first_name: "", family_name: "", father_name: "", mother_name: "", national_id: "", phone: "", alt_phone: "", birth_date: "", birth_date_accuracy: "unknown", gender: "unknown", marital_status: "unknown", address_line: "", displacement_status: "unknown", permanent_address: "", occupation: "", opening_date: "", visit_date: "" };
 const normalize = (value: string) => value.trim().replace(/\s+/g, " ");
 
-export default function ReceptionScreen({ id }: { id?: string }) {
+export default function PatientCardRegistration({ id, create = false }: { id?: string; create?: boolean }) {
   const identity = useIdentity(), params = useSearchParams();
   const { entry } = directoryFacility(identity.access, "patients.basic.view", params.get("facility_id"));
   if (!entry || (id && !/^[1-9]\d*$/.test(id))) return <section className={styles.status}><h2>بطاقات المرضى</h2><p role="alert">لا يتوفر وصول إلى البيانات الأساسية في المشفى المحدد. راجع مسؤول الصلاحيات.</p></section>;
-  return <Registration key={`${identity.user.id}:${entry.facility.id}:${id ?? "search"}`} id={id} facility={entry.facility.id} hospital={entry.facility.name_ar} medical={entry.permissions.includes("dossiers.medical.view")} />;
+  return <Registration key={`${identity.user.id}:${entry.facility.id}:${id ?? create}`} id={id} create={create} facility={entry.facility.id} hospital={entry.facility.name_ar} medical={entry.permissions.includes("dossiers.medical.view")} />;
 }
 
-function Registration({ facility, hospital, id, medical }: { facility: number; hospital: string; id?: string; medical: boolean }) {
+function Registration({ facility, hospital, id, medical, create }: { facility: number; hospital: string; id?: string; medical: boolean; create: boolean }) {
   const params = useSearchParams(), path = usePathname(), router = useRouter();
   const search = useClinicSearch(path, params.toString(), facility);
-  const options = useClinicRequest<Options>(`reception/options?facility_id=${facility}`);
+  const options = useClinicRequest<Options>(`patient-cards/options?facility_id=${facility}`);
   const term = normalize(search.committed);
-  const results = useClinicRequest<Patient[]>(options.data?.can_search && term.length >= 3 ? `reception/patients?facility_id=${facility}&search=${encodeURIComponent(term)}` : null);
-  const detail = useClinicRequest<Card>(id ? `reception/cards/${id}?facility_id=${facility}` : null);
-  const [selected, setSelected] = useState<Patient | null>(null), [creating, setCreating] = useState(false);
+  const results = useClinicRequest<Patient[]>(options.data?.can_search && term.length >= 3 ? `patient-cards/patients?facility_id=${facility}&search=${encodeURIComponent(term)}` : null);
+  const detail = useClinicRequest<Card>(id ? `patient-cards/cards/${id}?facility_id=${facility}` : null);
+  const [selected, setSelected] = useState<Patient | null>(null), [creating, setCreating] = useState(create && !id);
   const [saved, setSaved] = useState<Card | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState<AuthError | null>(null);
   const [draft, setDraft] = useState(initialDraft), [reviewedMatch, setReviewedMatch] = useState("");
   const pending = useRef<AbortController | null>(null), reservation = useRef<{ body: string; id: string } | null>(null), form = useRef<HTMLFormElement>(null);
   const duplicateTerm = creating ? normalize(`${draft.first_name} ${draft.family_name}`) : "";
   const [settledName, setSettledName] = useState("");
   useEffect(() => { const timer = setTimeout(() => setSettledName(duplicateTerm), 300); return () => clearTimeout(timer); }, [duplicateTerm]);
-  const duplicates = useClinicRequest<Patient[]>(creating && options.data?.can_search && settledName.length >= 3 ? `reception/patients?facility_id=${facility}&search=${encodeURIComponent(settledName)}` : null);
+  const duplicates = useClinicRequest<Patient[]>(creating && options.data?.can_search && settledName.length >= 3 ? `patient-cards/patients?facility_id=${facility}&search=${encodeURIComponent(settledName)}` : null);
   const duplicatePending = !!options.data?.can_search && duplicateTerm.length >= 3 && (settledName !== duplicateTerm || duplicates.loading);
   const matches = settledName === duplicateTerm ? duplicates.data ?? [] : [];
   const duplicateKey = `${duplicateTerm}:${matches.map(p => p.id).join(",")}`;
@@ -56,7 +56,7 @@ function Registration({ facility, hospital, id, medical }: { facility: number; h
     if (patient.dossier_id) router.push(`/patient-cards/${patient.dossier_id}?${back}&view=registration`);
     else { setSelected(patient); setDraft(value => ({ ...value, opening_date: value.opening_date || options.data?.today || "" })); }
   }
-  function start() { setCreating(true); setSelected(null); setSaved(null); setError(null); setDraft(value => ({ ...value, opening_date: value.opening_date || options.data?.today || "" })); }
+  function start() { setCreating(true); setSelected(null); setSaved(null); setError(null); }
   async function save() {
     if (pending.current || !options.data?.can_register || (!creating && !selected) || selected?.dossier_id || creating && (duplicatePending || !!duplicates.error || matches.length > 0 && reviewedMatch !== duplicateKey)) return;
     const c = new AbortController(); pending.current = c; setBusy(true); setError(null);
@@ -65,7 +65,7 @@ function Registration({ facility, hospital, id, medical }: { facility: number; h
     const body = JSON.stringify(payload);
     if (reservation.current?.body !== body) reservation.current = { body, id: crypto.randomUUID() };
     try {
-      const value = await apiRequest<Card>("reception/registrations", { method: "POST", signal: c.signal, body: JSON.stringify({ ...payload, request_id: reservation.current.id }) });
+      const value = await apiRequest<Card>("patient-cards/registrations", { method: "POST", signal: c.signal, body: JSON.stringify({ ...payload, request_id: reservation.current.id }) });
       if (!c.signal.aborted) { setSaved(value); setCreating(false); setSelected(null); setDraft(initialDraft); }
     } catch (e) { if (!c.signal.aborted) setError(e as AuthError); }
     finally { if (pending.current === c) pending.current = null; if (!c.signal.aborted) setBusy(false); }
@@ -77,21 +77,21 @@ function Registration({ facility, hospital, id, medical }: { facility: number; h
   function patientTable(rows: Patient[], label: string) { return <DirectoryTable label={label} headers={["الكود", "الاسم", "الميلاد", "الإجراء"]}>{rows.map(p => <tr key={p.id}><td><bdi>{p.code}</bdi></td><td>{p.first_name} {p.family_name}</td><td>{p.birth_date ?? "غير معروف"}</td><td><button type="button" className={styles.secondary} disabled={busy} onClick={() => open(p)}>{p.dossier_id ? "فتح البطاقة" : "اختيار هذه الهوية"}</button></td></tr>)}</DirectoryTable>; }
   return <div className={styles.screen}>
     {(id || creating || selected) && <DirectoryBack href={`/patient-cards?${back}`}>العودة إلى بطاقات المرضى</DirectoryBack>}
-    <header className={styles.heading}><div><h2>بطاقات المرضى · البحث والتسجيل</h2><p>{hospital}</p></div><Link className={styles.secondary} href={`/guide?facility_id=${facility}`}>دليل مصوّر للتسجيل</Link></header>
+    <header className={styles.heading}><div><h2>{create && !card ? "إضافة بطاقة مريض" : "بطاقات المرضى"}</h2><p>{hospital}</p></div><Link className={styles.secondary} href={`/guide?facility_id=${facility}`}>دليل إضافة البطاقة</Link></header>
     <p className={styles.scopeNote}><LuFolderHeart aria-hidden="true" /> هوية وكود واحد للمريض، وبطاقة للمشفى وزيارات متعددة. هذه الشاشة تعرض البيانات الأساسية فقط.</p>
     {[options.error, results.error, detail.error].filter(Boolean).map((message, i) => <p role="alert" key={i}>{message}<button className={styles.secondary} disabled={busy} onClick={() => { options.retry(); results.retry(); detail.retry(); }}>إعادة المحاولة</button></p>)}
     {error && <p role="alert">{error.message}{error.code === "DOSSIER_ALREADY_EXISTS" && typeof error.details.existing_dossier_id === "number" && <Link className={styles.secondary} href={`/patient-cards/${error.details.existing_dossier_id}?${back}&view=registration`}>فتح البطاقة الموجودة</Link>}</p>}
     {!options.data && !options.error && <p role="status">جارٍ التحقق من صلاحيات التسجيل…</p>}
-    {!id && options.data?.can_search && <section className={styles.panel}><h3><LuSearch aria-hidden="true" /> ١. ابحث عن المريض أولًا</h3><label className={styles.search}>الاسم أو كود المريض أو الرقم الوطني<input type="search" value={search.search} disabled={busy} onChange={e => search.change(e.target.value)} placeholder="ثلاثة محارف على الأقل" /></label><p className={styles.hint}>عشر نتائج كحد أقصى. كود المريض نظامي مستقل عن الرقم الوطني. لا تعرض النتائج معلومات طبية.</p>{search.searching || results.loading ? <p role="status">جارٍ البحث…</p> : term.length >= 3 && results.data ? results.data.length ? patientTable(results.data, "نتائج البحث المحدود") : <p role="status">لا توجد نتائج مطابقة. راجع الاسم والمعرّف قبل إنشاء مريض جديد.</p> : null}</section>}
-    {!id && options.data && !options.data.can_search && <p className={styles.hint}>الدور المحلي لا يكفي للبحث في الهوية المشتركة. اطلب من مسؤول التفويض فتح تفاصيل حسابك في إدارة المستخدمين وتفعيل «البحث المحدود عن المريض» ضمن التفويض العالمي، ثم حفظ فرق الوصول. {options.data.can_manage_global_access && <Link href={`/users?facility_id=${facility}`}>إدارة التفويض العالمي</Link>} يمكنك استخدام العمليات الأخرى المسموحة؛ لا تُدمج الأسماء المتشابهة تلقائيًا.</p>}
-    {!id && !creating && options.data?.can_create_patient && options.data.can_register && <button className={styles.primary} disabled={busy || options.data.can_search && (term.length < 3 || search.searching || results.loading || !results.data || !!results.error)} onClick={start}>تسجيل مريض جديد</button>}
+    {!id && options.data?.can_search && <details className={styles.detailPanel} open={!create || undefined}><summary><LuSearch aria-hidden="true" /> البحث عن مريض موجود</summary><label className={styles.search}>الاسم أو كود المريض أو الرقم الوطني<input type="search" value={search.search} disabled={busy} onChange={e => search.change(e.target.value)} placeholder="ثلاثة محارف على الأقل للبحث فقط" /></label><p className={styles.hint}>البحث اختياري لفتح النموذج. يعرض عشر هويات كحد أقصى ضمن النطاق المسموح، دون معلومات طبية.</p>{search.searching || results.loading ? <p role="status">جارٍ البحث…</p> : term.length >= 3 && results.data ? results.data.length ? patientTable(results.data, "نتائج البحث المحدود") : <p role="status">لا توجد نتائج مطابقة. راجع الاسم والمعرّف قبل إنشاء مريض جديد.</p> : null}</details>}
+    {!id && !creating && !selected && !card && options.data?.can_register && <Link className={styles.primary} href={`/patient-cards/new?facility_id=${facility}`}>إضافة بطاقة مريض</Link>}
+    {create && options.data && !options.data.can_register && <p role="alert">يمكنك عرض البيانات الأساسية فقط؛ إضافة البطاقة تحتاج صلاحية «إضافة مريض وبطاقته وزيارته الأولى» داخل المشفى. راجع مسؤول الصلاحيات.</p>}
     {detail.loading && <p role="status">جارٍ فتح ملخص البطاقة…</p>}
     {card && <><section className={styles.panel} aria-label="البيانات الأساسية للبطاقة"><h3>{card.first_name} {card.family_name}</h3><dl className={styles.facts}><div><dt>كود المريض</dt><dd><bdi>{card.code}</bdi></dd></div><div><dt>حالة البطاقة</dt><dd>{card.status === "draft" ? "مسودة" : "فعالة"}</dd></div><div><dt>تاريخ فتح البطاقة</dt><dd>{card.opening_date}</dd></div></dl><p className={styles.hint}>{card.registration_visit_id ? "الزيارة الأولى محفوظة؛ يتابع الفريق الطبي الاستكمال على السجل نفسه دون تسجيل جديد." : "بطاقة محفوظة في المشفى."}</p>{card.workflow && <div className={styles.actions}><Link className={styles.secondary} href={`/patient-cards/${card.id}?facility_id=${facility}`}>فتح مساحة العمل الطبية</Link>{card.workflow.resume_section !== null && <Link className={styles.primary} href={`/patient-cards/new?facility_id=${facility}&card=${card.id}&section=${card.workflow.resume_section}`}>استكمال المسودة المحفوظة</Link>}{card.workflow.subsequent_create && <Link className={styles.secondary} href={`/patient-cards/new?facility_id=${facility}&card=${card.id}&visit=new`}>إضافة زيارة للمريض</Link>}</div>}</section><IdentityPanel key={card.id} facility={facility} id={card.id} /></>}
     {medical && !id && <Link className={styles.secondary} href={`/patient-cards?facility_id=${facility}`}>قائمة البطاقات ومساحة العمل الطبية</Link>}
-    {(creating || selected && !selected.dossier_id) && options.data?.can_register && <form ref={form} className={`${styles.panel} ${styles.form}`} noValidate onSubmit={e => { e.preventDefault(); void save(); }}><h3>٢. {creating ? "تسجيل مريض وبطاقته وزيارته الأولى" : `فتح بطاقة لـ ${selected?.first_name} ${selected?.family_name}`}</h3>{selected && <p className={styles.scopeNote}>ستُستخدم هوية المريض وكوده <bdi>{selected.code}</bdi> دون نسخ بياناته أو تغييرها.</p>}<fieldset disabled={busy}>
+    {(creating || selected && !selected.dossier_id) && options.data?.can_register && <form ref={form} className={`${styles.panel} ${styles.form}`} noValidate onSubmit={e => { e.preventDefault(); void save(); }}><h3>{creating ? "بيانات المريض وبطاقته وزيارته الأولى" : `فتح بطاقة لـ ${selected?.first_name} ${selected?.family_name}`}</h3>{selected && <p className={styles.scopeNote}>ستُستخدم هوية المريض وكوده <bdi>{selected.code}</bdi> دون نسخ بياناته أو تغييرها.<button type="button" className={styles.secondary} onClick={start} disabled={busy}>العودة إلى مسودة الشخص الجديد</button></p>}<fieldset disabled={busy}>
       {creating && <><h4 className={layout.subheading}>الهوية الأساسية</h4><div className={styles.fields}>{field("first_name", "الاسم الأول", "text", true)}{field("family_name", "اسم العائلة", "text", true)}{field("national_id", "الرقم الوطني")}{field("phone", "رقم الهاتف", "tel")}{field("birth_date", "تاريخ الميلاد", "date")}{field("birth_date_accuracy", "دقة الميلاد")}{field("gender", "الجنس")}{field("address_line", "عنوان السكن")}</div><details><summary>بيانات شخصية إضافية متاحة</summary><div className={styles.fields}>{field("father_name", "اسم الأب")}{field("mother_name", "اسم الأم")}{field("alt_phone", "هاتف بديل", "tel")}{field("marital_status", "الوضع العائلي")}{field("occupation", "المهنة")}{field("displacement_status", "حالة النزوح")}{draft.displacement_status === "idp" && field("permanent_address", "عنوان الإقامة الدائم")}</div></details>
       {duplicatePending && <p role="status">جارٍ مراجعة الأسماء المشابهة…</p>}{duplicates.error && <p role="alert">تعذّر فحص الأسماء المشابهة؛ المسودة محفوظة.<button type="button" className={styles.secondary} onClick={duplicates.retry}>إعادة فحص التشابه</button></p>}{matches.length > 0 && <section className={styles.scopeNote} aria-label="مراجعة تشابه الأسماء"><h4>وجدنا أسماء مشابهة؛ راجعها قبل الإنشاء</h4><p>هذا تنبيه للمراجعة ولا يثبت تطابق الأشخاص. اختيار هوية موجودة لا يدمج السجلات.</p>{patientTable(matches, "هويات مشابهة للمراجعة")}<label><input type="checkbox" checked={reviewedMatch === duplicateKey} onChange={e => setReviewedMatch(e.target.checked ? duplicateKey : "")} />راجعت النتائج وأؤكد أن هذا شخص آخر</label></section>}</>}
       <h4 className={layout.subheading}>التسجيل والزيارة الفعلية</h4><div className={styles.fields}>{field("opening_date", "تاريخ فتح البطاقة", "date", true)}{field("visit_date", "تاريخ الزيارة الفعلي", "date", true)}</div><p className={styles.hint}>تاريخ الفتح يخص ملف المشفى. أدخل تاريخ الزيارة التي حدثت فعلًا؛ لن يُفترض تاريخ اليوم.</p>
-    </fieldset><div className={styles.actions}><button className={styles.primary} disabled={busy || creating && (duplicatePending || !!duplicates.error || matches.length > 0 && reviewedMatch !== duplicateKey)}>{busy ? "جارٍ الحفظ…" : "حفظ البطاقة والزيارة الأولى"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={() => { setCreating(false); setSelected(null); }}>إلغاء</button></div><p className={styles.hint}>تُحفظ البطاقة والزيارة كمسودتين. لا يُنشأ شيء قبل نجاح الحفظ، ولا تُضاف معلومات طبية من هذا النموذج.</p></form>}
+    </fieldset>{creating && matches.length > 0 && reviewedMatch !== duplicateKey && <p role="status">الحفظ ينتظر مراجعة الأسماء المشابهة: اختر الهوية الموجودة أو أكد أن هذا شخص آخر.</p>}<div className={styles.actions}><button className={styles.primary} disabled={busy || creating && (duplicatePending || !!duplicates.error || matches.length > 0 && reviewedMatch !== duplicateKey)}>{busy ? "جارٍ الحفظ…" : "حفظ البطاقة والزيارة الأولى"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={() => router.push(`/patient-cards?${back}`)}>إلغاء</button></div><p className={styles.hint}>تُحفظ البطاقة والزيارة كمسودتين. لا يُنشأ شيء قبل نجاح الحفظ، ولا تُضاف معلومات طبية من هذا النموذج.</p></form>}
   </div>;
 }

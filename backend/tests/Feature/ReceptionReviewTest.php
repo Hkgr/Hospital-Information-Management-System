@@ -139,25 +139,18 @@ class ReceptionReviewTest extends TestCase
         $this->assertDatabaseHas('patients', ['id' => $card['patient_id'], 'first_name' => 'أحمد']);
     }
 
-    public function test_account_freeze_revokes_tokens_and_local_permissions_cannot_escalate(): void
+    public function test_retired_account_route_cannot_change_accounts_even_for_the_old_authorized_admin(): void
     {
-        $input = ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_active' => false, 'permissions' => ['reception.view'], 'reason' => 'تجميد مدقق'];
-        $path = 'reviews/accounts/'.$this->clerk->id;
-        $this->api('PUT', $path, $input)->assertForbidden();
-        $this->api('PUT', $path, $input, true)->assertOk();
-        $this->api('PUT', $path, $input, true)->assertOk();
-        $this->assertSame(0, $this->clerk->tokens()->count());
-        $this->assertFalse($this->clerk->fresh()->is_active);
-        $this->api('GET', 'options')->assertUnauthorized();
-        $reactivate = array_replace($input, ['request_id' => (string) Str::uuid(), 'lock_version' => 2, 'is_active' => true]);
-        $this->api('PUT', $path, $reactivate, true)->assertOk();
-        $this->token = $this->clerk->fresh()->createToken('fresh', ['api'])->plainTextToken;
-        $this->api('GET', 'options')->assertOk();
-        $this->api('POST', 'registrations', ['request_id' => (string) Str::uuid(), 'person_mode' => 'new', 'first_name' => 'أحمد', 'family_name' => 'تجريبي', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown', 'opening_date' => '2020-01-01', 'visit_date' => '2020-01-01'])->assertForbidden();
-        $this->api('PUT', $path, array_replace($reactivate, ['request_id' => (string) Str::uuid(), 'permissions' => ['dossiers.view']]), true)->assertUnprocessable();
-        $this->api('PUT', 'reviews/accounts/'.$this->admin->id, array_replace($input, ['request_id' => (string) Str::uuid()]), true)->assertForbidden();
-        DB::table('role_permissions')->where('role_id', DB::table('roles')->where('code', 'hospital_admin')->value('id'))->where('permission_id', DB::table('permissions')->where('code', 'reception.correct')->value('id'))->delete();
-        $this->api('PUT', $path, array_replace($reactivate, ['request_id' => (string) Str::uuid(), 'lock_version' => 3, 'permissions' => ['reception.correct']]), true)->assertForbidden();
+        $before = DB::table('facility_user_roles')->orderBy('id')->get()->toJson();
+        $tokens = $this->clerk->tokens()->count();
+        $input = ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_active' => false, 'permissions' => [], 'reason' => 'retired route'];
+        foreach ([false, true] as $admin) {
+            $this->api('PUT', 'reviews/accounts/'.$this->clerk->id, $input, $admin)->assertStatus(410)->assertJsonPath('error.code', 'RECEPTION_ACCOUNTS_RETIRED');
+        }
+        $this->api('GET', 'reviews/accounts', [], true)->assertStatus(410);
+        $this->assertTrue($this->clerk->fresh()->is_active);
+        $this->assertSame($tokens, $this->clerk->tokens()->count());
+        $this->assertSame($before, DB::table('facility_user_roles')->orderBy('id')->get()->toJson());
     }
 
     public function test_duplicate_with_visit_is_blocked_without_deleting_or_relinking(): void
@@ -222,7 +215,7 @@ class ReceptionReviewTest extends TestCase
         $this->api('GET', 'reviews/duplicates/preview', ['canonical_dossier_id' => $card['id'], 'duplicate_dossier_id' => $second['id']], true)->assertJsonPath('data.can_merge', false);
         $role = DB::table('roles')->where('code', 'data_entry')->value('id');
         DB::table('facility_user_roles')->insert(['facility_id' => $other, 'user_id' => $this->clerk->id, 'role_id' => $role]);
-        $this->api('PUT', 'reviews/accounts/'.$this->clerk->id, ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_active' => false, 'permissions' => [], 'reason' => 'تجميد'], true)->assertForbidden();
+        $this->api('PUT', 'reviews/accounts/'.$this->clerk->id, ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_active' => false, 'permissions' => [], 'reason' => 'تجميد'], true)->assertStatus(410);
     }
 
     public function test_protected_account_and_revoked_permissions_fail_closed_and_rollback_preserves_history(): void
@@ -238,7 +231,7 @@ class ReceptionReviewTest extends TestCase
         $this->assertDatabaseHas('reception_identity_windows', ['dossier_id' => $card['id']]);
         $protected = User::find(1) ?? User::factory()->create(['id' => 1]);
         DB::table('facility_user_roles')->insert(['facility_id' => $this->facility, 'user_id' => $protected->id, 'role_id' => DB::table('roles')->where('code', 'data_entry')->value('id')]);
-        $this->api('PUT', 'reviews/accounts/1', ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_active' => false, 'permissions' => [], 'reason' => 'غير مسموح'], true)->assertForbidden();
+        $this->api('PUT', 'reviews/accounts/1', ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_active' => false, 'permissions' => [], 'reason' => 'غير مسموح'], true)->assertStatus(410);
         $role = DB::table('roles')->where('code', 'data_entry')->value('id');
         DB::table('role_permissions')->where('role_id', $role)->where('permission_id', DB::table('permissions')->where('code', 'reception.correct')->value('id'))->delete();
         $this->api('POST', 'cards/'.$card['id'].'/correct', $this->correctionInput($card))->assertForbidden();

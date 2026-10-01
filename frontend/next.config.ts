@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
     return [
       "session", "session/activity", "settings", "settings/system-session", "guide",
       "statistics", "statistics/export/:format(pdf|xlsx)",
+      "patient-cards/cards/:dossier(\\d+)/identity", "patient-cards/cards/:dossier(\\d+)/:action(correct|corrections)",
+      "patient-cards/reviews/patients", "patient-cards/reviews/duplicates/preview", "patient-cards/reviews/:kind(corrections|duplicates)",
+      "patient-cards/reviews/:kind(corrections|duplicates)/:review(\\d+)", "patient-cards/reviews/:kind(corrections|duplicates)/:review(\\d+)/decision",
+      "patient-cards/options", "patient-cards/patients", "patient-cards/registrations", "patient-cards/cards/:dossier(\\d+)",
       "reception/cards/:dossier(\\d+)/identity", "reception/cards/:dossier(\\d+)/:action(correct|corrections)",
       "reception/reviews/patients", "reception/reviews/duplicates/preview", "reception/reviews/:kind(corrections|duplicates|accounts)",
       "reception/reviews/:kind(corrections|duplicates)/:review(\\d+)", "reception/reviews/:kind(corrections|duplicates)/:review(\\d+)/decision", "reception/reviews/accounts/:user(\\d+)",

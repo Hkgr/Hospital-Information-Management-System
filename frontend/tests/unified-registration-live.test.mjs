@@ -45,16 +45,17 @@ test('real basic registration, explicit visit date, retained draft, no medical a
     assert.equal(await f.page.getByRole('link', { name: 'الاستقبال', exact: true }).count(), 0);
     await f.page.getByRole('searchbox').fill(`مريض تدريب ${fixture.tag}`);
     await f.page.getByText('لا توجد نتائج مطابقة. راجع الاسم والمعرّف قبل إنشاء مريض جديد.').waitFor();
-    await f.page.getByRole('button', { name: 'تسجيل مريض جديد', exact: true }).click();
+    await f.page.getByRole('link', { name: 'إضافة بطاقة مريض', exact: true }).click();
     assert.equal(await f.page.getByLabel('تاريخ الزيارة الفعلي', { exact: true }).inputValue(), '');
     await f.page.getByLabel('الاسم الأول', { exact: true }).fill('مريض تدريب');
     await f.page.getByLabel('اسم العائلة', { exact: true }).fill(fixture.tag);
-    const failed = f.page.waitForResponse(r => r.url().includes('/reception/registrations') && r.status() === 422);
+    const failed = f.page.waitForResponse(r => r.url().includes('/patient-cards/registrations') && r.status() === 422);
     await f.page.getByRole('button', { name: 'حفظ البطاقة والزيارة الأولى', exact: true }).click();
     await failed;
     assert.equal(await f.page.getByLabel('الاسم الأول', { exact: true }).inputValue(), 'مريض تدريب');
     await f.page.getByLabel('تاريخ الزيارة الفعلي', { exact: true }).fill('2020-03-04');
-    const saved = f.page.waitForResponse(r => r.url().includes('/reception/registrations') && r.status() === 201);
+    await f.page.getByLabel('تاريخ فتح البطاقة', { exact: true }).fill('2020-03-04');
+    const saved = f.page.waitForResponse(r => r.url().includes('/patient-cards/registrations') && r.status() === 201);
     await f.page.getByRole('button', { name: 'حفظ البطاقة والزيارة الأولى', exact: true }).click();
     card = (await (await saved).json()).data;
     assert.equal(card.workflow, null);
@@ -83,7 +84,6 @@ test('real basic registration, explicit visit date, retained draft, no medical a
 test('real duplicate-name hint requires review; selecting the saved identity opens its existing card', async () => {
   const f = await open('clerk', `/patient-cards/new?facility_id=${fixture.facilities[0]}&search=${encodeURIComponent(`مريض تدريب ${fixture.tag}`)}`);
   try {
-    await f.page.getByRole('button', { name: 'تسجيل مريض جديد', exact: true }).click();
     await f.page.getByLabel('الاسم الأول', { exact: true }).fill('مريض تدريب');
     await f.page.getByLabel('اسم العائلة', { exact: true }).fill(fixture.tag);
     await f.page.getByRole('region', { name: 'مراجعة تشابه الأسماء' }).waitFor();
@@ -113,7 +113,7 @@ test('real task templates, explicit prerequisites, scope and no privilege escala
     await f.page.getByRole('tab', { name: 'الأدوار والصلاحيات' }).click();
     await f.page.getByRole('button', { name: 'إضافة دور', exact: true }).click();
     const dialog = f.page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'معاينة التسجيل والبيانات الأساسية' }).click();
+    await dialog.getByRole('button', { name: 'معاينة بطاقات المرضى والبيانات الأساسية' }).click();
     assert.equal(await dialog.getByRole('checkbox', { checked: true }).count(), 0);
     await dialog.getByRole('button', { name: 'إلغاء المعاينة' }).click();
     await dialog.getByLabel('البحث في الصلاحيات').fill('خدمات الزيارة');
@@ -181,9 +181,8 @@ for (const width of [390, 768, 1440]) test(`real illustrated guide, registration
     assert.ok(await f.page.getByRole('heading', { name: 'بطاقة واحدة… وزيارات متعددة' }).isVisible());
     assert.equal(await f.page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false);
     await f.page.screenshot({ path: `test-results/unified/guide-${width}.png`, fullPage: true });
-    await f.page.getByRole('link', { name: 'ابدأ: البحث والتسجيل' }).click();
-    await f.page.getByRole('searchbox').fill(`غير موجود ${fixture.tag}`);
-    await f.page.getByRole('button', { name: 'تسجيل مريض جديد', exact: true }).click();
+    await f.page.getByRole('link', { name: 'ابدأ: إضافة بطاقة مريض' }).click();
+    await f.page.getByLabel('الاسم الأول', { exact: true }).waitFor();
     await f.page.keyboard.press('Tab');
     assert.equal(await f.page.getByLabel('تاريخ الزيارة الفعلي', { exact: true }).inputValue(), '');
     await f.page.waitForFunction(() => document.getAnimations().every(a => a.playState !== 'running'));

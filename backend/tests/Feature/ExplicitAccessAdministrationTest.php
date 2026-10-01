@@ -279,6 +279,7 @@ class ExplicitAccessAdministrationTest extends TestCase
     public function test_revoked_and_inactive_delegations_take_effect_without_a_new_login(): void
     {
         $this->consolidate();
+        DB::table('patients')->insert(['identity_document_type' => 'none', 'created_by' => 1, 'search_name' => 'nobody shared', 'patient_code' => 'OUTSIDE-'.Str::random(10), 'first_name' => 'nobody', 'family_name' => 'shared', 'status' => 'active']);
         [$clerk] = $this->member();
         $view = $this->api('GET', 'users/'.$clerk->id.'/access')->assertOk()->json('data');
         $this->api('PUT', 'users/'.$clerk->id.'/access', ['lock_version' => $view['lock_version'], 'access_fingerprint' => $view['access_fingerprint'], 'reason' => 'grant search', 'global_permission_ids' => $this->ids(['patients.basic.search'])])->assertOk();
@@ -288,14 +289,14 @@ class ExplicitAccessAdministrationTest extends TestCase
 
             return $this->getJson('/api/reception/patients?facility_id='.$this->facility.'&search=nobody', ['Authorization' => 'Bearer '.$token]);
         };
-        $call()->assertOk();
+        $call()->assertOk()->assertJsonCount(1, 'data');
         DB::table('roles')->where('code', 'delegation-'.$clerk->id)->update(['is_active' => false]);
-        $call()->assertForbidden();
+        $call()->assertOk()->assertJsonCount(0, 'data');
         DB::table('roles')->where('code', 'delegation-'.$clerk->id)->update(['is_active' => true]);
         DB::table('permissions')->where('code', 'patients.basic.search')->update(['is_active' => false]);
-        $call()->assertForbidden();
+        $call()->assertOk()->assertJsonCount(0, 'data');
         DB::table('permissions')->where('code', 'patients.basic.search')->update(['is_active' => true]);
-        $call()->assertOk();
+        $call()->assertOk()->assertJsonCount(1, 'data');
         $clerk->forceFill(['is_active' => false])->save();
         $call()->assertForbidden();
         $this->assertSame(0, $clerk->tokens()->count());
@@ -318,12 +319,13 @@ class ExplicitAccessAdministrationTest extends TestCase
     public function test_global_grant_is_explicit_scoped_revocable_audited_and_does_not_expose_medical_history(): void
     {
         $this->consolidate();
+        DB::table('patients')->insert(['identity_document_type' => 'none', 'created_by' => 1, 'search_name' => 'nobody shared', 'patient_code' => 'OUTSIDE-'.Str::random(10), 'first_name' => 'nobody', 'family_name' => 'shared', 'status' => 'active']);
         [$clerk] = $this->member();
-        $this->api('GET', 'reception/patients', ['search' => 'nobody'], $clerk)->assertForbidden();
+        $this->api('GET', 'reception/patients', ['search' => 'nobody'], $clerk)->assertOk()->assertJsonCount(0, 'data');
         $access = $this->api('GET', 'users/'.$clerk->id.'/access')->assertOk()->json('data');
         $body = ['lock_version' => $access['lock_version'], 'access_fingerprint' => $access['access_fingerprint'], 'reason' => 'explicit limited registration', 'global_permission_ids' => $this->ids(['patients.basic.search', 'patients.basic.create'])];
         $saved = $this->api('PUT', 'users/'.$clerk->id.'/access', $body)->assertOk()->json('data');
-        $this->api('GET', 'reception/patients', ['search' => 'nobody'], $clerk)->assertOk();
+        $this->api('GET', 'reception/patients', ['search' => 'nobody'], $clerk)->assertOk()->assertJsonCount(1, 'data');
         $this->api('GET', 'dossiers', [], $clerk)->assertForbidden();
         $this->api('POST', 'dossiers/export/pdf', [], $clerk)->assertForbidden();
         $other = DB::table('facilities')->insertGetId(['code' => 'EA-'.Str::random(12), 'name_ar' => 'other', 'timezone' => 'Asia/Damascus']);
@@ -331,7 +333,7 @@ class ExplicitAccessAdministrationTest extends TestCase
         $this->api('PUT', 'users/'.$clerk->id.'/access', $body)->assertConflict();
         $saved = $this->api('GET', 'users/'.$clerk->id.'/access')->assertOk()->json('data');
         $this->api('PUT', 'users/'.$clerk->id.'/access', ['lock_version' => $saved['lock_version'], 'access_fingerprint' => $saved['access_fingerprint'], 'reason' => 'revoke limited search', 'global_permission_ids' => []])->assertOk();
-        $this->api('GET', 'reception/patients', ['search' => 'nobody'], $clerk)->assertForbidden();
+        $this->api('GET', 'reception/patients', ['search' => 'nobody'], $clerk)->assertOk()->assertJsonCount(0, 'data');
         $this->assertDatabaseHas('audit_logs', ['actor_id' => 1, 'entity_type' => 'auth_session', 'entity_id' => $clerk->id, 'reason' => 'revoke limited search']);
     }
 }

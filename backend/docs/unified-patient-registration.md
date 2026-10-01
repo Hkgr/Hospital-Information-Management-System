@@ -1,5 +1,7 @@
 # توحيد التسجيل وصلاحيات المهام
 
+عقد إضافة البطاقة الحالي موثق في [إضافة بطاقة المريض مباشرة](direct-patient-card-entry.md): النموذج يفتح دون بحث سابق، والصلاحيتان المحليتان تكفيان للتدفق داخل المشفى. المراجعات داخل البطاقات، وإدارة الحسابات من المستخدمين فقط؛ مسار حسابات الاستقبال القديم متوقف بـ410.
+
 ## نموذج البيانات وحدود الوصول
 
 التسجيل الأساسي والعمل الطبي يستخدمان `DossierPersonalWriter` والهوية والكود والبطاقة والزيارة نفسها. لا توجد عملية نسخ أو دمج تلقائي للأسماء. البحث المحدود لا يعيد التاريخ الطبي أو العلاج أو المرفقات. فتح بطاقة مريض موجود في مشفى آخر يعيد استخدام هويته، ولا يمنح قراءة سياقه الطبي الآخر.
@@ -15,7 +17,7 @@
 | `reception.view`، أو `dossiers.view` | `patients.basic.view` | عرض تعريف المريض في المشفى، دون التاريخ الطبي |
 | `reception.patients.search`، أو `patients.search` | `patients.basic.search` | تفويض عالمي للبحث المحدود؛ لا تكفي إضافته لدور محلي |
 | `reception.patients.create`، أو `patients.create` | `patients.basic.create` | تفويض عالمي لإنشاء الهوية، دون تعديل الهوية القائمة |
-| `reception.register`، أو اجتماع `dossiers.create` و`dossiers.visits.create` | `patient_cards.register` | تسجيل بطاقة المشفى والزيارة الأولى؛ يحتاج عرض البيانات الأساسية وتفويض الهوية المناسب |
+| `reception.register`، أو اجتماع `dossiers.create` و`dossiers.visits.create` | `patient_cards.register` | إضافة الهوية والبطاقة والزيارة الأولى داخل المشفى؛ يحتاج `patients.basic.view` ولا يحتاج تفويضًا عالميًا منفصلًا لهذا التدفق |
 | `reception.correct` | `patients.own.correct` | لا تزال الملكية والمهلة والحالة والنسخة تمنع التصحيح غير المسموح |
 | `reception.corrections.request` | `patients.corrections.request` | تقديم مقترح للمراجعة، دون اعتماده تلقائيًا |
 | `dossiers.view` | `dossiers.medical.view` و`dossiers.visits.view` | قراءة السياق الطبي والزيارات؛ لا تُمنح لموظف التسجيل تلقائيًا |

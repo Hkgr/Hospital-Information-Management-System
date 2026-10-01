@@ -98,7 +98,7 @@ class PermissionMatrixTest extends TestCase
         $this->api('GET', 'reception/options', [], $ordinary->createToken('ordinary', ['api'])->plainTextToken)->assertForbidden();
         $this->api('GET', 'reception/options')->assertOk();
         DB::table('global_user_roles')->where('user_id', $this->clerk->id)->delete();
-        $this->api('GET', 'reception/patients', ['search' => 'أحمد'])->assertForbidden();
+        $this->api('GET', 'reception/patients', ['search' => 'أحمد'])->assertOk();
         DB::table('facility_user_roles')->where('user_id', $this->clerk->id)->delete();
         $this->api('GET', 'reception/options')->assertForbidden();
         $this->clerk->is_active = false;
