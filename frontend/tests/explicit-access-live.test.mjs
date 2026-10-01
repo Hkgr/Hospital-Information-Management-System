@@ -105,3 +105,99 @@ test('roles-only viewer opens details without account access or write buttons', 
     assert.equal((await api(f.token, `users/roles/${fixture.roles.clerk}`, 'PUT', { facility_id: fixture.facility, name_ar: 'forbidden', permission_ids: [1], lock_version: 0, reason: 'forbidden' })).status, 403);
   } finally { await f.context.close(); }
 });
+
+for (const kind of ['removal', 'addition']) test(`real concurrent global role ${kind} rejects stale preview and requires explicit fresh review`, async () => {
+  const target = fixture.users[kind].id;
+  const f = await open('admin', `/users?facility_id=${fixture.facility}&account=${target}`);
+  let writes = 0;
+  f.page.on('request', r => { if (r.method() === 'PUT' && r.url().includes(`/users/${target}/access`)) writes++; });
+  try {
+    const search = f.page.getByLabel('البحث المحدود عن المريض — تفويض عالمي', { exact: true });
+    const create = f.page.getByLabel('إنشاء هوية مريض جديد — تفويض عالمي', { exact: true });
+    await (kind === 'removal' ? create : search).uncheck();
+    await f.page.getByLabel('سبب التغيير', { exact: true }).fill('معاينة قبل تغيير دور متزامن');
+    await f.page.getByRole('button', { name: 'معاينة فرق الوصول' }).click();
+    const role = await api(f.token, `users/roles/${fixture.roles[kind]}?facility_id=${fixture.facility}`);
+    const options = await api(f.token, `users/roles/options?facility_id=${fixture.facility}`);
+    const permissions = options.body.data.permission_groups.flatMap(g => g.permissions);
+    const codes = kind === 'removal' ? ['patients.basic.create'] : ['patients.basic.search', 'patients.basic.create'];
+    assert.equal((await api(f.token, `users/roles/${fixture.roles[kind]}`, 'PUT', { facility_id: fixture.facility, name_ar: role.body.data.name_ar, lock_version: role.body.data.lock_version, permission_ids: permissions.filter(p => codes.includes(p.code)).map(p => p.id), reason: 'concurrent reviewed role update' })).status, 200);
+    const rejected = f.page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes(`/users/${target}/access`));
+    await f.page.getByRole('button', { name: 'تأكيد التفويض' }).click();
+    assert.equal((await rejected).status(), 409);
+    await f.page.getByRole('region', { name: 'تعارض حالة الوصول' }).waitFor();
+    assert.equal(await f.page.getByRole('button', { name: 'تأكيد التفويض' }).isDisabled(), true);
+    assert.equal(await (kind === 'removal' ? create : search).isChecked(), false, 'The old draft remains visible after rejection');
+    await f.page.getByRole('button', { name: 'جلب أحدث حالة الوصول' }).click();
+    const comparison = f.page.locator('details').filter({ has: f.page.getByText('مقارنة صلاحيات الأدوار المحلية', { exact: true }) });
+    await comparison.locator('summary').click();
+    const currentPermissions = comparison.locator('p').filter({ hasText: /^الآن:/ });
+    for (const permission of permissions.filter(p => codes.includes(p.code))) assert.ok((await currentPermissions.allTextContents()).some(text => text.includes(permission.name_ar)));
+    await f.page.getByRole('button', { name: 'بدء مراجعة جديدة بالقيم الحالية' }).click();
+    assert.equal(writes, 1, 'Fetching and reviewing must not submit the old draft');
+    assert.equal(await create.isChecked(), true, 'The concurrent addition/current permission is preserved');
+    assert.equal(await search.isChecked(), kind === 'addition');
+    if (kind === 'addition') await search.uncheck(); else await search.check();
+    await f.page.getByRole('button', { name: 'معاينة فرق الوصول' }).click();
+    const saved = f.page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes(`/users/${target}/access`));
+    await f.page.getByRole('button', { name: 'تأكيد التفويض' }).click();
+    assert.equal((await saved).status(), 200);
+    const current = await api(f.token, `users/${target}/access?facility_id=${fixture.facility}`);
+    assert.deepEqual(current.body.data.global_effective_codes.sort(), (kind === 'addition' ? ['patients.basic.create'] : ['patients.basic.create', 'patients.basic.search']).sort());
+    assert.equal(writes, 2);
+  } finally { await f.context.close(); }
+});
+
+test('real disabled-only member stays visible and can receive an active role without deleting historical membership', async () => {
+  const member = fixture.users.disabled;
+  const f = await open('admin', `/users?facility_id=${fixture.facility}&search=${member.username}`);
+  try {
+    await f.page.getByText('لا يوجد دور فعال — يحتاج إسنادًا', { exact: true }).waitFor();
+    const listing = await api(f.token, `users?facility_id=${fixture.facility}&search=${member.username}`);
+    assert.equal(listing.body.meta.total, 1); assert.equal(listing.body.data.length, 1); assert.deepEqual(listing.body.data[0].roles, []);
+    await f.page.getByRole('link', { name: `استعراض ${member.username}`, exact: true }).click();
+    await f.page.getByText('مراجعة الأدوار المحلية وتغييرها', { exact: true }).click();
+    await f.page.getByLabel('ابحث عن دور', { exact: true }).fill(fixture.tag);
+    assert.equal(await f.page.getByLabel(`دور تدريب disabled ${fixture.tag}`, { exact: true }).count(), 0);
+    await f.page.getByLabel(`التسجيل المعتمد ${fixture.tag}`, { exact: true }).check();
+    await f.page.getByLabel('سبب التغيير', { exact: true }).fill('إصلاح الإسناد مع حفظ التاريخ');
+    await f.page.getByRole('button', { name: 'معاينة فرق الوصول' }).click();
+    const saved = f.page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes(`/users/${member.id}/access`));
+    await f.page.getByRole('button', { name: 'تأكيد التفويض' }).click();
+    assert.equal((await saved).status(), 200);
+    await f.page.getByRole('cell', { name: `التسجيل المعتمد ${fixture.tag}`, exact: true }).waitFor();
+    control('verify-reassignment');
+  } finally { await f.context.close(); }
+});
+
+for (const width of [390, 768, 1440]) test(`shared spacing keeps real screens and dialog actions usable at ${width}px`, async () => {
+  const f = await open('admin', `/users?facility_id=${fixture.facility}`, width);
+  const errors = [];
+  f.page.on('pageerror', e => errors.push(e.message));
+  const screens = ['/users', '/doctors', '/clinics', '/services-procedures', '/medications', '/blood-bank', '/patient-cards', '/patient-cards/new', '/visits', '/stock/receipts', '/reports', '/statistics', '/settings', '/guide', '/dashboard/general'];
+  try {
+    for (const path of screens) {
+      await f.page.goto(`${base}${path}?facility_id=${fixture.facility}`);
+      await f.page.getByRole('main').waitFor();
+      await f.page.waitForLoadState('networkidle');
+      await f.page.evaluate(() => document.fonts.ready);
+      assert.ok(await f.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${path} must keep horizontal scroll inside tables, not the page`);
+      const name = path.replaceAll('/', '-').replace(/^-/, '');
+      await f.page.screenshot({ path: `test-results/explicit-access/spacing-${name}-${width}.png`, fullPage: true });
+      if (path === '/clinics' || path === '/doctors' || path === '/blood-bank') {
+        const action = path === '/clinics' ? 'إضافة عيادة جديدة' : path === '/doctors' ? 'إضافة طبيب جديد' : 'تسجيل تبرع';
+        const trigger = f.page.getByRole('button', { name: action, exact: true });
+        await trigger.click();
+        const dialog = f.page.getByRole('dialog'); await dialog.waitFor();
+        await f.page.waitForLoadState('networkidle');
+        assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1), `${action} must not clip the form horizontally`);
+        const fields = dialog.locator('input:visible:not([type="checkbox"]):not([type="radio"]),select:visible,textarea:visible');
+        if (await fields.count()) { await fields.last().focus(); await fields.last().scrollIntoViewIfNeeded(); assert.equal(await fields.last().evaluate(el => el === document.activeElement), true); }
+        await dialog.screenshot({ path: `test-results/explicit-access/spacing-${name}-dialog-${width}.png` });
+        await f.page.getByRole('button', { name: 'إغلاق النافذة', exact: true }).click();
+        assert.equal(await trigger.evaluate(el => el === document.activeElement), true, 'Closing returns focus to the initiating action');
+      }
+    }
+    assert.deepEqual(errors, []);
+  } finally { await f.context.close(); }
+});

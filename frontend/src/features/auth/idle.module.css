@@ -7,10 +7,10 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-inline);
   max-height: calc(100dvh - 2rem);
   overflow: auto;
-  padding: 1rem;
+  padding: var(--space-card);
   border: 1px solid #ae7a16;
   border-radius: 1rem;
   background: #fff9e9;

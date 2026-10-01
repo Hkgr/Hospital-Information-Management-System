@@ -20,9 +20,9 @@ form.profileForm input[type="radio"] {
 }
 
 /* Extend the actual directory form/section/button primitives only inside blood-bank forms. */
-.profileForm { gap: 28px; }
-.sectionList { display: grid; gap: 30px; border: 0; padding: 0; margin: 0; min-inline-size: 0; }
-.section { min-inline-size: 0; display: grid; gap: 20px; }
+.profileForm { gap: var(--space-section); }
+.sectionList { display: grid; gap: var(--space-section); border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+.section { min-inline-size: 0; display: grid; gap: var(--space-field); }
 .profileForm label { align-content: start; text-align: start; }
 .profileForm :is(input:not([type="radio"]), select, textarea) { min-block-size: 44px; }
 .profileForm select { padding-inline-end: 2.6rem; }
@@ -33,8 +33,8 @@ form.profileForm input[type="radio"] {
 .demographics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .bloodFields { margin: 0; padding: 16px; border: 1px solid #dce7eb; border-radius: 9px; background: #f8fbfc; }
 .bloodFields legend { padding-inline: 6px; font-size: 13px; font-weight: 600; }
-.personSummary { display: flex; align-items: flex-start; gap: 14px; padding: 16px; border: 1px solid #cfe3e7; border-radius: 9px; background: #f3f9fa; overflow-wrap: anywhere; }
-.personSummary > div { display: grid; gap: 8px; min-inline-size: 0; }
+.personSummary { display: flex; align-items: flex-start; gap: var(--space-inline); padding: 16px; border: 1px solid #cfe3e7; border-radius: 9px; background: #f3f9fa; overflow-wrap: anywhere; }
+.personSummary > div { display: grid; gap: var(--space-label); min-inline-size: 0; }
 .personSummary strong { display: block; color: #285b67; font-size: 15px; line-height: 1.8; }
 .personSummary :is(small,p) { font-size: 12px; color: #526e78; margin: 0; line-height: 1.9; }
 .personIcon { display: grid; place-items: center; inline-size: 38px; block-size: 38px; flex: 0 0 38px; border-radius: 9px; background: #e0eff2; color: #0b6178; }
@@ -43,20 +43,20 @@ form.profileForm input[type="radio"] {
 .personDetails summary { color: #0b6178; font-size: 13px; cursor: pointer; padding: 8px 0; }
 .personDetails dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .personDetails dd { font-size: 14px; overflow-wrap: anywhere; }
-.secondaryActions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-block-start: 14px; }
+.secondaryActions { display: flex; flex-wrap: wrap; gap: var(--space-inline); align-items: center; margin-block-start: 14px; }
 .secondaryActions p { flex-basis: 100%; }
-.screenings { display: grid; gap: 14px; }
+.screenings { display: grid; gap: var(--space-inline); }
 .screenings > button { justify-self: start; }
 .formActions { align-items: center; flex-wrap: wrap; }
 .saveHint { margin-inline-end: auto; font-size: 12px; color: #617a82; }
-.picker { display: grid; gap: 12px; align-content: start; }
+.picker { display: grid; gap: var(--space-inline); align-content: start; }
 .picker > p { margin: 0; }
-.compactPanel { position: relative; gap: 8px; padding: 0; border: 0; background: transparent; }
+.compactPanel { position: relative; gap: var(--space-label); padding: 0; border: 0; background: transparent; }
 .pickerLegend { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .compactPanel input[type="search"] { position: sticky; inset-block-start: 0; z-index: 1; background: #fff; }
 .pickerChoices { display: grid; gap: 4px; max-block-size: 260px; overflow-y: auto; scrollbar-gutter: stable; padding: 4px; overscroll-behavior: contain; scroll-padding-block: 8px; }
 .compactChoices { gap: 2px; max-block-size: min(280px, 46dvh); padding: 2px; }
-.option { inline-size: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; min-block-size: 38px; text-align: start; white-space: normal; overflow-wrap: anywhere; border: 0; border-radius: 6px; background: transparent; color: #29454e; font: inherit; font-size: 13px; cursor: pointer; }
+.option { inline-size: 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--space-inline); padding: 8px 10px; min-block-size: 38px; text-align: start; white-space: normal; overflow-wrap: anywhere; border: 0; border-radius: 6px; background: transparent; color: #29454e; font: inherit; font-size: 13px; cursor: pointer; }
 .option:hover { background: #eef6f8; }
 .option[aria-pressed="true"] { background: #eaf5f6; color: #0b6178; font-weight: 600; }
 .pickerChoices button span { display: grid; gap: 2px; min-inline-size: 0; }
@@ -64,14 +64,14 @@ form.profileForm input[type="radio"] {
 .pickerChoices button svg { flex-shrink: 0; }
 .choiceColumns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pickerPagination { border-block-start: 1px solid #e3ecef; }
-.pickerPagination > div { justify-content: start; gap: 8px; padding-block-start: 10px; }
+.pickerPagination > div { justify-content: start; gap: var(--space-label); padding-block-start: 10px; }
 .addressField { align-self: start; }
 @media (max-width: 767px) {
-  .profileForm { gap: 24px; }
-  .sectionList { gap: 28px; }
+  .profileForm { gap: var(--space-section); }
+  .sectionList { gap: var(--space-section); }
   .section { gap: 16px; }
   .demographics { grid-template-columns: 1fr; }
-  .personSummary { padding: 12px; gap: 10px; }
+  .personSummary { padding: 12px; gap: var(--space-inline); }
   .personSummary strong { font-size: 14px; }
   .personDetails dl { grid-template-columns: 1fr; }
   .summaryFacts { display: grid; }

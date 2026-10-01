@@ -23,6 +23,15 @@ class AccountAccessDirectory
 
     public function show(Request $request, int $facility, int $id): array
     {
+        return DB::transaction(function () use ($request, $facility, $id) {
+            ProtectedRolePolicy::lockActor($request, [$id]);
+
+            return $this->present($request, $facility, $id);
+        }, 3);
+    }
+
+    private function present(Request $request, int $facility, int $id): array
+    {
         $f = app(UserAccess::class)->facility($request->user(), $facility);
         $user = $this->target($id, $facility);
         $global = app(GlobalAccess::class);
@@ -35,10 +44,14 @@ class AccountAccessDirectory
         $currentRoles = DB::table('facility_user_roles as a')->join('roles as r', 'r.id', '=', 'a.role_id')->where('a.user_id', $id)->where('a.facility_id', $facility)->where('r.is_active', true)->pluck('r.id')->all();
         $currentCodes = collect(app(PermissionCatalog::class)->codesFor($currentRoles))->flatten(1)->pluck('code')->unique()->all();
         $canAssign = ($f['can_manage_global_roles'] ?? false) || app(PermissionCatalog::class)->within($f['permissions'], $currentCodes);
+        $assignable = app(RoleDirectory::class)->assignable($f);
+        $rolePermissions = app(PermissionCatalog::class)->codesFor(array_column($assignable, 'id'));
+        $assignable = array_map(fn ($role) => $role + ['permissions' => $rolePermissions[$role['id']] ?? []], $assignable);
 
         return ['id' => $id, 'username' => $user->username, 'name' => $user->name, 'is_active' => $user->is_active, 'lock_version' => (int) $user->lock_version,
+            'access_fingerprint' => $this->fingerprint($request, $user, $facility, $assignable),
             'local_role_ids' => $currentRoles,
-            'assignable_roles' => app(RoleDirectory::class)->assignable($f),
+            'assignable_roles' => $assignable,
             'global_permissions' => $canView ? $globalPermissions->all() : [],
             'global_permission_ids' => $canView ? $globalPermissions->whereIn('code', $globalCodes)->pluck('id')->all() : [],
             'global_effective_codes' => $globalCodes,
@@ -47,19 +60,37 @@ class AccountAccessDirectory
             'protected' => $protected];
     }
 
+    private function fingerprint(Request $request, User $user, int $facility, array $assignable): string
+    {
+        // Include inactive historical assignments and every candidate shown in
+        // the picker, so selecting an as-yet unassigned role is also reviewed.
+        $local = DB::table('facility_user_roles')->where('user_id', $user->id)->orderBy('id')->lockForUpdate()->get();
+        $global = DB::table('global_user_roles')->where('user_id', $user->id)->orderBy('id')->lockForUpdate()->get();
+        $ids = $local->pluck('role_id')->merge($global->pluck('role_id'))->merge(array_column($assignable, 'id'))->unique()->all();
+        $state = [
+            'actor' => $request->user()->id, 'user' => [$user->id, (int) $user->lock_version, $user->is_active], 'facility' => $facility,
+            'local' => $local, 'global' => $global,
+            'roles' => DB::table('roles')->whereIn('id', $ids)->orderBy('id')->get(),
+            'grants' => DB::table('role_permissions')->whereIn('role_id', $ids)->orderBy('id')->get(),
+            'definitions' => DB::table('permissions')->orderBy('id')->get(['id', 'code', 'name_ar', 'is_active']),
+        ];
+
+        return hash('sha256', json_encode($state, JSON_THROW_ON_ERROR));
+    }
+
     public function update(Request $request, int $facility, int $id, array $input): array
     {
         return DB::transaction(function () use ($request, $facility, $id, $input) {
-            ProtectedRolePolicy::lockActor($request);
+            ProtectedRolePolicy::lockActor($request, [$id]);
             $user = $this->target($id, $facility, true);
             $actor = $request->user()->fresh();
             $request->setUserResolver(fn () => $actor);
             $f = app(UserAccess::class)->facility($actor, $facility);
-            $old = $this->show($request, $facility, $id);
+            $old = $this->present($request, $facility, $id);
             if ($old['protected'] || $actor->id === $id || ! $user->is_active) {
                 ProtectedRolePolicy::fail('PROTECTED_ACCOUNT_ACCESS', 'لا يمكن تغيير حساب محمي أو حسابك الحالي أو حساب معطل من هذا المسار.');
             }
-            if ((int) $user->lock_version !== (int) $input['lock_version']) {
+            if ((int) $user->lock_version !== (int) $input['lock_version'] || ! hash_equals($old['access_fingerprint'], $input['access_fingerprint'])) {
                 ProtectedRolePolicy::fail('USER_ACCESS_CONFLICT', 'تغير وصول الحساب؛ اجلب أحدث نسخة وراجع الفرق.', 409);
             }
             $before = ['local' => DB::table('facility_user_roles')->where('user_id', $id)->get()->all(), 'global' => DB::table('global_user_roles')->where('user_id', $id)->get()->all(),
@@ -71,9 +102,12 @@ class AccountAccessDirectory
                 foreach ($input['local_role_ids'] as $role) {
                     app(RoleDirectory::class)->assertAssignable($f, $role);
                 }
-                DB::table('facility_user_roles')->where('user_id', $id)->where('facility_id', $facility)->delete();
+                // Disabled role memberships are historical, not editable active
+                // choices. Retain them as well as unchanged active assignments.
+                DB::table('facility_user_roles')->where('user_id', $id)->where('facility_id', $facility)
+                    ->whereIn('role_id', $old['local_role_ids'])->whereNotIn('role_id', $input['local_role_ids'])->delete();
                 foreach ($input['local_role_ids'] as $role) {
-                    DB::table('facility_user_roles')->insert(['user_id' => $id, 'facility_id' => $facility, 'role_id' => $role, 'created_at' => now(), 'updated_at' => now()]);
+                    DB::table('facility_user_roles')->insertOrIgnore(['user_id' => $id, 'facility_id' => $facility, 'role_id' => $role, 'created_at' => now(), 'updated_at' => now()]);
                 }
             }
             if (array_key_exists('global_permission_ids', $input)) {
@@ -105,7 +139,7 @@ class AccountAccessDirectory
                 DB::table('global_user_roles')->insert(['user_id' => $id, 'role_id' => $role->id, 'created_at' => now(), 'updated_at' => now()]);
             }
             DB::table('users')->where('id', $id)->update(['lock_version' => $user->lock_version + 1]);
-            $after = $this->show($request, $facility, $id);
+            $after = $this->present($request, $facility, $id);
             ProtectedRolePolicy::audit($request, $facility, 'auth_session', $id, $before + ['lock_version' => $user->lock_version], $after + [
                 'local_roles' => DB::table('roles')->whereIn('id', $after['local_role_ids'])->orderBy('code')->pluck('code')->all(), 'permissions' => $after['global_effective_codes'],
             ], $input['reason']);

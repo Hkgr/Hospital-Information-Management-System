@@ -1,6 +1,6 @@
-.month { padding: 18px 22px; margin: 0; font-size: 18px; color: var(--mbz-action); }
+.month { padding: var(--space-field) var(--space-card); margin: 0; font-size: 18px; color: var(--mbz-action); }
 .metric { border-block-start: 1px solid #e5edf0; }
-.intro { display: grid; gap: 10px; padding: 18px 22px; }
+.intro { display: grid; gap: var(--space-inline); padding: var(--space-field) var(--space-card); }
 .intro h4, .intro p { margin: 0; }
 .intro h4 { font-size: 16px; }
 .total { color: var(--mbz-action); font-size: 13px; font-weight: 700; }

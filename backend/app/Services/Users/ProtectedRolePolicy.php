@@ -26,15 +26,19 @@ class ProtectedRolePolicy
         throw new HttpResponseException(response()->json(['error' => compact('code', 'message')], $status));
     }
 
-    public static function lockActor(Request $request): void
+    public static function lockActor(Request $request, array $additionalUsers = []): void
     {
-        $user = User::whereKey($request->user()->id)->lockForUpdate()->first();
+        // Rare access-administration transactions share this lock order: users,
+        // role directory, permission definitions, grants, then assignments.
+        // Acquire the fence before any consistent read, including under MariaDB RR.
+        $users = User::whereIn('id', array_unique([$request->user()->id, ...$additionalUsers]))->orderBy('id')->lockForUpdate()->get();
+        $user = $users->firstWhere('id', $request->user()->id);
         if (! $user?->is_active) {
             self::fail('ACCOUNT_INACTIVE', 'هذا الحساب غير فعال.');
         }
-        $roleIds = DB::table('facility_user_roles')->where('user_id', $user->id)->pluck('role_id')
-            ->merge(DB::table('global_user_roles')->where('user_id', $user->id)->pluck('role_id'))->unique()->sort()->values()->all();
-        DB::table('roles')->whereIn('id', $roleIds)->orderBy('id')->lockForUpdate()->get();
+        DB::table('roles')->orderBy('id')->lockForUpdate()->get(['id']);
+        DB::table('permissions')->orderBy('id')->lockForUpdate()->get(['id']);
+        DB::table('role_permissions')->orderBy('id')->lockForUpdate()->get(['id']);
         $request->setUserResolver(fn () => $user);
     }
 

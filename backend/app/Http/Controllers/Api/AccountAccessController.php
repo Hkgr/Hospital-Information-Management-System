@@ -22,6 +22,7 @@ class AccountAccessController extends Controller
     {
         $input = $request->validate([
             'facility_id' => ['required', 'integer', 'min:1'], 'lock_version' => ['required', 'integer', 'min:0'], 'reason' => ['required', 'string', 'min:3', 'max:255'],
+            'access_fingerprint' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/'],
             'local_role_ids' => ['sometimes', 'array', 'min:1'], 'local_role_ids.*' => ['integer', 'distinct', 'min:1'],
             'global_permission_ids' => ['sometimes', 'array'], 'global_permission_ids.*' => ['integer', 'distinct', 'min:1'],
         ]);

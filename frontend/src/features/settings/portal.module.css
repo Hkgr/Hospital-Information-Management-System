@@ -1,14 +1,15 @@
-.portal { display: grid; gap: 24px; min-inline-size: 0; }
+.portal { display: grid; gap: var(--space-section); min-inline-size: 0; }
 .help { display: flex; justify-content: flex-end; }
 .help a { color: var(--mbz-action); font-size: 13px; text-decoration: underline; text-underline-offset: 4px; padding: 8px 0; }
 .portal > section, .portal form { min-inline-size: 0; }
-.portal > section { padding: 24px; display: grid; gap: 16px; }
-.portal form { padding: 24px; display: grid; gap: 24px; }
-.portal form label { display: grid; gap: 8px; align-content: start; }
-.portal form label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: 10px; }
+.portal > section { padding: var(--space-card); display: grid; gap: 16px; }
+.portal > section[data-inset="none"] { padding: 0; gap: 0; }
+.portal form { padding: var(--space-card); display: grid; gap: var(--space-section); }
+.portal form label { display: grid; gap: var(--space-label); align-content: start; }
+.portal form label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: var(--space-inline); }
 .portal form fieldset { min-inline-size: 0; }
 .portal form p { margin: 0; line-height: 1.9; }
 .portal :is(h2,h3,h4) { overflow-wrap: anywhere; }
 .portal [role="alert"] { line-height: 1.9; }
 .portal td small { display: block; margin-block-start: 8px; line-height: 1.8; }
-@media (max-width: 600px) { .portal { gap: 20px; } .portal > section, .portal form { padding: 18px 14px; } }
+@media (max-width: 600px) { .portal { gap: var(--space-field); } .portal > section, .portal form { padding: var(--space-card); } }

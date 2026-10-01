@@ -21,15 +21,15 @@ if ($mode === 'prepare') {
         $tag = Str::lower(Str::random(10));
         $fixture = ['tag' => $tag, 'users' => [], 'roles' => []];
         $fixture['facility'] = DB::table('facilities')->insertGetId(['code' => 'EA-LIVE-'.$tag, 'name_ar' => 'مشفى التدريب — بيانات اصطناعية', 'timezone' => 'Asia/Damascus']);
-        foreach (['admin' => DB::table('permissions')->where('is_active', true)->pluck('code')->all(), 'clerk' => ['patients.basic.view'], 'viewer' => ['roles.view']] as $kind => $codes) {
+        foreach (['admin' => DB::table('permissions')->where('is_active', true)->pluck('code')->all(), 'clerk' => ['patients.basic.view'], 'viewer' => ['roles.view'], 'removal' => ['patients.basic.search', 'patients.basic.create'], 'addition' => ['patients.basic.search'], 'disabled' => ['patients.basic.view']] as $kind => $codes) {
             $user = User::factory()->create(['username' => 'ea-'.$tag.'-'.$kind, 'name' => 'حساب تدريب '.$kind]);
             $role = DB::table('roles')->insertGetId(['code' => 'ea-'.$tag.'-'.$kind, 'name_ar' => $kind === 'clerk' ? 'مدخل بيانات التدريب '.$tag : 'دور تدريب '.$kind.' '.$tag,
-                'is_system_super_admin' => $kind === 'admin', 'access_consolidated_at' => $kind === 'admin' ? now() : null]);
+                'is_system_super_admin' => $kind === 'admin', 'access_consolidated_at' => $kind === 'admin' ? now() : null, 'is_active' => $kind !== 'disabled']);
             foreach (DB::table('permissions')->whereIn('code', $codes)->pluck('id') as $id) {
                 DB::table('role_permissions')->insert(['role_id' => $role, 'permission_id' => $id]);
             }
             DB::table('facility_user_roles')->insert(['user_id' => $user->id, 'facility_id' => $fixture['facility'], 'role_id' => $role]);
-            if ($kind === 'admin') {
+            if (in_array($kind, ['admin', 'removal', 'addition'], true)) {
                 DB::table('global_user_roles')->insert(['user_id' => $user->id, 'role_id' => $role]);
             }
             $fixture['users'][$kind] = ['id' => $user->id, 'username' => $user->username];
@@ -55,6 +55,14 @@ if ($mode === 'prepare') {
         }
     }
     echo "Saved patient, canonical card and first visit verified.\n";
+} elseif ($mode === 'verify-reassignment') {
+    $f = json_decode(file_get_contents($path), true);
+    foreach (['disabled', 'registration'] as $role) {
+        if (! DB::table('facility_user_roles')->where('user_id', $f['users']['disabled']['id'])->where('role_id', $f['roles'][$role])->where('facility_id', $f['facility'])->exists()) {
+            throw new RuntimeException('Historical or new membership missing.');
+        }
+    }
+    echo "Disabled membership retained alongside explicit new active membership.\n";
 } elseif ($mode === 'cleanup') {
     $f = json_decode(file_get_contents($path), true);
     foreach ($f['users'] as $row) {

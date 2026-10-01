@@ -1,5 +1,5 @@
-.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-.choice { display: grid; gap: 8px; justify-items: start; text-align: start; padding: 16px; border: 1px solid #dce7eb; border-radius: 12px; background: #f7fafb; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--space-inline); }
+.choice { display: grid; gap: var(--space-label); justify-items: start; text-align: start; padding: 16px; border: 1px solid #dce7eb; border-radius: 12px; background: #f7fafb; }
 .choice small { font-weight: 400; line-height: 1.5; }
 .protocol { min-block-size: 8rem; resize: vertical; }
 .fields { align-items: start; }
@@ -7,15 +7,15 @@
 .fields input:not([type="checkbox"]), .fields select { min-block-size: 44px; }
 .fields select { padding-inline-end: 2.6rem; }
 .scheduled { display: inline-flex; align-items: center; min-block-size: 28px; padding: 2px 10px; border-radius: 999px; background: #e7f3f8; color: #0b6178; font-weight: 700; font-size: 12px; }
-.board { display: grid; gap: 20px; }
-.boardBlock { display: grid; gap: 10px; padding: 16px; border: 1px solid #dce7eb; border-radius: 12px; background: #fff; }
-.boardHead { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.board { display: grid; gap: var(--space-field); }
+.boardBlock { display: grid; gap: var(--space-inline); padding: 16px; border: 1px solid #dce7eb; border-radius: 12px; background: #fff; }
+.boardHead { display: flex; flex-wrap: wrap; gap: var(--space-inline); align-items: center; justify-content: space-between; }
 .boardHead h3 { margin: 0; }
 .nameButton { max-inline-size: none; font-weight: 700; }
 .todayMark { display: block; color: #0b6178; font-weight: 700; }
 .sessionRow { cursor: pointer; }
 .selectedRow { background: #e6f4f8 !important; box-shadow: inset 3px 0 #0b6178; }
 
-.review { display: grid; gap: 12px; }
-.review label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.review { display: grid; gap: var(--space-inline); }
+.review label { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-label); }
 .review small { grid-column: 2; overflow-wrap: anywhere; }

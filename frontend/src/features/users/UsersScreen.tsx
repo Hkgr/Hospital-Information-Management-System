@@ -84,7 +84,7 @@ function UsersWorkspace({ facilityId, canViewUsers }: { facilityId: number; canV
       <button type="button" role="tab" disabled={!canViewUsers} aria-selected={tab === "users"} onClick={() => setTab("users")}>المستخدمون</button>
       <button type="button" role="tab" aria-selected={tab === "roles"} onClick={() => setTab("roles")}>الأدوار والصلاحيات</button>
     </div>}
-    {tab === "users" && <section className={styles.panel} aria-label="قائمة المستخدمين">
+    {tab === "users" && <section className={styles.panel} data-inset="none" aria-label="قائمة المستخدمين">
       <div className={styles.toolbar}><label className={styles.search}><span><LuSearch aria-hidden="true" />البحث في المستخدمين</span><input type="search" placeholder="اسم المستخدم أو الاسم…" value={search} onChange={event => change(event.target.value)} /></label></div>
       {list.error && <div className={styles.status}><p role="alert">{list.error}</p><button className={styles.secondary} onClick={list.retry}>إعادة المحاولة</button></div>}
       {!list.data && !list.error && <p className={styles.status} role="status">جارٍ تحميل المستخدمين…</p>}
@@ -94,7 +94,7 @@ function UsersWorkspace({ facilityId, canViewUsers }: { facilityId: number; canV
           {list.data.data.map(row => <tr key={row.id}>
             <td><bdi>{row.username}</bdi></td>
             <td>{row.name}</td>
-            <td>{row.roles.map(role => role.name_ar).join("، ") || "بدون دور"}</td>
+            <td>{row.roles.map(role => role.name_ar).join("، ") || "لا يوجد دور فعال — يحتاج إسنادًا"}</td>
             <td><span className={row.is_active ? styles.active : styles.inactive}>{row.is_active ? "فعال" : "غير فعال"}</span></td>
             <td><DirectoryRowActions name={row.username} href={`/users?${query}&account=${row.id}`} onDelete={caps?.delete ? () => setPending(row) : undefined} /></td>
           </tr>)}
@@ -103,7 +103,7 @@ function UsersWorkspace({ facilityId, canViewUsers }: { facilityId: number; canV
         <Pagination meta={list.data.meta} onPage={value => filter("page", String(value))} onPageSize={value => filter("per_page", value)} />
       </>}
     </section>}
-    {tab === "roles" && <section className={styles.panel} aria-label="قائمة الأدوار">
+    {tab === "roles" && <section className={styles.panel} data-inset="none" aria-label="قائمة الأدوار">
       {roles.error && <div className={styles.status}><p role="alert">{roles.error}</p><button className={styles.secondary} onClick={roles.retry}>إعادة المحاولة</button></div>}
       {!roles.data && !roles.error && <p className={styles.status} role="status">جارٍ تحميل الأدوار…</p>}
       {roles.data && <>

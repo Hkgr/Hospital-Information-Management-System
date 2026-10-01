@@ -30,7 +30,7 @@
 .card {
   position: relative;
   width: 100%;
-  padding: 36px 36px 28px;
+  padding: 32px var(--space-page) var(--space-card);
   border-radius: 26px;
   overflow: hidden;
   background: rgb(255 255 255 / 82%);
@@ -48,14 +48,14 @@
 .flagRibbon span:nth-child(3) { animation-delay: .4s; }
 .flagRibbonUae { right: auto; left: -28px; transform: rotate(-45deg); background: linear-gradient(to bottom, #00732f 0%, #00732f 33%, #ffffff 33%, #ffffff 66%, #000000 66%, #000000 100%); animation-name: uaeRibbonGlow; }
 .flagRibbonUae .uaeHoist { position: absolute; left: 0; top: 0; bottom: 0; width: 28%; background: #ff0000; transform: none; animation: none; text-shadow: none; }
-.brand { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 22px; padding-top: 18px; animation: brandEnter .7s .25s both; }
+.brand { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: var(--space-section); padding-top: 18px; animation: brandEnter .7s .25s both; }
 .wordmark { text-align: center; }
 .wordmark img { display: block; width: 200px; max-width: 100%; height: auto; margin: 0 auto; }
 .wordmark p { margin: 4px 0 0; font-size: 11px; color: var(--mbz-action); line-height: 1.7; }
 .divider { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; animation: dividerEnter .6s .4s both; }
 .divider span { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--mbz-blue) 35%, transparent), transparent); }
 .divider h1 { margin: 0; font-size: 13px; font-weight: 700; color: var(--mbz-action); white-space: nowrap; letter-spacing: .5px; line-height: 1.6; }
-.form { display: flex; flex-direction: column; gap: 14px; animation: formEnter .65s .6s both; }
+.form { display: flex; flex-direction: column; gap: var(--space-field); animation: formEnter .65s .6s both; }
 .field { position: relative; display: flex; align-items: center; border-radius: 13px; border: 1.5px solid color-mix(in srgb, var(--mbz-blue) 35%, transparent); background: color-mix(in srgb, var(--mbz-surface) 65%, transparent); transition: border-color .25s, background .25s, box-shadow .25s; }
 .field:focus-within, .filled { border-color: var(--mbz-blue); background: rgb(255 255 255 / 95%); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mbz-blue) 10%, transparent), 0 4px 16px color-mix(in srgb, var(--mbz-blue) 10%, transparent); }
 .field:has([aria-invalid="true"]) { border-color: #b42318; }
@@ -72,7 +72,7 @@
 .submit:active:not(:disabled) { transform: scale(.975); }
 .shimmer { position: absolute; top: 0; left: -120%; width: 60%; height: 100%; background: linear-gradient(110deg, transparent 20%, rgb(255 255 255 / 28%) 50%, transparent 80%); transform: skewX(-18deg); animation: shimmerSlide 2.8s ease-in-out infinite; pointer-events: none; }
 .spinner { width: 22px; height: 22px; border: 3px solid rgb(255 255 255 / 30%); border-top-color: white; border-radius: 50%; animation: spin .75s linear infinite; flex-shrink: 0; }
-.footer { margin-top: 22px; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--mbz-muted); font-size: 11px; line-height: 1.7; animation: fadeIn .5s .85s both; }
+.footer { margin-top: var(--space-section); display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--mbz-muted); font-size: 11px; line-height: 1.7; animation: fadeIn .5s .85s both; }
 .footer span:last-child { color: var(--mbz-action); font-weight: 700; }
 .footer span:nth-child(2) { color: var(--mbz-blue); }
 .error { margin: 0; border: 1px solid rgb(180 35 24 / 30%); color: #a11c12; background: #fff1f0; border-radius: 10px; padding: 10px 14px; font-size: 13px; line-height: 1.8; text-align: center; }

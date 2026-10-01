@@ -27,8 +27,8 @@ class UserDirectory
         $ids = $page->getCollection()->pluck('id');
         $rows = $ids->isEmpty() ? collect() : DB::table('users as u')
             ->join('facility_user_roles as a', 'a.user_id', '=', 'u.id')
-            ->join('roles as r', 'r.id', '=', 'a.role_id')
-            ->where('a.facility_id', $f['id'])->where('r.is_active', true)->whereIn('u.id', $ids)
+            ->leftJoin('roles as r', fn ($join) => $join->on('r.id', '=', 'a.role_id')->where('r.is_active', true))
+            ->where('a.facility_id', $f['id'])->whereIn('u.id', $ids)
             ->orderBy('u.username')->orderBy('r.code')
             ->get(['u.id', 'u.username', 'u.name', 'u.email', 'u.is_active', 'u.last_login_at', 'r.id as role_id', 'r.code as role_code', 'r.name_ar as role_name']);
         $data = [];
@@ -37,7 +37,9 @@ class UserDirectory
                 'id' => (int) $row->id, 'username' => $row->username, 'name' => $row->name, 'email' => $row->email,
                 'is_active' => (bool) $row->is_active, 'last_login_at' => $row->last_login_at, 'roles' => [],
             ];
-            $data[$row->id]['roles'][] = ['id' => (int) $row->role_id, 'code' => $row->role_code, 'name_ar' => $row->role_name];
+            if ($row->role_id !== null) {
+                $data[$row->id]['roles'][] = ['id' => (int) $row->role_id, 'code' => $row->role_code, 'name_ar' => $row->role_name];
+            }
         }
 
         return ['data' => array_values($data), 'meta' => CatalogQueries::meta($page)];
@@ -91,7 +93,7 @@ class UserDirectory
     public function destroy(Request $request, array $f, int $id): void
     {
         DB::transaction(function () use ($request, $f, $id) {
-            ProtectedRolePolicy::lockActor($request);
+            ProtectedRolePolicy::lockActor($request, [$id]);
             $f = app(UserAccess::class)->facility($request->user(), $f['id'], 'delete');
             $user = User::where('id', $id)->lockForUpdate()->first();
             if (! $user || ! DB::table('facility_user_roles')->where('facility_id', $f['id'])->where('user_id', $id)->exists()) {
