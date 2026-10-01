@@ -107,7 +107,7 @@ test('real granular service-only workspace omits procedure and medication contro
   } finally { await f.context.close(); }
 });
 
-test('real task templates, explicit prerequisites, scope and no privilege escalation through Next role routes', async () => {
+test('real task templates, automatic prerequisites, scope and no privilege escalation through Next role routes', async () => {
   const f = await open('manager', `/users?facility_id=${fixture.facilities[0]}`);
   try {
     await f.page.getByRole('tab', { name: 'الأدوار والصلاحيات' }).click();
@@ -118,13 +118,12 @@ test('real task templates, explicit prerequisites, scope and no privilege escala
     await dialog.getByRole('button', { name: 'إلغاء المعاينة' }).click();
     await dialog.getByLabel('البحث في الصلاحيات').fill('خدمات الزيارة');
     await dialog.getByRole('checkbox').check();
-    await dialog.getByRole('heading', { name: 'متطلبات تحتاج اختيارًا صريحًا' }).waitFor();
+    await dialog.getByText('أُضيفت المتطلبات تلقائيًا:', { exact: false }).waitFor();
     assert.equal(await dialog.getByRole('button', { name: 'إنشاء الدور', exact: true }).isDisabled(), true);
-    await dialog.getByRole('button', { name: 'إضافة عرض التاريخ الطبي للبطاقة', exact: true }).click();
-    await dialog.getByRole('button', { name: 'إضافة عرض الزيارات المحفوظة', exact: true }).click();
     await dialog.getByLabel('اسم الدور *').fill(`دور خدمات محدود ${fixture.tag}`);
     const saved = f.page.waitForResponse(r => r.url().includes('/users/roles') && r.request().method() === 'POST');
     await dialog.getByRole('button', { name: 'إنشاء الدور', exact: true }).click();
+    await dialog.getByRole('button', { name: 'تأكيد حفظ الدور', exact: true }).click();
     const response = await saved; assert.equal(response.status(), 201);
     const role = (await response.json()).data;
     assert.deepEqual(role.permissions.map(p => p.code).sort(), ['dossiers.medical.view', 'dossiers.services.update', 'dossiers.visits.view']);
@@ -133,7 +132,7 @@ test('real task templates, explicit prerequisites, scope and no privilege escala
   } finally { await f.context.close(); }
 });
 
-test('dose void role explains linked-session correction and requires its explicit selection through Next', async () => {
+test('dose void role explains and includes linked-session correction; API still rejects omitted prerequisite', async () => {
   const f = await open('manager', `/users?facility_id=${fixture.facilities[0]}`);
   try {
     await f.page.getByRole('tab', { name: 'الأدوار والصلاحيات' }).click();
@@ -146,20 +145,17 @@ test('dose void role explains linked-session correction and requires its explici
     const options = await api(f.token, `users/options?facility_id=${fixture.facilities[0]}`);
     assert.equal(options.status, 200);
     const permissions = options.body.data.permission_groups.flatMap(g => g.permissions);
-    for (const code of ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view']) {
-      await dialog.getByRole('button', { name: `إضافة ${permissions.find(p => p.code === code).name_ar}`, exact: true }).click();
-    }
-    assert.equal(await dialog.getByRole('button', { name: 'إنشاء الدور', exact: true }).isDisabled(), true);
+    await dialog.getByText('أُضيفت المتطلبات تلقائيًا:', { exact: false }).waitFor();
     const codes = ['dossiers.medical.view', 'dossiers.visits.view', 'dossiers.treatment.view', 'dossiers.treatment.administration.void'];
     const ids = permissions.filter(p => codes.includes(p.code)).map(p => p.id);
     const denied = await api(f.token, 'users/roles', 'POST', { facility_id: fixture.facilities[0], name_ar: 'دور ناقص ممنوع', permission_ids: ids });
     assert.equal(denied.status, 422);
     assert.equal(denied.body.error.code, 'ROLE_PREREQUISITES_REQUIRED');
     assert.deepEqual(denied.body.error.missing_permissions, ['dossiers.treatment.schedule.update']);
-    await dialog.getByRole('button', { name: 'إضافة تصحيح موعد علاج', exact: true }).click();
     assert.equal(await dialog.getByRole('button', { name: 'إنشاء الدور', exact: true }).isEnabled(), true);
     const saved = f.page.waitForResponse(r => r.url().includes('/users/roles') && r.request().method() === 'POST');
     await dialog.getByRole('button', { name: 'إنشاء الدور', exact: true }).click();
+    await dialog.getByRole('button', { name: 'تأكيد حفظ الدور', exact: true }).click();
     const response = await saved;
     assert.equal(response.status(), 201);
     assert.deepEqual((await response.json()).data.permissions.map(p => p.code).sort(), [...codes, 'dossiers.treatment.schedule.update'].sort());

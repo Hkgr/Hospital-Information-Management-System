@@ -130,6 +130,7 @@ test("a permitted admin can add a role with permissions then assign it", async (
     await roleDialog.getByLabel("اسم الدور *").fill("ممرض أجنحة");
     await roleDialog.getByText("استعراض مستخدمي المنشأة", { exact: true }).click();
     await roleDialog.getByRole("button", { name: "إنشاء الدور" }).click();
+    await roleDialog.getByRole("button", { name: "تأكيد حفظ الدور" }).click();
     await roleDialog.waitFor({ state: "hidden" });
     assert.equal(calls.some(call => call.method === "POST" && call.url.pathname.endsWith("/users/roles")), true);
     await page.getByRole("tab", { name: "المستخدمون" }).click();
@@ -140,6 +141,7 @@ test("a permitted admin can add a role with permissions then assign it", async (
     await nested.getByLabel("اسم الدور *").fill("دور من المستخدم");
     await nested.getByText("إضافة مستخدم وربطه بالمنشأة", { exact: true }).click();
     await nested.getByRole("button", { name: "إنشاء الدور" }).click();
+    await nested.getByRole("button", { name: "تأكيد حفظ الدور" }).click();
     await nested.waitFor({ state: "hidden" });
     await userDialog.getByLabel("اسم المستخدم *").fill("ward-nurse");
     await userDialog.getByLabel("الاسم *").fill("ممرض الجناح");

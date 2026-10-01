@@ -120,6 +120,9 @@ class TaskPermissions
         if ($code === 'patient_cards.register') {
             $reason .= ' تشمل إنشاء الهوية ضمن معاملة البطاقة في المشفى دون تفويض عالمي إضافي؛ لا تمنح تعديل الهوية أو قراءة التاريخ الطبي.';
         }
+        if ($code === 'patients.basic.view') {
+            $reason .= ' تشمل البحث المحدود عن مرضى المشفى وبياناتهم التعريفية فقط؛ يمكن اختيارها لإداري المشفى دون دور بحث إضافي، ولا تكشف التاريخ الطبي أو هوية خارج النطاق.';
+        }
 
         return ['name_ar' => $task[0] ?? $name, 'description' => ($task[0] ?? $name).'؛ '.($scope === 'global' ? 'تفويض عالمي مستقل، ولا يمنح الوصول إلى بيانات منشأة غير مصرح بها.' : ($scope === 'allowed_records' ? 'للسجلات المسموحة فقط مع استمرار قيود الملكية والمهلة والمراجعة.' : 'داخل المشفى المصرح به فقط، مع استمرار فحوص الحالة والنسخة.')).$reason, 'scope' => $scope, 'prerequisites' => $required, 'legacy_tasks' => array_values(array_unique($legacy))];
     }

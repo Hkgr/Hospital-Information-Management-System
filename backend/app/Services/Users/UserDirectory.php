@@ -37,7 +37,9 @@ class UserDirectory
                 'id' => (int) $row->id, 'username' => $row->username, 'name' => $row->name, 'email' => $row->email,
                 'is_active' => (bool) $row->is_active, 'last_login_at' => $row->last_login_at, 'roles' => [],
             ];
-            if ($row->role_id !== null) {
+            if ($row->role_code === RoleDirectory::LEGACY_SEARCH_ROLE) {
+                $data[$row->id]['legacy_search_access'] = true;
+            } elseif ($row->role_id !== null) {
                 $data[$row->id]['roles'][] = ['id' => (int) $row->role_id, 'code' => $row->role_code, 'name_ar' => $row->role_name];
             }
         }

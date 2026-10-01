@@ -43,6 +43,8 @@ class AccountAccessDirectory
         $globalPermissions = collect(app(PermissionCatalog::class)->grouped())->pluck('permissions')->flatten(1)->where('scope', 'global')->values();
         $currentRoles = DB::table('facility_user_roles as a')->join('roles as r', 'r.id', '=', 'a.role_id')->where('a.user_id', $id)->where('a.facility_id', $facility)->where('r.is_active', true)->pluck('r.id')->all();
         $currentCodes = collect(app(PermissionCatalog::class)->codesFor($currentRoles))->flatten(1)->pluck('code')->unique()->all();
+        $historical = DB::table('roles')->whereIn('id', $currentRoles)->where('code', RoleDirectory::LEGACY_SEARCH_ROLE)->get(['id', 'code', 'name_ar']);
+        $currentRoles = array_values(array_diff($currentRoles, $historical->pluck('id')->all()));
         $canAssign = ($f['can_manage_global_roles'] ?? false) || app(PermissionCatalog::class)->within($f['permissions'], $currentCodes);
         $assignable = app(RoleDirectory::class)->assignable($f);
         $rolePermissions = app(PermissionCatalog::class)->codesFor(array_column($assignable, 'id'));
@@ -51,6 +53,7 @@ class AccountAccessDirectory
         return ['id' => $id, 'username' => $user->username, 'name' => $user->name, 'is_active' => $user->is_active, 'lock_version' => (int) $user->lock_version,
             'access_fingerprint' => $this->fingerprint($request, $user, $facility, $assignable),
             'local_role_ids' => $currentRoles,
+            'historical_roles' => $historical->all(),
             'assignable_roles' => $assignable,
             'global_permissions' => $canView ? $globalPermissions->all() : [],
             'global_permission_ids' => $canView ? $globalPermissions->whereIn('code', $globalCodes)->pluck('id')->all() : [],
