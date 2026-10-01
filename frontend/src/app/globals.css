@@ -18,6 +18,28 @@
   --mbz-action: #0b6178;
   --mbz-gradient: linear-gradient(55deg, var(--mbz-blue) 0%, var(--mbz-teal) 100%);
   --mbz-font: "Cairo", Arial, sans-serif;
+  /* Shared visual rhythm. These control spacing, never clinical behavior. */
+  --space-label: 8px;
+  --space-control: 8px;
+  --space-inline: 12px;
+  --space-field: 20px;
+  --space-section: 24px;
+  --space-card: 24px;
+  --space-page: 32px;
+  --space-table-block: 16px;
+  --space-table-inline: 16px;
+}
+
+@media (max-width: 1279px) { :root { --space-page: 24px; } }
+@media (max-width: 767px) {
+  :root {
+    --space-page: 16px;
+    --space-card: 16px;
+    --space-section: 20px;
+    --space-field: 16px;
+    --space-table-block: 12px;
+    --space-table-inline: 12px;
+  }
 }
 
 @theme inline { --font-sans: var(--mbz-font); }

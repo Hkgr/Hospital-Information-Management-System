@@ -13,10 +13,12 @@ import Modal from "@/features/clinics/Modal";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import styles from "@/features/clinics/clinics.module.css";
 
+import AccountAccessEditor from "./AccountAccessEditor";
+
 type Role = { id: number; code: string; name_ar: string };
 import TaskPermissionPicker, { missingRequirements, type Permission, type TaskTemplate } from "./TaskPermissionPicker";
 type Group = { key: string; name_ar: string; permissions: Permission[] };
-type ManagedRole = Role & { permissions: Permission[]; manageable: boolean };
+type ManagedRole = Role & { permissions: Permission[]; manageable: boolean; lock_version: number; protected?: boolean; locked_permissions?: string[] };
 type Member = { id: number; username: string; name: string; email: string | null; is_active: boolean; last_login_at: string | null; roles: Role[]; pending_global_permissions?: string[] };
 type Options = {
   roles: Role[];
@@ -28,22 +30,22 @@ type Options = {
 export default function UsersScreen() {
   const { access } = useIdentity();
   const query = useSearchParams();
-  const { entry } = directoryFacility(access, "users.view", query.get("facility_id"));
+  const { entry } = directoryFacility(access.map(e => ({ ...e, permissions: e.permissions.includes("roles.view") ? [...e.permissions, "users.view"] : e.permissions })), "users.view", query.get("facility_id"));
   const ids = query.getAll("facility_id");
   if (ids.length > 1 || (ids.length === 1 && (!/^[1-9]\d*$/.test(ids[0]) || !Number.isSafeInteger(Number(ids[0])) || Number(ids[0]) > 2147483647))) return <section className={styles.status}><h2>تعذّر اختيار المنشأة</h2><p role="alert">معرّف المنشأة غير صالح. افتح رابطًا صحيحًا أو سجّل الخروج من قائمة الحساب.</p></section>;
   if (!entry) return <section className={styles.status}><h2>إدارة المستخدمين غير متاحة</h2><p role="alert">ليس لديك وصول إلى مستخدمي المنشأة المطلوبة.</p></section>;
   return <div className={styles.screen}>
     <div className={styles.context}><LuUsers aria-hidden="true" /><span>المنشأة</span><strong>{entry.facility.name_ar}</strong></div>
-    <UsersWorkspace key={entry.facility.id} facilityId={entry.facility.id} />
+    <UsersWorkspace key={entry.facility.id} facilityId={entry.facility.id} canViewUsers={access.find(e => e.facility.id === entry.facility.id)?.permissions.includes("users.view") ?? false} />
   </div>;
 }
 
-function UsersWorkspace({ facilityId }: { facilityId: number }) {
+function UsersWorkspace({ facilityId, canViewUsers }: { facilityId: number; canViewUsers: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [revision, setRevision] = useState(0);
-  const [tab, setTab] = useState<"users" | "roles">("users");
+  const [tab, setTab] = useState<"users" | "roles">(canViewUsers ? "users" : "roles");
   const [creating, setCreating] = useState(false);
   const [notice, setNotice] = useState("");
   const [creatingRole, setCreatingRole] = useState(false);
@@ -57,8 +59,8 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
   if (committed) query.set("search", committed);
   // Options is the response's data object; lists alone retain their envelope.
   // Never keep stale capability controls while options are reloading/failed.
-  const options = useClinicRequest<Options>(`users/options?facility_id=${facilityId}`, false, false, revision);
-  const list = useClinicRequest<Page<Member>>(`users?${query}`, true, true, revision);
+  const options = useClinicRequest<Options>(`${canViewUsers ? "users/options" : "users/roles/options"}?facility_id=${facilityId}`, false, false, revision);
+  const list = useClinicRequest<Page<Member>>(canViewUsers ? `users?${query}` : "", true, true, revision);
   const roles = useClinicRequest<{ data: ManagedRole[] }>(options.data?.capabilities.roles_view ? `users/roles?facility_id=${facilityId}` : "", true, true, revision);
   function filter(key: string, value: string) {
     cancel();
@@ -79,10 +81,10 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
     {options.loading && <p className={styles.status} role="status">جارٍ تحميل خيارات إدارة المستخدمين…</p>}
     {options.error && <section className={styles.status}><p>تعذّر تحميل خيارات إدارة المستخدمين.</p><p role="alert">{options.error}</p><button className={styles.secondary} onClick={options.retry}>إعادة تحميل الخيارات</button></section>}
     {caps?.roles_view && <div className={styles.tabs} role="tablist" aria-label="أقسام إدارة المستخدمين">
-      <button type="button" role="tab" aria-selected={tab === "users"} onClick={() => setTab("users")}>المستخدمون</button>
+      <button type="button" role="tab" disabled={!canViewUsers} aria-selected={tab === "users"} onClick={() => setTab("users")}>المستخدمون</button>
       <button type="button" role="tab" aria-selected={tab === "roles"} onClick={() => setTab("roles")}>الأدوار والصلاحيات</button>
     </div>}
-    {tab === "users" && <section className={styles.panel} aria-label="قائمة المستخدمين">
+    {tab === "users" && <section className={styles.panel} data-inset="none" aria-label="قائمة المستخدمين">
       <div className={styles.toolbar}><label className={styles.search}><span><LuSearch aria-hidden="true" />البحث في المستخدمين</span><input type="search" placeholder="اسم المستخدم أو الاسم…" value={search} onChange={event => change(event.target.value)} /></label></div>
       {list.error && <div className={styles.status}><p role="alert">{list.error}</p><button className={styles.secondary} onClick={list.retry}>إعادة المحاولة</button></div>}
       {!list.data && !list.error && <p className={styles.status} role="status">جارٍ تحميل المستخدمين…</p>}
@@ -92,16 +94,16 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
           {list.data.data.map(row => <tr key={row.id}>
             <td><bdi>{row.username}</bdi></td>
             <td>{row.name}</td>
-            <td>{row.roles.map(role => role.name_ar).join("، ") || "بدون دور"}</td>
+            <td>{row.roles.map(role => role.name_ar).join("، ") || "لا يوجد دور فعال — يحتاج إسنادًا"}</td>
             <td><span className={row.is_active ? styles.active : styles.inactive}>{row.is_active ? "فعال" : "غير فعال"}</span></td>
-            <td><DirectoryRowActions name={row.username} href={`/users?${query}`} onDelete={caps?.delete ? () => setPending(row) : undefined} /></td>
+            <td><DirectoryRowActions name={row.username} href={`/users?${query}&account=${row.id}`} onDelete={caps?.delete ? () => setPending(row) : undefined} /></td>
           </tr>)}
           {!list.data.data.length && <tr><td colSpan={5}><div className={styles.status}>لا يوجد مستخدمون مطابقون.</div></td></tr>}
         </DirectoryTable>
         <Pagination meta={list.data.meta} onPage={value => filter("page", String(value))} onPageSize={value => filter("per_page", value)} />
       </>}
     </section>}
-    {tab === "roles" && <section className={styles.panel} aria-label="قائمة الأدوار">
+    {tab === "roles" && <section className={styles.panel} data-inset="none" aria-label="قائمة الأدوار">
       {roles.error && <div className={styles.status}><p role="alert">{roles.error}</p><button className={styles.secondary} onClick={roles.retry}>إعادة المحاولة</button></div>}
       {!roles.data && !roles.error && <p className={styles.status} role="status">جارٍ تحميل الأدوار…</p>}
       {roles.data && <>
@@ -111,7 +113,7 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
             <td>{row.name_ar}</td>
             <td><bdi>{row.code}</bdi></td>
             <td><span className={styles.permissionMeta}>{row.permissions.length} صلاحية</span></td>
-            <td><DirectoryRowActions name={row.name_ar} href={`/users?${query}`} onEdit={caps?.roles_update && row.manageable ? () => setEditingRole(row) : undefined} editTitle="تعديل الصلاحيات" /></td>
+            <td><DirectoryRowActions name={row.name_ar} href={`/users?${query}&role=${row.id}`} onEdit={caps?.roles_update && row.manageable ? () => setEditingRole(row) : undefined} editTitle="تعديل الصلاحيات" /></td>
           </tr>)}
           {!roles.data.data.length && <tr><td colSpan={4}><div className={styles.status}>لا توجد أدوار.</div></td></tr>}
         </DirectoryTable>
@@ -119,7 +121,9 @@ function UsersWorkspace({ facilityId }: { facilityId: number }) {
     </section>}
     {creating && options.data && <UserEditor facilityId={facilityId} roles={options.data.roles} groups={options.data.permission_groups} templates={options.data.task_templates??[]} canCreateRole={!!caps?.roles_create} onClose={() => setCreating(false)} onSaved={member => { setNotice(member.pending_global_permissions?.length ? "أُنشئ الحساب وإسناده المحلي. البحث وإنشاء هوية المريض ينتظران تفويضًا عالميًا من مسؤول النظام؛ الحساب ليس جاهزًا لهاتين العمليتين بعد." : "أُنشئ الحساب وأُسند الدور بنجاح."); setCreating(false); setRevision(value => value + 1); }} />}
     {creatingRole && options.data && <RoleEditor facilityId={facilityId} groups={options.data.permission_groups} templates={options.data.task_templates??[]} onClose={() => setCreatingRole(false)} onSaved={() => { setCreatingRole(false); setRevision(value => value + 1); }} />}
-    {editingRole && options.data && <RoleEditor facilityId={facilityId} groups={options.data.permission_groups} templates={options.data.task_templates??[]} role={editingRole} onClose={() => setEditingRole(null)} onSaved={() => { setEditingRole(null); setRevision(value => value + 1); }} />}
+    {editingRole && options.data && <RoleEditor facilityId={facilityId} groups={options.data.permission_groups} templates={options.data.task_templates??[]} role={editingRole} onClose={() => setEditingRole(null)} onSaved={() => { setEditingRole(null); setRevision(value => value + 1); window.dispatchEvent(new Event("hospital-access-refresh")); }} />}
+    {searchParams.get("role") && roles.data?.data.find(r => String(r.id) === searchParams.get("role")) && <RoleDetails role={roles.data.data.find(r => String(r.id) === searchParams.get("role"))!} onClose={() => router.replace(`/users?${query}`, { scroll: false })} onEdit={role => { router.replace(`/users?${query}`, { scroll: false }); setEditingRole(role); }} />}
+    {canViewUsers && /^[1-9]\d*$/.test(searchParams.get("account") ?? "") && <AccountAccessEditor key={searchParams.get("account")} id={Number(searchParams.get("account"))} facility={facilityId} onClose={() => router.replace(`/users?${query}`, { scroll: false })} onSaved={() => { router.replace(`/users?${query}`, { scroll: false }); setRevision(value => value + 1); }} />}
     {pending && <ConfirmUserDelete member={pending} facilityId={facilityId} onClose={() => setPending(null)} onDeleted={() => { setPending(null); setRevision(value => value + 1); }} />}
   </>;
 }
@@ -168,19 +172,22 @@ function UserEditor({ facilityId, roles, groups, templates, canCreateRole, onClo
 
 function RoleEditor({ facilityId, groups, templates, role, nested = false, onClose, onSaved }: { facilityId: number; groups: Group[]; templates: TaskTemplate[]; role?: ManagedRole; nested?: boolean; onClose: () => void; onSaved: (role: ManagedRole) => void }) {
   const [name, setName] = useState(role?.name_ar ?? "");
+  const [reason, setReason] = useState("");
+  const [review, setReview] = useState(false);
   const [selected, setSelected] = useState<number[]>(role?.permissions.map(item => item.id) ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AuthError | null>(null);
   const pending = useRef(false);
-  const missing = missingRequirements(groups, selected);
+  const missing = missingRequirements(groups, selected, !!role?.protected);
   async function save(event: React.FormEvent) {
     event.preventDefault();
     if (pending.current || missing.length) return;
+    if (role && !review) { setReview(true); return; }
     pending.current = true; setBusy(true); setError(null);
     try {
-      const saved = await apiRequest<ManagedRole>(role ? `users/roles/${role.id}` : "users/roles", {
+      const saved = await apiRequest<ManagedRole>(role ? `users/roles/${role.id}${role.protected ? "/protected-permissions" : ""}` : "users/roles", {
         method: role ? "PUT" : "POST",
-        body: JSON.stringify({ facility_id: facilityId, name_ar: name, permission_ids: selected }),
+        body: JSON.stringify({ facility_id: facilityId, name_ar: name, permission_ids: selected, ...(role ? { lock_version: role.lock_version, reason } : {}) }),
       });
       onSaved(saved);
     } catch (reason) {
@@ -189,13 +196,15 @@ function RoleEditor({ facilityId, groups, templates, role, nested = false, onClo
   }
   return <Modal title={role ? `تعديل ${role.name_ar}` : "إضافة دور"} onClose={onClose} busy={busy} size="wide">
     <form onSubmit={save} className={styles.form}>
-      <p className={styles.hint}>{nested ? "بعد حفظ الدور سيُختار تلقائيًا للمستخدم الجديد." : "حدد صلاحيات الدور من الصلاحيات المتاحة لك فقط. لا تُمنح صلاحية لا تملكها."}</p>
+      <p className={styles.hint}>{nested ? "بعد حفظ الدور سيُختار تلقائيًا للمستخدم الجديد." : role?.protected ? "هذه الاختيارات هي سياسة المدير الفعلية. إدارة التفويض مستقلة عن تنفيذ العمل الطبي؛ راجع أثر السحب قبل الحفظ." : "اختر المهام المتاحة للتفويض. لا يتغير وصول الحساب عالميًا إلا بخطوة إسناد مستقلة."}</p>
       {error && <p role="alert" className={styles.error}>{error.message}</p>}
-      <fieldset disabled={busy} className={styles.fields}>
-        <label className={styles.full}>اسم الدور *<input autoFocus required maxLength={200} value={name} onChange={e => setName(e.target.value)} aria-invalid={!!error?.fields.name_ar} />{error?.fields.name_ar && <small className={styles.fieldError}>{error.fields.name_ar}</small>}</label>
-        <TaskPermissionPicker groups={groups} templates={templates} selected={selected} onChange={setSelected} />
+      <fieldset disabled={busy || review} className={styles.fields}>
+        <label className={styles.full}>اسم الدور *<input autoFocus disabled={role?.protected} required maxLength={200} value={name} onChange={e => setName(e.target.value)} aria-invalid={!!error?.fields.name_ar} />{error?.fields.name_ar && <small className={styles.fieldError}>{error.fields.name_ar}</small>}</label>
+        <TaskPermissionPicker groups={groups} templates={templates} selected={selected} onChange={setSelected} lockedCodes={role?.locked_permissions} exact={role?.protected} />
+        {role && <label className={styles.full}>سبب تعديل الصلاحيات *<textarea required minLength={3} maxLength={255} value={reason} onChange={e => setReason(e.target.value)} /></label>}
       </fieldset>
-      <div className={styles.modalActions}><button className={styles.primary} type="submit" disabled={busy || !selected.length || !!missing.length}>{busy ? "جارٍ الحفظ…" : role ? "حفظ الدور" : "إنشاء الدور"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
+      {role && review && <section className={styles.panel} aria-label="فرق صلاحيات الدور"><h3>معاينة التغيير</h3><p>إضافة: {groups.flatMap(g => g.permissions).filter(p => selected.includes(p.id) && !role.permissions.some(old => old.id === p.id)).map(p => p.name_ar).join("، ") || "لا شيء"}</p><p>سحب: {role.permissions.filter(p => !selected.includes(p.id)).map(p => p.name_ar).join("، ") || "لا شيء"}</p><button type="button" className={styles.secondary} disabled={busy} onClick={() => setReview(false)}>العودة للاختيارات</button></section>}
+      <div className={styles.modalActions}><button className={styles.primary} type="submit" disabled={busy || !selected.length || !!missing.length || (!!role && reason.trim().length < 3)}>{busy ? "جارٍ الحفظ…" : role ? review ? "تأكيد حفظ الدور" : "معاينة وحفظ الدور" : "إنشاء الدور"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
     </form>
   </Modal>;
 }
@@ -219,4 +228,8 @@ function ConfirmUserDelete({ member, facilityId, onClose, onDeleted }: { member:
     {error && <p role="alert" className={styles.error}>{error}</p>}
     <div className={styles.modalActions}><button className={styles.primary} disabled={busy} onClick={() => void confirm()}>{busy ? "جارٍ الحذف…" : "تأكيد الحذف"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
   </Modal>;
+}
+
+function RoleDetails({ role, onClose, onEdit }: { role: ManagedRole; onClose: () => void; onEdit: (role: ManagedRole) => void }) {
+  return <Modal title={`تفاصيل ${role.name_ar}`} onClose={onClose} size="wide"><p>{role.permissions.length} صلاحية محفوظة. {role.protected && "سياسة صريحة؛ لا تُضاف الصلاحيات الجديدة تلقائيًا ولا تعيد الأدوار الأخرى صلاحية ألغيتها هنا."}</p><ul>{role.permissions.map(p => <li key={p.id}><strong>{p.name_ar}</strong> — {p.scope === "global" ? "عالمي" : "داخل المشفى"}{role.locked_permissions?.includes(p.code) && " · محمية لمنع إغلاق إدارة الوصول"}</li>)}</ul><div className={styles.modalActions}>{role.manageable && <button className={styles.primary} onClick={() => onEdit(role)}>تعديل الصلاحيات</button>}<button className={styles.secondary} onClick={onClose}>إغلاق</button></div></Modal>;
 }

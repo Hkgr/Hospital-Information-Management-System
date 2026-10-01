@@ -1,8 +1,8 @@
-.section { padding: 1.5rem; display: grid; gap: 1.2rem; min-width: 0; }
+.section { padding: var(--space-card); display: grid; gap: var(--space-section); min-width: 0; }
 .section h3, .section p { margin: 0; }
 .section p { line-height: 1.9; }
-.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; max-width: 48rem; }
-.fields label, .upload, .upload label, .filter { display: grid; gap: .6rem; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-field); max-width: 48rem; }
+.fields label, .upload, .upload label, .filter { display: grid; gap: var(--space-label); }
 .fields input, .fields select, .filter select { width: 100%; padding-block: .7rem; padding-inline-start: .7rem; padding-inline-end: 2.6rem; border: 1px solid #d7e1df; border-radius: .5rem; background-color: white; color: inherit; font: inherit; }
 .fields input { padding-inline-end: .7rem; }
 .upload { border: 1px dashed #a8c3bd; border-radius: .7rem; padding: 1.25rem; background: #f8fbfa; }

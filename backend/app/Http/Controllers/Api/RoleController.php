@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Users\SaveRoleRequest;
 use App\Http\Requests\Users\UserQueryRequest;
+use App\Services\Users\ProtectedRolePolicy;
 use App\Services\Users\RoleAccess;
 use App\Services\Users\RoleDirectory;
+use App\Services\Users\UserDirectory;
 use Dedoc\Scramble\Attributes\Group;
 use Illuminate\Http\JsonResponse;
 
@@ -21,6 +23,26 @@ class RoleController extends Controller
         $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
 
         return response()->json($this->directory->listing($facility));
+    }
+
+    public function show(UserQueryRequest $request, int $role): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+
+        return response()->json(['data' => $this->directory->detail($facility, $role)]);
+    }
+
+    public function options(UserQueryRequest $request): JsonResponse
+    {
+        $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
+
+        return response()->json(app(UserDirectory::class)->options($facility));
+    }
+
+    /** Edit the protected administrator's exact permission policy, with version and reason. */
+    public function protectedUpdate(SaveRoleRequest $request, int $role): JsonResponse
+    {
+        return response()->json(['data' => app(ProtectedRolePolicy::class)->update($request, $request->integer('facility_id'), $role, $request->validated())]);
     }
 
     /** Create an active role and attach grantable permissions. Requires roles.create and roles.view. Never auto-grants. */

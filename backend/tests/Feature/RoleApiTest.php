@@ -52,7 +52,7 @@ class RoleApiTest extends TestCase
     {
         $this->app['auth']->forgetGuards();
 
-        return $this->json($method, '/api/users'.$path, $data + ['facility_id' => $this->facility], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
+        return $this->json($method, '/api/users'.$path, $data + ['facility_id' => $this->facility] + ($method === 'PUT' ? ['lock_version' => 0, 'reason' => 'reviewed test update'] : []), ['Authorization' => 'Bearer '.($token ?? $this->token)]);
     }
 
     public function test_task_prerequisites_require_explicit_selection_and_templates_do_not_grant(): void

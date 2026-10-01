@@ -27,7 +27,7 @@ class UserDirectory
         $ids = $page->getCollection()->pluck('id');
         $rows = $ids->isEmpty() ? collect() : DB::table('users as u')
             ->join('facility_user_roles as a', 'a.user_id', '=', 'u.id')
-            ->join('roles as r', 'r.id', '=', 'a.role_id')
+            ->leftJoin('roles as r', fn ($join) => $join->on('r.id', '=', 'a.role_id')->where('r.is_active', true))
             ->where('a.facility_id', $f['id'])->whereIn('u.id', $ids)
             ->orderBy('u.username')->orderBy('r.code')
             ->get(['u.id', 'u.username', 'u.name', 'u.email', 'u.is_active', 'u.last_login_at', 'r.id as role_id', 'r.code as role_code', 'r.name_ar as role_name']);
@@ -37,7 +37,9 @@ class UserDirectory
                 'id' => (int) $row->id, 'username' => $row->username, 'name' => $row->name, 'email' => $row->email,
                 'is_active' => (bool) $row->is_active, 'last_login_at' => $row->last_login_at, 'roles' => [],
             ];
-            $data[$row->id]['roles'][] = ['id' => (int) $row->role_id, 'code' => $row->role_code, 'name_ar' => $row->role_name];
+            if ($row->role_id !== null) {
+                $data[$row->id]['roles'][] = ['id' => (int) $row->role_id, 'code' => $row->role_code, 'name_ar' => $row->role_name];
+            }
         }
 
         return ['data' => array_values($data), 'meta' => CatalogQueries::meta($page)];
@@ -47,7 +49,7 @@ class UserDirectory
     {
         $roles = app(RoleDirectory::class)->assignable($f);
 
-        return ['data' => ['roles' => $roles, 'permission_groups' => app(PermissionCatalog::class)->grouped($f['permissions']), 'task_templates' => PermissionCatalog::TEMPLATES, 'capabilities' => [
+        return ['data' => ['roles' => $roles, 'permission_groups' => app(PermissionCatalog::class)->grouped(($f['can_manage_global_roles'] ?? false) ? null : $f['permissions']), 'task_templates' => PermissionCatalog::TEMPLATES, 'capabilities' => [
             'view' => in_array('users.view', $f['permissions'], true),
             'create' => in_array('users.create', $f['permissions'], true),
             'delete' => in_array('users.delete', $f['permissions'], true),
@@ -60,6 +62,7 @@ class UserDirectory
     public function create(Request $request, array $f, array $input): array
     {
         return DB::transaction(function () use ($request, $f, $input) {
+            ProtectedRolePolicy::lockActor($request);
             $f = app(UserAccess::class)->facility($request->user(), $f['id'], 'create');
             $role = app(RoleDirectory::class)->assertAssignable($f, (int) $input['role_id']);
             if (User::where('username', $input['username'])->lockForUpdate()->exists()) {
@@ -90,6 +93,8 @@ class UserDirectory
     public function destroy(Request $request, array $f, int $id): void
     {
         DB::transaction(function () use ($request, $f, $id) {
+            ProtectedRolePolicy::lockActor($request, [$id]);
+            $f = app(UserAccess::class)->facility($request->user(), $f['id'], 'delete');
             $user = User::where('id', $id)->lockForUpdate()->first();
             if (! $user || ! DB::table('facility_user_roles')->where('facility_id', $f['id'])->where('user_id', $id)->exists()) {
                 throw new HttpResponseException(response()->json(['error' => ['code' => 'USER_NOT_FOUND', 'message' => 'المستخدم غير موجود في المنشأة المحددة.']], 404));

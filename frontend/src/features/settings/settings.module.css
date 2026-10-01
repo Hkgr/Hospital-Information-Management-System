@@ -1,12 +1,12 @@
-.page { display: grid; gap: 24px; min-inline-size: 0; }
-.card { padding: 24px; display: grid; gap: 24px; min-inline-size: 0; }
+.page { display: grid; gap: var(--space-section); min-inline-size: 0; }
+.card { padding: var(--space-card); display: grid; gap: var(--space-section); min-inline-size: 0; }
 .card h3, .card p { margin: 0; }
 .card p, .card li { line-height: 1.9; }
-.card ol { margin: 0; padding-inline-start: 24px; display: grid; gap: 12px; list-style: decimal; }
-.card label { display: grid; gap: 8px; align-content: start; }
+.card ol { margin: 0; padding-inline-start: 24px; display: grid; gap: var(--space-inline); list-style: decimal; }
+.card label { display: grid; gap: var(--space-label); align-content: start; }
 .card textarea { font: inherit; padding: 12px; border: 1px solid #d4e1e5; border-radius: 10px; inline-size: 100%; resize: vertical; }
 .notice { padding: 16px; border-inline-start: 3px solid #bb8527; border-radius: 8px; background: #fff8e9; line-height: 1.9; }
 .success { padding: 16px; border: 1px solid #b8d8ca; background: #edf8f2; border-radius: 10px; }
-.comparison { display: grid; gap: 12px; padding: 18px; background: #f4f8fb; border-radius: 10px; }
+.comparison { display: grid; gap: var(--space-inline); padding: 18px; background: #f4f8fb; border-radius: 10px; }
 .comparison > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
-@media (max-width: 600px) { .card { padding: 18px 14px; gap: 20px; } .comparison > div { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .card { padding: var(--space-card); gap: var(--space-field); } .comparison > div { grid-template-columns: minmax(0, 1fr); } }

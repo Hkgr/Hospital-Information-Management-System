@@ -19,7 +19,7 @@ class ReceptionController extends Controller
         $f = $this->scope($r);
         $global = app(GlobalAccess::class);
 
-        return response()->json(['data' => ['today' => $f['today'], 'can_search' => $global->allows($r->user(), 'patients.basic.search'), 'can_create_patient' => $global->allows($r->user(), 'patients.basic.create'), 'can_register' => in_array('patient_cards.register', $f['permissions'], true)]]);
+        return response()->json(['data' => ['today' => $f['today'], 'can_manage_global_access' => in_array('users.view', $f['permissions'], true) && $global->allows($r->user(), 'users.global.view'), 'can_search' => $global->allows($r->user(), 'patients.basic.search'), 'can_create_patient' => $global->allows($r->user(), 'patients.basic.create'), 'can_register' => in_array('patient_cards.register', $f['permissions'], true)]]);
     }
 
     private function scope(Request $r, string $action = 'view'): array

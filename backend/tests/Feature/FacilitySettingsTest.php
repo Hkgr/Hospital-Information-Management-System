@@ -130,6 +130,9 @@ class FacilitySettingsTest extends TestCase
     public function test_global_super_policy_is_separate_and_invalid_values_fail_to_default(): void
     {
         $role = DB::table('roles')->insertGetId(['code' => 'settings-system-'.Str::random(12), 'name_ar' => 'تفويض نظامي اختباري', 'is_system_super_admin' => true]);
+        foreach (DB::table('permissions')->whereIn('code', ['settings.view', 'settings.update'])->where('is_active', true)->pluck('id') as $permission) {
+            DB::table('role_permissions')->insert(['role_id' => $role, 'permission_id' => $permission]);
+        }
         DB::table('global_user_roles')->insert(['user_id' => $this->admin->id, 'role_id' => $role]);
         $this->save(1)->assertOk();
         $this->api('PUT', 'settings/system-session', ['lock_version' => 1, 'idle_minutes' => 7, 'reason' => 'سياسة المسؤول'])->assertOk();
@@ -150,7 +153,7 @@ class FacilitySettingsTest extends TestCase
         $this->assertSame($before, DB::table('global_user_roles')->count());
         $role = DB::table('roles')->where('code', 'data_entry')->value('id');
         $this->api('POST', 'users', ['username' => 'new-'.Str::random(10), 'name' => 'استقبال اختبار', 'password' => 'test-password', 'role_id' => $role])
-            ->assertCreated()->assertJsonPath('data.pending_global_permissions', ['reception.patients.search', 'reception.patients.create']);
+            ->assertCreated()->assertJsonPath('data.pending_global_permissions', ['reception.patients.create', 'reception.patients.search']);
         $this->assertSame($before, DB::table('global_user_roles')->count());
     }
 
@@ -159,7 +162,7 @@ class FacilitySettingsTest extends TestCase
         $role = DB::table('roles')->where('code', 'data_entry')->value('id');
         DB::table('global_user_roles')->insert(['user_id' => User::factory()->create()->id, 'role_id' => $role]);
         $ids = DB::table('role_permissions')->where('role_id', $role)->pluck('permission_id')->all();
-        $this->api('PUT', 'users/roles/'.$role, ['name_ar' => 'تغيير تفويض عالمي غير مسموح', 'permission_ids' => $ids])->assertForbidden()->assertJsonPath('error.code', 'GLOBAL_ROLE_PROTECTED');
+        $this->api('PUT', 'users/roles/'.$role, ['lock_version' => 0, 'reason' => 'reviewed test change', 'name_ar' => 'تغيير تفويض عالمي غير مسموح', 'permission_ids' => $ids])->assertForbidden()->assertJsonPath('error.code', 'GLOBAL_ROLE_PROTECTED');
     }
 
     public function test_settings_save_does_not_renew_own_token_and_rollback_retains_policy_history(): void
