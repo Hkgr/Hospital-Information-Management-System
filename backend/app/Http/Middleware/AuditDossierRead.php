@@ -19,7 +19,7 @@ class AuditDossierRead
             $facility = $request->integer('facility_id');
             if (DB::table('patient_dossiers')->where('id', $id)->where('facility_id', $facility)->exists()) {
                 app(ClinicAudit::class)->record($request, $facility, (int) $id, 'opened', null, [
-                    'surface' => $request->is('api/reception/*') ? 'reception' : 'medical',
+                    'surface' => $request->is('api/patient-cards/*') ? 'patient_card' : ($request->is('api/reception/*') ? 'reception' : 'medical'),
                     'visit_id' => $request->route('visit') ? (int) $request->route('visit') : null,
                 ], 'patient_dossier');
             }

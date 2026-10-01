@@ -1,5 +1,8 @@
 # Permissions matrix — Phase 2
 
+> Current card entry/access and retired reception-account routes: [Direct patient-card entry](direct-patient-card-entry.md). Earlier phase-specific routes and global-grant prerequisites below describe the historical implementation, not a required setup for the current local card flow.
+
+
 Built from develop after PR #58. No production command has been run by this change.
 
 ## Operator activation

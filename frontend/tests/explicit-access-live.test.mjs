@@ -33,7 +33,7 @@ test('real UI role selection, separate global delegation, registration and reope
   const admin = await open('admin', `/users?facility_id=${fixture.facility}&role=${fixture.roles.registration}`);
   try {
     await admin.page.getByRole('button', { name: 'تعديل الصلاحيات', exact: true }).click();
-    await admin.page.getByRole('button', { name: 'معاينة التسجيل والبيانات الأساسية', exact: true }).click();
+    await admin.page.getByRole('button', { name: 'معاينة بطاقات المرضى والبيانات الأساسية', exact: true }).click();
     await admin.page.getByRole('button', { name: 'إضافة الصلاحيات المتاحة صراحة' }).click();
     await admin.page.getByLabel('سبب تعديل الصلاحيات *').fill('تجهيز موظف التسجيل — اختبار اصطناعي');
     await admin.page.getByRole('button', { name: 'معاينة وحفظ الدور', exact: true }).click();
@@ -51,7 +51,9 @@ test('real UI role selection, separate global delegation, registration and reope
     await admin.page.getByRole('button', { name: 'تأكيد التفويض' }).click();
     assert.equal((await local).status(), 200);
     const clerkLogin = await api(null, 'login', 'POST', { username: fixture.users.clerk.username, password: 'password' });
-    assert.equal((await api(clerkLogin.body.data.token, `reception/patients?facility_id=${fixture.facility}&search=nobody`)).status, 403, 'Local assignment alone must not enable global search');
+    assert.equal((await api(clerkLogin.body.data.token, `patient-cards/patients?facility_id=${fixture.facility}&search=nobody`)).status, 200, 'Local assignment permits bounded card search');
+    const localAccess = await api(admin.token, `users/${fixture.users.clerk.id}/access?facility_id=${fixture.facility}`);
+    assert.deepEqual(localAccess.body.data.global_effective_codes, [], 'Card template does not implicitly grant global access');
     await admin.page.goto(`${base}/users?facility_id=${fixture.facility}&account=${fixture.users.clerk.id}`);
     await admin.page.getByLabel('البحث المحدود عن المريض — تفويض عالمي', { exact: true }).check();
     await admin.page.getByLabel('إنشاء هوية مريض جديد — تفويض عالمي', { exact: true }).check();
@@ -63,13 +65,11 @@ test('real UI role selection, separate global delegation, registration and reope
   } finally { await admin.context.close(); }
   const clerk = await open('clerk', `/patient-cards/new?facility_id=${fixture.facility}`);
   try {
-    await clerk.page.getByRole('searchbox').fill(`تدريب صلاحيات ${fixture.tag}`);
-    await clerk.page.getByText('لا توجد نتائج مطابقة. راجع الاسم والمعرّف قبل إنشاء مريض جديد.').waitFor();
-    await clerk.page.getByRole('button', { name: 'تسجيل مريض جديد', exact: true }).click();
     await clerk.page.getByLabel('الاسم الأول', { exact: true }).fill('تدريب صلاحيات');
     await clerk.page.getByLabel('اسم العائلة', { exact: true }).fill(fixture.tag);
     await clerk.page.getByLabel('تاريخ الزيارة الفعلي', { exact: true }).fill('2020-03-04');
-    const saved = clerk.page.waitForResponse(r => r.url().includes('/reception/registrations') && r.status() === 201);
+    await clerk.page.getByLabel('تاريخ فتح البطاقة', { exact: true }).fill('2020-03-04');
+    const saved = clerk.page.waitForResponse(r => r.url().includes('/patient-cards/registrations') && r.status() === 201);
     await clerk.page.getByRole('button', { name: 'حفظ البطاقة والزيارة الأولى', exact: true }).click();
     const card = (await (await saved).json()).data;
     await clerk.page.goto(`${base}/patient-cards/${card.id}?facility_id=${fixture.facility}&view=registration`);
@@ -91,7 +91,7 @@ for (const width of [390, 768, 1440]) test(`real role/account detail and illustr
     await f.page.getByRole('group', { name: 'تفويض عالمي مستقل' }).waitFor();
     await f.page.screenshot({ path: `test-results/explicit-access/account-${width}.png`, fullPage: true });
     await f.page.goto(`${base}/guide?facility_id=${fixture.facility}`);
-    await f.page.getByRole('heading', { name: 'جهّز الموظف بخطوتي الوصول' }).waitFor();
+    await f.page.getByRole('heading', { name: 'جهّز صلاحيات البطاقة داخل المشفى' }).waitFor();
     await f.page.screenshot({ path: `test-results/explicit-access/guide-${width}.png`, fullPage: true });
   } finally { await f.context.close(); }
 });

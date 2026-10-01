@@ -29,7 +29,6 @@ class DossierPersonalWriter
     public function registerReception(Request $r, array $f, array $input): int
     {
         $f = app(ReceptionAccess::class)->facility($r->user(), $f['id'], 'register');
-        app(ReceptionAccess::class)->patients($r->user(), $input['person_mode'] === 'new' ? 'create' : 'search');
 
         return $this->persist($r, $f, $input, null, false, true);
     }
@@ -38,6 +37,9 @@ class DossierPersonalWriter
     {
         try {
             return $this->writes->once($r, $f, $input, ($automaticCode ? 'reception:' : '').'personal:'.($id ?? 'new'), function () use ($r, $f, $input, $id, $withoutVisit, $automaticCode) {
+                if ($automaticCode) {
+                    $f = app(ReceptionAccess::class)->facility($r->user()->fresh(), $f['id'], 'register');
+                }
                 $old = $id ? $this->writes->dossier($f, $id) : null;
                 if ($old) {
                     DossierWrites::version($old, $input['lock_version']);
@@ -56,6 +58,9 @@ class DossierPersonalWriter
                 $patient = $patientId ? DB::table('patients')->where('id', $patientId)->where('status', 'active')->lockForUpdate()->first() : null;
                 if ($patientId) {
                     abort_unless($patient, 404);
+                    if ($automaticCode) {
+                        app(ReceptionAccess::class)->assertPatient($r->user(), $f, (int) $patientId);
+                    }
                 }
                 if (! $patient && (DB::table('patients')->where('patient_code', $input['code'])->exists()
                     || DB::table('patient_dossiers')->where('code', $input['code'])->exists())) {

@@ -1,5 +1,8 @@
 # Facility settings, session policy and administrative guides
 
+> Current card entry/access and retired reception-account routes: [Direct patient-card entry](direct-patient-card-entry.md). Earlier phase-specific routes and global-grant prerequisites below describe the historical implementation, not a required setup for the current local card flow.
+
+
 This release extends the existing permissions matrix without assigning global roles to ordinary accounts. `/settings` and `/guide` use the existing authenticated AppShell, Cairo and RTL. Laravel authorizes every request; guide responses contain only a permitted facility, local/global permission codes and a server-derived system-admin capability.
 
 The current illustrated guide starts with task cards, a large patient-card/visit diagram and a four-step synthetic example. Registration now lives under `/patient-cards`; `/reception` remains a compatible redirect and `/reception-admin` is labelled “مراجعة بيانات المرضى”. See [unified registration and task permissions](unified-patient-registration.md) for the current permission mapping and operator-reviewed assignment steps. Earlier reception names below describe the original access model, not a separate current navigation section.

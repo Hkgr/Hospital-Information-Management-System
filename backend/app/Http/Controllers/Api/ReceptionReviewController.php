@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Services\Auth\GlobalAccess;
 use App\Services\Reception\DuplicateReview;
 use App\Services\Reception\IdentityCorrections;
-use App\Services\Reception\ReceptionAccounts;
 use App\Services\Reception\ReviewAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -105,17 +104,12 @@ class ReceptionReviewController extends Controller
 
     public function accounts(Request $r)
     {
-        $f = app(ReviewAccess::class)->facility($r, 'reception_accounts.manage');
-
-        return response()->json(['data' => app(ReceptionAccounts::class)->listing($r, $f)]);
+        return response()->json(['error' => ['code' => 'RECEPTION_ACCOUNTS_RETIRED', 'message' => 'إدارة الحسابات من المستخدمين فقط؛ لم تُغيّر الحسابات أو تعييناتها.']], 410);
     }
 
     public function account(Request $r, int $user)
     {
-        $f = app(ReviewAccess::class)->facility($r, 'reception_accounts.manage');
-        app(ReceptionAccounts::class)->update($r, $f, $user);
-
-        return response()->json(['data' => ['id' => $user, 'saved' => true]]);
+        return $this->accounts($r);
     }
 
     private function listing(string $table, array $f)

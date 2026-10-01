@@ -7,8 +7,7 @@ type NavigationItem = { label: string; icon: IconType; href?: string; permission
 export const primaryNavigation: NavigationItem[] = [
   { label: "الرئيسية", icon: LuHouse, href: "/dashboard/general", permission: "dashboards.view" },
   { label: "الإحصاءات المجهلة", icon: LuChartNoAxesCombined, href: "/statistics", permission: "statistics.view" },
-  { label: "مراجعة بيانات المرضى", icon: LuClipboardPlus, href: "/reception-admin", anyPermission: ["identity_corrections.review", "reception_accounts.manage", "patient_duplicates.review"] },
-  { label: "بطاقات المرضى", icon: LuFolderHeart, href: "/patient-cards", anyPermission: ["patients.basic.view", "dossiers.medical.view"] },
+  { label: "بطاقات المرضى", icon: LuFolderHeart, href: "/patient-cards", anyPermission: ["patients.basic.view", "dossiers.medical.view", "identity_corrections.review", "patient_duplicates.review"] },
   { label: "الزيارات", icon: LuClipboardPlus, href: "/visits", permission: "dossiers.visits.view" },
   { label: "الأطباء", icon: LuStethoscope, href: "/doctors", permission: "doctors.view" },
   { label: "العيادات", icon: LuHospital, href: "/clinics", permission: "clinics.view" },

@@ -13,10 +13,10 @@ class TaskPermissions
         'users.global.view' => ['عرض التفويضات العالمية للحساب', 'global', ['users.view'], []],
         'users.global.manage' => ['تعديل التفويضات العالمية للحساب', 'global', ['users.global.view', 'roles.delegate'], []],
         'users.roles.assign' => ['إسناد الأدوار داخل المشفى', 'facility', ['users.view', 'roles.view'], []],
-        'patients.basic.view' => ['عرض بيانات المريض الأساسية — داخل المشفى', 'facility', [], [['reception.view'], ['dossiers.view']]],
+        'patients.basic.view' => ['عرض البيانات الأساسية لبطاقة المريض', 'facility', [], [['reception.view'], ['dossiers.view']]],
         'patients.basic.search' => ['البحث المحدود عن المريض — تفويض عالمي', 'global', [], [['reception.patients.search'], ['patients.search']]],
         'patients.basic.create' => ['إنشاء هوية مريض جديد — تفويض عالمي', 'global', [], [['reception.patients.create'], ['patients.create']]],
-        'patient_cards.register' => ['فتح بطاقة وتسجيل الزيارة الأولى', 'facility', ['patients.basic.view'], [['reception.register'], ['dossiers.create', 'dossiers.visits.create']]],
+        'patient_cards.register' => ['إضافة مريض وبطاقته وزيارته الأولى', 'facility', ['patients.basic.view'], [['reception.register'], ['dossiers.create', 'dossiers.visits.create']]],
         'patients.own.correct' => ['تصحيح بيانات أدخلتها خلال المهلة', 'allowed_records', ['patients.basic.view'], [['reception.correct']]],
         'patients.corrections.request' => ['طلب تصحيح هوية المريض', 'allowed_records', ['patients.basic.view'], [['reception.corrections.request']]],
         'dossiers.medical.view' => ['عرض التاريخ الطبي للبطاقة', 'facility', [], [['dossiers.view']]],
@@ -117,6 +117,9 @@ class TaskPermissions
         $reason = $code === 'dossiers.treatment.administration.void'
             ? ' يتطلب صلاحية تصحيح موعد علاج لأن الإلغاء يتضمن معالجة حالة الجلسة المرتبطة.'
             : '';
+        if ($code === 'patient_cards.register') {
+            $reason .= ' تشمل إنشاء الهوية ضمن معاملة البطاقة في المشفى دون تفويض عالمي إضافي؛ لا تمنح تعديل الهوية أو قراءة التاريخ الطبي.';
+        }
 
         return ['name_ar' => $task[0] ?? $name, 'description' => ($task[0] ?? $name).'؛ '.($scope === 'global' ? 'تفويض عالمي مستقل، ولا يمنح الوصول إلى بيانات منشأة غير مصرح بها.' : ($scope === 'allowed_records' ? 'للسجلات المسموحة فقط مع استمرار قيود الملكية والمهلة والمراجعة.' : 'داخل المشفى المصرح به فقط، مع استمرار فحوص الحالة والنسخة.')).$reason, 'scope' => $scope, 'prerequisites' => $required, 'legacy_tasks' => array_values(array_unique($legacy))];
     }

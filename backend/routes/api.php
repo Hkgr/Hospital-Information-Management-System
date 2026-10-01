@@ -38,27 +38,32 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api', 'web.idle'
     Route::post('/statistics/export/{format}', [AnonymousStatisticsController::class, 'export'])->whereIn('format', ['pdf', 'xlsx'])->name('statistics.export');
     Route::get('/session', [WebSessionController::class, 'show'])->name('session.show');
     Route::post('/session/activity', [WebSessionController::class, 'activity'])->name('session.activity');
-    Route::prefix('reception')->name('reception.')->middleware(AuditDossierRead::class)->group(function () {
-        $review = ReceptionReviewController::class;
-        Route::get('/cards/{dossier}/identity', [$review, 'identity'])->whereNumber('dossier')->name('identity');
-        Route::post('/cards/{dossier}/{action}', [$review, 'correct'])->whereNumber('dossier')->whereIn('action', ['correct', 'corrections'])->name('identity.write');
-        Route::get('/reviews/corrections', [$review, 'corrections'])->name('corrections.index');
-        Route::get('/reviews/corrections/{review}', [$review, 'correction'])->whereNumber('review')->name('corrections.show');
-        Route::post('/reviews/corrections/{review}/decision', [$review, 'correctionDecision'])->whereNumber('review')->name('corrections.decide');
-        Route::get('/reviews/patients', [$review, 'patients'])->name('reviews.patients');
-        Route::get('/reviews/duplicates/preview', [$review, 'preview'])->name('duplicates.preview');
-        Route::get('/reviews/duplicates', [$review, 'duplicates'])->name('duplicates.index');
-        Route::post('/reviews/duplicates', [$review, 'duplicateRequest'])->name('duplicates.store');
-        Route::get('/reviews/duplicates/{review}', [$review, 'duplicate'])->whereNumber('review')->name('duplicates.show');
-        Route::post('/reviews/duplicates/{review}/decision', [$review, 'duplicateDecision'])->whereNumber('review')->name('duplicates.decide');
-        Route::get('/reviews/accounts', [$review, 'accounts'])->name('accounts.index');
-        Route::put('/reviews/accounts/{user}', [$review, 'account'])->whereNumber('user')->name('accounts.update');
-        $controller = ReceptionController::class;
-        Route::get('/options', [$controller, 'options'])->name('options');
-        Route::get('/patients', [$controller, 'search'])->middleware('throttle:reception')->name('patients');
-        Route::post('/registrations', [$controller, 'store'])->defaults('section', 'personal')->name('store');
-        Route::get('/cards/{dossier}', [$controller, 'show'])->whereNumber('dossier')->name('show');
-    });
+    // The old prefix remains a compatibility alias to the same card transaction.
+    foreach (['patient-cards', 'reception'] as $prefix) {
+        Route::prefix($prefix)->name($prefix.'.')->middleware(AuditDossierRead::class)->group(function () use ($prefix) {
+            $review = ReceptionReviewController::class;
+            Route::get('/cards/{dossier}/identity', [$review, 'identity'])->whereNumber('dossier')->name('identity');
+            Route::post('/cards/{dossier}/{action}', [$review, 'correct'])->whereNumber('dossier')->whereIn('action', ['correct', 'corrections'])->name('identity.write');
+            Route::get('/reviews/corrections', [$review, 'corrections'])->name('corrections.index');
+            Route::get('/reviews/corrections/{review}', [$review, 'correction'])->whereNumber('review')->name('corrections.show');
+            Route::post('/reviews/corrections/{review}/decision', [$review, 'correctionDecision'])->whereNumber('review')->name('corrections.decide');
+            Route::get('/reviews/patients', [$review, 'patients'])->name('reviews.patients');
+            Route::get('/reviews/duplicates/preview', [$review, 'preview'])->name('duplicates.preview');
+            Route::get('/reviews/duplicates', [$review, 'duplicates'])->name('duplicates.index');
+            Route::post('/reviews/duplicates', [$review, 'duplicateRequest'])->name('duplicates.store');
+            Route::get('/reviews/duplicates/{review}', [$review, 'duplicate'])->whereNumber('review')->name('duplicates.show');
+            Route::post('/reviews/duplicates/{review}/decision', [$review, 'duplicateDecision'])->whereNumber('review')->name('duplicates.decide');
+            if ($prefix === 'reception') {
+                Route::get('/reviews/accounts', [$review, 'accounts'])->name('accounts.index');
+                Route::put('/reviews/accounts/{user}', [$review, 'account'])->whereNumber('user')->name('accounts.update');
+            }
+            $controller = ReceptionController::class;
+            Route::get('/options', [$controller, 'options'])->name('options');
+            Route::get('/patients', [$controller, 'search'])->middleware('throttle:reception')->name('patients');
+            Route::post('/registrations', [$controller, 'store'])->defaults('section', 'personal')->name('store');
+            Route::get('/cards/{dossier}', [$controller, 'show'])->whereNumber('dossier')->name('show');
+        });
+    }
     Route::prefix('dossiers')->name('dossiers.')->middleware(AuditDossierRead::class)->group(function () {
         $imports = DossierImportController::class;
         Route::get('/import-template.xlsx', [$imports, 'template'])->name('imports.template');
