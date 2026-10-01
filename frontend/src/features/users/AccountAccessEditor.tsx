@@ -9,7 +9,7 @@ import styles from "../clinics/clinics.module.css";
 import ui from "./permissions.module.css";
 
 type Role = { id: number; name_ar: string; permissions: Permission[] };
-type Access = { id: number; username: string; name: string; is_active: boolean; lock_version: number; access_fingerprint: string; protected: boolean; local_role_ids: number[]; assignable_roles: Role[]; global_permissions: Permission[]; global_permission_ids: number[]; global_effective_codes: string[]; capabilities: { assign: boolean; global_view: boolean; global_manage: boolean } };
+type Access = { id: number; username: string; name: string; is_active: boolean; lock_version: number; access_fingerprint: string; protected: boolean; local_role_ids: number[]; historical_roles?: { id: number; name_ar: string }[]; assignable_roles: Role[]; global_permissions: Permission[]; global_permission_ids: number[]; global_effective_codes: string[]; capabilities: { assign: boolean; global_view: boolean; global_manage: boolean } };
 
 export default function AccountAccessEditor({ id, facility, onClose, onSaved }: { id: number; facility: number; onClose: () => void; onSaved: () => void }) {
   const request = useClinicRequest<Access>(`users/${id}/access?facility_id=${facility}`);
@@ -35,6 +35,16 @@ function AccessForm({ data: initial, facility, onSaved }: { data: Access; facili
   const toggle = (ids: number[], id: number) => ids.includes(id) ? ids.filter(value => value !== id) : [...ids, id];
   const describe = (ids: number[], choices: { id: number; name_ar: string }[]) => ids.map(id => choices.find(p => p.id === id)?.name_ar ?? `تعيين ${id}`).join("، ") || "لا شيء";
   const reviewedRoles = [...new Set([...data.local_role_ids, ...local, ...(latest?.local_role_ids ?? [])])];
+  const pendingGlobal = data.assignable_roles.filter(role => local.includes(role.id)).flatMap(role => role.permissions).filter(p => p.scope === "global" && !global.includes(p.id));
+  function chooseRole(role: Role) {
+    setLocal(toggle(local, role.id));
+    if (!local.includes(role.id) && data.capabilities.global_manage) {
+      // Prepare an explicit global subset in the same reviewed transaction;
+      // never copy local permissions or grant the protected delegation powers.
+      const allowed = new Set(data.global_permissions.filter(p => !["roles.delegate", "users.global.manage"].includes(p.code)).map(p => p.id));
+      setGlobal([...new Set([...global, ...role.permissions.filter(p => p.scope === "global" && allowed.has(p.id)).map(p => p.id)])]);
+    }
+  }
   async function save() {
     if (pending.current || conflict || !preview || !reason.trim() || !(changedLocal || changedGlobal)) return;
     const controller = new AbortController(); pending.current = controller; setBusy(true); setError("");
@@ -62,9 +72,11 @@ function AccessForm({ data: initial, facility, onSaved }: { data: Access; facili
   return <div className={styles.form}>
     <p><strong>{data.name}</strong> · <bdi>{data.username}</bdi> · {data.is_active ? "فعال" : "غير فعال"}</p>
     {data.protected && <p className={styles.hint}>الحساب محمي. تعديل صلاحيات المدير الشامل يتم من تفاصيل الدور؛ لا يمكن سحب تعيينه هنا.</p>}
-    {!data.local_role_ids.length && <p className={styles.scopeNote}>لا يوجد دور فعال داخل المشفى. يمكنك إسناد دور صالح؛ تبقى الارتباطات المعطلة محفوظة في السجل.</p>}
+    {!data.local_role_ids.length && !data.historical_roles?.length && <p className={styles.scopeNote}>لا يوجد دور فعال داخل المشفى. يمكنك إسناد دور صالح؛ تبقى الارتباطات المعطلة محفوظة في السجل.</p>}
+    {!!data.historical_roles?.length && <p className={styles.hint}>إسناد توافق محفوظ: {data.historical_roles.map(role => role.name_ar).join("، ")}. لا يُعرض لإسناد جديد، ولا يُحذف عند اختيار دور آخر.</p>}
     {previousDraft && <section className={styles.conflictReview} aria-label="المسودة السابقة"><h3>مسودتك السابقة للمقارنة فقط</h3><p>الأدوار: {previousDraft.local}</p><p>التفويض العالمي: {previousDraft.global}</p><p className={styles.hint}>الاختيارات أدناه تبدأ من الحالة الحالية. اختر ما تريد تغييره ثم عاين الفرق؛ لم تُطبّق المسودة تلقائيًا.</p></section>}
-    <section className={ui.summary}><h3>الدور داخل المشفى</h3><p>{describe(local, data.assignable_roles)}</p><details><summary>مراجعة الأدوار المحلية وتغييرها</summary><label className={styles.search}>ابحث عن دور<input type="search" value={roleSearch} onChange={e => setRoleSearch(e.target.value)} /></label><fieldset disabled={!data.capabilities.assign || busy || preview} className={styles.fields}><legend>الأدوار المتاحة للإسناد</legend>{data.assignable_roles.filter(role => role.name_ar.includes(roleSearch.trim())).map(role => <label className={ui.permission} key={role.id}><input type="checkbox" checked={local.includes(role.id)} onChange={() => setLocal(toggle(local, role.id))} /><span>{role.name_ar}</span></label>)}</fieldset></details></section>
+    <section className={ui.summary}><h3>الدور داخل المشفى</h3><p>{describe(local, data.assignable_roles)}</p><details><summary>مراجعة الأدوار المحلية وتغييرها</summary><label className={styles.search}>ابحث عن دور<input type="search" value={roleSearch} onChange={e => setRoleSearch(e.target.value)} /></label><fieldset disabled={!data.capabilities.assign || busy || preview} className={styles.fields}><legend>الأدوار المتاحة للإسناد</legend>{data.assignable_roles.filter(role => role.name_ar.includes(roleSearch.trim())).map(role => <label className={ui.permission} key={role.id}><input type="checkbox" checked={local.includes(role.id)} onChange={() => chooseRole(role)} /><span>{role.name_ar}</span></label>)}</fieldset></details><p className={styles.hint}>عند إضافة دور، تُجهّز صلاحياته ذات النطاق العالمي فقط في المعاينة أدناه إذا كنت مخولًا. لا تُحفظ إلا مع تأكيد الفرق. إزالة دور محلي لا تسحب تفويضًا عالميًا مستقلًا؛ راجعه أدناه.</p></section>
+    {!!pendingGlobal.length && <p role="status" className={styles.hint}>لن تُفعّل هذه المهام عالميًا بالاختيارات الحالية: {[...new Set(pendingGlobal.map(p => p.name_ar))].join("، ")}. {data.capabilities.global_manage ? "يمكن اختيارها أدناه قبل تأكيد الحفظ." : "تحتاج اعتماد المدير الشامل من شاشة الحساب نفسها."}</p>}
     {data.capabilities.global_view ? <fieldset disabled={!data.capabilities.global_manage || busy || preview} className={styles.fields}><legend>تفويض عالمي مستقل</legend><p className={`${styles.hint} ${styles.full}`}>الاختيارات التالية فقط هي التفويض العالمي الفعّال بعد الحفظ. لا يُنسخ الدور المحلي. حفظ هذه الخطوة يستبدل التعيينات العالمية السابقة مع حفظها في التدقيق؛ لا يمنح تاريخًا طبيًا داخل مشفى آخر.</p>{data.global_permissions.map(permission => <label className={ui.permission} key={permission.id}><input type="checkbox" checked={global.includes(permission.id)} disabled={["roles.delegate", "users.global.manage"].includes(permission.code)} onChange={() => setGlobal(toggle(global, permission.id))} /><span>{permission.name_ar}</span></label>)}</fieldset> : <p className={styles.hint}>عرض التفويض العالمي يحتاج صلاحية مستقلة؛ لا يكفي عرض الحساب.</p>}
     {(data.capabilities.assign || data.capabilities.global_manage) && <>
       <label>سبب التغيير<textarea required minLength={3} maxLength={255} disabled={busy || preview} value={reason} onChange={e => setReason(e.target.value)} /></label>

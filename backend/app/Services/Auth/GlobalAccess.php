@@ -3,6 +3,7 @@
 namespace App\Services\Auth;
 
 use App\Models\User;
+use App\Services\Users\ProtectedRolePolicy;
 use Illuminate\Support\Facades\DB;
 
 class GlobalAccess
@@ -26,8 +27,13 @@ class GlobalAccess
         if ($role = $this->systemRole($user)) {
             // A protected assignment selects one explicit policy. Other roles and
             // legacy umbrella expansion must not reinstate excluded operations.
-            return DB::table('role_permissions as rp')->join('permissions as p', 'p.id', '=', 'rp.permission_id')
-                ->where('rp.role_id', $role->id)->where('p.is_active', true)->orderBy('p.code')->pluck('p.code')->all();
+            // Delegation authority belongs to the active protected assignment,
+            // not to its operational choices or the account's name/identifier.
+            // Respect disabled definitions; never add operational permissions.
+            return DB::table('permissions')->where('is_active', true)
+                ->where(fn ($q) => $q->whereIn('code', ProtectedRolePolicy::MINIMUM)
+                    ->orWhereIn('id', DB::table('role_permissions')->where('role_id', $role->id)->select('permission_id')))
+                ->orderBy('code')->pluck('code')->all();
         }
 
         $rows = DB::table('global_user_roles as g')->join('roles as r', 'r.id', '=', 'g.role_id')->join('role_permissions as rp', 'rp.role_id', '=', 'r.id')->join('permissions as p', 'p.id', '=', 'rp.permission_id')

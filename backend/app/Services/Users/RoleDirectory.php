@@ -10,15 +10,21 @@ use Illuminate\Support\Str;
 
 class RoleDirectory
 {
+    public const LEGACY_SEARCH_ROLE = 'hospital_admin_patient_search';
+
     public function __construct(private PermissionCatalog $catalog) {}
 
     public function listing(array $f): array
     {
-        $roles = DB::table('roles')->where('is_active', true)->where('code', 'not like', 'delegation-%')->orderBy('name_ar')->orderBy('id')->get(['id', 'code', 'name_ar', 'is_system_super_admin', 'lock_version']);
+        $roles = DB::table('roles')->where('is_active', true)->where('code', '!=', self::LEGACY_SEARCH_ROLE)->where('code', 'not like', 'delegation-%')->orderBy('name_ar')->orderBy('id')->get(['id', 'code', 'name_ar', 'is_system_super_admin', 'lock_version']);
         $permissions = $this->catalog->codesFor($roles->pluck('id')->all());
         $data = [];
         $globalRoles = DB::table('global_user_roles')->distinct()->pluck('role_id')->all();
+        $minimum = DB::table('permissions')->where('is_active', true)->whereIn('code', ProtectedRolePolicy::MINIMUM)->get(['id', 'code', 'name_ar'])->map(fn ($row) => $this->catalog->present($row))->all();
         foreach ($roles as $role) {
+            if ($role->is_system_super_admin) {
+                $permissions[$role->id] = collect([...($permissions[$role->id] ?? []), ...$minimum])->unique('id')->sortBy('code')->values()->all();
+            }
             $codes = array_column($permissions[$role->id] ?? [], 'code');
             $data[] = [
                 'id' => (int) $role->id, 'code' => $role->code, 'name_ar' => $role->name_ar,
@@ -79,7 +85,7 @@ class RoleDirectory
 
     public function assignable(array $f): array
     {
-        $roles = DB::table('roles')->where('is_active', true)->orderBy('code')->orderBy('id')->get(['id', 'code', 'name_ar', 'is_system_super_admin', 'lock_version']);
+        $roles = DB::table('roles')->where('is_active', true)->where('code', '!=', self::LEGACY_SEARCH_ROLE)->orderBy('code')->orderBy('id')->get(['id', 'code', 'name_ar', 'is_system_super_admin', 'lock_version']);
         $permissions = $this->catalog->codesFor($roles->pluck('id')->all());
         $assignable = [];
         foreach ($roles as $role) {
@@ -109,7 +115,7 @@ class RoleDirectory
 
     private function assertOrdinary(object $role): void
     {
-        if ($role->is_system_super_admin || $role->code === 'super_admin' || str_starts_with($role->code, 'reception-') || str_starts_with($role->code, 'delegation-') || $role->code === 'full_access_user_1') {
+        if ($role->is_system_super_admin || $role->code === 'super_admin' || $role->code === self::LEGACY_SEARCH_ROLE || str_starts_with($role->code, 'reception-') || str_starts_with($role->code, 'delegation-') || $role->code === 'full_access_user_1') {
             throw new HttpResponseException(response()->json(['error' => ['code' => 'PROTECTED_SYSTEM_ROLE', 'message' => 'هذا الدور محمي؛ لا يمكن تعديله أو إسناده من إدارة الأدوار العامة.']], 403));
         }
     }

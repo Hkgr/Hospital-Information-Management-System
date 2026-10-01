@@ -12,13 +12,13 @@ use Illuminate\Support\Str;
 
 class ProtectedRolePolicy
 {
-    public const MINIMUM = ['users.view', 'roles.view', 'roles.update', 'roles.delegate', 'users.global.view', 'users.global.manage', 'users.roles.assign'];
+    public const MINIMUM = ['users.view', 'roles.view', 'roles.create', 'roles.update', 'roles.delegate', 'users.global.view', 'users.global.manage', 'users.roles.assign'];
 
     public static function delegates(User $user): bool
     {
         $access = app(GlobalAccess::class);
 
-        return $access->systemRole($user) !== null && $access->allows($user, 'roles.delegate');
+        return $access->systemRole($user) !== null;
     }
 
     public static function fail(string $code, string $message, int $status = 403): never
@@ -56,8 +56,8 @@ class ProtectedRolePolicy
             self::lockActor($request);
             $role = DB::table('roles')->where('id', $id)->lockForUpdate()->first();
             app(RoleAccess::class)->facility($request->user()->fresh(), $facility, 'update');
-            if (! self::delegates($request->user()->fresh()) || ! $role?->is_system_super_admin || ! $role->is_active || ! $role->access_consolidated_at) {
-                self::fail('PROTECTED_SYSTEM_ROLE', 'تعديل الدور المحمي يحتاج مسؤول التفويض وتهيئة الوصول المراجعة.');
+            if (! self::delegates($request->user()->fresh()) || ! $role?->is_system_super_admin || ! $role->is_active) {
+                self::fail('PROTECTED_SYSTEM_ROLE', 'تعديل الدور المحمي يحتاج مديرًا شاملًا بدور محمي فعال.');
             }
             if ((int) $role->lock_version !== (int) $input['lock_version']) {
                 self::fail('ROLE_VERSION_CONFLICT', 'تغير الدور؛ اجلب أحدث نسخة وراجع اختياراتك.', 409);
@@ -81,8 +81,9 @@ class ProtectedRolePolicy
             foreach ($input['permission_ids'] as $permission) {
                 DB::table('role_permissions')->insertOrIgnore(['role_id' => $id, 'permission_id' => $permission, 'created_at' => now(), 'updated_at' => now()]);
             }
-            DB::table('roles')->where('id', $id)->update(['lock_version' => $role->lock_version + 1, 'updated_at' => now()]);
-            self::audit($request, $facility, 'role', $id, ['permission_ids' => $old, 'permissions' => DB::table('permissions')->whereIn('id', $old)->orderBy('code')->pluck('code')->all(), 'lock_version' => $role->lock_version], ['permission_ids' => $input['permission_ids'], 'permissions' => $codes, 'lock_version' => $role->lock_version + 1], $input['reason']);
+            $consolidatedAt = $role->access_consolidated_at ?? now()->toDateTimeString();
+            DB::table('roles')->where('id', $id)->update(['lock_version' => $role->lock_version + 1, 'access_consolidated_at' => $consolidatedAt, 'updated_at' => now()]);
+            self::audit($request, $facility, 'role', $id, ['permission_ids' => $old, 'permissions' => DB::table('permissions')->whereIn('id', $old)->orderBy('code')->pluck('code')->all(), 'lock_version' => $role->lock_version, 'access_consolidated_at' => $role->access_consolidated_at], ['permission_ids' => $input['permission_ids'], 'permissions' => $codes, 'lock_version' => $role->lock_version + 1, 'access_consolidated_at' => $consolidatedAt], $input['reason']);
 
             return app(RoleDirectory::class)->detail(app(RoleAccess::class)->facility($request->user()->fresh(), $facility), $id);
         }, 3);

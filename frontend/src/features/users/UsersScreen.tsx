@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LuPlus, LuSearch, LuUsers } from "react-icons/lu";
 import { useIdentity } from "@/features/auth/AuthenticatedLayout";
 import { apiRequest, AuthError } from "@/features/auth/api";
@@ -19,7 +19,7 @@ type Role = { id: number; code: string; name_ar: string };
 import TaskPermissionPicker, { missingRequirements, type Permission, type TaskTemplate } from "./TaskPermissionPicker";
 type Group = { key: string; name_ar: string; permissions: Permission[] };
 type ManagedRole = Role & { permissions: Permission[]; manageable: boolean; lock_version: number; protected?: boolean; locked_permissions?: string[] };
-type Member = { id: number; username: string; name: string; email: string | null; is_active: boolean; last_login_at: string | null; roles: Role[]; pending_global_permissions?: string[] };
+type Member = { id: number; username: string; name: string; email: string | null; is_active: boolean; last_login_at: string | null; roles: Role[]; legacy_search_access?: boolean; pending_global_permissions?: string[] };
 type Options = {
   roles: Role[];
   permission_groups: Group[];
@@ -71,7 +71,7 @@ function UsersWorkspace({ facilityId, canViewUsers }: { facilityId: number; canV
   }
   const caps = options.data?.capabilities;
   return <>
-    <header className={styles.heading}><div><p className={styles.eyebrow}>الحسابات</p><h2>إدارة المستخدمين</h2><p>أضف مستخدمًا بدور موجود، أو أنشئ دورًا وحدد صلاحياته. لا تُمنح صلاحية إلا لمن يملكها.</p></div>
+    <header className={styles.heading}><div><p className={styles.eyebrow}>الحسابات</p><h2>إدارة المستخدمين</h2><p>حدد صلاحيات الدور ثم أسنده للمستخدم. المدير الشامل يدير التفويض دون اشتراط استخدامه للصلاحيات التشغيلية.</p></div>
       <div className={styles.actions}>
         {tab === "users" && caps?.create && <button className={styles.primary} onClick={() => setCreating(true)}><LuPlus aria-hidden="true" />إضافة مستخدم</button>}
         {tab === "roles" && caps?.roles_create && <button className={styles.primary} onClick={() => setCreatingRole(true)}><LuPlus aria-hidden="true" />إضافة دور</button>}
@@ -94,7 +94,7 @@ function UsersWorkspace({ facilityId, canViewUsers }: { facilityId: number; canV
           {list.data.data.map(row => <tr key={row.id}>
             <td><bdi>{row.username}</bdi></td>
             <td>{row.name}</td>
-            <td>{row.roles.map(role => role.name_ar).join("، ") || "لا يوجد دور فعال — يحتاج إسنادًا"}</td>
+            <td>{row.roles.map(role => role.name_ar).join("، ") || (row.legacy_search_access ? "صلاحيات بحث سابقة محفوظة — راجع إسناد دور" : "لا يوجد دور فعال — يحتاج إسنادًا")}</td>
             <td><span className={row.is_active ? styles.active : styles.inactive}>{row.is_active ? "فعال" : "غير فعال"}</span></td>
             <td><DirectoryRowActions name={row.username} href={`/users?${query}&account=${row.id}`} onDelete={caps?.delete ? () => setPending(row) : undefined} /></td>
           </tr>)}
@@ -104,6 +104,7 @@ function UsersWorkspace({ facilityId, canViewUsers }: { facilityId: number; canV
       </>}
     </section>}
     {tab === "roles" && <section className={styles.panel} data-inset="none" aria-label="قائمة الأدوار">
+      {canViewUsers && <div className={styles.toolbar}><p>بعد حفظ الدور، اختر المستخدم وافتح تفاصيل حسابه لمراجعة الإسناد ونطاقه في حفظ واحد.</p><button type="button" className={styles.secondary} onClick={() => setTab("users")}>اختيار مستخدم وإسناد دور</button></div>}
       {roles.error && <div className={styles.status}><p role="alert">{roles.error}</p><button className={styles.secondary} onClick={roles.retry}>إعادة المحاولة</button></div>}
       {!roles.data && !roles.error && <p className={styles.status} role="status">جارٍ تحميل الأدوار…</p>}
       {roles.data && <>
@@ -170,7 +171,8 @@ function UserEditor({ facilityId, roles, groups, templates, canCreateRole, onClo
   </Modal>;
 }
 
-function RoleEditor({ facilityId, groups, templates, role, nested = false, onClose, onSaved }: { facilityId: number; groups: Group[]; templates: TaskTemplate[]; role?: ManagedRole; nested?: boolean; onClose: () => void; onSaved: (role: ManagedRole) => void }) {
+function RoleEditor({ facilityId, groups, templates, role: initialRole, nested = false, onClose, onSaved }: { facilityId: number; groups: Group[]; templates: TaskTemplate[]; role?: ManagedRole; nested?: boolean; onClose: () => void; onSaved: (role: ManagedRole) => void }) {
+  const [role, setRole] = useState(initialRole);
   const [name, setName] = useState(role?.name_ar ?? "");
   const [reason, setReason] = useState("");
   const [review, setReview] = useState(false);
@@ -178,33 +180,55 @@ function RoleEditor({ facilityId, groups, templates, role, nested = false, onClo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AuthError | null>(null);
   const pending = useRef(false);
+  const controller = useRef<AbortController | null>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const [latest, setLatest] = useState<ManagedRole | null>(null);
+  const [conflict, setConflict] = useState(false);
+  const [previous, setPrevious] = useState("");
+  useEffect(() => () => controller.current?.abort(), []);
   const missing = missingRequirements(groups, selected, !!role?.protected);
+  const blocked = conflict ? "تغير الدور؛ اجلب أحدث نسخة وراجع الفرق قبل الحفظ." : !name.trim() ? "أدخل اسم الدور." : !selected.length ? "اختر صلاحية واحدة على الأقل." : missing.length ? "أكمل المتطلبات الناقصة الموضحة أعلاه قبل الحفظ." : role && reason.trim().length < 3 ? "أدخل سبب تعديل الصلاحيات (ثلاثة محارف على الأقل)." : "";
+  async function reload() {
+    if (!role || pending.current) return;
+    pending.current = true; setBusy(true);
+    const request = new AbortController(); controller.current = request;
+    try { const current = await apiRequest<ManagedRole>(`users/roles/${role.id}?facility_id=${facilityId}`, { signal: request.signal }); if (!request.signal.aborted) setLatest(current); }
+    catch (e) { if (!request.signal.aborted) setError(e instanceof AuthError ? e : new AuthError(0, "FAILED", "تعذّر جلب الدور؛ مسودتك محفوظة، حاول مجددًا.")); }
+    finally { pending.current = false; if (!request.signal.aborted) setBusy(false); }
+  }
   async function save(event: React.FormEvent) {
     event.preventDefault();
-    if (pending.current || missing.length) return;
-    if (role && !review) { setReview(true); return; }
+    if (pending.current || blocked) return;
+    if (!review) { setReview(true); return; }
     pending.current = true; setBusy(true); setError(null);
+    const request = new AbortController(); controller.current = request;
     try {
       const saved = await apiRequest<ManagedRole>(role ? `users/roles/${role.id}${role.protected ? "/protected-permissions" : ""}` : "users/roles", {
         method: role ? "PUT" : "POST",
+        signal: request.signal,
         body: JSON.stringify({ facility_id: facilityId, name_ar: name, permission_ids: selected, ...(role ? { lock_version: role.lock_version, reason } : {}) }),
       });
-      onSaved(saved);
+      if (!request.signal.aborted) onSaved(saved);
     } catch (reason) {
-      setError(reason instanceof AuthError ? reason : new AuthError(0, "FAILED", "تعذّر حفظ الدور. حاول مجددًا."));
-    } finally { pending.current = false; setBusy(false); }
+      if (!request.signal.aborted) { setError(reason instanceof AuthError ? reason : new AuthError(0, "FAILED", "تعذّر حفظ الدور. حاول مجددًا.")); if (reason instanceof AuthError && reason.status === 409) { setConflict(true); setLatest(null); } }
+    } finally { pending.current = false; if (!request.signal.aborted) setBusy(false); }
   }
   return <Modal title={role ? `تعديل ${role.name_ar}` : "إضافة دور"} onClose={onClose} busy={busy} size="wide">
-    <form onSubmit={save} className={styles.form}>
+    <form ref={form} onSubmit={save} className={styles.form}>
       <p className={styles.hint}>{nested ? "بعد حفظ الدور سيُختار تلقائيًا للمستخدم الجديد." : role?.protected ? "هذه الاختيارات هي سياسة المدير الفعلية. إدارة التفويض مستقلة عن تنفيذ العمل الطبي؛ راجع أثر السحب قبل الحفظ." : "اختر المهام المتاحة للتفويض. لا يتغير وصول الحساب عالميًا إلا بخطوة إسناد مستقلة."}</p>
       {error && <p role="alert" className={styles.error}>{error.message}</p>}
+      {previous && <p className={styles.hint}>مسودتك السابقة للمقارنة: {previous}. الاختيارات أدناه هي النسخة الحالية؛ اختر التغييرات مجددًا.</p>}
+      {conflict && <section className={styles.conflictReview} aria-label="مراجعة تعارض الدور"><p>لم يُحفظ التغيير. تبقى مسودتك حتى تراجع النسخة الجديدة.</p>{latest ? <><p>الصلاحيات الحالية: {latest.permissions.map(p => p.name_ar).join("، ")}</p><button type="button" className={styles.secondary} disabled={busy} onClick={() => { setPrevious(`${name}: ${groups.flatMap(g => g.permissions).filter(p => selected.includes(p.id)).map(p => p.name_ar).join("، ")}`); setRole(latest); setName(latest.name_ar); setSelected(latest.permissions.map(p => p.id)); setLatest(null); setConflict(false); setReview(false); setError(null); }}>بدء مراجعة الدور الحالي</button></> : <button type="button" className={styles.secondary} disabled={busy} onClick={() => void reload()}>جلب أحدث نسخة من الدور</button>}</section>}
       <fieldset disabled={busy || review} className={styles.fields}>
-        <label className={styles.full}>اسم الدور *<input autoFocus disabled={role?.protected} required maxLength={200} value={name} onChange={e => setName(e.target.value)} aria-invalid={!!error?.fields.name_ar} />{error?.fields.name_ar && <small className={styles.fieldError}>{error.fields.name_ar}</small>}</label>
-        <TaskPermissionPicker groups={groups} templates={templates} selected={selected} onChange={setSelected} lockedCodes={role?.locked_permissions} exact={role?.protected} />
-        {role && <label className={styles.full}>سبب تعديل الصلاحيات *<textarea required minLength={3} maxLength={255} value={reason} onChange={e => setReason(e.target.value)} /></label>}
+        <label className={styles.full}>اسم الدور *<input name="name_ar" autoFocus disabled={role?.protected} required maxLength={200} value={name} onChange={e => setName(e.target.value)} aria-invalid={!!error?.fields.name_ar || !name.trim()} />{error?.fields.name_ar && <small className={styles.fieldError}>{error.fields.name_ar}</small>}</label>
+        <TaskPermissionPicker key={role?.lock_version ?? "new"} groups={groups} templates={templates} selected={selected} onChange={setSelected} lockedCodes={role?.locked_permissions} exact={role?.protected} />
+        {role && <label className={styles.full}>سبب تعديل الصلاحيات *<textarea name="reason" required minLength={3} maxLength={255} value={reason} onChange={e => setReason(e.target.value)} aria-invalid={reason.trim().length < 3} /></label>}
       </fieldset>
-      {role && review && <section className={styles.panel} aria-label="فرق صلاحيات الدور"><h3>معاينة التغيير</h3><p>إضافة: {groups.flatMap(g => g.permissions).filter(p => selected.includes(p.id) && !role.permissions.some(old => old.id === p.id)).map(p => p.name_ar).join("، ") || "لا شيء"}</p><p>سحب: {role.permissions.filter(p => !selected.includes(p.id)).map(p => p.name_ar).join("، ") || "لا شيء"}</p><button type="button" className={styles.secondary} disabled={busy} onClick={() => setReview(false)}>العودة للاختيارات</button></section>}
-      <div className={styles.modalActions}><button className={styles.primary} type="submit" disabled={busy || !selected.length || !!missing.length || (!!role && reason.trim().length < 3)}>{busy ? "جارٍ الحفظ…" : role ? review ? "تأكيد حفظ الدور" : "معاينة وحفظ الدور" : "إنشاء الدور"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button></div>
+      {review && <section className={styles.panel} aria-label="فرق صلاحيات الدور"><h3>معاينة التغيير</h3><p>إضافة: {groups.flatMap(g => g.permissions).filter(p => selected.includes(p.id) && !role?.permissions.some(old => old.id === p.id)).map(p => p.name_ar).join("، ") || "لا شيء"}</p><p>سحب: {role?.permissions.filter(p => !selected.includes(p.id)).map(p => p.name_ar).join("، ") || "لا شيء"}</p><p>الصلاحيات العالمية: {groups.flatMap(g => g.permissions).filter(p => selected.includes(p.id) && p.scope === "global").map(p => p.name_ar).join("، ") || "لا شيء"}. تؤثر في الدليل المشترك عبر المنشآت؛ ستراجع تفعيلها للحساب عند إسناد الدور من هنا. التعديل يؤثر فورًا في حسابات الدور المسند عالميًا بالفعل.</p><button type="button" className={styles.secondary} disabled={busy} onClick={() => setReview(false)}>العودة للاختيارات</button></section>}
+      <div className={styles.modalActions}>
+        {blocked && <div className={styles.hint} role="status" style={{ flexBasis: "100%" }}><p>{blocked}</p>{!review && (!name.trim() || (role && reason.trim().length < 3)) && <button type="button" className={styles.textButton} onClick={() => { const field = form.current?.querySelector<HTMLElement>(!name.trim() ? '[name="name_ar"]' : '[name="reason"]'); field?.focus(); field?.scrollIntoView({ block: "center" }); }}>الانتقال إلى الحقل الناقص</button>}</div>}
+        <button className={styles.primary} type="submit" disabled={busy || !!blocked}>{busy ? "جارٍ الحفظ…" : review ? "تأكيد حفظ الدور" : role ? "معاينة وحفظ الدور" : "إنشاء الدور"}</button><button type="button" className={styles.secondary} disabled={busy} onClick={onClose}>إلغاء</button>
+      </div>
     </form>
   </Modal>;
 }
