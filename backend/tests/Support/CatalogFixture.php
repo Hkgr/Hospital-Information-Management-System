@@ -19,9 +19,10 @@ class CatalogFixture
         $facility = DB::table('facilities')->insertGetId(['code' => 'CAT-'.$tag, 'name_ar' => 'منشأة اختبار الخدمات', 'timezone' => 'Asia/Damascus']);
         $other = DB::table('facilities')->insertGetId(['code' => 'OTHER-'.$tag, 'name_ar' => 'منشأة محجوبة', 'timezone' => 'Asia/Damascus']);
         app(CatalogPermissionsSeeder::class)->run();
+        DB::table('permissions')->insertOrIgnore(['code' => 'medications.create', 'name_ar' => 'إضافة دواء إلى الدليل', 'is_active' => true]);
         foreach ([$user, $viewer] as $account) {
             $role = DB::table('roles')->insertGetId(['code' => 'CAT-'.$account->id.'-'.$tag, 'name_ar' => 'اختبار']);
-            foreach (array_keys(CatalogPermissionsSeeder::PERMISSIONS) as $code) {
+            foreach ([...array_keys(CatalogPermissionsSeeder::PERMISSIONS), 'medications.create'] as $code) {
                 if ($account->is($viewer) && ! in_array($code, ['catalog.view', 'catalog.export'], true)) {
                     continue;
                 }

@@ -183,7 +183,8 @@ class CatalogApiTest extends TestCase
         $this->api('POST', "/service/$id/archive", ['lock_version' => 1], $viewer)->assertForbidden();
         $role = DB::table('facility_user_roles')->where('user_id', $this->f['viewer']->id)->value('role_id');
         DB::table('role_permissions')->insert(['role_id' => $role, 'permission_id' => DB::table('permissions')->where('code', 'catalog.directory.create')->value('id')]);
-        $this->api('POST', '', $this->payload('service'), $viewer)->assertForbidden()->assertJsonPath('error.code', 'CATALOG_DIRECTORY_ACCESS_DENIED');
+        $this->api('POST', '', $this->payload('service'), $viewer)->assertCreated();
+        $this->api('POST', '', $this->payload('medication'), $viewer)->assertForbidden();
         DB::table('permissions')->where('code', 'catalog.view')->update(['is_active' => false]);
         $this->api('GET')->assertForbidden();
     }
@@ -206,6 +207,9 @@ class CatalogApiTest extends TestCase
         $bad = User::factory()->create()->createToken('no-ability', [])->plainTextToken;
         $this->api('GET', '', [], $bad)->assertForbidden();
         $this->api('GET', '', ['sort' => 'SQL', 'per_page' => 999])->assertUnprocessable();
+        // Measure row-count scaling, not Sanctum's timestamp UPDATE when the
+        // wall clock crosses a second between the two requests.
+        $this->freezeTime();
         $this->f['user']->tokens()->update(['last_used_at' => now()]);
         DB::flushQueryLog();
         DB::enableQueryLog();

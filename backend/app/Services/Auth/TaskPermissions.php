@@ -7,8 +7,15 @@ use Illuminate\Support\Facades\DB;
 /** One-way compatibility: a new task never implies its old umbrella permission. */
 class TaskPermissions
 {
+    /** Explicit local creation choices; historical global grants remain revocable and valid. */
+    public const ROLE_CREATION = ['doctors.directory.create', 'catalog.directory.create', 'medications.create'];
+
     public const TASKS = [
         // code => [Arabic name, scope, prerequisites, alternative legacy grants (AND within each)]
+        'clinics.create' => ['إضافة عيادة', 'facility', ['clinics.view'], []],
+        'doctors.directory.create' => ['إضافة طبيب إلى الدليل', 'facility', ['doctors.view'], []],
+        'catalog.directory.create' => ['إضافة خدمة أو إجراء إلى الدليل', 'facility', ['catalog.view'], []],
+        'medications.create' => ['إضافة دواء إلى الدليل', 'facility', ['catalog.view'], []],
         'roles.delegate' => ['إدارة التفويض دون امتلاك العمل الطبي', 'global', ['roles.view', 'roles.update'], []],
         'users.global.view' => ['عرض التفويضات العالمية للحساب', 'global', ['users.view'], []],
         'users.global.manage' => ['تعديل التفويضات العالمية للحساب', 'global', ['users.global.view', 'roles.delegate'], []],
@@ -91,6 +98,9 @@ class TaskPermissions
     public function describe(string $code, string $name): array
     {
         $name = str_replace('الاستقبال', 'التسجيل الأساسي', $name);
+        if ($code === 'catalog.view') {
+            $name = 'عرض أدلة الخدمات والإجراءات والأدوية';
+        }
         $task = self::TASKS[$code] ?? null;
         $global = str_contains($code, '.directory.') || in_array($code, ['patients.search', 'patients.create', 'patients.update', 'patients.identity.review', 'patients.duplicates.merge', 'diagnoses.create', 'medications.create', 'blood_bank.patients.search', 'reception.patients.search', 'reception.patients.create'], true);
         $scope = $task[1] ?? ($global ? 'global' : 'facility');
@@ -117,6 +127,12 @@ class TaskPermissions
         $reason = $code === 'dossiers.treatment.administration.void'
             ? ' يتطلب صلاحية تصحيح موعد علاج لأن الإلغاء يتضمن معالجة حالة الجلسة المرتبطة.'
             : '';
+        if (in_array($code, self::ROLE_CREATION, true)) {
+            $reason .= ' يكفي اختيارها في الدور المسند داخل المشفى؛ لا تحتاج تفويضًا آخر للحساب. تنشئ تعريفًا في الدليل المشترك ولا تمنح تعديل الموجود أو حذفه أو تصديره أو قراءة التاريخ الطبي.';
+        }
+        if ($code === 'doctors.directory.create') {
+            $reason .= ' ربط الطبيب بعيادة يحتاج اختيار صلاحية ربط الأطباء وعرض العيادات أيضًا.';
+        }
         if ($code === 'patient_cards.register') {
             $reason .= ' تشمل إنشاء الهوية ضمن معاملة البطاقة في المشفى دون تفويض عالمي إضافي؛ لا تمنح تعديل الهوية أو قراءة التاريخ الطبي.';
         }

@@ -81,7 +81,7 @@ class DoctorController extends Controller
         return response()->json(['data' => $this->queries->find($facility, $doctor)]);
     }
 
-    /** Explicit global doctors.directory.create grant; clinic deltas additionally require facility doctors.link. */
+    /** Explicit doctors.directory.create in this facility (or historical global grant); links additionally require doctors.link. */
     public function store(SaveDoctorRequest $request): JsonResponse
     {
         $facility = $this->access->facility($request->user(), $request->integer('facility_id'));

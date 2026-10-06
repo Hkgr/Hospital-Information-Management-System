@@ -50,7 +50,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
         } elseif ($route === 'dossiers/medications') {
             $fields = ['facility_id' => $i(), 'request_id' => $s()->format('uuid'), 'name_ar' => $s()];
             $required = array_keys($fields);
-            $op->description .= ' Explicit global medications.create required; never a side effect of prescription save. Code is server-issued and client codes are prohibited. Normalized duplicate name returns 422. Stable request_id replays the existing definition; changed content returns 409.';
+            $op->description = 'Directory-only creation: active account, Sanctum Bearer api ability, explicit active facility and medications.create in its assigned role or a historical explicit global grant. No medical-history permission required or granted. Returns only id/code/name_ar; private, no-store. Never a side effect of prescription save. Code is server-issued and client codes are prohibited. Normalized duplicate name returns 422. Stable request_id replays the existing definition after current authorization; changed content returns 409. Creation is audited.';
         } elseif (str_ends_with($route, '/medications')) {
             $item = $this->object($row + ['medication_id' => $i(), 'display_order' => $i()]);
             $item->required = ['medication_id', 'display_order'];

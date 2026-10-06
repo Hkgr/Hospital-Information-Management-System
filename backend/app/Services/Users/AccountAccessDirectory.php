@@ -40,7 +40,10 @@ class AccountAccessDirectory
             ->where(fn ($q) => $q->whereIn('r.id', DB::table('global_user_roles')->where('user_id', $id)->select('role_id'))
                 ->orWhereIn('r.id', DB::table('facility_user_roles')->where('user_id', $id)->select('role_id')))->exists();
         $globalCodes = $canView ? $global->codes($user) : [];
-        $globalPermissions = collect(app(PermissionCatalog::class)->grouped())->pluck('permissions')->flatten(1)->where('scope', 'global')->values();
+        // Keep historical explicit global creation grants manageable; new local
+        // role assignments no longer copy these choices into a global grant.
+        $globalPermissions = collect(app(PermissionCatalog::class)->grouped())->pluck('permissions')->flatten(1)
+            ->filter(fn ($p) => $p['scope'] === 'global' || (in_array($p['code'], TaskPermissions::ROLE_CREATION, true) && in_array($p['code'], $globalCodes, true)))->values();
         $currentRoles = DB::table('facility_user_roles as a')->join('roles as r', 'r.id', '=', 'a.role_id')->where('a.user_id', $id)->where('a.facility_id', $facility)->where('r.is_active', true)->pluck('r.id')->all();
         $currentCodes = collect(app(PermissionCatalog::class)->codesFor($currentRoles))->flatten(1)->pluck('code')->unique()->all();
         $historical = DB::table('roles')->whereIn('id', $currentRoles)->where('code', RoleDirectory::LEGACY_SEARCH_ROLE)->get(['id', 'code', 'name_ar']);
@@ -122,7 +125,8 @@ class AccountAccessDirectory
                     ProtectedRolePolicy::fail('GLOBAL_PERMISSION_INVALID', 'إحدى الصلاحيات معطلة أو غير موجودة.', 422);
                 }
                 foreach ($permissions as $permission) {
-                    if (app(TaskPermissions::class)->describe($permission->code, $permission->name_ar)['scope'] !== 'global' || in_array($permission->code, ['roles.delegate', 'users.global.manage'], true)) {
+                    $historicalCreation = in_array($permission->code, TaskPermissions::ROLE_CREATION, true) && in_array($permission->code, $old['global_effective_codes'], true);
+                    if ((app(TaskPermissions::class)->describe($permission->code, $permission->name_ar)['scope'] !== 'global' && ! $historicalCreation) || in_array($permission->code, ['roles.delegate', 'users.global.manage'], true)) {
                         ProtectedRolePolicy::fail('GLOBAL_PERMISSION_INVALID', 'اختر تفويضًا عالميًا تشغيليًا؛ سلطة إدارة التفويض محمية.', 422);
                     }
                 }

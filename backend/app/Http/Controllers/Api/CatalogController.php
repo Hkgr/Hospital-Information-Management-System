@@ -49,14 +49,14 @@ class CatalogController extends Controller
     {
         $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
 
-        return response()->json($this->queries->listing($facility, $request->validated()) + ['capabilities' => $this->access->capabilities($request->user(), $facility)]);
+        return response()->json($this->queries->listing($facility, $request->validated()) + ['capabilities' => $this->access->capabilities($request->user(), $facility, $request->input('kind') ?: 'service')]);
     }
 
     public function show(CatalogQueryRequest $request, string $kind, int $item): JsonResponse
     {
         $facility = $this->access->facility($request->user(), $request->integer('facility_id'));
 
-        return response()->json(['data' => $this->queries->find($facility, $kind, $item), 'capabilities' => $this->access->capabilities($request->user(), $facility)]);
+        return response()->json(['data' => $this->queries->find($facility, $kind, $item), 'capabilities' => $this->access->capabilities($request->user(), $facility, $kind)]);
     }
 
     public function store(SaveCatalogRequest $request): JsonResponse

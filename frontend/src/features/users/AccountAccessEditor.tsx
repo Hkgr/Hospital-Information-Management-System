@@ -70,6 +70,7 @@ function AccessForm({ data: initial, facility, onSaved }: { data: Access; facili
     setLatest(null); setConflict(false); setPreview(false); setError("");
   }
   return <div className={styles.form}>
+    <p className={styles.hint}>صلاحيات إضافة العيادات والأطباء والأدوية والخدمات والإجراءات تعمل من الدور داخل المشفى مباشرة. التفويضات العالمية الإضافية أدناه مستقلة؛ سحب تفويض قديم لا يسحب صلاحية ما زالت ممنوحة عبر دور فعال.</p>
     <p><strong>{data.name}</strong> · <bdi>{data.username}</bdi> · {data.is_active ? "فعال" : "غير فعال"}</p>
     {data.protected && <p className={styles.hint}>الحساب محمي. تعديل صلاحيات المدير الشامل يتم من تفاصيل الدور؛ لا يمكن سحب تعيينه هنا.</p>}
     {!data.local_role_ids.length && !data.historical_roles?.length && <p className={styles.scopeNote}>لا يوجد دور فعال داخل المشفى. يمكنك إسناد دور صالح؛ تبقى الارتباطات المعطلة محفوظة في السجل.</p>}

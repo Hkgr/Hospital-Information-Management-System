@@ -15,8 +15,8 @@ class CatalogWriter
 {
     public function createCategory(Request $request, array $facility, array $data): object
     {
-        app(CatalogAccess::class)->directory($request->user(), $facility, 'create');
         $kind = $data['kind'] ?? 'service';
+        app(CatalogAccess::class)->directory($request->user(), $facility, 'create', $kind);
         [$table] = CatalogQueries::classification($kind);
         $entity = match ($kind) {
             'service' => 'service_category', 'procedure' => 'procedure_type', 'medication' => 'medication_category',
@@ -86,7 +86,7 @@ class CatalogWriter
 
     public function save(Request $request, array $facility, string $kind, array $data, ?int $id): int
     {
-        app(CatalogAccess::class)->directory($request->user(), $facility, $id ? 'update' : 'create');
+        app(CatalogAccess::class)->directory($request->user(), $facility, $id ? 'update' : 'create', $kind);
         try {
             return app(CreationRequests::class)->save($request, $facility, $data, 'catalog:'.$kind, $id, function () use ($request, $facility, $kind, $data, $id) {
                 $row = $id ? $this->locked($kind, $id, $data['lock_version']) : null;

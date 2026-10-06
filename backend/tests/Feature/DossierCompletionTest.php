@@ -61,7 +61,7 @@ class DossierCompletionTest extends DossierCompletionCase
         $this->saveSection('medications', ['prescription' => null, 'outcome' => $current])->assertUnprocessable();
     }
 
-    public function test_global_medication_creation_is_explicit_normalized_and_not_granted_by_facility_role(): void
+    public function test_medication_creation_is_explicit_normalized_and_local_role_grant_can_be_revoked(): void
     {
         $data = ['name_ar' => '  دواء   جديد  ', 'request_id' => (string) Str::uuid()];
         $created = $this->callApi('POST', '/medications', $data)->assertCreated()->assertJsonPath('data.name_ar', 'دواء جديد')->json('data');
@@ -70,6 +70,11 @@ class DossierCompletionTest extends DossierCompletionCase
         $this->callApi('POST', '/medications', ['code' => 'new code', 'name_ar' => 'اسم مختلف', 'request_id' => (string) Str::uuid()])->assertUnprocessable()->assertJsonValidationErrors('code');
         $this->callApi('POST', '/medications', ['name_ar' => 'دواء    جديد', 'request_id' => (string) Str::uuid()])->assertUnprocessable()->assertJsonValidationErrors('name_ar');
         DB::table('global_user_roles')->where('user_id', $this->f['user']->id)->delete();
+        $this->callApi('POST', '/medications', ['name_ar' => 'إضافة محلية', 'request_id' => (string) Str::uuid()])->assertCreated();
+        // The fixture has both a catalog role and a dossier role. Revoke the
+        // permission from every role assigned here, not just one contributing role.
+        DB::table('role_permissions')->whereIn('role_id', DB::table('facility_user_roles')->where('user_id', $this->f['user']->id)->where('facility_id', $this->f['facility'])->select('role_id'))
+            ->where('permission_id', DB::table('permissions')->where('code', 'medications.create')->value('id'))->delete();
         $this->callApi('POST', '/medications', ['name_ar' => 'غير مسموح', 'request_id' => (string) Str::uuid()])->assertForbidden();
         $this->assertSame(0, DB::table('visit_prescriptions')->where('visit_id', $this->s['visit']['id'])->count());
     }

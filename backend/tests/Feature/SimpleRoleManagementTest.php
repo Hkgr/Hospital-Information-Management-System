@@ -129,4 +129,23 @@ class SimpleRoleManagementTest extends TestCase
         DB::table('roles')->where('id', $this->role)->update(['is_system_super_admin' => true, 'is_active' => false]);
         $this->api('GET', 'users/options')->assertForbidden();
     }
+
+    public function test_local_creation_choices_are_not_duplicated_as_new_global_grants_but_history_remains_revocable(): void
+    {
+        $user = User::factory()->create();
+        $local = $this->role(['catalog.view', 'medications.create']);
+        DB::table('facility_user_roles')->insert(['user_id' => $user->id, 'role_id' => $local, 'facility_id' => $this->facility]);
+        $view = $this->api('GET', 'users/'.$user->id.'/access')->assertOk()->json('data');
+        $this->assertNotContains('medications.create', array_column($view['global_permissions'], 'code'));
+        $input = ['lock_version' => $view['lock_version'], 'access_fingerprint' => $view['access_fingerprint'], 'global_permission_ids' => $this->ids(['medications.create']), 'reason' => 'تفويض مكرر غير مطلوب'];
+        $this->api('PUT', 'users/'.$user->id.'/access', $input)->assertUnprocessable()->assertJsonPath('error.code', 'GLOBAL_PERMISSION_INVALID');
+
+        $legacy = $this->role(['medications.create']);
+        DB::table('global_user_roles')->insert(['user_id' => $user->id, 'role_id' => $legacy]);
+        $view = $this->api('GET', 'users/'.$user->id.'/access')->assertOk()->json('data');
+        $this->assertContains('medications.create', array_column($view['global_permissions'], 'code'));
+        $this->api('PUT', 'users/'.$user->id.'/access', ['lock_version' => $view['lock_version'], 'access_fingerprint' => $view['access_fingerprint'], 'global_permission_ids' => [], 'reason' => 'سحب التفويض التاريخي فقط'])->assertOk()->assertJsonPath('data.global_effective_codes', []);
+        $this->assertDatabaseHas('facility_user_roles', ['user_id' => $user->id, 'role_id' => $local, 'facility_id' => $this->facility]);
+        $this->api('GET', 'service-catalog', ['kind' => 'medication'], $user)->assertOk()->assertJsonPath('capabilities.create', true);
+    }
 }

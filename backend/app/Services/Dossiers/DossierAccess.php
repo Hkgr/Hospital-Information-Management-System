@@ -47,7 +47,7 @@ class DossierAccess
         $caps['visits_update'] = $caps['visits_draft_update'];
         $caps['clinical_update'] = $caps['services_update'] || $caps['procedures_update'] || $caps['prescriptions_update'] || $caps['outcomes_update'];
         foreach (['patients.search', 'patients.create', 'patients.update', 'diagnoses.create', 'medications.create'] as $code) {
-            $caps[str_replace('.', '_', $code)] = in_array($code, $global, true);
+            $caps[str_replace('.', '_', $code)] = in_array($code, $global, true) || ($code === 'medications.create' && in_array($code, $permissions, true));
         }
 
         // Write responses include the saved visit snapshot. Do not advertise an
