@@ -125,7 +125,7 @@ class DossierCompletionSafetyTest extends DossierCompletionCase
         $this->assertArrayHasKey('200', $complete['responses']);
         $this->assertStringContainsString('dossiers.finalize', $complete['description']);
         $med = $schema['/api/dossiers/medications']['post'];
-        $this->assertStringContainsString('global medications.create', $med['description']);
+        $this->assertStringContainsString('medications.create in its assigned role or a historical explicit global grant', $med['description']);
         $this->assertArrayHasKey('/api/dossiers/{dossier}/visits/{visit}/attachments/{attachment}/download', $schema);
     }
 }

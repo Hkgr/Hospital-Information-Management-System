@@ -68,6 +68,7 @@ export default function TaskPermissionPicker({ groups, templates, selected, onCh
   }
   const toggle = (id: number) => selected.includes(id) ? remove([id]) : add([id]);
   return <div className={ui.picker}>
+    <p className={styles.hint}>الإضافة مستقلة لكل قسم: اختر إضافة عيادة أو طبيب أو دواء أو خدمة وإجراء. تُضاف متطلبات العرض تلقائيًا؛ يكفي إسناد الدور داخل المشفى، ولا تمنح الإضافة تعديل السجلات أو حذفها أو تصديرها.</p>
     {!!lockedCodes.length && <p className={styles.hint}>الخيارات المعطّلة محمية لمنع إغلاق إدارة الوصول على المسؤول. بقية الاختيارات صريحة؛ إزالة صلاحية تشغيلية تسري عند الطلب التالي، ولا تُضاف صلاحيات مستقبلية تلقائيًا.</p>}
     <section className={ui.templates} aria-label="مجموعات المهام"><h3>ابدأ بمجموعة مهام ثم خصّصها</h3><p>معاينة فقط قبل الإضافة. لا تُغيّر حسابًا قائمًا ولا تضيف تفويضًا عالميًا تلقائيًا.</p><div className={styles.actions}>{templates.map(t => <button type="button" className={styles.secondary} key={t.name_ar} onClick={() => setTemplate(t)}>معاينة {t.name_ar}</button>)}</div>
       {template && <div className={ui.preview}><h4>{template.name_ar}</h4><ul>{template.codes.map(code => <li key={code}>{name(code)}{!find(code) && " — لن تُضاف"}</li>)}</ul><div className={styles.actions}><button type="button" className={styles.primary} onClick={() => { add(all.filter(p => template.codes.includes(p.code)).map(p => p.id)); setTemplate(null); }}>إضافة الصلاحيات المتاحة صراحة</button><button type="button" className={styles.secondary} onClick={() => setTemplate(null)}>إلغاء المعاينة</button></div></div>}

@@ -21,7 +21,7 @@ class DoctorWriter
     public function save(Request $request, array $facility, array $input, ?int $id, bool $linksOnly = false): int
     {
         if (! $linksOnly) {
-            $this->access->directory($request->user(), $id === null ? 'create' : 'update');
+            $this->access->directory($request->user(), $id === null ? 'create' : 'update', $facility);
         }
         $add = $input['clinic_add_ids'] ?? [];
         $remove = $input['clinic_remove_ids'] ?? [];

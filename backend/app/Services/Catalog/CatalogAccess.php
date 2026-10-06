@@ -4,6 +4,7 @@ namespace App\Services\Catalog;
 
 use App\Exceptions\CatalogException;
 use App\Models\User;
+use App\Services\Auth\DirectoryCreationAccess;
 use App\Services\Auth\GlobalAccess;
 use App\Services\Auth\UserAccessContext;
 
@@ -27,7 +28,7 @@ class CatalogAccess
         throw new CatalogException('CATALOG_ACCESS_DENIED', 'ليس لديك صلاحية لهذه العملية في المنشأة المحددة.', 403);
     }
 
-    public function capabilities(User $user, array $facility): array
+    public function capabilities(User $user, array $facility, string $kind = 'service'): array
     {
         $global = app(GlobalAccess::class)->codes($user);
 
@@ -36,15 +37,15 @@ class CatalogAccess
             $tasks[$task] = in_array('catalog.directory.'.$task, $global, true);
         }
 
-        return $tasks + ['create' => in_array('catalog.directory.create', $global, true), 'update' => in_array('catalog.directory.edit', $global, true),
+        return $tasks + ['create' => app(DirectoryCreationAccess::class)->allows($user, $facility, $kind === 'medication' ? 'medications.create' : 'catalog.directory.create'), 'update' => in_array('catalog.directory.edit', $global, true),
             'delete' => $tasks['destroy'], 'export' => in_array('catalog.export', $facility['permissions'], true),
             'beneficiaries' => in_array('catalog.beneficiaries', $facility['permissions'], true), 'audit' => in_array('catalog.audit', $facility['permissions'], true)];
     }
 
-    public function directory(User $user, array $facility, string $action): void
+    public function directory(User $user, array $facility, string $action, string $kind = 'service'): void
     {
-        if (! $this->capabilities($user, $facility)[$action]) {
-            throw new CatalogException('CATALOG_DIRECTORY_ACCESS_DENIED', 'تغيير الدليل المشترك يحتاج تفويضًا عالميًا صريحًا.', 403);
+        if (! $this->capabilities($user, $facility, $kind)[$action]) {
+            throw new CatalogException('CATALOG_DIRECTORY_ACCESS_DENIED', $action === 'create' ? 'لا تملك صلاحية إضافة هذا النوع في المشفى المحدد.' : 'تغيير الدليل المشترك يحتاج تفويضًا عالميًا صريحًا.', 403);
         }
     }
 }

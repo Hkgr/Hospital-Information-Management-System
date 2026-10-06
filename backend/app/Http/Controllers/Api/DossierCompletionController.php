@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Dossiers\DossierReportRequest;
 use App\Http\Requests\Dossiers\SaveDossierSection;
 use App\Http\Requests\Dossiers\SaveVisitClinical;
+use App\Services\Auth\DirectoryCreationAccess;
 use App\Services\Directory\IssuedCodes;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierAttachments;
@@ -153,8 +154,8 @@ class DossierCompletionController extends Controller
 
     public function medication(Request $r)
     {
-        $f = $this->scope($r);
-        app(DossierAccess::class)->global($r->user(), 'medications.create');
+        $r->validate(['facility_id' => ['required', 'integer', 'min:1']]);
+        $f = app(DirectoryCreationAccess::class)->facility($r->user(), $r->integer('facility_id'), 'medications.create');
         $data = $r->validate(['facility_id' => ['required', 'integer'], 'request_id' => ['required', 'uuid'], 'code' => ['prohibited'], 'name_ar' => ['required', 'string', 'max:200']], ['prohibited' => 'الكود يصدره النظام ولا يُدخله المستخدم.']);
         $normalize = fn ($s) => trim(preg_replace('/\s+/u', ' ', $s));
         $name = $normalize($data['name_ar']);

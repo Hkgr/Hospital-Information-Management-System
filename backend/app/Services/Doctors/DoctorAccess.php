@@ -4,6 +4,7 @@ namespace App\Services\Doctors;
 
 use App\Exceptions\DoctorException;
 use App\Models\User;
+use App\Services\Auth\DirectoryCreationAccess;
 use App\Services\Auth\GlobalAccess;
 use App\Services\Auth\UserAccessContext;
 
@@ -25,11 +26,14 @@ class DoctorAccess
         return array_values(array_filter(app(GlobalAccess::class)->codes($user), fn ($code) => str_starts_with($code, 'doctors.directory.')));
     }
 
-    public function directory(User $user, string $action): void
+    public function directory(User $user, string $action, ?array $facility = null): void
     {
+        if ($action === 'create' && $facility && app(DirectoryCreationAccess::class)->allows($user, $facility, 'doctors.directory.create')) {
+            return;
+        }
         $action = ['update' => 'edit', 'delete' => 'destroy'][$action] ?? $action;
         if (! in_array('doctors.directory.'.$action, $this->globalPermissions($user), true)) {
-            throw new DoctorException('DOCTOR_DIRECTORY_ACCESS_DENIED', 'تعديل دليل الأطباء المشترك يحتاج تفويضًا عالميًا صريحًا.', 403);
+            throw new DoctorException('DOCTOR_DIRECTORY_ACCESS_DENIED', $action === 'create' ? 'لا تملك صلاحية إضافة طبيب في المشفى المحدد.' : 'تعديل دليل الأطباء المشترك يحتاج تفويضًا عالميًا صريحًا.', 403);
         }
     }
 
@@ -41,7 +45,7 @@ class DoctorAccess
             $tasks[$task] = in_array('doctors.directory.'.$task, $global, true);
         }
 
-        return $tasks + ['create' => in_array('doctors.directory.create', $global, true),
+        return $tasks + ['create' => app(DirectoryCreationAccess::class)->allows($user, $facility, 'doctors.directory.create'),
             'update' => in_array('doctors.directory.edit', $global, true),
             'delete' => in_array('doctors.directory.destroy', $global, true),
             'link' => in_array('doctors.link', $facility['permissions'], true),

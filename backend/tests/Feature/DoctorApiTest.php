@@ -190,7 +190,9 @@ class DoctorApiTest extends TestCase
         }
         DB::table('global_user_roles')->where('user_id', $this->user->id)->delete();
         $this->callApi('GET', '/options')->assertJsonPath('data.capabilities.update', false)->assertJsonPath('data.capabilities.link', true);
-        $this->callApi('POST', '', $this->input(['code' => 'NEW']))->assertForbidden()->assertJsonPath('error.code', 'DOCTOR_DIRECTORY_ACCESS_DENIED');
+        // Creation is an explicit local task; editing shared existing definitions
+        // still requires its independent global authorization.
+        $this->callApi('POST', '', $this->input(['code' => 'NEW']))->assertCreated();
         $this->callApi('PUT', '/'.$doctor['id'], $this->input(['lock_version' => 1]))->assertForbidden();
         $this->callApi('POST', '/'.$doctor['id'].'/deactivate', ['lock_version' => 1])->assertForbidden();
         $this->callApi('DELETE', '/'.$doctor['id'], ['lock_version' => 1])->assertForbidden();
