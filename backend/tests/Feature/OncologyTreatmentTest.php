@@ -801,6 +801,32 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $this->callApi('POST', $this->path('/dispensing'), ['dispensing_purpose' => 'unlinked', 'dispensed_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'prescribing_staff_id' => $ctx['doctor_id']] + $this->item())->assertUnprocessable();
     }
 
+    public function test_historical_treatment_clinicians_are_retained_on_correction_but_not_selectable_for_new_facts(): void
+    {
+        $this->ready();
+        $p = $this->makePlan();
+        $s = $this->schedule($p);
+        $input = $this->dose($s);
+        $dose = $this->callApi('POST', $this->path('/doses'), $input)->assertCreated()->json('data.id');
+        $ctx = $this->context();
+        $free = ['dispensed_on' => '2001-03-02', 'prescribing_staff_id' => $ctx['doctor_id'], 'prescribing_clinic_id' => $ctx['clinic_id'], 'dispensing_purpose' => 'unlinked'] + $this->item();
+        $dispensed = $this->callApi('POST', $this->path('/dispensing'), $free)->assertCreated()->json('data.id');
+        $appointment = $this->callApi('POST', '/'.$this->s['id'].'/treatment-sessions', ['planned_on' => '2001-03-02'] + $ctx)->assertCreated()->json('data');
+        DB::table('staff')->where('id', $ctx['doctor_id'])->update(['is_active' => false]);
+        DB::table('clinic_staff')->where('staff_id', $ctx['doctor_id'])->update(['starts_on' => '2024-01-01']);
+        $this->callApi('PUT', $this->planPath($p['id']), $this->planData(['lock_version' => DB::table('oncology_plans')->where('id', $p['id'])->value('lock_version'), 'protocol_text' => 'تصحيح البروتوكول مع إبقاء الطبيب التاريخي']))->assertOk();
+        $line = DB::table('dose_session_items')->where('dose_session_id', $dose)->first();
+        $input['items'][0] += ['id' => $line->id, 'lock_version' => $line->lock_version];
+        $this->callApi('PUT', $this->path('/doses/'.$dose), array_replace($input, ['lock_version' => 1, 'reason' => 'تصحيح وصف الواقعة', 'note' => 'ملاحظة مصححة']))->assertOk();
+        $this->callApi('PUT', $this->path('/dispensing/'.$dispensed), $free + ['lock_version' => 1, 'reason' => 'تصحيح صرف تاريخي', 'note' => 'ملاحظة مصححة'])->assertOk();
+        $appointment = $this->callApi('PUT', '/'.$this->s['id'].'/treatment-sessions/'.$appointment['id'], ['lock_version' => 1, 'status' => 'scheduled', 'planned_on' => '2001-03-02', 'reason' => 'إبقاء الطبيب والموعد التاريخيين'])->assertOk()->json('data');
+        $this->callApi('PUT', '/'.$this->s['id'].'/treatment-sessions/'.$appointment['id'], ['lock_version' => 2, 'status' => 'scheduled', 'planned_on' => '2001-03-03', 'reason' => 'تغيير التاريخ يتطلب أهلية الطبيب'])->assertUnprocessable();
+        $this->assertDatabaseHas('dose_sessions', ['id' => $dose, 'supervising_staff_id' => $ctx['doctor_id'], 'lock_version' => 2]);
+        $this->assertDatabaseHas('visit_medications', ['id' => $dispensed, 'prescribing_staff_id' => $ctx['doctor_id'], 'lock_version' => 2]);
+        $this->callApi('POST', $this->path('/dispensing'), $free)->assertUnprocessable()->assertJsonValidationErrors('prescribing_staff_id');
+        $this->callApi('POST', $this->planPath(), $this->planData(['protocol_text' => 'خطة جديدة لا تقبل طبيبًا غير مؤهل']))->assertUnprocessable();
+    }
+
     public function test_medication_recording_omits_the_period_and_stores_the_shared_source(): void
     {
         $this->ready();

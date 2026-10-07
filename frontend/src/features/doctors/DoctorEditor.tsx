@@ -12,6 +12,7 @@ import styles from "../clinics/clinics.module.css";
 export default function DoctorEditor({ doctor, facilityId, options, linksOnly = false, initialClinic, onClose, onSaved, onReloaded }: { doctor?: Doctor; facilityId: number; options: Options; linksOnly?: boolean; initialClinic?: ClinicLink; onClose: () => void; onSaved: (doctor: Doctor) => void; onReloaded: () => void }) {
   const creation = useCreationRequest();
   const [base, setBase] = useState(doctor); const [fields, setFields] = useState(doctorFields(doctor));
+  const [assignmentStart, setAssignmentStart] = useState("2022-01-01");
   const [changes, setChanges] = useState<Record<number, boolean>>(() => initialClinic && !doctor ? { [initialClinic.id]: true } : {}); const [touched, setTouched] = useState<Record<number, ClinicLink>>(() => initialClinic && !doctor ? { [initialClinic.id]: initialClinic } : {});
   const [conflict, setConflict] = useState(false); const [snapshot, setSnapshot] = useState<DoctorSnapshot | null>(null);
   const [busy, setBusy] = useState(false); const [fetching, setFetching] = useState(false); const [error, setError] = useState<AuthError | null>(null); const [reloadError, setReloadError] = useState("");
@@ -28,7 +29,7 @@ export default function DoctorEditor({ doctor, facilityId, options, linksOnly = 
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (pending.current || conflict) return; pending.current = true; setBusy(true); setError(null);
     const active = new AbortController(); controller.current = active;
-    const deltas = { clinic_add_ids: Object.keys(changes).filter(id => changes[Number(id)]).map(Number), ...(base ? { lock_version: base.lock_version, clinic_remove_ids: Object.keys(changes).filter(id => !changes[Number(id)]).map(Number) } : {}) };
+    const deltas = { clinic_add_ids: Object.keys(changes).filter(id => changes[Number(id)]).map(Number), ...(Object.values(changes).some(Boolean) ? { assignment_starts_on: assignmentStart } : {}), ...(base ? { lock_version: base.lock_version, clinic_remove_ids: Object.keys(changes).filter(id => !changes[Number(id)]).map(Number) } : {}) };
     try {
       const editable = { name: fields.name, description: fields.description, license_no: fields.license_no, phone: fields.phone, is_active: fields.is_active, specialty_ids: fields.specialty_ids };
       const saved = await creation.request<Doctor>(`doctors${base ? `/${base.id}${linksOnly ? "/clinics" : ""}` : ""}`, { method: base ? "PUT" : "POST", signal: active.signal, body: JSON.stringify({ facility_id: facilityId, ...(!linksOnly ? { ...editable, staff_type_id: Number(fields.staff_type_id) } : {}), ...deltas }) });
@@ -49,6 +50,7 @@ export default function DoctorEditor({ doctor, facilityId, options, linksOnly = 
         setBase(snapshot.doctor); setFields(nextFields); setChanges(nextChanges); setTouched(Object.fromEntries(Object.keys(nextChanges).map(id => [id, snapshot.choices[Number(id)]!]))); setSnapshot(null); setConflict(false); setError(null);
       }} />}
       <fieldset disabled={busy || conflict} className={styles.fields}>
+        {(options.capabilities.link || initialClinic) && <label className={styles.full}>بداية الارتباطات الجديدة<input type="date" required value={assignmentStart} onChange={e => setAssignmentStart(e.target.value)} /><small>الافتراضي 2022-01-01؛ يمكن اختيار البداية الفعلية أو المستقبلية. لتصحيح فترة موجودة استخدم تاريخ الارتباطات.</small>{fieldError("assignment_starts_on")}</label>}
         {!linksOnly && <><div className={styles.sectionHeading}><span>01</span><div><h3>بيانات الدليل الطبي</h3><p>الحقول المعلّمة * مطلوبة.</p></div></div>
           {base ? <label>كود الطبيب<input aria-label="كود الطبيب" value={fields.code} readOnly dir="ltr" /><small>الكود ثابت ويصدره النظام.</small></label> : <p className={styles.hint}>يُمنح كود الطبيب تلقائيًا عند الحفظ.</p>}{input("name", "الاسم الكامل", 200, true)}
           <label className={styles.full}>التوصيف المهني<textarea aria-label="التوصيف المهني" rows={3} maxLength={10000} value={fields.description} onChange={e => setFields({ ...fields, description: e.target.value })} />{fieldError("description")}</label>

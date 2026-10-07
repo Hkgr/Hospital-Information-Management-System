@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BloodBankController;
 use App\Http\Controllers\Api\BloodEventController;
 use App\Http\Controllers\Api\CatalogController;
+use App\Http\Controllers\Api\ClinicalAssignmentController;
 use App\Http\Controllers\Api\ClinicController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DoctorController;
@@ -192,6 +193,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api', 'web.idle'
         });
     });
     Route::prefix('doctors')->name('doctors.')->group(function () {
+        Route::put('/{parent}/assignments/{assignment}', [ClinicalAssignmentController::class, 'update'])->whereNumber(['parent', 'assignment'])->name('assignments.update');
         Route::get('/', [DoctorController::class, 'index'])->name('index');
         Route::post('/', [DoctorController::class, 'store'])->name('store');
         Route::get('/options', [DoctorController::class, 'options'])->name('options');
@@ -212,6 +214,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api', 'web.idle'
         Route::get('/{doctor}/report', [DoctorController::class, 'report'])->whereNumber('doctor')->name('report');
     });
     Route::prefix('clinics')->name('clinics.')->group(function () {
+        Route::put('/{parent}/assignments/{assignment}', [ClinicalAssignmentController::class, 'update'])->whereNumber(['parent', 'assignment'])->name('assignments.update');
         Route::get('/', [ClinicController::class, 'index'])->name('index');
         Route::post('/', [ClinicController::class, 'store'])->name('store');
         Route::get('/options/doctors', [ClinicController::class, 'doctorOptions'])->name('doctorOptions');

@@ -41,6 +41,8 @@ php artisan doctors:grant-access --user=testadmin --role=super_admin --facility=
 
 ## الواجهة والكاش
 
+لتصحيح تواريخ الارتباط وإتاحة تعديل الوقائع الطبية المحفوظة، راجع [دليل تواريخ الارتباط والتعديل](clinical-assignment-dates-and-editing.md). لا يحتاج هذا الإصلاح migration أو Seeder؛ أمر تصحيح التواريخ وأمر تهيئة صلاحيات التعديل معاينتان افتراضيًا، والتطبيق إجراء مشغّل صريح ومدقق لمرة واحدة، دون تغيير مسار مراجعة هوية المريض المشتركة.
+
 ```bash
 # frontend، بإعداد LARAVEL_API_URL الصحيح قبل البناء
 npm ci

@@ -13,6 +13,7 @@ export default function ClinicEditor({ clinic, facilityId, canChangeStatus = fal
   const creation = useCreationRequest();
   const [baseClinic, setBaseClinic] = useState(clinic);
   const [fields, setFields] = useState(clinicFields(clinic));
+  const [assignmentStart, setAssignmentStart] = useState("2022-01-01");
   const [changes, setChanges] = useState<Record<number, boolean>>({});
   const [changedDoctors, setChangedDoctors] = useState<Record<number, Doctor>>({});
   const [conflict, setConflict] = useState(false);
@@ -48,6 +49,7 @@ export default function ClinicEditor({ clinic, facilityId, canChangeStatus = fal
         care_setting: fields.care_setting || null, clinic_kind: fields.clinic_kind || null,
         ...(baseClinic ? { lock_version: baseClinic.lock_version, doctor_remove_ids: Object.keys(changes).filter(id => !changes[Number(id)]).map(Number) } : {}),
         doctor_add_ids: Object.keys(changes).filter(id => changes[Number(id)]).map(Number),
+        ...(Object.values(changes).some(Boolean) ? { assignment_starts_on: assignmentStart } : {}),
       }) });
       if (!active.signal.aborted) onSaved();
     } catch (reason) {
@@ -69,6 +71,7 @@ export default function ClinicEditor({ clinic, facilityId, canChangeStatus = fal
         setSnapshot(null); setConflict(false); setError(null); setReloadError("");
       }} />}
       <fieldset disabled={busy || conflict} className={styles.fields}>
+        <label className={styles.full}>بداية الارتباطات الجديدة<input type="date" required value={assignmentStart} onChange={e => setAssignmentStart(e.target.value)} /><small>الافتراضي 2022-01-01 لإدخال الوقائع التاريخية. غيّر التاريخ إذا كانت بداية العمل الفعلية مختلفة؛ لا تتغير الفترات المحفوظة.</small>{fieldError("assignment_starts_on")}</label>
         <div className={styles.sectionHeading}><span>01</span><div><h3>بيانات العيادة</h3><p>تعريف العيادة وتخصصها داخل المنشأة.</p></div></div>
         {baseClinic ? <label>كود العيادة<input aria-label="كود العيادة" value={fields.code} readOnly /><small>الكود ثابت ويصدره النظام.</small></label> : <p className={styles.hint}>يُمنح كود العيادة تلقائيًا عند الحفظ.</p>}
         <label>اسم العيادة *<input required maxLength={200} value={fields.name_ar} onChange={e => setFields({ ...fields, name_ar: e.target.value })} aria-invalid={!!error?.fields.name_ar} aria-describedby={error?.fields.name_ar ? "clinic-error-name_ar" : undefined} />{fieldError("name_ar")}</label>

@@ -46,7 +46,7 @@ class ClinicWriter
                     DB::table('clinics')->where('id', $id)->update($fields + ['lock_version' => $old['lock_version'] + 1]);
                 }
                 $beforePeriods = $this->periods($id);
-                $this->changeDoctors($request, $id, $facility, $input['doctor_add_ids'] ?? [], $input['doctor_remove_ids'] ?? []);
+                $this->changeDoctors($request, $id, $facility, $input['doctor_add_ids'] ?? [], $input['doctor_remove_ids'] ?? [], $input['assignment_starts_on'] ?? null);
                 $new = (array) DB::table('clinics')->find($id);
                 $this->audit->record($request, $facility['id'], $id, $old ? 'updated' : 'created', $old, $new);
                 $afterPeriods = $this->periods($id);
@@ -90,7 +90,7 @@ class ClinicWriter
         return (array) $clinic;
     }
 
-    private function changeDoctors(Request $request, int $clinicId, array $facility, array $add, array $remove): void
+    private function changeDoctors(Request $request, int $clinicId, array $facility, array $add, array $remove, ?string $startsOn = null): void
     {
         if (array_intersect($add, $remove)) {
             throw ValidationException::withMessages(['doctor_add_ids' => 'لا يمكن إضافة الطبيب وإزالته في الطلب نفسه.']);
@@ -101,7 +101,7 @@ class ClinicWriter
         }
         foreach ([false => $remove, true => $add] as $adding => $ids) {
             foreach ($ids as $staffId) {
-                if ($this->links->change($clinicId, $staffId, (bool) $adding, $facility)) {
+                if ($this->links->change($clinicId, $staffId, (bool) $adding, $facility, $startsOn)) {
                     DB::table('staff')->where('id', $staffId)->increment('lock_version');
                     $this->audit->record($request, $facility['id'], $staffId, 'clinics_changed', null, ['clinic_id' => $clinicId, 'linked' => (bool) $adding], 'doctor');
                 }

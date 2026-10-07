@@ -103,7 +103,7 @@ class DirectoryLifecycle
         $query = DB::table('clinic_staff as cs')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')
             ->join('staff as s', 's.id', '=', 'cs.staff_id')->where('c.facility_id', $facility['id'])
             ->where($doctor ? 'cs.staff_id' : 'cs.clinic_id', $id)
-            ->select('cs.id', 'cs.starts_on', 'cs.ends_on', $doctor ? 'c.code' : 's.staff_code as code', $doctor ? 'c.name_ar as name' : 's.full_name as name');
+            ->select('cs.id', 'cs.starts_on', 'cs.ends_on', 'c.lock_version as clinic_lock_version', 's.lock_version as staff_lock_version', $doctor ? 'c.code' : 's.staff_code as code', $doctor ? 'c.name_ar as name' : 's.full_name as name');
         $page = $query->orderByDesc('cs.starts_on')->orderByDesc('cs.id')->paginate($filters['per_page'] ?? 20, ['*'], 'page', $filters['page'] ?? 1);
 
         return ['data' => $page->items(), 'meta' => ['page' => $page->currentPage(), 'per_page' => $page->perPage(), 'total' => $page->total(), 'last_page' => $page->lastPage()]];

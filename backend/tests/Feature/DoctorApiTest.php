@@ -212,7 +212,7 @@ class DoctorApiTest extends TestCase
     {
         $clinic = $this->clinic();
         $second = $this->clinic('CL-02');
-        $doctor = $this->create(['clinic_add_ids' => [$clinic, $second]]);
+        $doctor = $this->create(['clinic_add_ids' => [$clinic, $second], 'assignment_starts_on' => now('Asia/Damascus')->toDateString()]);
         $this->assertSame(2, $doctor['clinic_count']);
         $this->assertDatabaseHas('clinics', ['id' => $clinic, 'lock_version' => 2]);
         $clinicInput = ['facility_id' => $this->facility, 'name_ar' => 'عيادة CL-01', 'is_active' => true, 'lock_version' => 1, 'doctor_remove_ids' => [$doctor['id']]];

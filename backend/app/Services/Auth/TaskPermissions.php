@@ -140,6 +140,10 @@ class TaskPermissions
             $reason .= ' تشمل البحث المحدود عن مرضى المشفى وبياناتهم التعريفية فقط؛ يمكن اختيارها لإداري المشفى دون دور بحث إضافي، ولا تكشف التاريخ الطبي أو هوية خارج النطاق.';
         }
 
+        if (in_array($code, ['dossiers.medical.update', 'dossiers.visits.draft.update', 'dossiers.diagnoses.update', 'dossiers.services.update', 'dossiers.procedures.update', 'dossiers.prescriptions.update', 'dossiers.outcomes.update', 'dossiers.pathology.update', 'dossiers.treatment.update', 'dossiers.treatment.schedule.update', 'dossiers.treatment.administration.correct', 'dossiers.treatment.dispensing.correct'], true)) {
+            $reason .= ' تشمل تصحيح السجلات المحفوظة المسموح بها، ولو كانت قديمة أو أدخلها مستخدم آخر، مع حفظ المعرف والتدقيق والنسخة. لا تمنح الحذف أو الإكمال أو تجاوز حالة الزيارة المغلقة.';
+        }
+
         return ['name_ar' => $task[0] ?? $name, 'description' => ($task[0] ?? $name).'؛ '.($scope === 'global' ? 'تفويض عالمي مستقل، ولا يمنح الوصول إلى بيانات منشأة غير مصرح بها.' : ($scope === 'allowed_records' ? 'للسجلات المسموحة فقط مع استمرار قيود الملكية والمهلة والمراجعة.' : 'داخل المشفى المصرح به فقط، مع استمرار فحوص الحالة والنسخة.')).$reason, 'scope' => $scope, 'prerequisites' => $required, 'legacy_tasks' => array_values(array_unique($legacy))];
     }
 }

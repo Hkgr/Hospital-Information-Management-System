@@ -84,6 +84,7 @@ const nextConfig: NextConfig = {
       "blood-bank/donor/:donor(\\d+)/donations/:donation(\\d+)/report/:format(pdf|xlsx)",
       "blood-bank/patients/:patient(\\d+)", "blood-bank/:kind(donor|recipient)/:item(\\d+)",
       "blood-bank/donor/:donor(\\d+)/donations", "blood-bank/donor/:donor(\\d+)/donations/:donation(\\d+)",
+      "doctors/:parent(\\d+)/assignments/:assignment(\\d+)", "clinics/:parent(\\d+)/assignments/:assignment(\\d+)",
       "service-catalog", "service-catalog/options", "service-catalog/classifications", "service-catalog/export/:format(xlsx|pdf)",
       "service-catalog/context", "service-catalog/categories",       "service-catalog/:kind(service|procedure|medication)/:item(\\d+)/events",
       "service-catalog/:kind(service|procedure|medication)/:item(\\d+)", "service-catalog/:kind(service|procedure|medication)/:item(\\d+)/deletion-preview",

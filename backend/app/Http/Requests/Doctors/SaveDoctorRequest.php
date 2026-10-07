@@ -39,6 +39,7 @@ class SaveDoctorRequest extends FormRequest
             'request_id' => [$this->isMethod('POST') ? 'required' : 'prohibited', 'uuid'],
             'lock_version' => [$this->isMethod('POST') ? 'prohibited' : 'required', 'integer', 'min:1'],
             'clinic_add_ids' => ['sometimes', 'array', 'max:200'],
+            'assignment_starts_on' => ['sometimes', 'date_format:Y-m-d'],
             'clinic_add_ids.*' => ['integer', 'min:1', 'distinct'],
             'clinic_remove_ids' => [$this->isMethod('POST') ? 'prohibited' : 'sometimes', 'array', 'max:200'],
             'clinic_remove_ids.*' => ['integer', 'min:1', 'distinct'],

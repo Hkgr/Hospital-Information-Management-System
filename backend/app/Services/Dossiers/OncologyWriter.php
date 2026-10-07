@@ -45,8 +45,12 @@ class OncologyWriter
             $d = $this->writes->dossier($f, $dossier);
             $old = $id ? $this->plan($f, $dossier, $id, $data['lock_version']) : null;
             $priorRevision = $old ? DB::table('oncology_plan_revisions')->where('id', $old->current_revision_id)->first() : null;
-            $this->context->check($f, $data['protocol_clinic_id'], $data['protocol_doctor_id'], $f['today'], 'protocol_doctor_id', false);
-            $this->context->check($f, $data['treating_clinic_id'], $data['treating_doctor_id'], $f['today'], 'treating_doctor_id', false);
+            foreach (['protocol', 'treating'] as $kind) {
+                $clinic = $kind.'_clinic_id';
+                $doctor = $kind.'_doctor_id';
+                $retained = $priorRevision && $data[$clinic] == $priorRevision->$clinic && $data[$doctor] == $priorRevision->$doctor;
+                $this->context->check($f, $data[$clinic], $data[$doctor], $f['today'], $doctor, (bool) $retained);
+            }
             $fields = Arr::only($data, ['modality', 'intent', 'protocol_text', 'protocol_clinic_id', 'protocol_doctor_id', 'treating_clinic_id', 'treating_doctor_id']);
             $content = OncologyIntegrity::content($fields);
             if ($priorRevision && $content === OncologyIntegrity::content((array) $priorRevision)) {
@@ -152,7 +156,7 @@ class OncologyWriter
                 }
                 $fields = Arr::only($data, ['status', 'reason']);
                 if ($data['status'] === 'scheduled') {
-                    $this->context->check($f, $s->clinic_id, $s->doctor_id, $data['planned_on'], 'planned_on', false);
+                    $this->context->check($f, $s->clinic_id, $s->doctor_id, $data['planned_on'], 'planned_on', $data['planned_on'] === $s->planned_on);
                     $fields['planned_on'] = $data['planned_on'];
                 }
 
@@ -187,7 +191,8 @@ class OncologyWriter
                 abort_unless($old, 404);
                 DossierWrites::version((array) $old, $data['lock_version']);
             }
-            if (! DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('s.id', $data['nurse_id'])->where('c.id', $session->clinic_id)->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $data['given_on'])->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $data['given_on']))->exists()) {
+            $retainedNurse = $old && $old->nurse_id == $data['nurse_id'] && $old->given_on === $data['given_on'];
+            if (! $retainedNurse && ! DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('s.id', $data['nurse_id'])->where('c.id', $session->clinic_id)->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $data['given_on'])->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $data['given_on']))->exists()) {
                 throw ValidationException::withMessages(['nurse_id' => 'اختر ممرضًا مرتبطًا بعيادة هذه الجلسة في تاريخ الجرعة.']);
             }
 
@@ -249,7 +254,8 @@ class OncologyWriter
                 OncologyIntegrity::reject('ONCOLOGY_OBSOLETE_SESSION_REVISION', 'نسخة علاجية سابقة — تحتاج معالجة قبل الإعطاء. أكد النقل إلى النسخة الحالية صراحة.');
             }
             $fields['planned_on'] = $data['planned_on'];
-            $this->context->check($f, $fields['clinic_id'] ?? $s->clinic_id, $fields['doctor_id'] ?? $s->doctor_id, $fields['planned_on'], 'planned_on', false);
+            $retained = ! ($data['carry_forward'] ?? false) && $fields['planned_on'] === $s->planned_on;
+            $this->context->check($f, $fields['clinic_id'] ?? $s->clinic_id, $fields['doctor_id'] ?? $s->doctor_id, $fields['planned_on'], 'planned_on', $retained);
         }
 
         return $this->persist($r, $f, 'oncology_sessions', $s, $fields);
@@ -403,8 +409,9 @@ class OncologyWriter
                 }
             }
             $doseRevision = DB::table('oncology_plan_revisions')->where('id', $old?->plan_revision_id ?? $session->revision_id)->first();
-            $this->context->check($f, $doseRevision->treating_clinic_id, $data['supervising_staff_id'], $v->visit_date, 'supervising_staff_id', false);
-            if (! DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('s.id', $data['administered_by'])->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $v->visit_date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $v->visit_date))->exists()) {
+            $retainedDate = $old && $old->administered_on === $data['administered_on'];
+            $this->context->check($f, $doseRevision->treating_clinic_id, $data['supervising_staff_id'], $v->visit_date, 'supervising_staff_id', (bool) ($retainedDate && $old->supervising_staff_id == $data['supervising_staff_id']));
+            if (! ($retainedDate && $old->administered_by == $data['administered_by']) && ! DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('s.id', $data['administered_by'])->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $v->visit_date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $v->visit_date))->exists()) {
                 throw ValidationException::withMessages(['administered_by' => 'اختر عضو كادر فعالًا له ارتباط في هذا المشفى يغطي تاريخ الإعطاء.']);
             }
             $fields = Arr::only($data, ['reporting_period_id', 'administered_on', 'supervising_staff_id', 'administered_by', 'session_label', 'note']);
@@ -482,12 +489,14 @@ class OncologyWriter
                 abort_unless($dose, 404);
                 $session = DB::table('oncology_sessions')->where('id', $dose->oncology_session_id)->first();
                 abort_unless($session, 404);
-                $this->context->check($f, $session->clinic_id, $data['prescribing_staff_id'], $v->visit_date, 'prescribing_staff_id', false);
+                $retained = $old && $old->prescribing_staff_id == $data['prescribing_staff_id'] && $old->dispensed_on === $data['dispensed_on'];
+                $this->context->check($f, $session->clinic_id, $data['prescribing_staff_id'], $v->visit_date, 'prescribing_staff_id', (bool) $retained);
                 if (! $old) {
                     $fields += ['visit_id' => $visit, 'facility_id' => $f['id'], 'dose_session_id' => $dose->id, 'client_request_id' => $data['request_id']];
                 }
             } else {
-                $this->context->check($f, (int) $data['prescribing_clinic_id'], (int) $data['prescribing_staff_id'], $v->visit_date, 'prescribing_staff_id', false);
+                $retained = $old && $old->prescribing_clinic_id == $data['prescribing_clinic_id'] && $old->prescribing_staff_id == $data['prescribing_staff_id'] && $old->dispensed_on === $data['dispensed_on'];
+                $this->context->check($f, (int) $data['prescribing_clinic_id'], (int) $data['prescribing_staff_id'], $v->visit_date, 'prescribing_staff_id', (bool) $retained);
                 $fields['prescribing_clinic_id'] = $data['prescribing_clinic_id'];
                 $fields['dose_session_id'] = null;
                 if (! $old) {
