@@ -18,7 +18,7 @@ function StatusBadge({status}:{status:string}) {
 }
 type MedicationPane="unlinked"|"outside";
 type Props={facility:number;dossier:number;caps:Record<string,boolean>;revision:number;onChanged:()=>void;visit?:Visit;medicationView?:MedicationPane;medicationSource?:string|null};
-type Editing={kind:EditorKind;plan?:Plan;session?:Session;dose?:Dose;dispensing?:Dispensing;dispensePurpose?:"unlinked"|"take_home"|"supportive"};
+type Editing={sessionDose?:SessionDose;kind:EditorKind;plan?:Plan;session?:Session;dose?:Dose;dispensing?:Dispensing;dispensePurpose?:"unlinked"|"take_home"|"supportive"};
 export default function OncologyPanel(props:Props){const {facility,dossier,caps,revision,onChanged,visit,medicationView,medicationSource}=props;const allowed=!!caps.treatment_view;
  const [page,setPage]=useState(1),[size,setSize]=useState(10),[sessionPage,setSessionPage]=useState(1),[sessionSize,setSessionSize]=useState(50),[editing,setEditing]=useState<Editing|null>(null),[details,setDetails]=useState<Plan|null>(null),[selectedId,setSelectedId]=useState<number|null>(null),[error,setError]=useState<string|null>(null),[busy,setBusy]=useState(false);
  const pending=useRef<AbortController|null>(null);
@@ -30,13 +30,9 @@ export default function OncologyPanel(props:Props){const {facility,dossier,caps,
  const actual=useClinicRequest<{doses:Dose[];dispensed:Dispensing[]}>(allowed&&visit?`${base}/visits/${visit.id}/doses?facility_id=${facility}`:null,false,true,revision);
  const rows=sessions.data?.data??[];
  const administrable=(s:Session)=>!!visit&&!!s.plan_id&&s.planned_on===visit.visit_date&&s.revision_id===s.current_revision_id&&!s.dose_id&&s.status==="scheduled";
- useEffect(()=>{
-  if(!rows.length){setSelectedId(null);return;}
-  setSelectedId(id=>id&&rows.some(s=>s.id===id)?id:(rows.find(administrable)?.id??rows[0].id));
- },[rows,visit?.id,visit?.visit_date]);
  async function loadPlan(id:number,kind?:EditorKind,session?:Session){if(pending.current)return;const c=new AbortController();pending.current=c;setBusy(true);setError(null);try{const plan=await apiRequest<Plan>(`${base}/treatment-plans/${id}?facility_id=${facility}`,{signal:c.signal});if(!c.signal.aborted){if(kind)setEditing({kind,plan,session});else setDetails(plan);}}catch(e){if(!c.signal.aborted)setError(e instanceof Error?e.message:"تعذّر تحميل الخطة.");}finally{if(pending.current===c)pending.current=null;if(!c.signal.aborted)setBusy(false);}}
  if(!allowed)return null;
- const selected=rows.find(s=>s.id===selectedId)??null;
+ const selected=rows.find(s=>s.id===selectedId)??rows.find(administrable)??rows[0]??null;
  const sessionDoses:SessionDose[]=selected?.doses??[];
  const changed=()=>{setEditing(null);setDetails(null);onChanged();};
  const dispensed=actual.data?.dispensed??[];
@@ -63,7 +59,7 @@ export default function OncologyPanel(props:Props){const {facility,dossier,caps,
   <section className={oncology.boardBlock}>
    <div className={oncology.boardHead}><h3>جدول الجرعات{selected?` · ${selected.plan_id?`${selected.plan_number} / جلسة ${selected.session_number}`:`موعد #${selected.id}`}`:""}</h3>{selected&&caps.treatment_schedule_create&&selected.status==="scheduled"&&<button className={styles.secondary} onClick={()=>setEditing({kind:"session-dose",session:selected})}>إضافة جرعة علاجية</button>}</div>
    <p className={styles.hint}>جرعات الجلسة المختارة مع تاريخ زيارة كل جرعة.</p>
-   <DirectoryTable label="جدول الجرعات" headers={["الجرعة","تاريخ الزيارة","المصدر","الممرض"]}>{sessionDoses.map(dose=><tr key={dose.id}><td>{dose.dose_name}</td><td>{dose.given_on}{visit&&dose.given_on===visit.visit_date&&<small className={oncology.todayMark}>تاريخ هذه الزيارة</small>}</td><td>{sourceLabels[dose.medication_source??""]??"غير مسجل"}</td><td>{dose.nurse_name??"غير مسجل"}</td></tr>)}{selected&&!sessionDoses.length&&<tr><td colSpan={4}>لا جرعات بعد لهذه الجلسة.</td></tr>}{!selected&&<tr><td colSpan={4}>اختر جلسة من الجدول أعلاه.</td></tr>}</DirectoryTable>
+   <DirectoryTable label="جدول الجرعات" headers={["الجرعة","تاريخ الزيارة","المصدر","الممرض","الإجراءات"]}>{sessionDoses.map(dose=><tr key={dose.id}><td>{dose.dose_name}</td><td>{dose.given_on}{visit&&dose.given_on===visit.visit_date&&<small className={oncology.todayMark}>تاريخ هذه الزيارة</small>}</td><td>{sourceLabels[dose.medication_source??""]??"غير مسجل"}</td><td>{dose.nurse_name??"غير مسجل"}</td><td>{selected?.status==="scheduled"&&caps.treatment_schedule_update&&<button className={styles.secondary} onClick={()=>setEditing({kind:"session-dose",session:selected,sessionDose:dose})}>تعديل الجرعة العلاجية</button>}</td></tr>)}{selected&&!sessionDoses.length&&<tr><td colSpan={5}>لا جرعات بعد لهذه الجلسة.</td></tr>}{!selected&&<tr><td colSpan={5}>اختر جلسة من الجدول أعلاه.</td></tr>}</DirectoryTable>
   </section>
   {visit&&<section className={oncology.boardBlock}>
    <h3>إعطاء هذه الزيارة</h3>

@@ -7,6 +7,7 @@ use App\Services\Clinics\ClinicCounts;
 use Dedoc\Scramble\Support\Generator\Combined\AnyOf;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\Reference;
+use Dedoc\Scramble\Support\Generator\RequestBodyObject;
 use Dedoc\Scramble\Support\Generator\Response;
 use Dedoc\Scramble\Support\Generator\Schema;
 use Dedoc\Scramble\Support\Generator\SecurityRequirement;
@@ -46,7 +47,7 @@ class ClinicDocumentTransformer
 
     protected function historySchema(): ObjectType
     {
-        return $this->object(['id' => new IntegerType, 'code' => new StringType, 'name' => new StringType, 'starts_on' => new StringType, 'ends_on' => (new StringType)->nullable(true)]);
+        return $this->object(['id' => new IntegerType, 'code' => new StringType, 'name' => new StringType, 'starts_on' => new StringType, 'ends_on' => (new StringType)->nullable(true), 'clinic_lock_version' => new IntegerType, 'staff_lock_version' => new IntegerType]);
     }
 
     protected function unavailableChoices(): ArrayType
@@ -68,6 +69,22 @@ class ClinicDocumentTransformer
                     ->description('Optional complete batch. Repeated ids[] keys; 1–100 entries, deduplicated by the server. Incompatible with search/page/per_page.')
                     ->setSchema(Schema::fromType($this->list((new IntegerType)->setMin(1)->setMax(9007199254740991))->setMin(1)->setMax(100)));
             }
+        }
+    }
+
+    protected function configureAssignment($operation, bool $doctor): void
+    {
+        $operation->security = [new SecurityRequirement(['bearerAuth' => []])];
+        $operation->description = 'Edit an owned clinic_staff period, never recreate it. Requires '.($doctor ? 'doctors.view + doctors.link' : 'clinics.view + clinics.edit').' in the active facility. Includes all clinical staff types in clinic history. Start inclusive/end exclusive; null end remains open. Both clinic_lock_version and staff_lock_version are required, with staff-before-clinic locks, overlap/unique-start validation, current authorization and before/after audit. Archived ended periods cannot be reopened or extended. Every response private, no-store; 409 requires refetch and explicit draft review. New ordinary links default to 2022-01-01, unless an explicit assignment_starts_on is supplied; ended-history reactivation defaults to today.';
+        $fields = ['facility_id' => new IntegerType, 'starts_on' => (new StringType)->format('date'), 'ends_on' => (new StringType)->format('date')->nullable(true), 'clinic_lock_version' => new IntegerType, 'staff_lock_version' => new IntegerType, 'reason' => new StringType];
+        $type = $this->object($fields);
+        $type->required = array_keys($fields);
+        $operation->requestBodyObject = new RequestBodyObject;
+        $operation->requestBodyObject->setContent('application/json', Schema::fromType($type));
+        $operation->responses = [];
+        $operation->addResponse(Response::make(200)->setDescription('Same assignment ID and incremented endpoint versions.')->setContent('application/json', Schema::fromType($this->object(['data' => $this->object($fields + ['id' => new IntegerType, 'clinic_id' => new IntegerType, 'staff_id' => new IntegerType])]))));
+        foreach ([401, 403, 404, 409, 422, 500] as $status) {
+            $operation->addResponse(Response::make($status)->setDescription($status === 422 ? 'Invalid date range, overlap or validation.' : 'Authentication, authorization, ownership, stale version or safe internal error.'));
         }
     }
 
@@ -94,6 +111,11 @@ class ClinicDocumentTransformer
                 continue;
             }
             foreach ($path->operations as $operation) {
+                if (str_contains($route, '/assignments/')) {
+                    $this->configureAssignment($operation, false);
+
+                    continue;
+                }
                 $operation->responses = array_values(array_filter($operation->responses ?? [], function ($response) {
                     $resolved = $response instanceof Reference ? $response->resolve() : $response;
 

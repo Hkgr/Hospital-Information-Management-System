@@ -53,7 +53,7 @@ class DossierClinicalContext
         $links->lockClinics($targets[1]);
     }
 
-    public function check(array $f, ?int $clinic, ?int $doctor, string $date, string $field, bool $historical, ?string $manual = null): void
+    public function check(array $f, ?int $clinic, ?int $doctor, string $date, string $field, bool $historical, ?string $manual = null, bool $requireCoverage = false): void
     {
         if ($manual !== null && trim($manual) !== '') {
             $q = DB::table('clinics')->where('id', $clinic)->where('facility_id', $f['id']);
@@ -62,6 +62,14 @@ class DossierClinicalContext
             }
             if ($doctor || ! $q->exists()) {
                 throw ValidationException::withMessages([$field => 'الاسم اليدوي يحتاج عيادة صالحة في المنشأة ولا يُجمع مع طبيب من الدليل.']);
+            }
+
+            return;
+        }
+        if ($historical && ! $requireCoverage) {
+            // Only an unchanged, owned persisted row reaches this branch.
+            if (! DB::table('clinics')->where('id', $clinic)->where('facility_id', $f['id'])->exists() || ! DB::table('staff')->where('id', $doctor)->exists()) {
+                throw ValidationException::withMessages([$field => 'القيمة التاريخية لا تنتمي إلى سياق محفوظ صالح.']);
             }
 
             return;
@@ -98,7 +106,7 @@ class DossierClinicalContext
                 if (! $diagnoses && property_exists($row, 'dossier_managed') && ! $row->dossier_managed && ! $row->$clinic) {
                     continue;
                 }
-                $this->check($f, $row->$clinic, $row->$doctor, $date, "$field.$index.doctor_id", true, $row->manual_doctor_name ?? null);
+                $this->check($f, $row->$clinic, $row->$doctor, $date, "$field.$index.doctor_id", true, $row->manual_doctor_name ?? null, true);
                 if ($table === 'visit_procedures') {
                     app(ProcedureLocation::class)->check($f, $row->$clinic, $row->execution_location_snapshot, "$field.$index.clinic_id");
                 }

@@ -33,6 +33,11 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
                 continue;
             }
             foreach ($path->operations as $operation) {
+                if (str_contains($route, '/assignments/')) {
+                    $this->configureAssignment($operation, true);
+
+                    continue;
+                }
                 $operation->responses = [];
                 $operation->security = [new SecurityRequirement(['bearerAuth' => []])];
                 $operation->description .= '\nInternal codes are server-issued and immutable; code inputs are prohibited. Creates require a stable UUID request_id. Exact retries return the existing ID/code after current authorization; changed content with the same key returns 409 CREATION_REQUEST_CONFLICT without writes. Recovery replays the original payload/UUID, never searches by name.';
@@ -40,7 +45,7 @@ class DoctorDocumentTransformer extends ClinicDocumentTransformer
                 $isCreate = $route === 'doctors' && $operation->method === 'post';
                 if ($isCreate || $operation->method === 'put') {
                     $linksOnly = str_ends_with($route, '/clinics');
-                    $fields = ['facility_id' => (new IntegerType)->setMin(1), 'clinic_add_ids' => $this->list((new IntegerType)->setMin(1))->setMax(200)];
+                    $fields = ['facility_id' => (new IntegerType)->setMin(1), 'clinic_add_ids' => $this->list((new IntegerType)->setMin(1))->setMax(200), 'assignment_starts_on' => (new StringType)->format('date')];
                     if (! $isCreate) {
                         $fields += ['lock_version' => (new IntegerType)->setMin(1), 'clinic_remove_ids' => $this->list((new IntegerType)->setMin(1))->setMax(200)];
                     }

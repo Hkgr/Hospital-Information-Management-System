@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Picker from "./DossierPicker";
 import type { Choice } from "../blood-bank/api";
 import styles from "../clinics/clinics.module.css";
 
 /** A date change invalidates the previous selection, even if the clinic is unchanged. */
-export default function ClinicDoctorPicker({ facility, clinic, date, selected, name, label, onSelect }: {
-  facility: number; clinic: Choice | null; date: string; selected: Choice | null; name: string; label: string; onSelect: (doctor: Choice | null) => void;
+export default function ClinicDoctorPicker({ facility, clinic, date, selected, name, label, onSelect, saved = false }: {
+  facility: number; clinic: Choice | null; date: string; selected: Choice | null; name: string; label: string; onSelect: (doctor: Choice | null) => void; saved?: boolean;
 }) {
   const scope = `${facility}:${clinic?.id ?? ""}:${date}`;
   const previous = useRef(scope);
+  const [original] = useState(() => ({ scope, id: selected?.id }));
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener("hospital-clinical-assignments-changed", refresh);
+    window.addEventListener("focus", refresh);
+    return () => { window.removeEventListener("hospital-clinical-assignments-changed", refresh); window.removeEventListener("focus", refresh); };
+  }, []);
   const callback = useRef(onSelect);
   useEffect(() => { callback.current = onSelect; }, [onSelect]);
   useEffect(() => {
@@ -20,7 +28,7 @@ export default function ClinicDoctorPicker({ facility, clinic, date, selected, n
     callback.current(null);
   }, [scope]);
   if (!clinic || !date) return <p className={styles.hint}>حدد تاريخ الزيارة والعيادة أولًا لعرض الأطباء المرتبطين بها.</p>;
-  return <Picker key={scope} name={name} label={label} path={`dossiers/options/doctors?facility_id=${facility}&clinic_id=${clinic.id}&visit_date=${date}`} selected={selected}
+  return <>{saved && selected?.id === original.id && scope === original.scope && <p className={styles.hint}>هذه قيمة الطبيب المحفوظة. يمكن الاحتفاظ بها عند تصحيح السطر؛ اختيار طبيب آخر يتطلب أهلية فعلية في تاريخ الزيارة.</p>}<Picker key={`${scope}:${revision}`} name={name} label={label} path={`dossiers/options/doctors?facility_id=${facility}&clinic_id=${clinic.id}&visit_date=${date}`} selected={selected}
     emptyMessage="لا يوجد طبيب مؤهل مرتبط بهذه العيادة في التاريخ المحدد. راجع ارتباطات العيادة أو صحح التاريخ."
-    onSelect={onSelect} />;
+    onSelect={onSelect} /></>;
 }

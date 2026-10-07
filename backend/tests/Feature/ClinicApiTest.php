@@ -140,7 +140,7 @@ class ClinicApiTest extends TestCase
     public function test_history_same_day_reopen_and_stale_version(): void
     {
         $this->travelTo(now()->setTimezone('Asia/Damascus')->setTime(12, 0));
-        $clinic = $this->create(['doctor_add_ids' => [$this->doctor]]);
+        $clinic = $this->create(['doctor_add_ids' => [$this->doctor], 'assignment_starts_on' => now('Asia/Damascus')->toDateString()]);
         $today = now('Asia/Damascus')->toDateString();
         $updated = $this->edit($clinic, ['doctor_remove_ids' => [$this->doctor]])->assertOk()->assertJsonPath('data.doctor_count', 0)->json('data');
         $this->assertDatabaseHas('clinic_staff', ['starts_on' => $today, 'ends_on' => $today]);

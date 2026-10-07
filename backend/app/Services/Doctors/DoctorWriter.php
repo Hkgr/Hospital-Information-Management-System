@@ -70,7 +70,7 @@ class DoctorWriter
                 foreach ([false => $remove, true => $add] as $adding => $ids) {
                     sort($ids, SORT_NUMERIC);
                     foreach ($ids as $clinicId) {
-                        if ($this->links->change($clinicId, $id, (bool) $adding, $facility)) {
+                        if ($this->links->change($clinicId, $id, (bool) $adding, $facility, $input['assignment_starts_on'] ?? null)) {
                             DB::table('clinics')->where('id', $clinicId)->increment('lock_version');
                             $this->audit->record($request, $facility['id'], $clinicId, 'doctors_changed', null, ['staff_id' => $id, 'linked' => (bool) $adding]);
                             $this->audit->record($request, $facility['id'], $id, 'clinics_changed', null, ['clinic_id' => $clinicId, 'linked' => (bool) $adding], 'doctor');

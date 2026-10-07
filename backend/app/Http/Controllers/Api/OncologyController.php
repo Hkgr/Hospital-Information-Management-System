@@ -65,6 +65,8 @@ class OncologyController extends Controller
         $row = DB::table('oncology_sessions as s')->leftJoinSub(app(OncologyQueries::class)->plans($f)->select('p.id', 'p.current_revision_id', 'p.lock_version')->selectRaw(OncologyQueries::effectiveSql().' AS effective_status'), 'p', 'p.id', '=', 's.plan_id')->where('s.id', $session)->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->first(['s.*', 'p.current_revision_id', 'p.lock_version as plan_lock_version', 'p.effective_status', DB::raw(OncologyQueries::voidedDoseSql())]);
         abort_unless($row, 404);
         $row->has_voided_dose = (bool) $row->has_voided_dose;
+        $row->doses = DB::table('oncology_session_doses as d')->leftJoin('staff as n', 'n.id', '=', 'd.nurse_id')->where('d.session_id', $row->id)->where('d.facility_id', $f['id'])->orderBy('d.id')
+            ->get(['d.id', 'd.session_id', 'd.given_on', 'd.dose_name', 'd.complaint', 'd.recommendations', 'd.nurse_id', 'd.medication_source', 'd.lock_version', 'n.full_name as nurse_name'])->all();
 
         return response()->json(['data' => $row]);
     }

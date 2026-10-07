@@ -31,6 +31,7 @@ class SaveClinicRequest extends FormRequest
             'is_active' => ['required', 'boolean'],
             'lock_version' => [$this->isMethod('POST') ? 'prohibited' : 'required', 'integer', 'min:1'],
             'doctor_add_ids' => ['sometimes', 'array', 'max:200'],
+            'assignment_starts_on' => ['sometimes', 'date_format:Y-m-d'],
             'doctor_add_ids.*' => ['integer', 'min:1', 'distinct'],
             'doctor_remove_ids' => [$this->isMethod('POST') ? 'prohibited' : 'sometimes', 'array', 'max:200'],
             'doctor_remove_ids.*' => ['integer', 'min:1', 'distinct'],

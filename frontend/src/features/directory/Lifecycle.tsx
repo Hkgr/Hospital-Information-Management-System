@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest, AuthError } from "@/features/auth/api";
 import { useClinicRequest, type Page } from "../clinics/api";
+import AssignmentDatesEditor, { type AssignmentPeriod } from "./AssignmentDatesEditor";
+import { DirectoryTable } from "./DirectoryPrimitives";
 import Modal from "../clinics/Modal";
 import { Pagination } from "./Controls";
 import styles from "../clinics/clinics.module.css";
@@ -62,13 +64,14 @@ export default function LifecycleDialog({ kind, record, name, facilityId, action
   </div></Modal>;
 }
 
-type Period = { id: number; code: string; name: string; starts_on: string; ends_on: string | null };
-export function LinkHistory({ kind, id, facilityId }: { kind: "doctors" | "clinics"; id: number; facilityId: number }) {
+type Period = AssignmentPeriod;
+export function LinkHistory({ kind, id, facilityId, canEdit = false, onChanged }: { kind: "doctors" | "clinics"; id: number; facilityId: number; canEdit?: boolean; onChanged?: () => void }) {
   const [open, setOpen] = useState(false), [page, setPage] = useState(1), [size, setSize] = useState(20);
+  const [editing, setEditing] = useState<Period | null>(null);
   const result = useClinicRequest<Page<Period>>(open ? `${kind}/${id}/link-history?facility_id=${facilityId}&page=${page}&per_page=${size}` : null, true);
   return <section className={styles.detailPanel}><button className={styles.secondary} aria-expanded={open} onClick={() => setOpen(value => !value)}>تاريخ الارتباطات في المنشأة</button>{open && <>
     <p className={styles.hint}>السارية والمنتهية والمجدولة، بما فيها السجلات المعطلة والمؤرشفة. تساوي البداية والنهاية يعني فترة مغلقة دون مدة.</p>
     {result.loading && <p role="status">جارٍ تحميل التاريخ…</p>}{result.error && <p role="alert">{result.error} <button onClick={result.retry}>إعادة المحاولة</button></p>}
-    {result.data && <><div className={styles.tableScroll}><table><thead><tr><th>الكود</th><th>الاسم</th><th>البداية</th><th>النهاية (غير مشمولة)</th></tr></thead><tbody>{result.data.data.map(p => <tr key={p.id}><td><bdi>{p.code}</bdi></td><td>{p.name}</td><td><bdi>{p.starts_on}</bdi></td><td><bdi>{p.ends_on ?? "مفتوحة"}</bdi></td></tr>)}</tbody></table></div>{!result.data.data.length && <p>لا توجد فترات ارتباط مسجلة.</p>}<Pagination meta={result.data.meta} onPage={setPage} onPageSize={value => { setSize(Number(value)); setPage(1); }} /></>}
-  </>}</section>;
+    {result.data && <><DirectoryTable label="فترات الارتباط" headers={["الكود", "الاسم", "البداية", "النهاية (غير مشمولة)", ...(canEdit ? ["الإجراءات"] : [])]}>{result.data.data.map(p => <tr key={p.id}><td><bdi>{p.code}</bdi></td><td>{p.name}</td><td><bdi>{p.starts_on}</bdi></td><td><bdi>{p.ends_on ?? "مفتوحة"}</bdi></td>{canEdit && <td><button className={styles.secondary} onClick={() => setEditing(p)}>تعديل التواريخ</button></td>}</tr>)}</DirectoryTable>{!result.data.data.length && <p>لا توجد فترات ارتباط مسجلة.</p>}<Pagination meta={result.data.meta} onPage={setPage} onPageSize={value => { setSize(Number(value)); setPage(1); }} /></>}
+  </>}{editing && <AssignmentDatesEditor period={editing} kind={kind} parent={id} facility={facilityId} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); result.retry(); onChanged?.(); }}/>}</section>;
 }
