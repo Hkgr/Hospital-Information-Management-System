@@ -41,6 +41,7 @@ if ($mode === 'prepare') {
         $f['viewer_id'] = $f['viewer']->id;
         $f['token'] = $f['user']->createToken('clinical-edit', ['api'])->plainTextToken;
         $f['session_medication'] = SessionDoseFixture::medication($f['tag']);
+        $f['session_medication_b'] = SessionDoseFixture::medication('second-'.$f['tag']);
         $f['doctor'] = $f['workflow_doctors'][0];
         $f['clinic'] = $f['clinics'][0];
         $f['doctor_name'] = DB::table('staff')->where('id', $f['doctor'])->value('full_name');
@@ -54,6 +55,24 @@ if ($mode === 'prepare') {
     });
     file_put_contents($path, json_encode($f, JSON_THROW_ON_ERROR));
     echo "Synthetic fixture prepared.\n";
+} elseif ($mode === 'legacy-session-dose' || $mode === 'read-session-dose') {
+    $f = json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+    $row = DB::table('oncology_session_doses')->where('id', (int) ($argv[2] ?? 0))->where('facility_id', $f['facility'])->where('entered_by', $f['user_id'])->first();
+    if (! $row) {
+        throw new RuntimeException('An owned synthetic session-dose record is required.');
+    }
+    $row = (array) $row;
+    if ($mode === 'legacy-session-dose') {
+        unset($row['id']);
+        $row['dose_name'] = 'اسم جرعة تاريخي بلا ربط دوائي';
+        $row['medication_id'] = null;
+        $row['nurse_id'] = $f['doctor'];
+        $row['nurse_name'] = null;
+        $row['client_request_id'] = (string) Str::uuid();
+        $row['lock_version'] = 1;
+        $row['id'] = DB::table('oncology_session_doses')->insertGetId($row);
+    }
+    echo json_encode($row, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
 } elseif ($mode === 'revoke' || $mode === 'restore') {
     $f = json_decode(file_get_contents($path), true);
     $key = ['role_id' => $f['reader_role'], 'permission_id' => DB::table('permissions')->where('code', 'dossiers.diagnoses.update')->value('id')];
