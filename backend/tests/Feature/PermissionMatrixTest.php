@@ -33,7 +33,14 @@ class PermissionMatrixTest extends TestCase
         $this->seed([UserPermissionsSeeder::class, DossierPermissionsSeeder::class, DossierAuditPermissionsSeeder::class, PermissionMatrixPhaseOneSeeder::class]);
         $this->facility = DB::table('facilities')->insertGetId(['code' => 'MATRIX-'.Str::random(10), 'name_ar' => 'مشفى اختبار', 'timezone' => 'Asia/Damascus']);
         $this->other = DB::table('facilities')->insertGetId(['code' => 'MATRIX-'.Str::random(10), 'name_ar' => 'مشفى آخر', 'timezone' => 'Asia/Damascus']);
-        $this->clerk = $this->assigned('data_entry');
+        // Keep coverage for a basic-only account; data_entry now explicitly
+        // supports clinical card entry and is covered by its own regressions.
+        $basicRole = 'basic-only-'.Str::random(10);
+        $id = DB::table('roles')->insertGetId(['code' => $basicRole, 'name_ar' => 'بيانات أساسية فقط']);
+        foreach (DB::table('permissions')->whereIn('code', ['patients.basic.view', 'patient_cards.register'])->pluck('id') as $permission) {
+            DB::table('role_permissions')->insert(['role_id' => $id, 'permission_id' => $permission]);
+        }
+        $this->clerk = $this->assigned($basicRole);
         $this->token = $this->clerk->createToken('matrix', ['api'])->plainTextToken;
     }
 
@@ -61,7 +68,7 @@ class PermissionMatrixTest extends TestCase
         return ['request_id' => (string) Str::uuid(), 'person_mode' => 'new', 'first_name' => 'أحمد', 'family_name' => 'تجريبي', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown', 'opening_date' => '2020-01-01', 'visit_date' => '2020-01-01'];
     }
 
-    public function test_clerk_registration_reuses_atomic_writer_and_never_exposes_medical_history(): void
+    public function test_basic_only_registration_reuses_atomic_writer_and_never_exposes_medical_history(): void
     {
         $input = $this->registration();
         $row = $this->api('POST', 'reception/registrations', $input)->assertCreated()->assertHeader('Cache-Control', 'no-store, private')->json('data');

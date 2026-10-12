@@ -1,5 +1,7 @@
 # Permission matrix — Phase 1
 
+> Current `data_entry` contract: [card entry without directory creation](data-entry-card-permissions.md). Its new default supports clinical card input; existing role assignments/grants are corrected only through the targeted, audited command. The limited clerk contract below describes the historical Phase 1 scope.
+
 > Current card entry/access and retired reception-account routes: [Direct patient-card entry](direct-patient-card-entry.md). Earlier phase-specific routes and global-grant prerequisites below describe the historical implementation, not a required setup for the current local card flow.
 
 
@@ -26,8 +28,9 @@ below are preserved, not automatically replaced or broadened.
 Ordinary facility membership never substitutes for global directory authority.
 Permissions from multiple roles are combined: do not assign medical/report roles to
 a clerk who must remain restricted. Definitions assign no users automatically.
-Existing overprivileged `data_entry`/`statistics` definitions stop the seeder
-atomically for operator review rather than silently removing previous grants.
+Existing `data_entry` grants are preserved by repeated seeding; use the targeted
+command linked above for the reviewed correction. Overprivileged `statistics`
+definitions still stop the seeder atomically for operator review.
 
 ## Operator deployment
 

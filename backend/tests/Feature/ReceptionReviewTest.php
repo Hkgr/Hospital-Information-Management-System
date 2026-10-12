@@ -233,7 +233,7 @@ class ReceptionReviewTest extends TestCase
         DB::table('facility_user_roles')->insert(['facility_id' => $this->facility, 'user_id' => $protected->id, 'role_id' => DB::table('roles')->where('code', 'data_entry')->value('id')]);
         $this->api('PUT', 'reviews/accounts/1', ['request_id' => (string) Str::uuid(), 'lock_version' => 1, 'is_active' => false, 'permissions' => [], 'reason' => 'غير مسموح'], true)->assertStatus(410);
         $role = DB::table('roles')->where('code', 'data_entry')->value('id');
-        DB::table('role_permissions')->where('role_id', $role)->where('permission_id', DB::table('permissions')->where('code', 'reception.correct')->value('id'))->delete();
+        DB::table('role_permissions')->where('role_id', $role)->whereIn('permission_id', DB::table('permissions')->whereIn('code', ['reception.correct', 'patients.own.correct'])->pluck('id'))->delete();
         $this->api('POST', 'cards/'.$card['id'].'/correct', $this->correctionInput($card))->assertForbidden();
         $this->clerk->forceFill(['is_active' => false])->save();
         $this->api('GET', 'cards/'.$card['id'].'/identity')->assertForbidden();
