@@ -67,6 +67,8 @@ if ($mode === 'legacy-session-dose') {
         $f['viewer_id'] = $f['viewer']->id;
         $f['session_medication'] = SessionDoseFixture::medication($f['tag']);
         $f['session_medication_name'] = DB::table('medications')->where('id', $f['session_medication'])->value('name_ar');
+        $otherCategory = DB::table('medication_categories')->insertGetId(['code' => 'OTHER-'.$f['tag'], 'name_ar' => 'تصنيف آخر للاختبار', 'is_active' => true]);
+        DB::table('medications')->where('id', $f['medication'])->update(['category_id' => $otherCategory]);
         $f['staff_type'] = DB::table('staff')->where('id', $f['workflow_doctors'][0])->value('staff_type_id');
         $f['category'] = DB::table('service_categories')->where('is_active', true)->value('id');
         if (Artisan::call('dossiers:setup-prescription-funding', ['--apply' => true, '--facility' => $f['facility'], '--execution-reference' => 'LOCAL real invoice verification']) !== 0) {

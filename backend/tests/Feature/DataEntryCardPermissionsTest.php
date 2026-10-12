@@ -109,6 +109,8 @@ class DataEntryCardPermissionsTest extends TestCase
         $category = DB::table('medications')->where('id', $medication)->value('category_id');
         $inactive = SessionDoseFixture::medication('inactive-'.$this->f['tag']);
         $archived = SessionDoseFixture::medication('archived-'.$this->f['tag']);
+        $otherCategory = DB::table('medication_categories')->insertGetId(['code' => 'OTHER-'.$this->f['tag'], 'name_ar' => 'تصنيف آخر للاختبار', 'is_active' => true]);
+        DB::table('medications')->where('id', $this->f['medication'])->update(['category_id' => $otherCategory]);
         DB::table('medications')->where('id', $inactive)->update(['is_active' => false]);
         DB::table('medications')->where('id', $archived)->update(['archived_at' => now()]);
         $ids = array_column($this->api('GET', 'dossiers/session-dose-medications')->assertOk()->json('data.medications'), 'id');
