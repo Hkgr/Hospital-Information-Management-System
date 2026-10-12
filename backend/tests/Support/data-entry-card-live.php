@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Services\Users\DataEntryCardPermissions;
 use App\Support\TestDatabaseSafety;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\DossierCompletionFixture;
 
@@ -47,13 +48,26 @@ if ($mode === 'counts') {
         $f['viewer_id'] = $f['viewer']->id;
         $f['staff_type'] = DB::table('staff')->where('id', $f['workflow_doctors'][0])->value('staff_type_id');
         $f['category'] = DB::table('service_categories')->where('is_active', true)->value('id');
-        $f['funding'] = DB::table('funding_sources')->insertGetId(['code' => 'ENTRY-LIVE-'.$f['tag'], 'name_ar' => 'مصدر اصطناعي '.$f['tag'], 'is_active' => true]);
+        if (Artisan::call('dossiers:setup-prescription-funding', ['--apply' => true, '--facility' => $f['facility'], '--execution-reference' => 'LOCAL real invoice verification']) !== 0) {
+            throw new RuntimeException('Approved funding setup failed; review the local definitions.');
+        }
+        $f['fundings'] = DB::table('funding_sources')->whereIn('code', ['ministry_of_health', 'al_rowad', 'personal_expense'])->where('is_active', true)->orderBy('display_order')->get(['id', 'name_ar'])->all();
+        if (count($f['fundings']) !== 3) {
+            throw new RuntimeException('Real verification requires the three approved active sources; no disabled definition was reactivated.');
+        }
+        $f['funding'] = $f['fundings'][0]->id;
         $f['diagnosis_name'] = DB::table('diagnoses')->where('id', $f['diagnosis'])->value('name_ar');
         $f['clinic_name'] = DB::table('clinics')->where('id', $f['clinics'][0])->value('name_ar');
         $f['doctor_name'] = DB::table('staff')->where('id', $f['workflow_doctors'][0])->value('full_name');
         $f['service_name'] = DB::table('services')->where('id', $f['service'])->value('name_ar');
         $f['procedure_name'] = DB::table('procedures')->where('id', $f['procedure'])->value('name_ar');
         $f['medication_name'] = DB::table('medications')->where('id', $f['medication'])->value('name_ar');
+        $f['invoice_medications'] = [];
+        foreach ([1, 2, 3] as $i) {
+            $name = 'دواء فاتورة اختبار '.$i.' '.$f['tag'];
+            $id = DB::table('medications')->insertGetId(['code' => 'ENTRY-RX-'.$i.'-'.$f['tag'], 'name_ar' => $name, 'is_active' => true]);
+            $f['invoice_medications'][] = ['id' => $id, 'name_ar' => $name];
+        }
         unset($f['user'], $f['viewer']);
 
         return $f;

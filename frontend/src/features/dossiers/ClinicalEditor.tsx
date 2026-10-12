@@ -4,8 +4,7 @@ import { useClinicRequest } from "../clinics/api";
 import ClinicDoctorPicker from "./ClinicDoctorPicker";
 import Picker from "./DossierPicker";
 import { NewDirectoryEntry } from "./DiagnosisEditor";
-import { type ClinicalDraft, type Context, type MedicationPane, type Occurrence, type Prescription, type PrescriptionKind, type SavedRow, outcomeLabels, prescriptionKindLabels } from "./clinical";
-import type { TreatmentOptions } from "./oncology";
+import { type ClinicalDraft, type Context, type MedicationPane, type Occurrence, type Prescription, type PrescriptionKind, type SavedRow, outcomeLabels, prescriptionKindLabels, selectedPrescription } from "./clinical";
 import styles from "../clinics/clinics.module.css";
 import layout from "./wizard.module.css";
 
@@ -22,12 +21,43 @@ function Removal({row,change,remove,label,prefix,error}:{row:SavedRow;change:(v:
 }
 function PrescriptionEditor({kind,value,change,facility,date,canCreateMedication,error}:{kind:PrescriptionKind;value:ClinicalDraft;change:(d:ClinicalDraft)=>void;facility:number;date:string;canCreateMedication:boolean;error:ErrorDisplay}) {
   const [adding,setAdding]=useState<string|null>(null);
-  const funds=useClinicRequest<TreatmentOptions>(kind==="dose_linked"?`dossiers/treatment-options?facility_id=${facility}&date=${date}`:null);
-  const p=value.prescriptions[kind];
-  const setPrescription=(next:Prescription|null)=>change({...value,prescriptions:{...value.prescriptions,[kind]:next}});
-  const hint=kind==="unlinked"?"وصفة واحدة لأدوية صُرفت من المشفى دون ارتباط بجرعة. أضف دواءً أو عدة أدوية.":kind==="dose_linked"?"وصفة واحدة لأدوية مرتبطة بالجرعة. تمويل الوصفة مطلوب من مصادر التمويل المحفوظة.":"وصفة لأدوية خارج المشفى. اذكر سبب عدم تواجدها في المشفى، دون تمويل.";
-  return <section className={layout.diagnosis}><h4>{prescriptionKindLabels[kind]}</h4><p className={styles.hint}>{hint}</p>{!p?<button type="button" className={styles.secondary} onClick={()=>setPrescription({kind,clinic:null,doctor:null,prescribed_on:date,note:"",funding_source_id:null,unavailable_reason:"",items:[]})}>إضافة وصفة</button>:<><Removal row={p} change={r=>setPrescription({...p,...r})} remove={()=>setPrescription(null)} label="الوصفة" prefix="prescription" error={error}/>{!p.remove&&<><div className={styles.fields}><ClinicalContext value={p} change={ctx=>setPrescription({...p,...ctx})} facility={facility} date={date} prefix="prescription." doctorKey="prescribing_staff_id" clinicKey="prescribing_clinic_id" label="الوصفة" error={error}/><label>تاريخ الوصفة *<input name="prescription.prescribed_on" type="date" value={p.prescribed_on} onChange={e=>setPrescription({...p,prescribed_on:e.target.value})}/>{error("prescription.prescribed_on")}</label>{kind==="dose_linked"&&<label>تمويل الوصفة *<select name="prescription.funding_source_id" value={p.funding_source_id??""} onChange={e=>setPrescription({...p,funding_source_id:e.target.value?Number(e.target.value):null})}><option value="">اختر مصدر التمويل</option>{(funds.data?.funding_sources??[]).map(source=><option key={source.id} value={source.id}>{source.name_ar}</option>)}</select>{error("prescription.funding_source_id")}</label>}{kind==="outside"&&<label className={styles.full}>سبب عدم تواجدها في المشفى *<textarea name="prescription.unavailable_reason" rows={3} value={p.unavailable_reason} onChange={e=>setPrescription({...p,unavailable_reason:e.target.value})}/>{error("prescription.unavailable_reason")}</label>}<label>ملاحظة عامة للوصفة<textarea name="prescription.note" rows={3} value={p.note} onChange={e=>setPrescription({...p,note:e.target.value})}/>{error("prescription.note")}</label></div>{p.items.map((item,i)=>{const update=(v:typeof item)=>setPrescription({...p,items:p.items.map(x=>x.key===item.key?v:x)});return <section key={item.key} className={layout.diagnosis} aria-label={`دواء الوصفة ${i+1}`}><div className={layout.diagnosisHeader}><h4>الدواء {i+1}</h4><Removal row={item} change={r=>update({...item,...r})} remove={()=>setPrescription({...p,items:p.items.filter(x=>x.key!==item.key)})} label="الدواء" prefix={`prescription.items.${i}`} error={error}/></div>{!item.remove&&<div className={styles.fields}><div><Picker name={`prescription.items.${i}.medication_id`} label={`الدواء من الدليل ${i+1}`} path={`dossiers/options/medications?facility_id=${facility}`} selected={item.medication} onSelect={medication=>update({...item,medication})}/>{error(`prescription.items.${i}.medication_id`)}{canCreateMedication&&<button type="button" className={styles.secondary} onClick={()=>setAdding(item.key)}>إضافة دواء إلى الدليل</button>}</div><label>ملاحظة خاصة بالدواء<textarea name={`prescription.items.${i}.note`} rows={3} value={item.note} onChange={e=>update({...item,note:e.target.value})}/>{error(`prescription.items.${i}.note`)}</label></div>}</section>})}{error("prescription.items")}<button type="button" className={styles.secondary} onClick={()=>setPrescription({...p,items:[...p.items,{key:crypto.randomUUID(),medication:null,note:"",display_order:p.items.length}]})}>إضافة دواء للوصفة</button></>}</>}
-    {adding&&<NewDirectoryEntry kind="medication" facility={facility} onClose={()=>setAdding(null)} onSaved={medication=>{if(p)setPrescription({...p,items:p.items.map(x=>x.key===adding?{...x,medication}:x)});setAdding(null);}}/>}
+  const funds=useClinicRequest<{funding_sources:{id:number;name_ar:string}[]}>(kind==="dose_linked"?`dossiers/prescription-funding?facility_id=${facility}`:null);
+  const p=selectedPrescription(value,kind);
+  const setPrescription=(next:Prescription|null)=>change({...value,prescriptions:{...value.prescriptions,[kind]:value.prescriptions[kind].flatMap(row=>row.key!==p?.key?[row]:next?[next]:[])}});
+  const hint="يمكن إضافة عدة فواتير من النوع نفسه. الحفظ يخص الفاتورة المختارة فقط؛ تبقى مسودات الفواتير الأخرى والتبويبات محفوظة في الصفحة.";
+  return <section className={layout.diagnosis}>
+    <h4>{prescriptionKindLabels[kind]}</h4><p className={styles.hint}>{hint}</p>
+    <div className={layout.entryModes} aria-label="فواتير الزيارة">
+      {value.prescriptions[kind].map((row,i)=><button key={row.key} type="button" className={styles.secondary} aria-pressed={p?.key===row.key} aria-current={p?.key===row.key?"true":undefined} onClick={()=>change({...value,selectedPrescription:row.key})}>فاتورة {i+1}{row.id?` · #${row.id}`:" · مسودة"}{row.remove?" · للإلغاء":""}</button>)}
+      <button type="button" className={styles.secondary} onClick={()=>{const key=crypto.randomUUID();change({...value,selectedPrescription:key,prescriptions:{...value.prescriptions,[kind]:[...value.prescriptions[kind],{key,kind,clinic:null,doctor:null,prescribed_on:date,note:"",funding_source_id:null,unavailable_reason:"",items:[]}]}});}}>إضافة فاتورة</button>
+    </div>
+    {p&&<section key={p.key} aria-label={`الفاتورة المختارة ${value.prescriptions[kind].findIndex(row=>row.key===p.key)+1}`}>
+      <Removal row={p} change={r=>setPrescription({...p,...r})} remove={()=>setPrescription(null)} label="الفاتورة" prefix="prescription" error={error}/>
+      {!p.remove&&<>
+        <div className={styles.fields}>
+          <ClinicalContext value={p} change={ctx=>setPrescription({...p,...ctx})} facility={facility} date={date} prefix="prescription." doctorKey="prescribing_staff_id" clinicKey="prescribing_clinic_id" label="الوصفة" error={error}/>
+          <label>تاريخ الوصفة *<input name="prescription.prescribed_on" type="date" value={p.prescribed_on} onChange={e=>setPrescription({...p,prescribed_on:e.target.value})}/>{error("prescription.prescribed_on")}</label>
+          {kind==="dose_linked"&&<div>
+            <label>تمويل الوصفة *<select name="prescription.funding_source_id" disabled={funds.loading||!!funds.error} value={p.funding_source_id??""} onChange={e=>setPrescription({...p,funding_source_id:e.target.value?Number(e.target.value):null})}>
+              <option value="">اختر مصدر التمويل</option>
+              {p.funding_source_id&&!funds.data?.funding_sources.some(s=>s.id===p.funding_source_id)&&<option value={p.funding_source_id}>{p.funding_name??"مصدر التمويل المحفوظ"} · محفوظ</option>}
+              {(funds.data?.funding_sources??[]).map(source=><option key={source.id} value={source.id}>{source.name_ar}</option>)}
+            </select>{error("prescription.funding_source_id")}</label>
+            {funds.loading&&<p role="status">جارٍ تحميل مصادر التمويل…</p>}
+            {funds.error&&<p role="alert">تعذّر تحميل مصادر التمويل: {funds.error} <button type="button" className={styles.secondary} onClick={funds.retry}>إعادة تحميل التمويل</button></p>}
+            {!funds.loading&&!funds.error&&funds.data&&!funds.data.funding_sources.length&&<p role="status">لا توجد مصادر تمويل فعالة. يلزم تهيئة المصادر المعتمدة بواسطة المسؤول؛ لا يمكن حفظ فاتورة جديدة مرتبطة بالجرعة قبل ذلك. <button type="button" className={styles.secondary} onClick={funds.retry}>إعادة تحميل التمويل</button></p>}
+          </div>}
+          {kind==="outside"&&<label className={styles.full}>سبب عدم تواجدها في المشفى *<textarea name="prescription.unavailable_reason" rows={3} value={p.unavailable_reason} onChange={e=>setPrescription({...p,unavailable_reason:e.target.value})}/>{error("prescription.unavailable_reason")}</label>}
+          <label>ملاحظة عامة للوصفة<textarea name="prescription.note" rows={3} value={p.note} onChange={e=>setPrescription({...p,note:e.target.value})}/>{error("prescription.note")}</label>
+        </div>
+        {p.items.map((item,i)=>{const update=(v:typeof item)=>setPrescription({...p,items:p.items.map(x=>x.key===item.key?v:x)});return <section key={item.key} className={layout.diagnosis} aria-label={`دواء الوصفة ${i+1}`}>
+          <div className={layout.diagnosisHeader}><h4>الدواء {i+1}</h4><Removal row={item} change={r=>update({...item,...r})} remove={()=>setPrescription({...p,items:p.items.filter(x=>x.key!==item.key)})} label="الدواء" prefix={`prescription.items.${i}`} error={error}/></div>
+          {!item.remove&&<div className={styles.fields}><div><Picker name={`prescription.items.${i}.medication_id`} label={`الدواء من الدليل ${i+1}`} path={`dossiers/options/medications?facility_id=${facility}`} selected={item.medication} onSelect={medication=>update({...item,medication})}/>{error(`prescription.items.${i}.medication_id`)}{canCreateMedication&&<button type="button" className={styles.secondary} onClick={()=>setAdding(item.key)}>إضافة دواء إلى الدليل</button>}</div><label>ملاحظة خاصة بالدواء<textarea name={`prescription.items.${i}.note`} rows={3} value={item.note} onChange={e=>update({...item,note:e.target.value})}/>{error(`prescription.items.${i}.note`)}</label></div>}
+        </section>;})}
+        {error("prescription.items")}<button type="button" className={styles.secondary} onClick={()=>setPrescription({...p,items:[...p.items,{key:crypto.randomUUID(),medication:null,note:"",display_order:p.items.length}]})}>إضافة دواء للوصفة</button>
+      </>}
+    </section>}
+    {adding&&p&&<NewDirectoryEntry key={p.key} kind="medication" facility={facility} onClose={()=>setAdding(null)} onSaved={medication=>{setPrescription({...p,items:p.items.map(x=>x.key===adding?{...x,medication}:x)});setAdding(null);}}/>}
   </section>;
 }
 export default function ClinicalEditor({section,pane="unlinked",value,change,facility,date,caps,canCreateMedication,error}:{section:number;caps:Record<string,boolean>;pane?:MedicationPane;value:ClinicalDraft;change:(d:ClinicalDraft)=>void;facility:number;date:string;canCreateMedication:boolean;error:ErrorDisplay}) {

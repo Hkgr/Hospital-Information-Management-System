@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\Dossiers\OncologyQueries;
 use App\Services\Users\DataEntryCardPermissions;
 use Database\Seeders\PermissionMatrixPhaseOneSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -59,6 +60,66 @@ class DataEntryCardPermissionsTest extends TestCase
     private function context(): array
     {
         return ['clinic_id' => $this->f['clinics'][0], 'doctor_id' => $this->f['workflow_doctors'][0]];
+    }
+
+    public function test_data_entry_saves_three_funded_invoices_and_funding_does_not_require_treatment_permission(): void
+    {
+        $this->artisan('dossiers:setup-prescription-funding', ['--apply' => true, '--facility' => $this->f['facility'], '--execution-reference' => 'LOCAL approved funding test'])->assertSuccessful();
+        DB::table('role_permissions')->where('role_id', $this->role)->where('permission_id', DB::table('permissions')->where('code', 'dossiers.treatment.view')->value('id'))->delete();
+        $sources = $this->api('GET', 'dossiers/prescription-funding')->assertOk()->json('data.funding_sources');
+        $approved = array_values(array_filter($sources, fn ($s) => in_array($s['code'], ['ministry_of_health', 'al_rowad', 'personal_expense'], true)));
+        $this->assertCount(3, $approved);
+        $s = $this->register();
+        $path = 'dossiers/'.$s['id'].'/visits/'.$s['visit']['id'];
+        foreach ($approved as $i => $source) {
+            $input = ['request_id' => (string) Str::uuid(), 'lock_version' => $s['visit']['lock_version'], 'outcome' => null, 'prescription' => ['kind' => 'dose_linked', 'prescribing_clinic_id' => $this->f['clinics'][0], 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'prescribed_on' => '2001-03-0'.($i + 1), 'funding_source_id' => $source['id'], 'note' => "Invoice $i", 'items' => [['medication_id' => $this->f['medication'], 'display_order' => 0, 'note' => "Item $i"]]]];
+            $s = $this->api('PUT', $path.'/medications', $input)->assertOk()->json('data');
+            $this->api('PUT', $path.'/medications', $input)->assertOk();
+        }
+        $before = $s['clinical']['prescriptions'];
+        $changed = $before[1];
+        $changed['note'] = 'Only second invoice corrected';
+        $s = $this->api('PUT', $path.'/medications', ['lock_version' => $s['visit']['lock_version'], 'prescription' => $changed, 'outcome' => null])->assertOk()->json('data');
+        $this->assertSame($before[0], $s['clinical']['prescriptions'][0]);
+        $this->assertSame($before[2], $s['clinical']['prescriptions'][2]);
+        $this->api('GET', $path.'/progress')->assertOk()->assertJsonCount(3, 'data.clinical.prescriptions')->assertJsonPath('data.clinical.prescriptions.1.note', 'Only second invoice corrected');
+        $this->assertSame(array_column($approved, 'id'), array_column($s['clinical']['prescriptions'], 'funding_source_id'));
+        $this->assertSame(0, DB::table('visit_medications')->where('visit_id', $s['visit']['id'])->count());
+        $this->api('GET', 'dossiers/prescription-funding', ['facility_id' => $this->f['other']])->assertForbidden();
+        DB::table('role_permissions')->where('role_id', $this->role)->where('permission_id', DB::table('permissions')->where('code', 'dossiers.prescriptions.update')->value('id'))->delete();
+        $this->api('GET', 'dossiers/prescription-funding')->assertForbidden();
+    }
+
+    public function test_funding_setup_is_previewed_repeatable_preserves_disabled_sources_and_rejects_ambiguity(): void
+    {
+        $codes = array_keys(OncologyQueries::MEDICATION_SOURCES);
+        $names = array_values(OncologyQueries::MEDICATION_SOURCES);
+        // Preserve any existing referenced test definitions and their IDs; isolate
+        // the approved names/codes temporarily within this rolled-back fixture.
+        foreach (DB::table('funding_sources')->whereIn('code', $codes)->orWhereIn('name_ar', $names)->get() as $row) {
+            DB::table('funding_sources')->where('id', $row->id)->update(['code' => 'OLD-'.$row->id.'-'.$this->f['tag'], 'name_ar' => 'Old '.$row->id]);
+        }
+        $before = DB::table('funding_sources')->orderBy('id')->get()->toJson();
+        $this->artisan('dossiers:setup-prescription-funding')->assertSuccessful();
+        $this->assertSame($before, DB::table('funding_sources')->orderBy('id')->get()->toJson());
+        $args = ['--apply' => true, '--facility' => $this->f['facility'], '--execution-reference' => 'LOCAL operator funding verification'];
+        $this->artisan('dossiers:setup-prescription-funding', $args)->assertSuccessful();
+        $this->assertSame(5, DB::table('funding_sources')->whereIn('code', $codes)->count());
+        DB::table('funding_sources')->where('code', 'none')->update(['is_active' => false]);
+        DB::table('funding_sources')->where('code', 'ministry_of_health')->update(['code' => 'HISTORICAL-MOH-'.$this->f['tag']]);
+        $after = DB::table('funding_sources')->orderBy('id')->get()->toJson();
+        $audit = DB::table('audit_logs')->count();
+        $this->artisan('dossiers:setup-prescription-funding', $args)->assertSuccessful();
+        $this->assertSame($after, DB::table('funding_sources')->orderBy('id')->get()->toJson());
+        $this->assertSame($audit, DB::table('audit_logs')->count());
+        $visible = $this->api('GET', 'dossiers/prescription-funding')->assertOk()->json('data.funding_sources');
+        $this->assertNotContains('none', array_column($visible, 'code'));
+        DB::table('funding_sources')->update(['is_active' => false]);
+        $this->api('GET', 'dossiers/prescription-funding')->assertOk()->assertJsonPath('data.funding_sources', []);
+        DB::table('funding_sources')->insert(['code' => 'AMBIGUOUS-'.$this->f['tag'], 'name_ar' => $names[0], 'is_active' => true]);
+        $before = DB::table('funding_sources')->orderBy('id')->get()->toJson();
+        $this->artisan('dossiers:setup-prescription-funding', $args)->assertFailed();
+        $this->assertSame($before, DB::table('funding_sources')->orderBy('id')->get()->toJson());
     }
 
     public function test_default_data_entry_saves_all_card_sections_and_completes_a_real_visit_without_global_roles(): void

@@ -77,6 +77,7 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api', 'web.idle'
         }
         $oncology = OncologyController::class;
         Route::get('/treatment-options', [$oncology, 'options'])->name('treatment.options');
+        Route::get('/prescription-funding', [DossierCompletionController::class, 'prescriptionFunding'])->name('prescription.funding');
         Route::get('/{dossier}/treatment-plans', [$oncology, 'index'])->whereNumber('dossier')->name('treatment.index');
         Route::post('/{dossier}/treatment-plans', [$oncology, 'savePlan'])->whereNumber('dossier')->name('treatment.create');
         Route::get('/{dossier}/treatment-plans/{plan}', [$oncology, 'show'])->whereNumber(['dossier', 'plan'])->name('treatment.show');

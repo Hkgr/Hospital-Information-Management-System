@@ -20,7 +20,7 @@ import DiagnosisEditor from "./DiagnosisEditor";
 import ClinicalEditor from "./ClinicalEditor";
 import ClinicalConflict from "./ClinicalConflict";
 import FinalReview from "./FinalReview";
-import { clinicalDraft, clinicalPayload, medicationPanes, prescriptionKindLabels, type MedicationPane } from "./clinical";
+import { acceptPrescriptionSave, hasUnsavedMedicationDraft, clinicalDraft, clinicalPayload, medicationPanes, prescriptionKindLabels, type MedicationPane } from "./clinical";
 import styles from "../clinics/clinics.module.css";
 import layout from "./wizard.module.css";
 
@@ -140,7 +140,8 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
       const result = await apiRequest<Snapshot>(path, { method: step === 5 || step === 0 && !base || step === 2 && !base?.visit ? "POST" : "PUT", body: JSON.stringify(body), signal: controller.signal });
       if (controller.signal.aborted) return;
       acceptServer(result,step);
-      setDirty(d => d.filter(n => n !== step)); setSaved("تم حفظ القسم كمسودة."); reservation.current = null;
+      const remainingMedication = step === 4 && hasUnsavedMedicationDraft(medicationPane === "outcome" ? {...clinical, outcome: clinicalDraft(result).outcome} : acceptPrescriptionSave(clinical, base!, result, medicationPane), result);
+      setDirty(d => remainingMedication ? [...new Set([...d, 4])] : d.filter(n => n !== step)); setSaved("تم حفظ القسم كمسودة."); reservation.current = null;
       if (step === 0) setPatientVersion(result.patient.lock_version);
       if (step === 0) setPersonal(personalFields(result));
       if (step === 1) setMedical(medicalFields(result));
@@ -148,7 +149,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
       const url = `/patient-cards/new?${back}&card=${result.id}`;
       if (!base) window.history.replaceState(null, "", `${url}&section=1`);
       if(subsequent&&!base?.visit)window.history.replaceState(null,"",`${url}&visit=${result.visit!.id}&section=3`);
-      if (exit&&!dirty.some(n=>n!==step)) router.push(listHref);
+      if (exit&&!remainingMedication&&!dirty.some(n=>n!==step)) router.push(listHref);
       else if(exit)setSaved("حُفظ هذا القسم؛ احفظ التغييرات في الأقسام الأخرى قبل الخروج.");
       else if (step===4) {
         const i = allowedPanes.findIndex(p => p.key === medicationPane);
@@ -170,7 +171,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
       const next={...old,...(savedStep===3||!dirty.includes(3)?{services:latest.services,procedures:latest.procedures}:{})};
       if(savedStep===4){
         if(medicationPane==="outcome") next.outcome=latest.outcome;
-        else next.prescriptions={...old.prescriptions,[medicationPane]:latest.prescriptions[medicationPane]};
+        else next.prescriptions=acceptPrescriptionSave(old,base!,result,medicationPane).prescriptions;
       } else if(!dirty.includes(4)) {
         next.prescriptions=latest.prescriptions;
         next.outcome=latest.outcome;

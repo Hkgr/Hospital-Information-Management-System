@@ -72,17 +72,41 @@ test('data_entry alone creates a card and saves existing diagnoses, services, pr
       await choose(page, `الطبيب المسؤول · ${singular} 1`, f.doctor_name);
     }
     card = await save(page, '/clinical');
-    for (const kind of ['unlinked', 'dose_linked', 'outside']) {
-      await page.getByRole('button', { name: 'إضافة وصفة', exact: true }).click();
+    let linked = 0;
+    for (const kind of ['unlinked', 'dose_linked', 'dose_linked', 'dose_linked', 'outside']) {
+      if(kind==='dose_linked')await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
+      if(kind==='outside')await page.getByRole('tab',{name:'أدوية خارج المشفى',exact:true}).click();
+      await page.getByRole('button', { name: 'إضافة فاتورة', exact: true }).click();
       await choose(page, 'العيادة · الوصفة', f.clinic_name);
       await choose(page, 'الطبيب المسؤول · الوصفة', f.doctor_name);
-      if (kind === 'dose_linked') await page.locator('[name="prescription.funding_source_id"]').selectOption(String(f.funding));
+      if (kind === 'dose_linked') {
+        await page.locator('[name="prescription.funding_source_id"] option', {hasText:f.fundings[linked].name_ar}).waitFor({state:'attached'});
+        await page.locator('[name="prescription.funding_source_id"]').selectOption(String(f.fundings[linked++].id));
+      }
       if (kind === 'outside') await page.locator('[name="prescription.unavailable_reason"]').fill('غير متوفر في المشفى');
       await page.getByRole('button', { name: 'إضافة دواء للوصفة', exact: true }).click();
       assert.equal(await page.getByRole('button', { name: 'إضافة دواء إلى الدليل', exact: true }).count(), 0);
-      await choose(page, 'الدواء من الدليل 1', f.medication_name);
+      await choose(page, 'الدواء من الدليل 1', kind==='dose_linked'?f.invoice_medications[linked-1].name_ar:f.medication_name);
+      if(kind==='dose_linked')await page.locator('[name="prescription.prescribed_on"]').fill(`2001-03-0${linked}`);
+      await page.locator('[name="prescription.items.0.note"]').fill(`Medication ${kind} ${linked}`);
+      await page.locator('[name="prescription.note"]').fill(`Invoice ${kind} ${linked}`);
       card = await save(page, '/medications');
     }
+    const invoicesBefore=structuredClone(card.clinical.prescriptions.filter(p=>p.kind==='dose_linked'));
+    assert.equal(invoicesBefore.length,3);
+    await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
+    await page.getByRole('button',{name:'إضافة فاتورة',exact:true}).click();
+    await page.locator('[name="prescription.note"]').fill('Unfinished fourth invoice');
+    await page.getByRole('button',{name:new RegExp(`^فاتورة 2 · #${invoicesBefore[1].id}$`)}).click();
+    await page.locator('[name="prescription.note"]').fill('Only second invoice edited');
+    card=await save(page,'/medications');
+    const invoicesAfter=card.clinical.prescriptions.filter(p=>p.kind==='dose_linked');
+    assert.deepEqual(invoicesAfter[0],invoicesBefore[0]);assert.deepEqual(invoicesAfter[2],invoicesBefore[2]);
+    await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
+    await page.getByRole('button',{name:'فاتورة 4 · مسودة',exact:true}).click();
+    assert.equal(await page.locator('[name="prescription.note"]').inputValue(),'Unfinished fourth invoice');
+    await page.getByRole('button',{name:'إزالة الفاتورة',exact:true}).click();
+    await page.getByRole('tab',{name:'النتيجة',exact:true}).click();
     await page.getByRole('button', { name: 'تسجيل نتيجة الزيارة', exact: true }).click();
     await page.locator('[name="outcome.code"]').selectOption('DOS-NORX');
     await choose(page, 'العيادة · نتيجة الزيارة', f.clinic_name);
@@ -98,9 +122,74 @@ test('data_entry alone creates a card and saves existing diagnoses, services, pr
     assert.equal(card.visit.diagnoses[0].diagnosis_id, f.diagnosis);
     assert.equal(card.clinical.services[0].catalog_id, f.service);
     assert.equal(card.clinical.procedures[0].catalog_id, f.procedure);
-    assert.equal(card.clinical.prescriptions.length, 3);
+    assert.equal(card.clinical.prescriptions.length, 5);
+    assert.deepEqual(card.clinical.prescriptions.filter(p=>p.kind==='dose_linked').map(p=>p.funding_source_id),f.fundings.map(s=>s.id));
+    assert.deepEqual(card.clinical.prescriptions.filter(p=>p.kind==='dose_linked').map(p=>p.items[0].medication_id),f.invoice_medications.map(s=>s.id));
+    await page.goto(`${base}/patient-cards/new?facility_id=${f.facility}&card=${card.id}&visit=${card.visit.id}&section=4`);
+    await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
+    for (const [i,invoice] of card.clinical.prescriptions.filter(p=>p.kind==='dose_linked').entries()) {
+      await page.getByRole('button',{name:`فاتورة ${i+1} · #${invoice.id}`,exact:true}).click();
+      assert.equal(await page.locator('[name="prescription.funding_source_id"]').inputValue(),String(invoice.funding_source_id));
+      assert.equal(await page.locator('[name="prescription.note"]').inputValue(),invoice.note);
+      assert.equal(await page.locator('[name="prescription.items.0.note"]').inputValue(),invoice.items[0].note);
+    }
     assert.equal(card.clinical.attachment_count, 1);
   } finally { await context.close(); }
+});
+
+test('invoice conflict review uses invoice IDs and keeps new same-kind drafts separate from concurrent invoices', async () => {
+  const {context,page}=await open(`/patient-cards/new?card=${card.id}&visit=${card.visit.id}&section=4`);
+  try {
+    await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
+    const rows=card.clinical.prescriptions.filter(p=>p.kind==='dose_linked');
+    await page.getByRole('button',{name:`فاتورة 1 · #${rows[0].id}`,exact:true}).click();
+    await page.locator('[name="prescription.note"]').fill('My reviewed invoice edit');
+    let result=await api('PUT',`dossiers/${card.id}/visits/${card.visit.id}/medications`,{lock_version:card.visit.lock_version,prescription:{...rows[1],note:'Concurrent second invoice'},outcome:null});
+    assert.equal(result.status,200);card=result.body.data;
+    await save(page,'/medications','حفظ ومتابعة',409);
+    assert.equal(await page.locator('[name="prescription.note"]').inputValue(),'My reviewed invoice edit');
+    await page.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();
+    await page.getByRole('checkbox',{name:`تطبيق مسودتي: أدوية مرتبطة بالجرعة:${rows[0].id} · الملاحظة`,exact:true}).check();
+    await page.getByRole('button',{name:'اعتماد الاختيارات للمراجعة',exact:true}).click();
+    card=await save(page,'/medications');
+    assert.equal(card.clinical.prescriptions.find(p=>p.id===rows[0].id).note,'My reviewed invoice edit');
+    assert.equal(card.clinical.prescriptions.find(p=>p.id===rows[1].id).note,'Concurrent second invoice');
+    await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
+    await page.getByRole('button',{name:'إضافة فاتورة',exact:true}).click();
+    await choose(page,'العيادة · الوصفة',f.clinic_name);await choose(page,'الطبيب المسؤول · الوصفة',f.doctor_name);
+    await page.locator('[name="prescription.funding_source_id"]').selectOption(String(f.funding));
+    await page.locator('[name="prescription.note"]').fill('My separate new invoice');
+    await page.getByRole('button',{name:'إضافة دواء للوصفة',exact:true}).click();await choose(page,'الدواء من الدليل 1',f.medication_name);
+    const concurrent={kind:'dose_linked',prescribing_clinic_id:f.clinics[0],prescribing_staff_id:f.workflow_doctors[0],prescribed_on:'2001-03-02',funding_source_id:f.funding,note:'Concurrent separate new invoice',items:[{medication_id:f.medication,display_order:0}]};
+    result=await api('PUT',`dossiers/${card.id}/visits/${card.visit.id}/medications`,{lock_version:card.visit.lock_version,prescription:concurrent,outcome:null});assert.equal(result.status,200);
+    await save(page,'/medications','حفظ ومتابعة',409);await page.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();
+    await page.getByRole('checkbox',{name:/تطبيق مسودتي: إضافة أدوية مرتبطة بالجرعة:.*الجديدة من مسودتي/}).check();
+    await page.getByRole('button',{name:'اعتماد الاختيارات للمراجعة',exact:true}).click();
+    assert.equal(await page.locator('[name="prescription.note"]').inputValue(),'My separate new invoice');
+    card=await save(page,'/medications');
+    const invoices=card.clinical.prescriptions.filter(p=>p.kind==='dose_linked');
+    assert.equal(invoices.length,5);
+    assert.ok(invoices.some(p=>p.note==='Concurrent separate new invoice'));
+    assert.ok(invoices.some(p=>p.note==='My separate new invoice'));
+    assert.equal(new Set(invoices.map(p=>p.id)).size,5);
+  } finally {await context.close();}
+});
+
+test('funding empty/error states are explicit and retry preserves the invoice draft (UI fault injection only)', async () => {
+  const {context,page}=await open(`/patient-cards/new?card=${card.id}&visit=${card.visit.id}&section=4`);
+  try {
+    let mode='empty';
+    await page.route('**/hospital-api/dossiers/prescription-funding?*',route=>mode==='empty'?route.fulfill({json:{data:{funding_sources:[]}}}):mode==='error'?route.fulfill({status:503,json:{error:{code:'LOCAL_TEST_UNAVAILABLE',message:'تعذر تحميل بيانات الاختبار'}}}):route.continue());
+    await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
+    await page.getByText(/لا توجد مصادر تمويل فعالة/).waitFor();
+    await page.locator('[name="prescription.note"]').fill('Draft survives funding failures');
+    mode='error';await page.getByRole('button',{name:'إعادة تحميل التمويل',exact:true}).click();
+    await page.getByRole('alert').filter({hasText:'تعذّر تحميل مصادر التمويل'}).waitFor();
+    assert.equal(await page.locator('[name="prescription.note"]').inputValue(),'Draft survives funding failures');
+    mode='real';await page.getByRole('button',{name:'إعادة تحميل التمويل',exact:true}).click();
+    await page.locator('[name="prescription.funding_source_id"] option').filter({hasText:f.fundings[0].name_ar}).waitFor({state:'attached'});
+    assert.equal(await page.locator('[name="prescription.note"]').inputValue(),'Draft survives funding failures');
+  } finally {await context.close();}
 });
 
 test('directory creation stays absent on mobile/tablet/desktop and the remaining card sections expose their input actions', async () => {

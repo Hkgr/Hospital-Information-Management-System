@@ -47,6 +47,14 @@ class DossierCompletionController extends Controller
         return $this->snapshot($this->scope($r), $dossier, $visit);
     }
 
+    public function prescriptionFunding(Request $r)
+    {
+        $this->scope($r, 'visits.view');
+        $this->scope($r, 'prescriptions.update');
+
+        return response()->json(['data' => ['funding_sources' => DB::table('funding_sources')->where('is_active', true)->orderBy('display_order')->orderBy('id')->get(['id', 'code', 'name_ar'])]]);
+    }
+
     public function newVisit(Request $r, int $dossier)
     {
         $f = $this->scope($r, 'visits.create');
