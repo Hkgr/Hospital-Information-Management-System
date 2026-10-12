@@ -69,7 +69,23 @@ export function clinicalPayload(d: ClinicalDraft, section: number, pane: Medicat
 }
 
 export function selectedPrescription(d: ClinicalDraft, kind: PrescriptionKind) {
-  return d.prescriptions[kind].find(p => p.key === d.selectedPrescription) ?? d.prescriptions[kind][0];
+  if (!d.selectedPrescription) return d.prescriptions[kind][0];
+  const selected = prescriptionKinds.flatMap(k => d.prescriptions[k]).find(p => p.key === d.selectedPrescription);
+  // Switching to another tab may show its first invoice. A vanished explicit
+  // selection is different: it must never redirect a write to another invoice.
+  return selected ? selected.kind === kind ? selected : d.prescriptions[kind][0] : undefined;
+}
+
+export function hasMissingPrescriptionSelection(d: ClinicalDraft): boolean {
+  return !!d.selectedPrescription && !prescriptionKinds.some(kind => d.prescriptions[kind].some(p => p.key === d.selectedPrescription));
+}
+
+export function withPrescriptionSelection(previous: ClinicalDraft, next: ClinicalDraft): ClinicalDraft {
+  if (!previous.selectedPrescription) return next;
+  const selected = prescriptionKinds.flatMap(kind => previous.prescriptions[kind]).find(p => p.key === previous.selectedPrescription);
+  const replacement = prescriptionKinds.flatMap(kind => next.prescriptions[kind]).find(p => selected?.id ? p.id === selected.id : p.key === previous.selectedPrescription);
+  // Retain an unresolved key so the UI can report removal and require a choice.
+  return {...next, selectedPrescription: replacement?.key ?? previous.selectedPrescription};
 }
 
 // Only the selected invoice was sent. Preserve every other invoice and draft,

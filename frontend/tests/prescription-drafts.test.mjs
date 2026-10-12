@@ -46,3 +46,38 @@ test('a new invoice receives its own saved ID without replacing another new draf
   const old = clinical.clinicalDraft({clinical: {...before.clinical, prescriptions: undefined, prescription: rx(9, 'unlinked')}});
   assert.equal(old.prescriptions.unlinked[0].id, 9);
 });
+
+test('a missing explicit selection cannot silently serialize the first invoice', () => {
+  const d=clinical.clinicalDraft(snapshot([rx(1),rx(2)]));
+  d.selectedPrescription='deleted-invoice-key';
+  assert.equal(clinical.selectedPrescription(d,'dose_linked'),undefined);
+  assert.equal(clinical.clinicalPayload(d,4,'dose_linked').prescription,null);
+});
+
+test('a saved draft selection follows the same invoice ID when server keys change, without changing other invoices', () => {
+  const before=snapshot([rx(1)]);
+  let draft=clinical.clinicalDraft(before);
+  draft.prescriptions.dose_linked.push({...draft.prescriptions.dose_linked[0],key:'local-second',id:undefined,lock_version:undefined});
+  draft.selectedPrescription='local-second';
+  const after=snapshot([rx(1),rx(2)]);
+  draft=clinical.acceptPrescriptionSave(draft,before,after,'dose_linked');
+  assert.equal(clinical.selectedPrescription(draft,'dose_linked').id,2);
+  const latest=clinical.clinicalDraft(after);
+  const reconciled=clinical.withPrescriptionSelection(draft,latest);
+  assert.equal(reconciled.selectedPrescription,'2');
+  assert.equal(clinical.clinicalPayload(reconciled,4,'dose_linked').prescription.id,2);
+  assert.deepEqual(reconciled.prescriptions,latest.prescriptions);
+  const removed=clinical.withPrescriptionSelection(reconciled,clinical.clinicalDraft(snapshot([rx(1)])));
+  assert.equal(removed.selectedPrescription,'2');
+  assert.equal(clinical.hasMissingPrescriptionSelection(removed),true);
+  assert.equal(clinical.selectedPrescription(removed,'dose_linked'),undefined);
+});
+
+test('normal tab switching and an initially unselected list still show the intended tab', () => {
+  const d=clinical.clinicalDraft(snapshot([rx(1),rx(2,'outside')]));
+  assert.equal(clinical.selectedPrescription(d,'dose_linked').id,1);
+  d.selectedPrescription='2';
+  assert.equal(clinical.selectedPrescription(d,'outside').id,2);
+  assert.equal(clinical.selectedPrescription(d,'dose_linked').id,1);
+  assert.equal(clinical.hasMissingPrescriptionSelection(d),false);
+});

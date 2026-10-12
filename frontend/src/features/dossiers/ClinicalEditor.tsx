@@ -4,7 +4,7 @@ import { useClinicRequest } from "../clinics/api";
 import ClinicDoctorPicker from "./ClinicDoctorPicker";
 import Picker from "./DossierPicker";
 import { NewDirectoryEntry } from "./DiagnosisEditor";
-import { type ClinicalDraft, type Context, type MedicationPane, type Occurrence, type Prescription, type PrescriptionKind, type SavedRow, outcomeLabels, prescriptionKindLabels, selectedPrescription } from "./clinical";
+import { type ClinicalDraft, type Context, type MedicationPane, type Occurrence, type Prescription, type PrescriptionKind, type SavedRow, outcomeLabels, prescriptionKindLabels, selectedPrescription, hasMissingPrescriptionSelection } from "./clinical";
 import styles from "../clinics/clinics.module.css";
 import layout from "./wizard.module.css";
 
@@ -27,6 +27,7 @@ function PrescriptionEditor({kind,value,change,facility,date,canCreateMedication
   const hint="يمكن إضافة عدة فواتير من النوع نفسه. الحفظ يخص الفاتورة المختارة فقط؛ تبقى مسودات الفواتير الأخرى والتبويبات محفوظة في الصفحة.";
   return <section className={layout.diagnosis}>
     <h4>{prescriptionKindLabels[kind]}</h4><p className={styles.hint}>{hint}</p>
+    {hasMissingPrescriptionSelection(value)&&<p role="alert" className={layout.error}>الفاتورة المختارة لم تعد متاحة. اختر فاتورة من القائمة أو أضف فاتورة جديدة قبل الحفظ؛ لم تُحفظ فاتورة أخرى بدلًا منها، ومسوداتك الأخرى باقية.</p>}
     <div className={layout.entryModes} aria-label="فواتير الزيارة">
       {value.prescriptions[kind].map((row,i)=><button key={row.key} type="button" className={styles.secondary} aria-pressed={p?.key===row.key} aria-current={p?.key===row.key?"true":undefined} onClick={()=>change({...value,selectedPrescription:row.key})}>فاتورة {i+1}{row.id?` · #${row.id}`:" · مسودة"}{row.remove?" · للإلغاء":""}</button>)}
       <button type="button" className={styles.secondary} onClick={()=>{const key=crypto.randomUUID();change({...value,selectedPrescription:key,prescriptions:{...value.prescriptions,[kind]:[...value.prescriptions[kind],{key,kind,clinic:null,doctor:null,prescribed_on:date,note:"",funding_source_id:null,unavailable_reason:"",items:[]}]}});}}>إضافة فاتورة</button>

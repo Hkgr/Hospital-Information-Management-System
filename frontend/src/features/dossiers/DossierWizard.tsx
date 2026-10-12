@@ -20,7 +20,7 @@ import DiagnosisEditor from "./DiagnosisEditor";
 import ClinicalEditor from "./ClinicalEditor";
 import ClinicalConflict from "./ClinicalConflict";
 import FinalReview from "./FinalReview";
-import { acceptPrescriptionSave, hasUnsavedMedicationDraft, clinicalDraft, clinicalPayload, medicationPanes, prescriptionKindLabels, type MedicationPane } from "./clinical";
+import { acceptPrescriptionSave, hasUnsavedMedicationDraft, hasMissingPrescriptionSelection, withPrescriptionSelection, clinicalDraft, clinicalPayload, medicationPanes, prescriptionKindLabels, type MedicationPane } from "./clinical";
 import styles from "../clinics/clinics.module.css";
 import layout from "./wizard.module.css";
 
@@ -111,6 +111,10 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
   const input = (fields: Fields, setter: React.Dispatch<React.SetStateAction<Fields>>, labels: Fields, key: string, type = "text", required = false) => <label key={key}>{labels[key]}{required && " *"}<input name={key} aria-label={labels[key]} aria-invalid={!!error?.fields[key]} type={type} dir={type === "number" || type === "tel" ? "ltr" : undefined} step={type === "number" ? "0.01" : undefined} min={type === "number" ? "0.01" : undefined} max={key === "weight_kg" ? "499.99" : key === "height_cm" ? "299.99" : undefined} inputMode={type === "number" ? "decimal" : undefined} value={fields[key] ?? ""} maxLength={type === "text" ? (key === "national_id" ? 20 : key === "code" ? 40 : key === "occupation" ? 120 : 200) : undefined} onChange={e => changed(setter, key, e.target.value)} />{fieldError(key)}</label>;
   async function save(exit: boolean) {
     if (step>5 || pending.current || !allowed || review || error?.status === 409 || uploadsPending || (step===5&&dirty.some(n=>n!==5))) return;
+    if (step===4 && medicationPane!=="outcome" && hasMissingPrescriptionSelection(clinical)) {
+      setError(new AuthError(422,"INVOICE_SELECTION_REQUIRED","اختر الفاتورة التي تريد حفظها؛ لم تُرسل أي فاتورة لأن الاختيار السابق لم يعد متاحًا."));
+      return;
+    }
     const controller = new AbortController(); pending.current = controller; setBusy(true); setError(null); setSaved("");
     let body: Record<string, unknown>={}; let path: string="";
     if (step === 0) {
@@ -176,7 +180,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
         next.prescriptions=latest.prescriptions;
         next.outcome=latest.outcome;
       }
-      return next;
+      return withPrescriptionSelection(old,next);
     });
   }
   async function reload() {
@@ -200,7 +204,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
     <form ref={form} className={`${styles.form} ${layout.form}`} hidden={step>5} noValidate onSubmit={e => { e.preventDefault(); void save(false); }}>
       {error && <div role="alert" tabIndex={-1} className={styles.conflict}><strong>{error.code === "DOSSIER_ALREADY_EXISTS" ? "للمريض بطاقة في هذا المشفى؛ مسودتك لم تُحفظ ولم تُفقد." : error.message}</strong>{error.status === 409 && error.code !== "DOSSIER_ALREADY_EXISTS" && <><p>لن تُستبدل البيانات تلقائيًا. اجلب النسخة الحالية لاختيار ما تريد تطبيقه من مسودتك.</p><button type="button" className={styles.secondary} disabled={busy} onClick={() => void reload()}>جلب أحدث نسخة</button></>}{reloadError && <p>{reloadError}</p>}</div>}
       {review && step<3 && <WizardConflict step={step} latest={review} personal={personal} medical={medical} visit={visit} diagnoses={diagnoses} onAccept={(fields, rows) => { setSectionVersions(v => v.map((version, i) => i === step ? (step<2?review.lock_version:review.visit?.lock_version??0) : version)); if (step === 0) setPatientVersion(review.patient.lock_version); if (step === 0) setPersonal(fields); else if (step === 1) setMedical(fields); else { setVisit(fields); setDiagnoses(rows ?? []); } setBase(previous => ({ ...review, ...(step === 2 && previous ? { lock_version: previous.lock_version } : {}), ...(step !== 2 && previous ? { visit: previous.visit, workflow: { ...review.workflow, visit: previous.workflow.visit } } : {}) })); setReview(null); setError(null); reservation.current = null; touch(); }} />}
-      {review && step>=3 && step<5 && <ClinicalConflict step={step} latest={review} draft={clinical} onAccept={value=>{setClinical(old=>({...old,...(step===3?{services:value.services,procedures:value.procedures}:{prescriptions:value.prescriptions,outcome:value.outcome})}));setSectionVersions(v=>v.map((version,i)=>i===step?review.visit!.lock_version:version));setBase(review);setReview(null);setError(null);reservation.current=null;touch();}}/>}
+      {review && step>=3 && step<5 && <ClinicalConflict step={step} latest={review} draft={clinical} onAccept={value=>{setClinical(old=>({...old,...(step===3?{services:value.services,procedures:value.procedures}:{prescriptions:value.prescriptions,selectedPrescription:value.selectedPrescription,outcome:value.outcome})}));setSectionVersions(v=>v.map((version,i)=>i===step?review.visit!.lock_version:version));setBase(review);setReview(null);setError(null);reservation.current=null;touch();}}/>}
       {review && step===5 && <div className={styles.conflict}><p>راجع البيانات الحالية في ملخص المراجعة قبل تأكيدها مجددًا.</p><button type="button" className={styles.secondary} onClick={()=>{acceptServer(review,5);setReview(null);setError(null);setReviewed(false);reservation.current=null;}}>جلب البيانات الحالية لإعادة المراجعة</button></div>}
       <fieldset disabled={busy || !!review || (!!base && !allowed)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <section className={layout.section}><div><h3 ref={heading} tabIndex={-1}>{steps[step]}</h3><p className={styles.hint}>الحقول المعلّمة بنجمة مطلوبة. تبقى الأقسام اللاحقة محفوظة عند العودة.</p></div>
@@ -241,7 +245,7 @@ function WizardForm({ facility, options, initial }: { facility: number; options:
             {diagnoses.map((row, index) => <DiagnosisEditor key={row.key} row={row} index={index} facility={facility} date={visit.visit_date} canCreate={!!caps.diagnoses_create} change={value => { touch(); setDiagnoses(items => items.map(d => d.key === row.key ? value : d)); }} remove={() => { touch(); setDiagnoses(items => items.filter(d => d.key !== row.key)); }} error={fieldError} />)}
             <div><button type="button" className={styles.secondary} onClick={() => { touch(); setDiagnoses(items => [...items, { key: `new-${crypto.randomUUID()}`, diagnosis: null, clinic: null, doctor: null, diagnosed_on: "" }]); }}><LuPlus aria-hidden="true" />إضافة تشخيص للزيارة</button></div>
           </fieldset></>}
-          {(step===3||step===4)&&<ClinicalEditor caps={caps} section={step} pane={medicationPane} value={clinical} change={v=>{touch();setClinical(v);}} facility={facility} date={visit.visit_date} canCreateMedication={!!caps.medications_create} error={fieldError}/>}
+          {(step===3||step===4)&&<ClinicalEditor caps={caps} section={step} pane={medicationPane} value={clinical} change={v=>{touch();setClinical(v);if(error?.code==="INVOICE_SELECTION_REQUIRED"&&!hasMissingPrescriptionSelection(v))setError(null);}} facility={facility} date={visit.visit_date} canCreateMedication={!!caps.medications_create} error={fieldError}/>}
           {base?.visit&&<div className={layout.review} hidden={step!==5}><FinalReview onReviewMode={setReviewPane} facility={facility} snapshot={base} caps={caps} onSaved={s=>acceptServer(s,-1)} onPending={setUploadsPending} blocked={busy||dirty.some(n=>n<5)||!!review||error?.status===409} reviewed={reviewed} setReviewed={v=>{setReviewed(v);touch();}} error={fieldError} onError={e=>{focusError.current=true;setError(e);}}/></div>}
         </section>
       </fieldset>
