@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\Support\DossierCompletionCase;
+use Tests\Support\SessionDoseFixture;
 
 class OncologyTreatmentTest extends DossierCompletionCase
 {
@@ -765,21 +766,23 @@ class OncologyTreatmentTest extends DossierCompletionCase
         $p = $this->activate($this->makePlan())->assertOk()->json('data');
         $s = $this->schedule($p, '2001-03-02');
         $path = '/'.$this->s['id'].'/treatment-sessions/'.$s['id'].'/session-doses';
-        $dose = ['given_on' => '2001-03-02', 'dose_name' => 'الجرعة الأولى', 'complaint' => 'غثيان', 'recommendations' => 'إكمال الجلسة', 'nurse_id' => $this->context()['doctor_id'], 'medication_source' => 'ministry_of_health'];
+        $firstMedication = SessionDoseFixture::medication('first-'.$this->f['tag']);
+        $secondMedication = SessionDoseFixture::medication('second-'.$this->f['tag']);
+        $dose = ['given_on' => '2001-03-02', 'medication_id' => $firstMedication, 'complaint' => 'غثيان', 'recommendations' => 'إكمال الجلسة', 'nurse_name' => 'اسم ممرض حر', 'medication_source' => 'ministry_of_health'];
         $this->callApi('POST', $path, $dose)->assertCreated();
-        $this->callApi('POST', $path, array_replace($dose, ['given_on' => '2001-03-05', 'dose_name' => 'جرعة داعمة', 'medication_source' => 'al_rowad']))->assertCreated();
+        $this->callApi('POST', $path, array_replace($dose, ['given_on' => '2001-03-05', 'medication_id' => $secondMedication, 'medication_source' => 'al_rowad']))->assertCreated();
         $listed = $this->callApi('GET', '/'.$this->s['id'].'/treatment-sessions?plan_id='.$p['id'])->assertOk()->json('data');
         $row = collect($listed)->firstWhere('id', $s['id']);
         $this->assertCount(2, $row['doses']);
         $this->assertSame('2001-03-02', $row['doses'][0]['given_on']);
         $this->assertSame('ministry_of_health', $row['doses'][0]['medication_source']);
-        $this->assertSame('جرعة داعمة', $row['doses'][1]['dose_name']);
+        $this->assertSame(DB::table('medications')->where('id', $secondMedication)->value('name_ar'), $row['doses'][1]['dose_name']);
         $this->assertSame('al_rowad', $row['doses'][1]['medication_source']);
         $this->callApi('POST', $path, array_replace($dose, ['nurse_id' => 999999999]))->assertUnprocessable()->assertJsonValidationErrors('nurse_id');
         $this->callApi('POST', $path, array_replace($dose, ['medication_source' => 'catalog-row']))->assertUnprocessable()->assertJsonValidationErrors('medication_source');
         unset($dose['medication_source']);
         $this->callApi('POST', $path, $dose)->assertUnprocessable()->assertJsonValidationErrors('medication_source');
-        $this->callApi('PUT', $path.'/'.$row['doses'][0]['id'], ['lock_version' => $row['doses'][0]['lock_version'], 'given_on' => '2001-03-02', 'dose_name' => 'الجرعة الأولى', 'complaint' => 'غثيان', 'recommendations' => 'إكمال الجلسة', 'nurse_id' => $this->context()['doctor_id']])->assertOk();
+        $this->callApi('PUT', $path.'/'.$row['doses'][0]['id'], ['lock_version' => $row['doses'][0]['lock_version'], 'given_on' => '2001-03-02', 'complaint' => 'غثيان', 'recommendations' => 'إكمال الجلسة'])->assertOk();
         $this->assertSame('ministry_of_health', DB::table('oncology_session_doses')->where('id', $row['doses'][0]['id'])->value('medication_source'));
     }
 

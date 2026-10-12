@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Services\Users\DataEntryCardPermissions;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -14,6 +15,7 @@ class PermissionMatrixPhaseOneSeeder extends Seeder
     public function run(): void
     {
         DB::transaction(function () {
+            app(DataEntryCardPermissions::class)->define();
             foreach ([SurfacePermissionsSeeder::class, UserPermissionsSeeder::class, DossierPermissionsSeeder::class, DossierCompletionPermissionsSeeder::class, DossierAuditPermissionsSeeder::class, ClinicPermissionsSeeder::class, DoctorPermissionsSeeder::class, CatalogPermissionsSeeder::class] as $definition) {
                 app($definition)->run();
             }
@@ -24,11 +26,17 @@ class PermissionMatrixPhaseOneSeeder extends Seeder
             foreach (array_combine(self::RECEPTION, ['عرض الاستقبال المحدود', 'تسجيل بطاقة وزيارة أولى من الاستقبال', 'بحث تعريفي محدود عن المرضى — تفويض عالمي', 'إنشاء هوية مريض من الاستقبال — تفويض عالمي']) as $code => $name) {
                 DB::table('permissions')->insertOrIgnore(['code' => $code, 'name_ar' => $name, 'is_active' => true]);
             }
-            foreach (['data_entry' => ['مدخل البيانات', self::RECEPTION], 'hospital_admin' => ['إداري المشفى', self::ADMIN], 'statistics' => ['فريق الإحصاء', []], 'super_admin' => ['مدير النظام الشامل', []]] as $code => [$name, $permissions]) {
+            foreach (['data_entry' => ['مدخل البيانات', DataEntryCardPermissions::GRANTS], 'hospital_admin' => ['إداري المشفى', self::ADMIN], 'statistics' => ['فريق الإحصاء', []], 'super_admin' => ['مدير النظام الشامل', []]] as $code => [$name, $permissions]) {
+                $exists = DB::table('roles')->where('code', $code)->exists();
                 DB::table('roles')->insertOrIgnore(['code' => $code, 'name_ar' => $name, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()]);
                 $id = DB::table('roles')->where('code', $code)->lockForUpdate()->value('id');
+                if ($code === 'data_entry' && $exists) {
+                    // Existing policies are corrected only by the explicit,
+                    // audited role command, never restored by repeated seeding.
+                    continue;
+                }
                 $compatible = match ($code) {
-                    'data_entry' => [...$permissions, 'reception.correct', 'reception.corrections.request'],
+                    'data_entry' => [...$permissions, ...self::RECEPTION, 'reception.correct', 'reception.corrections.request'],
                     'statistics' => ['statistics.view', 'statistics.export'],
                     default => $permissions,
                 };

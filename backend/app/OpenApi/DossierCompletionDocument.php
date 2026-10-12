@@ -17,7 +17,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
 {
     public static function matches(string $route): bool
     {
-        return $route === 'dossiers/medications' || preg_match('#/(clinical|medications|review|complete|uploads|attachments|export|report|subsequent|new)(/|$)#', $route) === 1;
+        return $route === 'dossiers/medications' || $route === 'dossiers/prescription-funding' || preg_match('#/(clinical|medications|review|complete|uploads|attachments|export|report|subsequent|new)(/|$)#', $route) === 1;
     }
 
     public function clinical(): ObjectType
@@ -41,7 +41,13 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
         $fields = ['facility_id' => $i(), 'request_id' => $s()->format('uuid'), 'lock_version' => $i()];
         $required = array_keys($fields);
         $row = ['id' => $i(), 'lock_version' => $i(), 'remove' => new BooleanType, 'void_reason' => $null(), 'note' => $null()];
-        if (str_ends_with($route, '/clinical')) {
+        if ($route === 'dossiers/prescription-funding') {
+            $op->description = 'Active funding definitions for visit invoices. Requires same-facility dossiers.visits.view and dossiers.prescriptions.update; does not require treatment.view or directory creation. Private, no-store. Empty funding_sources means approved definitions need operator setup; errors are not empty results.';
+            $op->responses = [];
+            $op->addResponse(Response::make(200)->setDescription('Active approved sources')->setContent('application/json', Schema::fromType($this->object(['data' => $this->object(['funding_sources' => $this->list($this->object(['id' => $i(), 'code' => $s(), 'name_ar' => $s()]))])]))));
+
+            return;
+        } elseif (str_ends_with($route, '/clinical')) {
             $event = $this->object($row + ['catalog_id' => $i(), 'clinic_id' => $i(), 'doctor_id' => $i()->nullable(true), 'manual_doctor_name' => $null()]);
             $event->required = ['catalog_id', 'clinic_id'];
             $fields += ['services' => $this->list($event), 'procedures' => $this->list($event)];
@@ -60,7 +66,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
             $out->required = ['code', 'clinic_id', 'doctor_id', 'outcome_on'];
             $fields += ['prescription' => $rx, 'outcome' => $out];
             $required = [...$required, 'prescription', 'outcome'];
-            $op->description .= ' Requires dossiers.clinical.update. Up to one active prescription per kind (unlinked hospital dispense, dose-linked with funding_source_id, outside-hospital with unavailable_reason). Each prescription has one or more items. Omitted kinds and a null prescription are left unchanged. One current outcome, saved independently of prescriptions. Dates must not be future. DOS-REFER requires all three outgoing fields; other outcomes prohibit them. Incoming referral stays independent.';
+            $op->description .= ' Requires dossiers.visits.view plus dossiers.prescriptions.update for an invoice, and dossiers.outcomes.update for an outcome. Multiple active invoices per kind (unlinked hospital dispense, dose-linked with funding_source_id, outside-hospital with unavailable_reason). Each prescription has one or more items. Each write sends one selected invoice with its own row version; all omitted invoices/kinds and a null prescription are left unchanged. One current outcome, saved independently of prescriptions. Dates must not be future. DOS-REFER requires all three outgoing fields; other outcomes prohibit them. Incoming referral stays independent.';
         } elseif (str_ends_with($route, '/complete')) {
             $fields += ['dossier_lock_version' => $i(), 'confirmed' => new BooleanType, 'clinic_id' => $i(), 'attending_staff_id' => $i()];
             $required = array_keys($fields);

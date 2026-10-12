@@ -131,9 +131,6 @@ class DossierClinicalWriter
         if ($old && $old->kind !== $kind) {
             throw ValidationException::withMessages(['prescription.kind' => 'لا يمكن تغيير نوع الوصفة المحفوظة.']);
         }
-        if (! $old && DB::table('visit_prescriptions')->where('visit_id', $v->id)->where('kind', $kind)->whereNull('voided_at')->exists()) {
-            DossierWrites::conflict('توجد وصفة محفوظة لهذا النوع؛ اجلب نسختها للمراجعة.');
-        }
         if (! empty($row['remove'])) {
             $this->void($r, $f, 'visit_prescriptions', $old, $row, 'prescription');
 

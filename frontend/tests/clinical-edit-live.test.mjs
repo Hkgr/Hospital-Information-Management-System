@@ -8,9 +8,10 @@ import { chromium } from 'playwright';
 const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3198';
 assert.ok(['127.0.0.1', 'localhost'].includes(new URL(base).hostname));
 let browser, f, card;
-function control(mode) {
-  const result = spawnSync('php', ['tests/Support/clinical-edit-live.php', mode], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: { ...process.env, APP_ENV: 'testing' }, encoding: 'utf8' });
+function control(mode, record) {
+  const result = spawnSync('php', ['tests/Support/clinical-edit-live.php', mode, ...(record ? [String(record)] : [])], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: { ...process.env, APP_ENV: 'testing' }, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stdout + result.stderr);
+  return result.stdout;
 }
 before(async () => { control('prepare'); f = JSON.parse(readFileSync(new URL('../../backend/storage/framework/testing/clinical-edit-live.json', import.meta.url))); browser = await chromium.launch({ channel: 'chrome' }); mkdirSync('test-results/clinical-edit', { recursive: true }); });
 after(async () => { await browser?.close(); if (f) control('cleanup'); });
@@ -92,7 +93,7 @@ test('session-dose edit uses the existing PUT contract and explicit conflict rev
   const appointment = await api(`dossiers/${card.id}/treatment-sessions`, 'POST', { planned_on: '2022-06-01', clinic_id: f.clinic, doctor_id: f.doctor });
   assert.equal(appointment.status, 201, JSON.stringify(appointment.body));
   const sessionId = appointment.body.data.id;
-  const input = { given_on: '2022-06-01', dose_name: 'جرعة اصطناعية', complaint: 'شكاية قديمة', recommendations: 'توصيات قديمة', nurse_id: f.doctor, medication_source: 'ministry_of_health' };
+  const input = { given_on: '2022-06-01', medication_id: f.session_medication, complaint: 'شكاية قديمة', recommendations: 'توصيات قديمة', nurse_name: 'Synthetic free nurse', medication_source: 'ministry_of_health' };
   const dose = await api(`dossiers/${card.id}/treatment-sessions/${sessionId}/session-doses`, 'POST', input);
   assert.equal(dose.status, 201, JSON.stringify(dose.body));
   const doseId = dose.body.data.id;
@@ -100,7 +101,7 @@ test('session-dose edit uses the existing PUT contract and explicit conflict rev
   try {
     const page = session.page;
     await page.getByRole('button', { name: 'تعديل الجرعة العلاجية', exact: true }).click();
-    assert.equal(await page.getByLabel('اسم الجرعة', { exact: true }).inputValue(), input.dose_name);
+    assert.equal(await page.getByLabel('اسم الجرعة', { exact: true }).inputValue(), String(input.medication_id));
     await page.getByRole('textbox', { name: /^شكاية المريض/ }).fill('تصحيح المسودة');
     const live = await api(`dossiers/${card.id}/treatment-sessions/${sessionId}?facility_id=${f.facility}`);
     const old = live.body.data.doses.find(d => d.id === doseId);
@@ -122,6 +123,88 @@ test('session-dose edit uses the existing PUT contract and explicit conflict rev
     assert.equal(result.body.data.doses[0].id, doseId);
     assert.equal(result.body.data.doses[0].complaint, 'تصحيح المسودة');
   } finally { await session.context.close(); }
+});
+
+async function identityDose() {
+  const created = await api('dossiers', 'POST', { person_mode: 'new', first_name: 'مريض', family_name: `تعارض جرعة ${f.tag}`, opening_date: '2025-06-01', visit_date: '2025-06-01', gender: 'unknown', birth_date_accuracy: 'unknown', displacement_status: 'unknown' });
+  assert.equal(created.status, 201, JSON.stringify(created.body));
+  const d = created.body.data;
+  const appointment = await api(`dossiers/${d.id}/treatment-sessions`, 'POST', { planned_on: '2025-06-01', clinic_id: f.clinic, doctor_id: f.doctor });
+  assert.equal(appointment.status, 201, JSON.stringify(appointment.body));
+  const path = `dossiers/${d.id}/treatment-sessions/${appointment.body.data.id}`;
+  const input = { given_on: '2025-06-01', medication_id: f.session_medication, nurse_name: 'ممرض A', complaint: 'شكاية أصلية', recommendations: 'توصية أصلية', medication_source: 'ministry_of_health' };
+  const saved = await api(`${path}/session-doses`, 'POST', input);
+  assert.equal(saved.status, 201, JSON.stringify(saved.body));
+  return { dossier: d, session: appointment.body.data, path, input, id: saved.body.data.id };
+}
+
+for (const keepDraft of [true, false]) test(`session-dose conflict review ${keepDraft ? 'explicitly restores A over concurrent B' : 'adopts server B as the unchanged baseline'}`, async () => {
+  const dose = await identityDose();
+  const { page, context } = await open(f.reader_token, `/patient-cards/new?facility_id=${f.facility}&card=${dose.dossier.id}&visit=${dose.dossier.visit.id}&section=7`, 768);
+  const suffix = `/session-doses/${dose.id}`;
+  try {
+    await page.getByRole('button', { name: 'تعديل الجرعة العلاجية', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    assert.equal(await dialog.getByLabel('اسم الجرعة', { exact: true }).inputValue(), String(f.session_medication));
+    assert.equal(await dialog.locator('[name="nurse_name"]').inputValue(), dose.input.nurse_name);
+    await dialog.locator('[name="complaint"]').fill('شكاية مسودتي');
+    const original = (await api(`${dose.path}?facility_id=${f.facility}`)).body.data.doses.find(r => r.id === dose.id);
+    const changed = await api(`${dose.path}${suffix}`, 'PUT', { ...dose.input, medication_id: f.session_medication_b, nurse_name: 'ممرض B', lock_version: original.lock_version });
+    assert.equal(changed.status, 200, JSON.stringify(changed.body));
+    const conflict = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith(suffix));
+    await dialog.getByRole('button', { name: 'حفظ', exact: true }).click();
+    assert.equal((await conflict).status(), 409);
+    await dialog.getByRole('button', { name: 'جلب أحدث نسخة', exact: true }).click();
+    await dialog.getByRole('checkbox', { name: /^medication_id/ }).waitFor();
+    if (keepDraft) {
+      await dialog.getByRole('checkbox', { name: /^medication_id/ }).check();
+      await dialog.getByRole('checkbox', { name: /^اسم الممرض/ }).check();
+    }
+    await dialog.getByRole('checkbox', { name: /^شكاية المريض/ }).check();
+    await dialog.getByRole('button', { name: 'اعتماد الاختيارات للمراجعة قبل الحفظ', exact: true }).click();
+    const expectedMedication = keepDraft ? f.session_medication : f.session_medication_b;
+    const expectedNurse = keepDraft ? 'ممرض A' : 'ممرض B';
+    assert.equal(await dialog.getByLabel('اسم الجرعة', { exact: true }).inputValue(), String(expectedMedication));
+    assert.equal(await dialog.locator('[name="nurse_name"]').inputValue(), expectedNurse);
+    const pending = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith(suffix));
+    await dialog.getByRole('button', { name: 'حفظ', exact: true }).click();
+    const response = await pending;
+    assert.equal(response.status(), 200, await response.text());
+    const sent = response.request().postDataJSON();
+    const stored = (await api(`${dose.path}?facility_id=${f.facility}`)).body.data.doses.find(r => r.id === dose.id);
+    assert.deepEqual({ sentMedication: sent.medication_id ?? null, sentNurse: sent.nurse_name ?? null, storedMedication: stored.medication_id, storedNurse: stored.nurse_name }, {
+      sentMedication: keepDraft ? expectedMedication : null, sentNurse: keepDraft ? expectedNurse : null, storedMedication: expectedMedication, storedNurse: expectedNurse,
+    });
+    assert.equal(stored.complaint, 'شكاية مسودتي');
+  } finally { await context.close(); }
+});
+
+test('session-dose historical edit omits unmapped medication and preserves the linked nurse and name snapshot', async () => {
+  const dose = await identityDose();
+  const legacy = JSON.parse(control('legacy-session-dose', dose.id));
+  const { page, context } = await open(f.reader_token, `/patient-cards/new?facility_id=${f.facility}&card=${dose.dossier.id}&visit=${dose.dossier.visit.id}&section=7`, 768);
+  const suffix = `/session-doses/${legacy.id}`;
+  try {
+    await page.getByRole('row').filter({ hasText: legacy.dose_name }).getByRole('button', { name: 'تعديل الجرعة العلاجية', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    assert.equal(await dialog.getByLabel('اسم الجرعة', { exact: true }).inputValue(), '');
+    assert.equal(await dialog.locator('[name="nurse_name"]').inputValue(), f.doctor_name);
+    await dialog.locator('[name="complaint"]').fill('تصحيح الشكاية دون تغيير الهوية التاريخية');
+    const pending = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith(suffix));
+    await dialog.getByRole('button', { name: 'حفظ', exact: true }).click();
+    const response = await pending;
+    assert.equal(response.status(), 200, await response.text());
+    const sent = response.request().postDataJSON();
+    assert.equal(Object.hasOwn(sent, 'medication_id'), false);
+    assert.equal(Object.hasOwn(sent, 'nurse_name'), false);
+    const stored = JSON.parse(control('read-session-dose', legacy.id));
+    assert.equal(stored.medication_id, null);
+    assert.equal(stored.dose_name, legacy.dose_name);
+    assert.equal(stored.nurse_id, legacy.nurse_id);
+    assert.equal(stored.nurse_name, null);
+    const read = (await api(`${dose.path}?facility_id=${f.facility}`)).body.data.doses.find(r => r.id === legacy.id);
+    assert.equal(read.nurse_name, f.doctor_name);
+  } finally { await context.close(); }
 });
 
 test('revoked diagnosis update hides edit action and API denies the same token without changing clinical rows', async () => {

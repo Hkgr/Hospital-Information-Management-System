@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 use Symfony\Component\Process\Process;
 use Tests\Support\DossierCompletionFixture;
 use Tests\Support\OncologyProcess;
+use Tests\Support\SessionDoseFixture;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -34,6 +35,7 @@ if ($mode === 'prepare') {
             DB::table('role_permissions')->insertOrIgnore(['role_id' => $f['dossier_role'], 'permission_id' => DB::table('permissions')->where('code', $code)->value('id')]);
         }
     }
+    $f['session_medication'] = SessionDoseFixture::medication($f['tag']);
     $f['funding'] = DB::table('funding_sources')->insertGetId(['code' => 'ONC-LIVE-'.$f['tag'], 'name_ar' => 'تمويل اصطناعي للتحقق']);
     $f['period'] = DB::table('reporting_periods')->insertGetId(['facility_id' => $f['facility'], 'starts_on' => '2001-01-01', 'ends_on' => '2001-12-31', 'status' => 'open']);
     $f['user_id'] = $f['user']->id;

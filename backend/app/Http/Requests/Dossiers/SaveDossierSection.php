@@ -10,6 +10,11 @@ class SaveDossierSection extends FormRequest
 {
     public const PERSON = [...SaveBloodProfile::PERSON, 'marital_status', 'permanent_address', 'occupation', 'smoking_status', 'alcohol_status', 'national_id'];
 
+    public static function paperOnly(array $input): bool
+    {
+        return array_key_exists('paper_file_number', $input) && ! array_intersect_key($input, array_flip(self::PERSON));
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -20,6 +25,9 @@ class SaveDossierSection extends FormRequest
         $rules = ['facility_id' => ['required', 'integer', 'min:1'], 'request_id' => ['required', 'uuid'], 'lock_version' => [$this->isMethod('PUT') ? 'required' : 'prohibited', 'integer', 'min:1']];
         $section = $this->route('section');
         if ($section === 'personal') {
+            if ($this->isMethod('PUT') && self::paperOnly($this->all())) {
+                return $rules + ['patient_lock_version' => ['required', 'integer', 'min:1'], 'paper_file_number' => ['nullable', 'string', 'max:60'], 'opening_date' => ['prohibited'], 'person_mode' => ['prohibited'], 'patient_id' => ['prohibited'], 'code' => ['prohibited']];
+            }
             $newPatient = $this->isMethod('PUT') || $this->input('person_mode') === 'new';
             $rules += ['code' => ['prohibited'], 'opening_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'],
                 'person_mode' => [$this->isMethod('POST') ? 'required' : 'prohibited', Rule::in(['existing', 'new'])],
@@ -33,6 +41,7 @@ class SaveDossierSection extends FormRequest
                 foreach (['first_name' => 80, 'family_name' => 80, 'father_name' => 80, 'mother_name' => 120, 'phone' => 30, 'alt_phone' => 30, 'address_line' => 255, 'permanent_address' => 255, 'occupation' => 120, 'national_id' => 20] as $key => $max) {
                     $rules[$key] = [in_array($key, ['first_name', 'family_name']) ? 'required' : 'nullable', 'string', 'max:'.$max];
                 }
+                $rules['paper_file_number'] = ['sometimes', 'nullable', 'string', 'max:60'];
                 $rules['birth_date'] = ['nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'];
                 $rules['birth_date_accuracy'] = ['required', Rule::in(['exact', 'year_only', 'estimated', 'unknown'])];
                 $rules['gender'] = ['required', Rule::in(['male', 'female', 'unknown'])];
@@ -44,6 +53,9 @@ class SaveDossierSection extends FormRequest
                 foreach (['governorate_id', 'city_id'] as $key) {
                     $rules[$key] = ['nullable', 'integer', 'min:1'];
                 }
+            }
+            if (! $newPatient) {
+                $rules['paper_file_number'] = ['prohibited'];
             }
         } elseif ($section === 'medical') {
             $rules += ['disability_text' => ['nullable', 'string', 'max:10000'], 'clinical_history' => ['nullable', 'string', 'max:20000'], 'weight_kg' => ['nullable', 'numeric', 'gt:0', 'lt:500', 'decimal:0,2'], 'height_cm' => ['nullable', 'numeric', 'gt:0', 'lt:300', 'decimal:0,2'], 'is_oncology' => ['required', 'boolean'], 'confirm_hide_oncology' => ['sometimes', 'boolean']];

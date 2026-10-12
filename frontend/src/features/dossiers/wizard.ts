@@ -2,7 +2,7 @@ import type { Choice } from "../blood-bank/api";
 
 export type Fields = Record<string, string>;
 export type DiagnosisDraft = { key: string; id?: number; lock_version?: number; diagnosis: Choice | null; clinic: Choice | null; doctor: Choice | null; diagnosed_on: string; remove?: boolean; void_reason?: string };
-export type WorkflowActions = { sections?: boolean[]; subsequent_create?: boolean; personal_update: boolean; medical_update: boolean; resume_section: number | null; visit: { id: number | null; action: "create" | "update" | null; label: string | null } };
+export type WorkflowActions = { sections?: boolean[]; subsequent_create?: boolean; personal_update: boolean; paper_file_number_update?: boolean; medical_update: boolean; resume_section: number | null; visit: { id: number | null; action: "create" | "update" | null; label: string | null } };
 export type WizardOptions = { capabilities: Record<string, boolean>; creation: { allowed: boolean; reason: string | null }; today: string; governorates: Choice[] };
 export type Snapshot = {
   id: number; code: string; status: "draft" | "active"; opening_date: string; lock_version: number;
@@ -22,7 +22,7 @@ export type Snapshot = {
   } | null;
   visit: ({ id: number; status: string; lock_version: number; diagnoses: { id: number; lock_version: number; diagnosis_id: number; clinic_id: number | null; diagnosing_staff_id: number; diagnosis_name: string; clinic_name: string | null; doctor_name: string; diagnosed_on: string | null }[] } & Record<string, unknown>) | null;
 };
-export const personalLabels: Fields = { code: "كود المريض", opening_date: "بداية الملف الطبي في المشفى", first_name: "الاسم الأول", family_name: "اسم العائلة", national_id: "الرقم الوطني", father_name: "اسم الأب", mother_name: "اسم الأم", birth_date: "تاريخ الميلاد", birth_date_accuracy: "دقة الميلاد", gender: "الجنس", marital_status: "الوضع العائلي", phone: "الهاتف", alt_phone: "هاتف بديل", governorate_id: "المحافظة", city_id: "المدينة", address_line: "عنوان السكن", displacement_status: "حالة النزوح", permanent_address: "عنوان الإقامة الدائم", occupation: "المهنة", smoking_status: "التدخين", alcohol_status: "الكحول" };
+export const personalLabels: Fields = { paper_file_number: "الرقم الورقي للإضبارة", code: "كود المريض", opening_date: "بداية الملف الطبي في المشفى", first_name: "الاسم الأول", family_name: "اسم العائلة", national_id: "الرقم الوطني", father_name: "اسم الأب", mother_name: "اسم الأم", birth_date: "تاريخ الميلاد", birth_date_accuracy: "دقة الميلاد", gender: "الجنس", marital_status: "الوضع العائلي", phone: "الهاتف", alt_phone: "هاتف بديل", governorate_id: "المحافظة", city_id: "المدينة", address_line: "عنوان السكن", displacement_status: "حالة النزوح", permanent_address: "عنوان الإقامة الدائم", occupation: "المهنة", smoking_status: "التدخين", alcohol_status: "الكحول" };
 export const personalChoices: Record<string, Record<string, string>> = {
   birth_date_accuracy: { unknown: "غير معروف", exact: "دقيق", year_only: "السنة فقط", estimated: "تقديري" },
   gender: { unknown: "غير معروف", male: "ذكر", female: "أنثى" },

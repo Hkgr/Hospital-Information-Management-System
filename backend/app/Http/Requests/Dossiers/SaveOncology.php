@@ -10,6 +10,13 @@ use Illuminate\Validation\Rule;
 
 class SaveOncology extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if ($this->operation() === 'session-dose' && is_string($this->input('nurse_name'))) {
+            $this->merge(['nurse_name' => trim($this->input('nurse_name'))]);
+        }
+    }
+
     protected function failedValidation(Validator $validator): void
     {
         if ($this->operation() === 'void' && $this->route('dose') && ($validator->errors()->has('session_resolution') || $validator->errors()->has('planned_on'))) {
@@ -84,7 +91,8 @@ class SaveOncology extends FormRequest
         }
         if ($op === 'session-dose') {
             $creating = ! $this->route('sessionDose');
-            return $rules + ['given_on' => $date, 'dose_name' => ['required', 'string', 'max:200'], 'complaint' => ['required', 'string', 'max:10000'], 'recommendations' => ['required', 'string', 'max:10000'], 'nurse_id' => $id, 'medication_source' => [$creating ? 'required' : 'nullable', 'string', Rule::in(array_keys(OncologyQueries::MEDICATION_SOURCES))]];
+
+            return $rules + ['given_on' => $date, 'medication_id' => [$creating ? 'required' : 'sometimes', 'nullable', 'integer', 'min:1'], 'dose_name' => ['prohibited'], 'complaint' => ['required', 'string', 'max:10000'], 'recommendations' => ['required', 'string', 'max:10000'], 'nurse_name' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:200', 'regex:/\S/u'], 'nurse_id' => ['prohibited'], 'medication_source' => [$creating ? 'required' : 'nullable', 'string', Rule::in(array_keys(OncologyQueries::MEDICATION_SOURCES))]];
         }
         if ($op === 'schedule') {
             return $rules + ['sessions' => ['required', 'array', 'min:1', 'max:24'], 'sessions.*.planned_on' => $date, 'sessions.*.session_number' => ['sometimes', 'nullable', 'integer', 'min:1'], 'sessions.*.note' => $text];

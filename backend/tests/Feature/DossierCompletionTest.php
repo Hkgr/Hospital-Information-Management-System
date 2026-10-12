@@ -8,6 +8,25 @@ use Tests\Support\DossierCompletionCase;
 
 class DossierCompletionTest extends DossierCompletionCase
 {
+    public function test_three_same_kind_invoices_survive_reload_edit_replay_and_omission(): void
+    {
+        for ($i = 1; $i <= 3; $i++) {
+            $input = ['request_id' => (string) Str::uuid(), 'prescription' => $this->rx() + ['note' => "Invoice $i"], 'outcome' => null, 'lock_version' => $this->s['visit']['lock_version']];
+            $this->s = $this->saveSection('medications', $input)->assertOk()->assertJsonCount($i, 'data.clinical.prescriptions')->json('data');
+            $this->saveSection('medications', $input)->assertOk();
+        }
+        $before = $this->s['clinical']['prescriptions'];
+        $edited = $before[1];
+        $edited['note'] = 'Corrected second invoice';
+        $this->s = $this->saveSection('medications', ['prescription' => $edited, 'outcome' => null])->assertOk()->json('data');
+        $this->assertSame($before[0], $this->s['clinical']['prescriptions'][0]);
+        $this->assertSame($before[2], $this->s['clinical']['prescriptions'][2]);
+        $this->saveSection('medications', ['prescription' => $edited, 'outcome' => null])->assertConflict();
+        $this->s = $this->callApi('GET', $this->path('/progress'))->assertOk()->assertJsonCount(3, 'data.clinical.prescriptions')->json('data');
+        $this->assertSame('Corrected second invoice', $this->s['clinical']['prescriptions'][1]['note']);
+        $this->assertSame(0, DB::table('visit_medications')->where('visit_id', $this->s['visit']['id'])->count());
+    }
+
     public function test_multiple_occurrences_period_independence_replay_omission_void_and_atomic_date_correction(): void
     {
         $periods = DB::table('reporting_periods')->orderBy('id')->get()->toJson();
@@ -41,7 +60,7 @@ class DossierCompletionTest extends DossierCompletionCase
         $rx['items'] = [$rx['items'][0]];
         $this->s = $this->saveSection('medications', ['prescription' => $rx, 'outcome' => null])->assertOk()->assertJsonCount(2, 'data.clinical.prescription.items')->json('data');
         $this->assertStringStartsWith('دواء اختبار', $this->s['clinical']['prescription']['items'][0]['name_ar']);
-        $this->saveSection('medications', ['prescription' => $this->rx(), 'outcome' => null])->assertConflict();
+        $this->saveSection('medications', ['prescription' => $rx, 'outcome' => null])->assertConflict();
         $this->assertSame(1, DB::table('visit_prescriptions')->where('visit_id', $this->s['visit']['id'])->count());
         $this->assertSame($dispensing, DB::table('visit_medications')->orderBy('id')->get()->toJson());
     }
@@ -108,7 +127,7 @@ class DossierCompletionTest extends DossierCompletionCase
         $this->assertSame('unlinked', $this->s['clinical']['prescription']['kind']);
         $this->assertSame($funding, $this->s['clinical']['prescriptions'][1]['funding_source_id']);
         $this->assertSame('غير متوفر في مخزون المشفى', $this->s['clinical']['prescriptions'][2]['unavailable_reason']);
-        $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'dose_linked', 'funding_source_id' => $funding], 'outcome' => null])->assertConflict();
+        $this->saveSection('medications', ['prescription' => $this->s['clinical']['prescriptions'][1], 'outcome' => null, 'lock_version' => $this->s['visit']['lock_version'] - 1])->assertConflict();
         $this->s = $this->saveSection('medications', ['prescription' => null, 'outcome' => $this->outcome()])->assertOk()->json('data');
         $this->assertCount(3, $this->s['clinical']['prescriptions']);
         $this->assertSame('DOS-NORX', $this->s['clinical']['outcome']['code']);

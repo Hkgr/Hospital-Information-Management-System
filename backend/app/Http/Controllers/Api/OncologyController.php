@@ -9,6 +9,7 @@ use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierWrites;
 use App\Services\Dossiers\OncologyQueries;
 use App\Services\Dossiers\OncologyWriter;
+use App\Services\Dossiers\SessionDoseMedications;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -35,6 +36,13 @@ class OncologyController extends Controller
             'staff' => DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))->distinct()->orderBy('s.full_name')->get(['s.id', 's.full_name as name_ar']),
             'clinic_staff' => $r->filled('clinic_id') ? DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('c.id', $r->integer('clinic_id'))->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))->distinct()->orderBy('s.full_name')->get(['s.id', 's.full_name as name_ar']) : [],
             'today' => $f['today']]]);
+    }
+
+    public function sessionDoseMedications(Request $r)
+    {
+        $this->scope($r);
+
+        return response()->json(['data' => ['medications' => app(SessionDoseMedications::class)->eligible()->orderBy('m.name_ar')->orderBy('m.id')->get(['m.id', 'm.code', 'm.name_ar'])]]);
     }
 
     public function index(Request $r, int $dossier)
@@ -66,7 +74,7 @@ class OncologyController extends Controller
         abort_unless($row, 404);
         $row->has_voided_dose = (bool) $row->has_voided_dose;
         $row->doses = DB::table('oncology_session_doses as d')->leftJoin('staff as n', 'n.id', '=', 'd.nurse_id')->where('d.session_id', $row->id)->where('d.facility_id', $f['id'])->orderBy('d.id')
-            ->get(['d.id', 'd.session_id', 'd.given_on', 'd.dose_name', 'd.complaint', 'd.recommendations', 'd.nurse_id', 'd.medication_source', 'd.lock_version', 'n.full_name as nurse_name'])->all();
+            ->get(['d.id', 'd.session_id', 'd.given_on', 'd.dose_name', 'd.medication_id', 'd.complaint', 'd.recommendations', 'd.nurse_id', 'd.medication_source', 'd.lock_version', DB::raw('COALESCE(d.nurse_name,n.full_name) as nurse_name')])->all();
 
         return response()->json(['data' => $row]);
     }
