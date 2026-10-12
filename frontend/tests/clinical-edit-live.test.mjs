@@ -92,7 +92,7 @@ test('session-dose edit uses the existing PUT contract and explicit conflict rev
   const appointment = await api(`dossiers/${card.id}/treatment-sessions`, 'POST', { planned_on: '2022-06-01', clinic_id: f.clinic, doctor_id: f.doctor });
   assert.equal(appointment.status, 201, JSON.stringify(appointment.body));
   const sessionId = appointment.body.data.id;
-  const input = { given_on: '2022-06-01', dose_name: 'جرعة اصطناعية', complaint: 'شكاية قديمة', recommendations: 'توصيات قديمة', nurse_id: f.doctor, medication_source: 'ministry_of_health' };
+  const input = { given_on: '2022-06-01', medication_id: f.session_medication, complaint: 'شكاية قديمة', recommendations: 'توصيات قديمة', nurse_name: 'Synthetic free nurse', medication_source: 'ministry_of_health' };
   const dose = await api(`dossiers/${card.id}/treatment-sessions/${sessionId}/session-doses`, 'POST', input);
   assert.equal(dose.status, 201, JSON.stringify(dose.body));
   const doseId = dose.body.data.id;
@@ -100,7 +100,7 @@ test('session-dose edit uses the existing PUT contract and explicit conflict rev
   try {
     const page = session.page;
     await page.getByRole('button', { name: 'تعديل الجرعة العلاجية', exact: true }).click();
-    assert.equal(await page.getByLabel('اسم الجرعة', { exact: true }).inputValue(), input.dose_name);
+    assert.equal(await page.getByLabel('اسم الجرعة', { exact: true }).inputValue(), String(input.medication_id));
     await page.getByRole('textbox', { name: /^شكاية المريض/ }).fill('تصحيح المسودة');
     const live = await api(`dossiers/${card.id}/treatment-sessions/${sessionId}?facility_id=${f.facility}`);
     const old = live.body.data.doses.find(d => d.id === doseId);

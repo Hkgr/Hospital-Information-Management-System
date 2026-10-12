@@ -2,16 +2,26 @@
 
 namespace Tests\Feature;
 
+use App\Http\Requests\Dossiers\SaveDossierSection;
 use App\Models\User;
+use App\Services\BloodBank\BloodBankReports;
+use App\Services\Catalog\CatalogWriter;
+use App\Services\Directory\DirectoryReport;
+use App\Services\Dossiers\DossierAccess;
+use App\Services\Dossiers\DossierReports;
 use App\Services\Dossiers\OncologyQueries;
 use App\Services\Users\DataEntryCardPermissions;
 use Database\Seeders\PermissionMatrixPhaseOneSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\Support\DossierCompletionFixture;
+use Tests\Support\SessionDoseFixture;
 use Tests\TestCase;
 
 class DataEntryCardPermissionsTest extends TestCase
@@ -35,7 +45,7 @@ class DataEntryCardPermissionsTest extends TestCase
         DB::table('roles')->where('code', 'data_entry')->update(['code' => 'previous-data-entry-'.$this->f['tag']]);
         $this->seed(PermissionMatrixPhaseOneSeeder::class);
         $this->role = DB::table('roles')->where('code', 'data_entry')->value('id');
-        $this->clerk = User::factory()->create();
+        $this->clerk = User::factory()->create(['username' => 'entry-'.$this->f['tag'], 'email' => 'entry-'.$this->f['tag'].'@example.test']);
         DB::table('facility_user_roles')->insert(['user_id' => $this->clerk->id, 'facility_id' => $this->f['facility'], 'role_id' => $this->role]);
         $this->token = $this->clerk->createToken('data-entry-card', ['api'])->plainTextToken;
     }
@@ -47,9 +57,10 @@ class DataEntryCardPermissionsTest extends TestCase
         return $this->json($method, '/api/'.$path, $body + ['facility_id' => $this->f['facility'], 'request_id' => (string) Str::uuid()], ['Authorization' => 'Bearer '.($token ?? $this->token)]);
     }
 
-    private function register(): array
+    private function register(array $extra = []): array
     {
         $body = ['request_id' => (string) Str::uuid(), 'person_mode' => 'new', 'first_name' => 'أحمد', 'family_name' => 'بطاقة إدخال '.$this->f['tag'], 'phone' => '0900000000', 'opening_date' => '2001-03-01', 'visit_date' => '2001-03-02', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
+        $body = array_replace($body, $extra);
         $card = $this->api('POST', 'patient-cards/registrations', $body)->assertCreated()->json('data');
         $this->api('POST', 'patient-cards/registrations', $body)->assertCreated()->assertJsonPath('data.id', $card['id']);
         $this->assertSame(1, DB::table('visits')->where('dossier_id', $card['id'])->count());
@@ -60,6 +71,115 @@ class DataEntryCardPermissionsTest extends TestCase
     private function context(): array
     {
         return ['clinic_id' => $this->f['clinics'][0], 'doctor_id' => $this->f['workflow_doctors'][0]];
+    }
+
+    public function test_paper_file_number_has_a_bounded_card_write_without_global_identity_access(): void
+    {
+        $s = $this->register(['paper_file_number' => '00042-A']);
+        $this->assertSame('00042-A', $s['patient']['paper_file_number']);
+        $this->assertTrue($s['workflow']['paper_file_number_update']);
+        $this->assertFalse($s['workflow']['personal_update']);
+        $before = DB::table('patients')->where('id', $s['patient']['id'])->first();
+        $path = 'dossiers/'.$s['id'].'/personal';
+        $input = ['lock_version' => $s['lock_version'], 'patient_lock_version' => $s['patient']['lock_version'], 'paper_file_number' => '00042-B', 'request_id' => (string) Str::uuid()];
+        $this->api('PUT', $path, $input + ['opening_date' => '2002-01-01'])->assertUnprocessable()->assertJsonValidationErrors('opening_date');
+        $this->api('PUT', $path, array_replace($input, ['paper_file_number' => str_repeat('A', 61)]))->assertUnprocessable();
+        $s = $this->api('PUT', $path, $input)->assertOk()->json('data');
+        $this->api('PUT', $path, $input)->assertOk();
+        $after = DB::table('patients')->where('id', $s['patient']['id'])->first();
+        $this->assertSame('00042-B', $after->paper_file_number);
+        foreach (array_keys((array) $before) as $key) {
+            if (! in_array($key, ['paper_file_number', 'lock_version', 'updated_at'])) {
+                $this->assertSame($before->$key, $after->$key, $key);
+            }
+        }
+        $full = Arr::only($s['patient'], SaveDossierSection::PERSON);
+        $this->api('PUT', $path, $full + ['opening_date' => $s['opening_date'], 'first_name' => 'غير مسموح', 'paper_file_number' => 'ATTACK', 'lock_version' => $s['lock_version'], 'patient_lock_version' => $s['patient']['lock_version']])->assertForbidden();
+        $this->api('PUT', $path, $input)->assertOk(); // original replay stays idempotent
+        $this->api('PUT', $path, array_replace($input, ['request_id' => (string) Str::uuid()]))->assertConflict();
+        $this->api('GET', 'dossiers/'.$s['id'].'/progress')->assertOk()->assertJsonPath('data.patient.paper_file_number', '00042-B');
+        $second = $this->register(['paper_file_number' => '00042-B']);
+        $this->assertNotSame($s['patient']['id'], $second['patient']['id']);
+        $this->api('PUT', $path, ['facility_id' => $this->f['other']] + $input)->assertForbidden();
+    }
+
+    public function test_session_dose_uses_specific_medications_free_nurses_and_retains_historical_identity(): void
+    {
+        $medication = SessionDoseFixture::medication($this->f['tag']);
+        $category = DB::table('medications')->where('id', $medication)->value('category_id');
+        $inactive = SessionDoseFixture::medication('inactive-'.$this->f['tag']);
+        $archived = SessionDoseFixture::medication('archived-'.$this->f['tag']);
+        DB::table('medications')->where('id', $inactive)->update(['is_active' => false]);
+        DB::table('medications')->where('id', $archived)->update(['archived_at' => now()]);
+        $ids = array_column($this->api('GET', 'dossiers/session-dose-medications')->assertOk()->json('data.medications'), 'id');
+        $this->assertContains($medication, $ids);
+        foreach ([$inactive, $archived, $this->f['medication']] as $id) {
+            $this->assertNotContains($id, $ids);
+        }
+        $s = $this->register();
+        $base = 'dossiers/'.$s['id'];
+        $s = $this->api('PUT', $base.'/medical', ['lock_version' => $s['lock_version'], 'is_oncology' => true, 'history' => [], 'treatment' => []])->assertOk()->json('data');
+        $session = $this->api('POST', $base.'/treatment-sessions', ['planned_on' => '2001-03-02'] + $this->context())->assertCreated()->json('data');
+        $path = $base.'/treatment-sessions/'.$session['id'].'/session-doses';
+        $data = ['request_id' => (string) Str::uuid(), 'given_on' => '2001-03-02', 'medication_id' => $medication, 'nurse_name' => '  اسم حر غير موجود في العاملين  ', 'complaint' => 'شكاية', 'recommendations' => 'توصية', 'medication_source' => 'ministry_of_health'];
+        $before = DB::table('oncology_session_doses')->count();
+        foreach ([$inactive, $archived, $this->f['medication']] as $id) {
+            $this->api('POST', $path, array_replace($data, ['medication_id' => $id]))->assertUnprocessable()->assertJsonValidationErrors('medication_id');
+        }
+        $this->api('POST', $path, array_replace($data, ['nurse_name' => '   ']))->assertUnprocessable();
+        $this->api('POST', $path, array_replace($data, ['nurse_name' => str_repeat('N', 201)]))->assertUnprocessable();
+        $this->assertSame($before, DB::table('oncology_session_doses')->count());
+        $id = $this->api('POST', $path, $data)->assertCreated()->json('data.id');
+        $this->api('POST', $path, $data)->assertCreated()->assertJsonPath('data.id', $id);
+        $name = DB::table('medications')->where('id', $medication)->value('name_ar');
+        $row = DB::table('oncology_session_doses')->where('id', $id)->first();
+        $this->assertSame($name, $row->dose_name);
+        $this->assertNull($row->nurse_id);
+        $this->assertSame('اسم حر غير موجود في العاملين', $row->nurse_name);
+        $this->assertTrue(app(CatalogWriter::class)->references('medication', $medication));
+        DB::table('medications')->where('id', $medication)->update(['name_ar' => 'اسم الدليل الجديد', 'is_active' => false]);
+        $edit = ['given_on' => $row->given_on, 'complaint' => 'تصحيح الشكاية', 'recommendations' => $row->recommendations, 'lock_version' => $row->lock_version];
+        $this->api('PUT', $path.'/'.$id, $edit)->assertOk();
+        $this->assertDatabaseHas('oncology_session_doses', ['id' => $id, 'dose_name' => $name, 'nurse_name' => $row->nurse_name, 'medication_id' => $medication]);
+        $this->api('GET', $base.'/treatment-sessions/'.$session['id'])->assertOk()->assertJsonPath('data.doses.0.nurse_name', $row->nurse_name)->assertJsonPath('data.doses.0.dose_name', $name);
+        $this->api('PUT', $path.'/'.$id, $edit)->assertConflict();
+        $legacy = DB::table('oncology_session_doses')->insertGetId(['facility_id' => $this->f['facility'], 'dossier_id' => $s['id'], 'session_id' => $session['id'], 'given_on' => '2001-03-02', 'dose_name' => 'اسم جرعة تاريخي لا يطابق دواء', 'complaint' => 'قديمة', 'recommendations' => 'قديمة', 'nurse_id' => $this->f['workflow_doctors'][0], 'client_request_id' => (string) Str::uuid(), 'entered_by' => $this->clerk->id, 'lock_version' => 1]);
+        $this->api('PUT', $path.'/'.$legacy, ['lock_version' => 1, 'given_on' => '2001-03-03', 'complaint' => 'تصحيح تاريخي', 'recommendations' => 'قديمة'])->assertOk();
+        $this->assertDatabaseHas('oncology_session_doses', ['id' => $legacy, 'medication_id' => null, 'dose_name' => 'اسم جرعة تاريخي لا يطابق دواء', 'nurse_id' => $this->f['workflow_doctors'][0], 'nurse_name' => null]);
+        $listed = $this->api('GET', $base.'/treatment-sessions/'.$session['id'])->assertOk()->json('data.doses');
+        $this->assertCount(2, $listed);
+        $this->assertSame(DB::table('staff')->where('id', $this->f['workflow_doctors'][0])->value('full_name'), $listed[1]['nurse_name']);
+        DB::table('role_permissions')->insertOrIgnore(['role_id' => $this->f['dossier_role'], 'permission_id' => DB::table('permissions')->where('code', 'dossiers.treatment.view')->value('id')]);
+        $f = app(DossierAccess::class)->facility($this->f['user'], $this->f['facility'], 'export');
+        $request = Request::create('/api/dossiers/'.$s['id'].'/report/xlsx', 'POST');
+        $request->setUserResolver(fn () => $this->f['user']);
+        $document = app(DossierReports::class)->document($request, $f, [], $s['id']);
+        $json = json_encode($document, JSON_UNESCAPED_UNICODE);
+        foreach ([$name, $row->nurse_name, $listed[1]['nurse_name'], 'اسم جرعة تاريخي لا يطابق دواء'] as $text) {
+            $this->assertStringContainsString($text, $json);
+        }
+        $this->assertStringStartsWith('%PDF-', app(DirectoryReport::class)->pdf($document, 'reports.blood-bank'));
+        $bytes = app(BloodBankReports::class)->xlsx($document);
+        $file = tempnam(storage_path('framework/testing'), 'session-dose-report-');
+        file_put_contents($file, $bytes);
+        try {
+            $book = IOFactory::load($file);
+            $values = [];
+            foreach ($book->getAllSheets() as $sheet) {
+                foreach ($sheet->getCoordinates() as $cell) {
+                    $values[] = (string) $sheet->getCell($cell)->getValue();
+                }
+            }
+            $this->assertStringContainsString($row->nurse_name, implode("\n", $values));
+            $this->assertStringContainsString($name, implode("\n", $values));
+            $book->disconnectWorksheets();
+        } finally {
+            unlink($file);
+        }
+        DB::table('medication_categories')->where('id', $category)->update(['is_active' => false]);
+        $this->api('GET', 'dossiers/session-dose-medications')->assertOk()->assertJsonPath('data.medications', []);
+        $this->api('POST', $path, array_replace($data, ['request_id' => (string) Str::uuid()]))->assertUnprocessable();
+        $this->api('GET', 'dossiers/session-dose-medications', ['facility_id' => $this->f['other']])->assertForbidden();
     }
 
     public function test_data_entry_saves_three_funded_invoices_and_funding_does_not_require_treatment_permission(): void
@@ -159,7 +279,7 @@ class DataEntryCardPermissionsTest extends TestCase
         $plan = $this->api('POST', $base.'/treatment-plans', ['modality' => 'chemotherapy', 'intent' => 'curative', 'protocol_text' => 'بروتوكول مسجل', 'protocol_clinic_id' => $this->f['clinics'][0], 'protocol_doctor_id' => $this->f['workflow_doctors'][0], 'treating_clinic_id' => $this->f['clinics'][0], 'treating_doctor_id' => $this->f['workflow_doctors'][0]])->assertCreated()->json('data');
         $this->api('POST', $base.'/treatment-plans/'.$plan['id'].'/sessions', ['lock_version' => $plan['lock_version'], 'sessions' => [['planned_on' => '2001-03-02']]])->assertCreated();
         $session = $this->api('GET', $base.'/treatment-sessions')->assertOk()->json('data.0');
-        $this->api('POST', $base.'/treatment-sessions/'.$session['id'].'/session-doses', ['given_on' => '2001-03-02', 'dose_name' => 'جرعة علاجية', 'complaint' => 'مسجل', 'recommendations' => 'مسجلة', 'nurse_id' => $this->f['workflow_doctors'][0], 'medication_source' => 'ministry_of_health'])->assertCreated();
+        $this->api('POST', $base.'/treatment-sessions/'.$session['id'].'/session-doses', ['given_on' => '2001-03-02', 'medication_id' => SessionDoseFixture::medication($this->f['tag']), 'complaint' => 'مسجل', 'recommendations' => 'مسجلة', 'nurse_name' => 'Synthetic free nurse', 'medication_source' => 'ministry_of_health'])->assertCreated();
         $this->api('POST', $base.'/treatment-sessions', ['planned_on' => '2001-03-02'] + $this->context())->assertCreated();
         $plan = $this->api('GET', $base.'/treatment-plans/'.$plan['id'])->assertOk()->json('data');
         $med = ['medication_id' => $this->f['medication'], 'medication_source' => 'ministry_of_health', 'quantity' => '1.5', 'quantity_unit' => 'vial'];

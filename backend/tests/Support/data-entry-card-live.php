@@ -6,7 +6,9 @@ use App\Support\TestDatabaseSafety;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\DossierCompletionFixture;
+use Tests\Support\SessionDoseFixture;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -15,7 +17,24 @@ $app->make(Kernel::class)->bootstrap();
 TestDatabaseSafety::assertAvailable($app);
 $path = storage_path('framework/testing/data-entry-card-live.json');
 $mode = $argv[1] ?? '';
-if ($mode === 'counts') {
+if ($mode === 'legacy-session-dose') {
+    $f = json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+    $old = DB::table('oncology_session_doses')->where('facility_id', $f['facility'])->where('entered_by', $f['clerk_id'])->orderByDesc('id')->first();
+    if (! $old) {
+        throw new RuntimeException('Create the owned synthetic session dose first.');
+    }
+    $row = (array) $old;
+    unset($row['id']);
+    $row['dose_name'] = 'اسم جرعة تاريخي غير مرتبط بدواء';
+    $row['medication_id'] = null;
+    $row['nurse_id'] = $f['workflow_doctors'][0];
+    $row['nurse_name'] = null;
+    $row['client_request_id'] = (string) Str::uuid();
+    $row['lock_version'] = 1;
+    $row['id'] = DB::table('oncology_session_doses')->insertGetId($row);
+    $row['nurse_display_name'] = DB::table('staff')->where('id', $row['nurse_id'])->value('full_name');
+    echo json_encode($row, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+} elseif ($mode === 'counts') {
     $counts = [];
     foreach (['clinics', 'staff', 'services', 'procedures', 'medications', 'service_categories', 'diagnoses'] as $table) {
         $counts[$table] = DB::table($table)->count();
@@ -36,7 +55,7 @@ if ($mode === 'counts') {
         app(DataEntryCardPermissions::class)->reconcile(true, $f['facility'], 'LOCAL/data-entry-card-live');
         $f['role_after_version'] = DB::table('roles')->where('id', $role->id)->value('lock_version');
         $f['grants_after'] = DB::table('role_permissions')->where('role_id', $role->id)->orderBy('id')->get()->map(fn ($r) => (array) $r)->all();
-        $clerk = User::factory()->create();
+        $clerk = User::factory()->create(['username' => 'entry-live-'.$f['tag'], 'email' => 'entry-live-'.$f['tag'].'@example.test']);
         DB::table('facility_user_roles')->insert(['user_id' => $clerk->id, 'facility_id' => $f['facility'], 'role_id' => $role->id]);
         $f['clerk_id'] = $clerk->id;
         $f['clerk_token'] = $clerk->createToken('data-entry-card-live', ['api'])->plainTextToken;
@@ -46,6 +65,8 @@ if ($mode === 'counts') {
         $f['creator_token'] = $f['user']->createToken('data-entry-directory-author', ['api'])->plainTextToken;
         $f['creator_id'] = $f['user']->id;
         $f['viewer_id'] = $f['viewer']->id;
+        $f['session_medication'] = SessionDoseFixture::medication($f['tag']);
+        $f['session_medication_name'] = DB::table('medications')->where('id', $f['session_medication'])->value('name_ar');
         $f['staff_type'] = DB::table('staff')->where('id', $f['workflow_doctors'][0])->value('staff_type_id');
         $f['category'] = DB::table('service_categories')->where('is_active', true)->value('id');
         if (Artisan::call('dossiers:setup-prescription-funding', ['--apply' => true, '--facility' => $f['facility'], '--execution-reference' => 'LOCAL real invoice verification']) !== 0) {

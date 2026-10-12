@@ -76,7 +76,7 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
 
                     continue;
                 }
-                if (preg_match('#/(treatment-options|treatment-plans|treatment-sessions|doses|dispensing)(/|$)#', $route)) {
+                if (preg_match('#/(session-dose-medications|treatment-options|treatment-plans|treatment-sessions|doses|dispensing)(/|$)#', $route)) {
                     (new OncologyDocument)->operation($op, $route);
 
                     continue;

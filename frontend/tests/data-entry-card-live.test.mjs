@@ -50,12 +50,17 @@ test('data_entry alone creates a card and saves existing diagnoses, services, pr
     await page.getByRole('link', { name: 'تسجيل بطاقة مريض', exact: true }).click();
     await page.getByLabel('الاسم الأول', { exact: true }).fill('مريض');
     await page.getByLabel('اسم العائلة', { exact: true }).fill(`إدخال ${f.tag}`);
+    await page.locator('[name="paper_file_number"]').fill('00042-A');
     await page.getByLabel('تاريخ فتح البطاقة', { exact: true }).fill('2001-03-01');
     await page.getByLabel('تاريخ الزيارة الفعلي', { exact: true }).fill('2001-03-02');
     const registered = await save(page, '/patient-cards/registrations', 'حفظ البطاقة والزيارة الأولى', 201);
     const replay = await api('POST', 'patient-cards/registrations', { request_id: randomUUID(), person_mode: 'existing', patient_id: registered.patient_id, opening_date: '2001-03-01', visit_date: '2001-03-02' });
     assert.equal(replay.status, 409); assert.equal(replay.body.error.existing_dossier_id, registered.id);
-    await page.goto(`${base}/patient-cards/new?facility_id=${f.facility}&card=${registered.id}&section=1`);
+    await page.goto(`${base}/patient-cards/new?facility_id=${f.facility}&card=${registered.id}&section=0`);
+    assert.equal(await page.locator('[name="paper_file_number"]').inputValue(),'00042-A');
+    assert.equal(await page.locator('[name="first_name"]').isDisabled(),true,'the paper field must not enable shared identity editing');
+    card=await save(page,'/personal');
+    assert.equal(card.patient.paper_file_number,'00042-A');
     await page.locator('[name="is_oncology"]').selectOption('yes');
     await page.locator('[name="clinical_history"]').fill('قصة مسجلة من مدخل البيانات');
     card = await save(page, '/medical');
@@ -232,6 +237,56 @@ test('a second invoice saved without reload stays selected after conflict review
   } finally {await context.close();}
 });
 
+test('data_entry selects only specific session-dose medications, saves a free nurse, and edits legacy doses without guessing', async () => {
+  const basePath=`dossiers/${card.id}`;
+  const sessionResponse=await api('POST',`${basePath}/treatment-sessions`,{planned_on:'2001-03-02',...ctx()});assert.equal(sessionResponse.status,201);
+  const session=sessionResponse.body.data;
+  const path=`${basePath}/treatment-sessions/${session.id}/session-doses`;
+  const denied=await api('POST',path,{given_on:'2001-03-02',medication_id:f.medication,nurse_name:'Free nurse',complaint:'No write',recommendations:'No write',medication_source:'ministry_of_health'});
+  assert.equal(denied.status,422);assert.ok(denied.body.errors.medication_id);
+  const before=JSON.parse(control('counts'));
+  const {context,page}=await open(`/patient-cards/new?card=${card.id}&visit=${card.visit.id}&section=7`);
+  try {
+    const selectSession=async()=>{await page.getByRole('button',{name:`موعد مستقل #${session.id}`,exact:true}).click();};
+    await selectSession();await page.getByRole('button',{name:'إضافة جرعة علاجية',exact:true}).last().click();
+    let dialog=page.getByRole('dialog');
+    const select=dialog.locator('select[name="medication_id"]');
+    await select.locator(`option[value="${f.session_medication}"]`).waitFor({state:'attached'});
+    const values=await select.locator('option').evaluateAll(options=>options.map(o=>o.value));
+    assert.ok(!values.includes(String(f.medication)));
+    await select.selectOption(String(f.session_medication));
+    assert.equal(await dialog.locator('[name="dose_name"]').count(),0);
+    assert.equal(await dialog.locator('select[name="nurse_id"]').count(),0);
+    assert.equal(await dialog.getByRole('button',{name:/إضافة دواء.*الدليل/}).count(),0);
+    await dialog.locator('[name="nurse_name"]').fill('  ممرض حر غير مسجل في العاملين  ');
+    await dialog.locator('[name="complaint"]').fill('شكاية مسجلة');await dialog.locator('[name="recommendations"]').fill('توصية مسجلة');
+    await dialog.locator('[name="medication_source"]').selectOption('ministry_of_health');
+    const dose=await save(page,'/session-doses','حفظ',201);
+    await page.reload();await selectSession();
+    let data=(await api('GET',`${basePath}/treatment-sessions/${session.id}`)).body.data;
+    const saved=data.doses.find(d=>d.id===dose.id);
+    assert.equal(saved.medication_id,f.session_medication);assert.equal(saved.dose_name,f.session_medication_name);
+    assert.equal(saved.nurse_name,'ممرض حر غير مسجل في العاملين');assert.equal(saved.nurse_id,null);
+    await page.getByRole('region',{name:'جدول الجرعات',exact:true}).getByText(saved.nurse_name,{exact:true}).waitFor();
+    const legacy=JSON.parse(control('legacy-session-dose'));
+    await page.reload();await selectSession();
+    const table=page.getByRole('region',{name:'جدول الجرعات',exact:true});
+    const legacyRow=table.getByRole('row').filter({hasText:legacy.dose_name});await legacyRow.waitFor();
+    await legacyRow.getByRole('button',{name:'تعديل الجرعة العلاجية',exact:true}).click();dialog=page.getByRole('dialog');
+    assert.equal(await dialog.locator('[name="medication_id"]').inputValue(),'');
+    assert.equal(await dialog.locator('[name="nurse_name"]').inputValue(),legacy.nurse_display_name);
+    await dialog.locator('[name="complaint"]').fill('تصحيح الشكاية فقط');
+    await save(page,`/session-doses/${legacy.id}`,'حفظ');
+    data=(await api('GET',`${basePath}/treatment-sessions/${session.id}`)).body.data;
+    const old=data.doses.find(d=>d.id===legacy.id);
+    assert.equal(old.dose_name,legacy.dose_name);assert.equal(old.medication_id,null);assert.equal(old.nurse_id,legacy.nurse_id);
+    assert.equal(old.nurse_name,legacy.nurse_display_name);
+    assert.equal(JSON.parse(control('counts')).staff,before.staff);
+    await page.goto(`${base}/patient-cards/new?facility_id=${f.facility}&card=${card.id}&section=0`);
+    assert.equal(await page.locator('[name="paper_file_number"]').inputValue(),'00042-A');
+  } finally {await context.close();}
+});
+
 test('funding empty/error states are explicit and retry preserves the invoice draft (UI fault injection only)', async () => {
   const {context,page}=await open(`/patient-cards/new?card=${card.id}&visit=${card.visit.id}&section=4`);
   try {
@@ -285,8 +340,9 @@ test('assessment, pathology, scheduling, actual treatment/dispensing and complet
   r = await api('POST', `${basePath}/treatment-plans`, { modality: 'chemotherapy', intent: 'curative', protocol_text: 'بروتوكول مدخل بيانات', protocol_clinic_id: f.clinics[0], protocol_doctor_id: f.workflow_doctors[0], treating_clinic_id: f.clinics[0], treating_doctor_id: f.workflow_doctors[0] });
   assert.equal(r.status, 201, JSON.stringify(r.body)); const plan = r.body.data;
   assert.equal((await api('POST', `${basePath}/treatment-plans/${plan.id}/sessions`, { lock_version: plan.lock_version, sessions: [{ planned_on: '2001-03-02' }] })).status, 201);
-  const session = (await api('GET', `${basePath}/treatment-sessions`)).body.data[0];
-  assert.equal((await api('POST', `${basePath}/treatment-sessions/${session.id}/session-doses`, { given_on: '2001-03-02', dose_name: 'جرعة محفوظة', complaint: 'مسجلة', recommendations: 'مسجلة', nurse_id: f.workflow_doctors[0], medication_source: 'ministry_of_health' })).status, 201);
+  const session = (await api('GET', `${basePath}/treatment-sessions`)).body.data.find(s=>s.plan_id===plan.id);
+  assert.ok(session,'select the session belonging to this plan, not an independent appointment');
+  assert.equal((await api('POST', `${basePath}/treatment-sessions/${session.id}/session-doses`, { given_on: '2001-03-02', medication_id: f.session_medication, complaint: 'مسجلة', recommendations: 'مسجلة', nurse_name: 'Synthetic free nurse', medication_source: 'ministry_of_health' })).status, 201);
   assert.equal((await api('POST', `${basePath}/treatment-sessions`, { planned_on: '2001-03-02', ...ctx() })).status, 201);
   const currentPlan = (await api('GET', `${basePath}/treatment-plans/${plan.id}`)).body.data;
   const item = { medication_id: f.medication, medication_source: 'ministry_of_health', quantity: '1.5', quantity_unit: 'vial' };

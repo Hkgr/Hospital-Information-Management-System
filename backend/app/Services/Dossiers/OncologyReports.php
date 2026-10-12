@@ -97,6 +97,18 @@ class OncologyReports
         $check(count($rows));
         $result[] = $this->section('تفاصيل الصرف مع الجرعة', $rows);
 
+        $courses = DB::table('oncology_session_doses as c')->join('oncology_sessions as s', 's.id', '=', 'c.session_id')->leftJoin('staff as n', 'n.id', '=', 'c.nurse_id')
+            ->where('c.facility_id', $f['id'])->where('c.dossier_id', $dossier)->where('s.facility_id', $f['id'])->where('s.dossier_id', $dossier)
+            ->when($individualVisit, fn ($q) => $q->whereIn('c.given_on', DB::table('visits')->where('facility_id', $f['id'])->where('dossier_id', $dossier)->whereIn('id', $visitIds)->select('visit_date')))
+            ->orderBy('c.given_on')->orderBy('c.id')->limit($max + 1)->get(['c.*', DB::raw('COALESCE(c.nurse_name,n.full_name) as nurse_display_name')]);
+        $check($courses->count());
+        $rows = [];
+        foreach ($courses as $course) {
+            array_push($rows, ...$this->facts('جلسة #'.$course->session_id.' / جرعة #'.$course->id, ['اسم الجرعة' => $course->dose_name, 'تاريخ الجرعة' => $course->given_on, 'اسم الممرض' => $course->nurse_display_name, 'شكاية المريض' => $course->complaint, 'توصيات الطبيب' => $course->recommendations, 'مصدر الدواء' => OncologyQueries::MEDICATION_SOURCES[$course->medication_source ?? ''] ?? null], ['تاريخ الجرعة' => 'date']));
+        }
+        $check(count($rows));
+        $result[] = $this->section('جرعات الجلسات العلاجية', $rows);
+
         return $result;
     }
 }

@@ -8,6 +8,7 @@ use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Support\DossierCompletionFixture;
+use Tests\Support\SessionDoseFixture;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -39,6 +40,7 @@ if ($mode === 'prepare') {
         $f['user_id'] = $f['user']->id;
         $f['viewer_id'] = $f['viewer']->id;
         $f['token'] = $f['user']->createToken('clinical-edit', ['api'])->plainTextToken;
+        $f['session_medication'] = SessionDoseFixture::medication($f['tag']);
         $f['doctor'] = $f['workflow_doctors'][0];
         $f['clinic'] = $f['clinics'][0];
         $f['doctor_name'] = DB::table('staff')->where('id', $f['doctor'])->value('full_name');

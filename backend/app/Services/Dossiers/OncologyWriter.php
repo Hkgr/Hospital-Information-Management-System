@@ -178,7 +178,7 @@ class OncologyWriter
         $targets = $target->plan_id ? $this->planTargets($f, $dossier, (int) $target->plan_id) : [[], []];
 
         return $this->writes->once($r, $f, $data, 'oncology:session-dose:'.$dossier.':'.$sessionId.':'.($doseId ?? 'new'), function () use ($r, $f, $dossier, $sessionId, $data, $doseId, $targets) {
-            $this->context->lock([array_merge($targets[0], [$data['nurse_id']]), $targets[1]]);
+            $this->context->lock($targets);
             $this->writes->dossier($f, $dossier);
             $session = DB::table('oncology_sessions')->where('id', $sessionId)->where('dossier_id', $dossier)->where('facility_id', $f['id'])->lockForUpdate()->first();
             abort_unless($session, 404);
@@ -191,15 +191,19 @@ class OncologyWriter
                 abort_unless($old, 404);
                 DossierWrites::version((array) $old, $data['lock_version']);
             }
-            $retainedNurse = $old && $old->nurse_id == $data['nurse_id'] && $old->given_on === $data['given_on'];
-            if (! $retainedNurse && ! DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('s.id', $data['nurse_id'])->where('c.id', $session->clinic_id)->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $data['given_on'])->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $data['given_on']))->exists()) {
-                throw ValidationException::withMessages(['nurse_id' => 'اختر ممرضًا مرتبطًا بعيادة هذه الجلسة في تاريخ الجرعة.']);
+            $medicationId = $data['medication_id'] ?? $old?->medication_id;
+            if (array_key_exists('medication_id', $data) && $data['medication_id'] === null && $old?->medication_id) {
+                throw ValidationException::withMessages(['medication_id' => 'لا تُزل ربط الدواء المحفوظ؛ اتركه أو اختر دواءً نوعيًا بديلًا صراحة.']);
             }
-
+            $medication = (! $old || $medicationId != $old->medication_id) ? app(SessionDoseMedications::class)->selected((int) $medicationId) : null;
+            $nurseName = $data['nurse_name'] ?? $old?->nurse_name;
+            if ($old && $old->nurse_name === null && isset($data['nurse_name']) && $data['nurse_name'] === DB::table('staff')->where('id', $old->nurse_id)->value('full_name')) {
+                $nurseName = null;
+            }
             $fields = [
                 'session_id' => $session->id, 'dossier_id' => $dossier, 'facility_id' => $f['id'],
-                'given_on' => $data['given_on'], 'dose_name' => trim($data['dose_name']), 'complaint' => trim($data['complaint']),
-                'recommendations' => trim($data['recommendations']), 'nurse_id' => $data['nurse_id'],
+                'given_on' => $data['given_on'], 'dose_name' => $medication?->name_ar ?? $old->dose_name, 'medication_id' => $medicationId, 'complaint' => trim($data['complaint']),
+                'recommendations' => trim($data['recommendations']), 'nurse_id' => $old?->nurse_id, 'nurse_name' => $nurseName,
             ] + ($old ? [] : ['client_request_id' => $data['request_id']]);
             $source = $data['medication_source'] ?? null;
             if ($source === null || $source === '') {

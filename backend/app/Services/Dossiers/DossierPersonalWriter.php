@@ -18,12 +18,15 @@ class DossierPersonalWriter
 
     public function save(Request $r, array $f, array $input, ?int $id, bool $withoutVisit = false): int
     {
-        $this->access->global($r->user(), $id ? 'patients.update' : ($input['person_mode'] === 'new' ? 'patients.create' : 'patients.search'));
+        $paperOnly = $id && SaveDossierSection::paperOnly($input);
+        if (! $paperOnly) {
+            $this->access->global($r->user(), $id ? 'patients.update' : ($input['person_mode'] === 'new' ? 'patients.create' : 'patients.search'));
+        }
         if (! $id && ! $withoutVisit) {
             $this->access->facility($r->user(), $f['id'], 'visits.create');
         }
 
-        return $this->persist($r, $f, $input, $id, $withoutVisit);
+        return $this->persist($r, $f, $input, $id, $withoutVisit, false, (bool) $paperOnly);
     }
 
     public function registerReception(Request $r, array $f, array $input): int
@@ -33,10 +36,13 @@ class DossierPersonalWriter
         return $this->persist($r, $f, $input, null, false, true);
     }
 
-    private function persist(Request $r, array $f, array $input, ?int $id, bool $withoutVisit, bool $automaticCode = false): int
+    private function persist(Request $r, array $f, array $input, ?int $id, bool $withoutVisit, bool $automaticCode = false, bool $paperOnly = false): int
     {
         try {
-            return $this->writes->once($r, $f, $input, ($automaticCode ? 'reception:' : '').'personal:'.($id ?? 'new'), function () use ($r, $f, $input, $id, $withoutVisit, $automaticCode) {
+            return $this->writes->once($r, $f, $input, ($automaticCode ? 'reception:' : '').'personal:'.($id ?? 'new'), function () use ($r, $f, $input, $id, $withoutVisit, $automaticCode, $paperOnly) {
+                if ($paperOnly) {
+                    $f = $this->access->facility($r->user()->fresh(), $f['id'], 'personal.update');
+                }
                 if ($automaticCode) {
                     $f = app(ReceptionAccess::class)->facility($r->user()->fresh(), $f['id'], 'register');
                 }
@@ -72,11 +78,19 @@ class DossierPersonalWriter
                         throw new HttpResponseException(response()->json(['error' => ['code' => 'DOSSIER_ALREADY_EXISTS', 'message' => 'للمريض ملف طبي محفوظ في هذا المشفى. افتح بطاقة المريض لإضافة زيارة أو استكمال المسودة؛ لم تُحفظ المسودة الجديدة.', 'existing_dossier_id' => (int) $existing]], 409));
                     }
                 }
-                if ($id || ! $patient) {
+                if ($paperOnly) {
+                    DossierWrites::version((array) $patient, $input['patient_lock_version']);
+                    $fields = ['paper_file_number' => $input['paper_file_number'], 'lock_version' => $patient->lock_version + 1, 'updated_at' => now()];
+                    DB::table('patients')->where('id', $patientId)->update($fields);
+                    $this->writes->audit($r, $f, 'patient', $patientId, Arr::only((array) $patient, ['paper_file_number', 'lock_version']), $fields);
+                } elseif ($id || ! $patient) {
                     if ($id) {
                         DossierWrites::version((array) $patient, $input['patient_lock_version']);
                     }
                     $fields = Arr::only($input, SaveDossierSection::PERSON) + array_fill_keys(SaveDossierSection::PERSON, null);
+                    if (array_key_exists('paper_file_number', $input)) {
+                        $fields['paper_file_number'] = $input['paper_file_number'];
+                    }
                     foreach (['marital_status', 'smoking_status', 'alcohol_status'] as $key) {
                         $fields[$key] = $fields[$key] ?: 'unknown';
                     }
@@ -103,11 +117,11 @@ class DossierPersonalWriter
                     } else {
                         $patientId = DB::table('patients')->insertGetId($fields + ['patient_code' => $input['code'], 'identity_document_type' => 'unknown', 'identity_check_status' => 'pending', 'created_by' => $r->user()->id, 'created_at' => now()]);
                     }
-                    $this->writes->audit($r, $f, 'patient', $patientId, $patient ? Arr::only((array) $patient, [...SaveDossierSection::PERSON, 'lock_version']) : null, $fields);
+                    $this->writes->audit($r, $f, 'patient', $patientId, $patient ? Arr::only((array) $patient, [...SaveDossierSection::PERSON, 'paper_file_number', 'lock_version']) : null, $fields);
                 }
                 // patients is the one global card. patient_dossiers rows remain local
                 // clinical contexts; their historical codes are immutable aliases.
-                $values = Arr::only($input, ['opening_date']) + ['updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($old['lock_version'] ?? 0) + 1];
+                $values = ($paperOnly ? [] : Arr::only($input, ['opening_date'])) + ['updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($old['lock_version'] ?? 0) + 1];
                 if ($id) {
                     DB::table('patient_dossiers')->where('id', $id)->update($values);
                 } else {

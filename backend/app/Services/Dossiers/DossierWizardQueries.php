@@ -15,7 +15,7 @@ class DossierWizardQueries
         return DB::transaction(function () use ($f, $id, $selected, $newVisit) {
             $d = app(DossierWrites::class)->dossier($f, $id, false);
             $d['is_oncology'] = (bool) $d['is_oncology'];
-            $p = DB::table('patients')->where('id', $d['patient_id'])->first(['id', 'patient_code', 'lock_version', ...SaveDossierSection::PERSON]);
+            $p = DB::table('patients')->where('id', $d['patient_id'])->first(['id', 'patient_code', 'lock_version', 'paper_file_number', ...SaveDossierSection::PERSON]);
             $context = app(DossierWorkflowActions::class)->forDossiers($f, [$d])[$id];
             $progress = $context['progress'];
             $visitId = $newVisit ? null : ($selected ?? $context['initial_visit']?->id);
@@ -30,7 +30,7 @@ class DossierWizardQueries
                 $action = $visit ? ($editable && ($caps['visits_update'] || $caps['diagnoses_update']) ? 'update' : null) : ($d['status'] === 'active' && $caps['visits_create'] ? 'create' : null);
                 $context['workflow']['visit'] = ['id' => $visitId, 'action' => $action, 'label' => $visit ? 'استكمال الزيارة المسودة' : 'إضافة زيارة'];
                 $later = $newVisit || $visit?->dossier_visit_kind === 'subsequent';
-                $context['workflow']['sections'] = [$later ? false : $context['workflow']['personal_update'], $later ? false : $context['workflow']['medical_update'], $action !== null, $editable && ($caps['services_update'] || $caps['procedures_update']), $editable && ($caps['prescriptions_update'] || $caps['outcomes_update']), $editable && ($caps['visits_update'] || $caps['visits_complete'])];
+                $context['workflow']['sections'] = [$later ? false : ($context['workflow']['personal_update'] || $context['workflow']['paper_file_number_update']), $later ? false : $context['workflow']['medical_update'], $action !== null, $editable && ($caps['services_update'] || $caps['procedures_update']), $editable && ($caps['prescriptions_update'] || $caps['outcomes_update']), $editable && ($caps['visits_update'] || $caps['visits_complete'])];
                 $context['workflow']['resume_section'] = 2;
             }
             $selections = DB::table('dossier_oncology_selections')->where('dossier_id', $id)->where('is_active', true)->orderBy('code')->get();

@@ -48,7 +48,7 @@ class CatalogWriter
         $tables = match ($kind) {
             'service' => ['visit_services', 'report_metric_catalog_items'],
             'procedure' => ['visit_procedures', 'blood_recipient_procedures', 'report_metric_catalog_items'],
-            'medication' => ['visit_medications', 'visit_prescription_items', 'dose_session_items', 'report_metric_catalog_items', 'medication_batches', 'inventory_transactions', 'medication_receipt_items', 'stock_issues'],
+            'medication' => ['visit_medications', 'visit_prescription_items', 'dose_session_items', 'oncology_session_doses', 'report_metric_catalog_items', 'medication_batches', 'inventory_transactions', 'medication_receipt_items', 'stock_issues'],
             default => throw new CatalogException('CATALOG_NOT_FOUND', 'النوع غير موجود.', 404),
         };
         foreach ($tables as $table) {
