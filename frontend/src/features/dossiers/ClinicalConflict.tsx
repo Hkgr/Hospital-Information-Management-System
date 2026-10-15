@@ -2,7 +2,7 @@
 import ConflictReview from "../blood-bank/ConflictReview";
 import { clinicalDraft, prescriptionKindLabels, prescriptionKinds, type ClinicalDraft, type SavedRow } from "./clinical";
 import type { Snapshot } from "./wizard";
-const names:Record<string,string>={catalog:"الخدمة أو الإجراء",clinic:"العيادة",doctor:"الطبيب",note:"الملاحظة",medication:"الدواء",prescribed_on:"تاريخ الوصفة",outcome_on:"تاريخ النتيجة",code:"النتيجة",remove:"الإزالة",void_reason:"سبب التصحيح",display_order:"الترتيب",referral_target:"مشفى الوجهة",outgoing_referral_date:"تاريخ الإحالة الصادرة",outgoing_referral_reason:"سبب الإحالة الصادرة",funding_source_id:"تمويل الوصفة",unavailable_reason:"سبب عدم التواجد في المشفى",kind:"نوع الوصفة"};
+const names:Record<string,string>={catalog:"الخدمة أو الإجراء",clinic:"العيادة",doctor:"الطبيب",note:"الملاحظة",medication:"الدواء",prescribed_on:"تاريخ الوصفة",outcome_on:"تاريخ النتيجة",code:"النتيجة",remove:"الإزالة",void_reason:"سبب التصحيح",display_order:"الترتيب",referral_target:"مشفى الوجهة",outgoing_referral_date:"تاريخ الإحالة الصادرة",outgoing_referral_reason:"سبب الإحالة الصادرة",funding_source_id:"مصدر تمويل الوصفة",unavailable_reason:"سبب عدم التواجد في المشفى",kind:"نوع الوصفة"};
 function flatten(d:ClinicalDraft,current:ClinicalDraft,step:number){
   const values:Record<string,string>={},labels:Record<string,string>={};
   function row(prefix:string,r:SavedRow & Record<string,unknown>){

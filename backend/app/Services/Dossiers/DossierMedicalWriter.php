@@ -22,6 +22,9 @@ class DossierMedicalWriter
             }
             $fields = ['is_oncology' => $input['is_oncology'], 'disability_text' => $input['disability_text'] ?? null, 'clinical_history' => $input['clinical_history'] ?? null, 'weight_kg' => $input['weight_kg'] ?? null, 'height_cm' => $input['height_cm'] ?? null];
             if ($input['is_oncology']) {
+                if (! empty($input['medication_source'])) {
+                    app(MedicationSources::class)->selected($input['medication_source'], 'code', $old['medication_source'], 'medication_source');
+                }
                 $fields += ['previous_examinations' => $input['previous_examinations'] ?? null, 'medication_source' => $input['medication_source'] ?? null, 'other_organization' => ($input['medication_source'] ?? null) === 'other_organization' ? $input['other_organization'] : null];
                 foreach (['history', 'treatment'] as $group) {
                     // Omitted selections are preserved, while submitted arrays explicitly change them.

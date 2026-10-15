@@ -21,32 +21,32 @@ function Removal({row,change,remove,label,prefix,error}:{row:SavedRow;change:(v:
 }
 function PrescriptionEditor({kind,value,change,facility,date,canCreateMedication,error}:{kind:PrescriptionKind;value:ClinicalDraft;change:(d:ClinicalDraft)=>void;facility:number;date:string;canCreateMedication:boolean;error:ErrorDisplay}) {
   const [adding,setAdding]=useState<string|null>(null);
-  const funds=useClinicRequest<{funding_sources:{id:number;name_ar:string}[]}>(kind==="dose_linked"?`dossiers/prescription-funding?facility_id=${facility}`:null);
+  const funds=useClinicRequest<{funding_sources:{id:number;name_ar:string}[]}>(`dossiers/prescription-funding?facility_id=${facility}`);
   const p=selectedPrescription(value,kind);
   const setPrescription=(next:Prescription|null)=>change({...value,prescriptions:{...value.prescriptions,[kind]:value.prescriptions[kind].flatMap(row=>row.key!==p?.key?[row]:next?[next]:[])}});
-  const hint="يمكن إضافة عدة فواتير من النوع نفسه. الحفظ يخص الفاتورة المختارة فقط؛ تبقى مسودات الفواتير الأخرى والتبويبات محفوظة في الصفحة.";
+  const hint="يمكن إضافة عدة وصفات من النوع نفسه. الحفظ يخص الوصفة المختارة فقط؛ تبقى مسودات الوصفات الأخرى والتبويبات محفوظة في الصفحة.";
   return <section className={layout.diagnosis}>
     <h4>{prescriptionKindLabels[kind]}</h4><p className={styles.hint}>{hint}</p>
-    {hasMissingPrescriptionSelection(value)&&<p role="alert" className={layout.error}>الفاتورة المختارة لم تعد متاحة. اختر فاتورة من القائمة أو أضف فاتورة جديدة قبل الحفظ؛ لم تُحفظ فاتورة أخرى بدلًا منها، ومسوداتك الأخرى باقية.</p>}
-    <div className={layout.entryModes} aria-label="فواتير الزيارة">
-      {value.prescriptions[kind].map((row,i)=><button key={row.key} type="button" className={styles.secondary} aria-pressed={p?.key===row.key} aria-current={p?.key===row.key?"true":undefined} onClick={()=>change({...value,selectedPrescription:row.key})}>فاتورة {i+1}{row.id?` · #${row.id}`:" · مسودة"}{row.remove?" · للإلغاء":""}</button>)}
-      <button type="button" className={styles.secondary} onClick={()=>{const key=crypto.randomUUID();change({...value,selectedPrescription:key,prescriptions:{...value.prescriptions,[kind]:[...value.prescriptions[kind],{key,kind,clinic:null,doctor:null,prescribed_on:date,note:"",funding_source_id:null,unavailable_reason:"",items:[]}]}});}}>إضافة فاتورة</button>
+    {hasMissingPrescriptionSelection(value)&&<p role="alert" className={layout.error}>الوصفة المختارة لم تعد متاحة. اختر وصفة من القائمة أو أضف وصفة جديدة قبل الحفظ؛ لم تُحفظ وصفة أخرى بدلًا منها، ومسوداتك الأخرى باقية.</p>}
+    <div className={layout.entryModes} aria-label="وصفات الزيارة">
+      {value.prescriptions[kind].map((row,i)=><button key={row.key} type="button" className={styles.secondary} aria-pressed={p?.key===row.key} aria-current={p?.key===row.key?"true":undefined} onClick={()=>change({...value,selectedPrescription:row.key})}>وصفة {i+1}{row.id?` · #${row.id}`:" · مسودة"}{row.remove?" · للإلغاء":""}</button>)}
+      <button type="button" className={styles.secondary} onClick={()=>{const key=crypto.randomUUID();change({...value,selectedPrescription:key,prescriptions:{...value.prescriptions,[kind]:[...value.prescriptions[kind],{key,kind,clinic:null,doctor:null,prescribed_on:date,note:"",funding_source_id:null,unavailable_reason:"",items:[]}]}});}}>إضافة وصفة</button>
     </div>
-    {p&&<section key={p.key} aria-label={`الفاتورة المختارة ${value.prescriptions[kind].findIndex(row=>row.key===p.key)+1}`}>
-      <Removal row={p} change={r=>setPrescription({...p,...r})} remove={()=>setPrescription(null)} label="الفاتورة" prefix="prescription" error={error}/>
+    {p&&<section key={p.key} aria-label={`الوصفة المختارة ${value.prescriptions[kind].findIndex(row=>row.key===p.key)+1}`}>
+      <Removal row={p} change={r=>setPrescription({...p,...r})} remove={()=>setPrescription(null)} label="الوصفة" prefix="prescription" error={error}/>
       {!p.remove&&<>
         <div className={styles.fields}>
           <ClinicalContext value={p} change={ctx=>setPrescription({...p,...ctx})} facility={facility} date={date} prefix="prescription." doctorKey="prescribing_staff_id" clinicKey="prescribing_clinic_id" label="الوصفة" error={error}/>
           <label>تاريخ الوصفة *<input name="prescription.prescribed_on" type="date" value={p.prescribed_on} onChange={e=>setPrescription({...p,prescribed_on:e.target.value})}/>{error("prescription.prescribed_on")}</label>
-          {kind==="dose_linked"&&<div>
-            <label>تمويل الوصفة *<select name="prescription.funding_source_id" disabled={funds.loading||!!funds.error} value={p.funding_source_id??""} onChange={e=>setPrescription({...p,funding_source_id:e.target.value?Number(e.target.value):null})}>
+          {<div>
+            <label>مصدر تمويل الوصفة *<select required aria-label="مصدر تمويل الوصفة" name="prescription.funding_source_id" disabled={funds.loading||!!funds.error} value={p.funding_source_id??""} onChange={e=>setPrescription({...p,funding_source_id:e.target.value?Number(e.target.value):null})}>
               <option value="">اختر مصدر التمويل</option>
-              {p.funding_source_id&&!funds.data?.funding_sources.some(s=>s.id===p.funding_source_id)&&<option value={p.funding_source_id}>{p.funding_name??"مصدر التمويل المحفوظ"} · محفوظ</option>}
+              {p.funding_source_id&&!funds.data?.funding_sources.some(s=>s.id===p.funding_source_id)&&<option disabled value={p.funding_source_id}>{p.funding_name??"مصدر التمويل المحفوظ"} · محفوظ</option>}
               {(funds.data?.funding_sources??[]).map(source=><option key={source.id} value={source.id}>{source.name_ar}</option>)}
             </select>{error("prescription.funding_source_id")}</label>
             {funds.loading&&<p role="status">جارٍ تحميل مصادر التمويل…</p>}
             {funds.error&&<p role="alert">تعذّر تحميل مصادر التمويل: {funds.error} <button type="button" className={styles.secondary} onClick={funds.retry}>إعادة تحميل التمويل</button></p>}
-            {!funds.loading&&!funds.error&&funds.data&&!funds.data.funding_sources.length&&<p role="status">لا توجد مصادر تمويل فعالة. يلزم تهيئة المصادر المعتمدة بواسطة المسؤول؛ لا يمكن حفظ فاتورة جديدة مرتبطة بالجرعة قبل ذلك. <button type="button" className={styles.secondary} onClick={funds.retry}>إعادة تحميل التمويل</button></p>}
+            {!funds.loading&&!funds.error&&funds.data&&!funds.data.funding_sources.length&&<p role="status">لا توجد مصادر دواء فعالة في الدليل المشترك. راجع المسؤول؛ لا يمكن حفظ وصفة جديدة دون مصدر تمويل صالح. <button type="button" className={styles.secondary} onClick={funds.retry}>إعادة تحميل التمويل</button></p>}
           </div>}
           {kind==="outside"&&<label className={styles.full}>سبب عدم تواجدها في المشفى *<textarea name="prescription.unavailable_reason" rows={3} value={p.unavailable_reason} onChange={e=>setPrescription({...p,unavailable_reason:e.target.value})}/>{error("prescription.unavailable_reason")}</label>}
           <label>ملاحظة عامة للوصفة<textarea name="prescription.note" rows={3} value={p.note} onChange={e=>setPrescription({...p,note:e.target.value})}/>{error("prescription.note")}</label>

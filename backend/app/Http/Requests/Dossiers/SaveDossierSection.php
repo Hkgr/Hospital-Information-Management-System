@@ -63,7 +63,7 @@ class SaveDossierSection extends FormRequest
                 $rules[$group] = ['sometimes', 'array', 'max:4'];
                 $rules[$group.'.*'] = ['string', 'distinct', Rule::in($codes)];
             }
-            $rules += ['previous_examinations' => ['nullable', 'string', 'max:20000'], 'medication_source' => ['nullable', Rule::in(['ministry_of_health', 'al_rowad', 'other_organization', 'personal_expense', 'none'])],
+            $rules += ['previous_examinations' => ['nullable', 'string', 'max:20000'], 'medication_source' => ['nullable', 'string', 'max:50'],
                 'other_organization' => [Rule::requiredIf($this->boolean('is_oncology') && $this->input('medication_source') === 'other_organization'), Rule::prohibitedIf($this->input('medication_source') !== 'other_organization'), 'nullable', 'string', 'max:200']];
         } else {
             $rules += ['visit_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'], 'is_referred' => ['required', 'boolean'],

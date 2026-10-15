@@ -7,6 +7,7 @@ use App\Http\Requests\Dossiers\SaveOncology;
 use App\Services\Clinics\ClinicCounts;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierWrites;
+use App\Services\Dossiers\MedicationSources;
 use App\Services\Dossiers\OncologyQueries;
 use App\Services\Dossiers\OncologyWriter;
 use App\Services\Dossiers\SessionDoseMedications;
@@ -28,10 +29,12 @@ class OncologyController extends Controller
     {
         $f = $this->scope($r);
         $date = $r->validate(['date' => ['required', 'date_format:Y-m-d'], 'clinic_id' => ['nullable', 'integer', 'min:1']])['date'];
+        $sources = app(MedicationSources::class)->choices();
 
         return response()->json(['data' => ['modalities' => OncologyQueries::MODALITIES, 'intents' => OncologyQueries::INTENTS,
             'doctors' => $r->filled('clinic_id') ? app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $date]))->where('c.id', $r->integer('clinic_id'))->distinct()->orderBy('s.full_name')->get(['s.id', 's.full_name as name_ar']) : [],
-            'funding_sources' => DB::table('funding_sources')->where('is_active', true)->orderBy('display_order')->orderBy('id')->get(['id', 'code', 'name_ar']),
+            'medication_sources' => $sources,
+            'funding_sources' => $sources,
             'periods' => DB::table('reporting_periods')->where('facility_id', $f['id'])->where('status', 'open')->where('starts_on', '<=', $date)->where('ends_on', '>=', $date)->orderBy('starts_on')->get(['id', 'starts_on', 'ends_on']),
             'staff' => DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))->distinct()->orderBy('s.full_name')->get(['s.id', 's.full_name as name_ar']),
             'clinic_staff' => $r->filled('clinic_id') ? DB::table('staff as s')->join('clinic_staff as cs', 'cs.staff_id', '=', 's.id')->join('clinics as c', 'c.id', '=', 'cs.clinic_id')->where('c.id', $r->integer('clinic_id'))->where('c.facility_id', $f['id'])->where('c.is_active', true)->whereNull('c.archived_at')->where('s.is_active', true)->whereNull('s.archived_at')->where('cs.starts_on', '<=', $date)->where(fn ($q) => $q->whereNull('cs.ends_on')->orWhere('cs.ends_on', '>', $date))->distinct()->orderBy('s.full_name')->get(['s.id', 's.full_name as name_ar']) : [],
@@ -73,8 +76,8 @@ class OncologyController extends Controller
         $row = DB::table('oncology_sessions as s')->leftJoinSub(app(OncologyQueries::class)->plans($f)->select('p.id', 'p.current_revision_id', 'p.lock_version')->selectRaw(OncologyQueries::effectiveSql().' AS effective_status'), 'p', 'p.id', '=', 's.plan_id')->where('s.id', $session)->where('s.dossier_id', $dossier)->where('s.facility_id', $f['id'])->first(['s.*', 'p.current_revision_id', 'p.lock_version as plan_lock_version', 'p.effective_status', DB::raw(OncologyQueries::voidedDoseSql())]);
         abort_unless($row, 404);
         $row->has_voided_dose = (bool) $row->has_voided_dose;
-        $row->doses = DB::table('oncology_session_doses as d')->leftJoin('staff as n', 'n.id', '=', 'd.nurse_id')->where('d.session_id', $row->id)->where('d.facility_id', $f['id'])->orderBy('d.id')
-            ->get(['d.id', 'd.session_id', 'd.given_on', 'd.dose_name', 'd.medication_id', 'd.complaint', 'd.recommendations', 'd.nurse_id', 'd.medication_source', 'd.lock_version', DB::raw('COALESCE(d.nurse_name,n.full_name) as nurse_name')])->all();
+        $row->doses = DB::table('oncology_session_doses as d')->leftJoin('staff as n', 'n.id', '=', 'd.nurse_id')->leftJoin('funding_sources as source', 'source.code', '=', 'd.medication_source')->where('d.session_id', $row->id)->where('d.facility_id', $f['id'])->orderBy('d.id')
+            ->get(['d.id', 'd.session_id', 'd.given_on', 'd.dose_name', 'd.medication_id', 'd.complaint', 'd.recommendations', 'd.nurse_id', 'd.medication_source', 'source.name_ar as medication_source_name', 'd.lock_version', DB::raw('COALESCE(d.nurse_name,n.full_name) as nurse_name')])->all();
 
         return response()->json(['data' => $row]);
     }

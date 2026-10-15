@@ -53,7 +53,7 @@ const saved=(r:SavedRow)=>({...r.id?{id:r.id,lock_version:r.lock_version}:{},...
 function serializePrescription(p: Prescription) {
   return {
     ...saved(p), kind: p.kind, prescribing_clinic_id: p.clinic?.id, prescribing_staff_id: p.doctor?.id, prescribed_on: p.prescribed_on, note: p.note || null,
-    ...(p.kind === "dose_linked" ? { funding_source_id: p.funding_source_id } : {}),
+    funding_source_id: p.funding_source_id,
     ...(p.kind === "outside" ? { unavailable_reason: p.unavailable_reason || null } : {}),
     items: p.items.map(i => ({ ...saved(i), medication_id: i.medication?.id, note: i.note || null, display_order: i.display_order })),
   };

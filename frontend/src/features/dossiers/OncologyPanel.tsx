@@ -7,7 +7,7 @@ import {DirectoryTable} from "../directory/DirectoryPrimitives";
 import OncologyEditor from "./OncologyEditor";
 import {intents,modalities,sessionStates,type Dose,type Dispensing,type Plan,type Session,type SessionDose,type EditorKind} from "./oncology";
 import type {Visit} from "./api";
-import {sourceLabels} from "./api";
+
 import {dispositionLabels} from "./pathology";
 import styles from "../clinics/clinics.module.css";
 import oncology from "./oncology.module.css";
@@ -59,7 +59,7 @@ export default function OncologyPanel(props:Props){const {facility,dossier,caps,
   <section className={oncology.boardBlock}>
    <div className={oncology.boardHead}><h3>جدول الجرعات{selected?` · ${selected.plan_id?`${selected.plan_number} / جلسة ${selected.session_number}`:`موعد #${selected.id}`}`:""}</h3>{selected&&caps.treatment_schedule_create&&selected.status==="scheduled"&&<button className={styles.secondary} onClick={()=>setEditing({kind:"session-dose",session:selected})}>إضافة جرعة علاجية</button>}</div>
    <p className={styles.hint}>جرعات الجلسة المختارة مع تاريخ زيارة كل جرعة.</p>
-   <DirectoryTable label="جدول الجرعات" headers={["الجرعة","تاريخ الزيارة","المصدر","الممرض","الإجراءات"]}>{sessionDoses.map(dose=><tr key={dose.id}><td>{dose.dose_name}</td><td>{dose.given_on}{visit&&dose.given_on===visit.visit_date&&<small className={oncology.todayMark}>تاريخ هذه الزيارة</small>}</td><td>{sourceLabels[dose.medication_source??""]??"غير مسجل"}</td><td>{dose.nurse_name??"غير مسجل"}</td><td>{selected?.status==="scheduled"&&caps.treatment_schedule_update&&<button className={styles.secondary} onClick={()=>setEditing({kind:"session-dose",session:selected,sessionDose:dose})}>تعديل الجرعة العلاجية</button>}</td></tr>)}{selected&&!sessionDoses.length&&<tr><td colSpan={5}>لا جرعات بعد لهذه الجلسة.</td></tr>}{!selected&&<tr><td colSpan={5}>اختر جلسة من الجدول أعلاه.</td></tr>}</DirectoryTable>
+   <DirectoryTable label="جدول الجرعات" headers={["الجرعة","تاريخ الزيارة","المصدر","الممرض","الإجراءات"]}>{sessionDoses.map(dose=><tr key={dose.id}><td>{dose.dose_name}</td><td>{dose.given_on}{visit&&dose.given_on===visit.visit_date&&<small className={oncology.todayMark}>تاريخ هذه الزيارة</small>}</td><td>{dose.medication_source_name??"غير محدد"}</td><td>{dose.nurse_name??"غير مسجل"}</td><td>{selected?.status==="scheduled"&&caps.treatment_schedule_update&&<button className={styles.secondary} onClick={()=>setEditing({kind:"session-dose",session:selected,sessionDose:dose})}>تعديل الجرعة العلاجية</button>}</td></tr>)}{selected&&!sessionDoses.length&&<tr><td colSpan={5}>لا جرعات بعد لهذه الجلسة.</td></tr>}{!selected&&<tr><td colSpan={5}>اختر جلسة من الجدول أعلاه.</td></tr>}</DirectoryTable>
   </section>
   {visit&&<section className={oncology.boardBlock}>
    <h3>إعطاء هذه الزيارة</h3>

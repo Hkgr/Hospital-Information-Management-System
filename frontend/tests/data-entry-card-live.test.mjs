@@ -62,6 +62,12 @@ test('data_entry alone creates a card and saves existing diagnoses, services, pr
     card=await save(page,'/personal');
     assert.equal(card.patient.paper_file_number,'00042-A');
     await page.locator('[name="is_oncology"]').selectOption('yes');
+    const general=(await api('GET','dossiers/options')).body.data.medication_sources;
+    const funding=(await api('GET','dossiers/prescription-funding')).body.data.funding_sources;
+    assert.deepEqual(general,funding,'both lists must use identical shared source IDs and definitions');
+    const generalSelect=page.locator('[name="medication_source"]');
+    await generalSelect.selectOption(String(f.funding));
+    assert.deepEqual(await generalSelect.locator('option').evaluateAll(xs=>xs.filter(x=>x.value).map(x=>Number(x.value))),funding.map(x=>x.id));
     await page.locator('[name="clinical_history"]').fill('قصة مسجلة من مدخل البيانات');
     card = await save(page, '/medical');
     await page.getByRole('button', { name: 'إضافة تشخيص للزيارة', exact: true }).click();
@@ -81,13 +87,15 @@ test('data_entry alone creates a card and saves existing diagnoses, services, pr
     for (const kind of ['unlinked', 'dose_linked', 'dose_linked', 'dose_linked', 'outside']) {
       if(kind==='dose_linked')await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
       if(kind==='outside')await page.getByRole('tab',{name:'أدوية خارج المشفى',exact:true}).click();
-      await page.getByRole('button', { name: 'إضافة فاتورة', exact: true }).click();
+      await page.getByRole('button', { name: 'إضافة وصفة', exact: true }).click();
       await choose(page, 'العيادة · الوصفة', f.clinic_name);
       await choose(page, 'الطبيب المسؤول · الوصفة', f.doctor_name);
+      assert.equal(await page.locator('[name="prescription.funding_source_id"]').inputValue(), '', 'a new prescription must not silently select its source');
       if (kind === 'dose_linked') {
         await page.locator('[name="prescription.funding_source_id"] option', {hasText:f.fundings[linked].name_ar}).waitFor({state:'attached'});
         await page.locator('[name="prescription.funding_source_id"]').selectOption(String(f.fundings[linked++].id));
       }
+      if (kind !== 'dose_linked') await page.locator('[name="prescription.funding_source_id"]').selectOption(String(f.funding));
       if (kind === 'outside') await page.locator('[name="prescription.unavailable_reason"]').fill('غير متوفر في المشفى');
       await page.getByRole('button', { name: 'إضافة دواء للوصفة', exact: true }).click();
       assert.equal(await page.getByRole('button', { name: 'إضافة دواء إلى الدليل', exact: true }).count(), 0);
@@ -100,17 +108,17 @@ test('data_entry alone creates a card and saves existing diagnoses, services, pr
     const invoicesBefore=structuredClone(card.clinical.prescriptions.filter(p=>p.kind==='dose_linked'));
     assert.equal(invoicesBefore.length,3);
     await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
-    await page.getByRole('button',{name:'إضافة فاتورة',exact:true}).click();
+    await page.getByRole('button',{name:'إضافة وصفة',exact:true}).click();
     await page.locator('[name="prescription.note"]').fill('Unfinished fourth invoice');
-    await page.getByRole('button',{name:new RegExp(`^فاتورة 2 · #${invoicesBefore[1].id}$`)}).click();
+    await page.getByRole('button',{name:new RegExp(`^وصفة 2 · #${invoicesBefore[1].id}$`)}).click();
     await page.locator('[name="prescription.note"]').fill('Only second invoice edited');
     card=await save(page,'/medications');
     const invoicesAfter=card.clinical.prescriptions.filter(p=>p.kind==='dose_linked');
     assert.deepEqual(invoicesAfter[0],invoicesBefore[0]);assert.deepEqual(invoicesAfter[2],invoicesBefore[2]);
     await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
-    await page.getByRole('button',{name:'فاتورة 4 · مسودة',exact:true}).click();
+    await page.getByRole('button',{name:'وصفة 4 · مسودة',exact:true}).click();
     assert.equal(await page.locator('[name="prescription.note"]').inputValue(),'Unfinished fourth invoice');
-    await page.getByRole('button',{name:'إزالة الفاتورة',exact:true}).click();
+    await page.getByRole('button',{name:'إزالة الوصفة',exact:true}).click();
     await page.getByRole('tab',{name:'النتيجة',exact:true}).click();
     await page.getByRole('button', { name: 'تسجيل نتيجة الزيارة', exact: true }).click();
     await page.locator('[name="outcome.code"]').selectOption('DOS-NORX');
@@ -133,7 +141,7 @@ test('data_entry alone creates a card and saves existing diagnoses, services, pr
     await page.goto(`${base}/patient-cards/new?facility_id=${f.facility}&card=${card.id}&visit=${card.visit.id}&section=4`);
     await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
     for (const [i,invoice] of card.clinical.prescriptions.filter(p=>p.kind==='dose_linked').entries()) {
-      await page.getByRole('button',{name:`فاتورة ${i+1} · #${invoice.id}`,exact:true}).click();
+      await page.getByRole('button',{name:`وصفة ${i+1} · #${invoice.id}`,exact:true}).click();
       assert.equal(await page.locator('[name="prescription.funding_source_id"]').inputValue(),String(invoice.funding_source_id));
       assert.equal(await page.locator('[name="prescription.note"]').inputValue(),invoice.note);
       assert.equal(await page.locator('[name="prescription.items.0.note"]').inputValue(),invoice.items[0].note);
@@ -147,7 +155,7 @@ test('invoice conflict review uses invoice IDs and keeps new same-kind drafts se
   try {
     await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
     const rows=card.clinical.prescriptions.filter(p=>p.kind==='dose_linked');
-    await page.getByRole('button',{name:`فاتورة 1 · #${rows[0].id}`,exact:true}).click();
+    await page.getByRole('button',{name:`وصفة 1 · #${rows[0].id}`,exact:true}).click();
     await page.locator('[name="prescription.note"]').fill('My reviewed invoice edit');
     let result=await api('PUT',`dossiers/${card.id}/visits/${card.visit.id}/medications`,{lock_version:card.visit.lock_version,prescription:{...rows[1],note:'Concurrent second invoice'},outcome:null});
     assert.equal(result.status,200);card=result.body.data;
@@ -160,7 +168,7 @@ test('invoice conflict review uses invoice IDs and keeps new same-kind drafts se
     assert.equal(card.clinical.prescriptions.find(p=>p.id===rows[0].id).note,'My reviewed invoice edit');
     assert.equal(card.clinical.prescriptions.find(p=>p.id===rows[1].id).note,'Concurrent second invoice');
     await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
-    await page.getByRole('button',{name:'إضافة فاتورة',exact:true}).click();
+    await page.getByRole('button',{name:'إضافة وصفة',exact:true}).click();
     await choose(page,'العيادة · الوصفة',f.clinic_name);await choose(page,'الطبيب المسؤول · الوصفة',f.doctor_name);
     await page.locator('[name="prescription.funding_source_id"]').selectOption(String(f.funding));
     await page.locator('[name="prescription.note"]').fill('My separate new invoice');
@@ -181,26 +189,27 @@ test('invoice conflict review uses invoice IDs and keeps new same-kind drafts se
 });
 
 test('a second invoice saved without reload stays selected after conflict review; missing selection never saves another invoice', async () => {
-  const registered=await api('POST','patient-cards/registrations',{person_mode:'new',first_name:'اختبار',family_name:`اختيار فاتورة ${f.tag}`,opening_date:'2001-03-01',visit_date:'2001-03-02',birth_date_accuracy:'unknown',gender:'unknown',displacement_status:'unknown'});
+  const registered=await api('POST','patient-cards/registrations',{person_mode:'new',first_name:'اختبار',family_name:`اختيار وصفة ${f.tag}`,opening_date:'2001-03-01',visit_date:'2001-03-02',birth_date_accuracy:'unknown',gender:'unknown',displacement_status:'unknown'});
   assert.equal(registered.status,201);
   let c=(await api('GET',`dossiers/${registered.body.data.id}/visits/${registered.body.data.registration_visit_id}/progress`)).body.data;
   const path=`dossiers/${c.id}/visits/${c.visit.id}/medications`;
-  const rx={kind:'unlinked',prescribing_clinic_id:f.clinics[0],prescribing_staff_id:f.workflow_doctors[0],prescribed_on:'2001-03-02',note:'First invoice unchanged',items:[{medication_id:f.medication,display_order:0,note:'First item unchanged'}]};
+  const rx={funding_source_id:f.funding,kind:'unlinked',prescribing_clinic_id:f.clinics[0],prescribing_staff_id:f.workflow_doctors[0],prescribed_on:'2001-03-02',note:'First invoice unchanged',items:[{medication_id:f.medication,display_order:0,note:'First item unchanged'}]};
   let result=await api('PUT',path,{lock_version:c.visit.lock_version,prescription:rx,outcome:null});assert.equal(result.status,200);c=result.body.data;
   const first=structuredClone(c.clinical.prescriptions[0]);
   const {context,page}=await open(`/patient-cards/new?card=${c.id}&visit=${c.visit.id}&section=4`);
   try {
     const tab=()=>page.getByRole('tab',{name:'أدوية مصروفة من المشفى (غير مرتبطة بالجرعة)',exact:true});
-    const invoice=id=>page.getByRole('button',{name:new RegExp(`^فاتورة \\d+ · #${id}$`)});
-    await page.getByRole('button',{name:'إضافة فاتورة',exact:true}).click();
+    const invoice=id=>page.getByRole('button',{name:new RegExp(`^وصفة \\d+ · #${id}$`)});
+    await page.getByRole('button',{name:'إضافة وصفة',exact:true}).click();
     await choose(page,'العيادة · الوصفة',f.clinic_name);await choose(page,'الطبيب المسؤول · الوصفة',f.doctor_name);
     await page.getByRole('button',{name:'إضافة دواء للوصفة',exact:true}).click();await choose(page,'الدواء من الدليل 1',f.invoice_medications[1].name_ar);
     await page.locator('[name="prescription.note"]').fill('Second invoice newly saved');
+    await page.locator('[name="prescription.funding_source_id"]').selectOption(String(f.funding));
     c=await save(page,'/medications');
     const second=c.clinical.prescriptions.find(p=>p.id!==first.id);
     await tab().click();
     assert.equal(await invoice(second.id).getAttribute('aria-pressed'),'true');
-    await page.getByRole('button',{name:'إضافة فاتورة',exact:true}).click();
+    await page.getByRole('button',{name:'إضافة وصفة',exact:true}).click();
     await page.locator('[name="prescription.note"]').fill('Third invoice draft preserved');
     await invoice(second.id).click();
     await page.locator('[name="prescription.note"]').fill('Reviewed edit to second invoice');
@@ -217,7 +226,7 @@ test('a second invoice saved without reload stays selected after conflict review
     page.on('request',capture);c=await save(page,'/medications');page.off('request',capture);
     assert.equal(sent.prescription.id,second.id);
     assert.deepEqual(c.clinical.prescriptions.find(p=>p.id===first.id),first);
-    await tab().click();await page.getByRole('button',{name:'فاتورة 3 · مسودة',exact:true}).click();
+    await tab().click();await page.getByRole('button',{name:'وصفة 3 · مسودة',exact:true}).click();
     assert.equal(await page.locator('[name="prescription.note"]').inputValue(),'Third invoice draft preserved');
     await invoice(second.id).click();
     const savedSecond=c.clinical.prescriptions.find(p=>p.id===second.id);
@@ -225,14 +234,14 @@ test('a second invoice saved without reload stays selected after conflict review
     await save(page,'/medications','حفظ ومتابعة',409);await page.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();
     await page.getByRole('checkbox',{name:/تطبيق مسودتي: إضافة أدوية مصروفة من المشفى.*الجديدة من مسودتي/}).check();
     await page.getByRole('button',{name:'اعتماد الاختيارات للمراجعة',exact:true}).click();
-    await page.getByRole('alert').filter({hasText:'الفاتورة المختارة لم تعد متاحة'}).waitFor();
+    await page.getByRole('alert').filter({hasText:'الوصفة المختارة لم تعد متاحة'}).waitFor();
     assert.equal(await invoice(first.id).getAttribute('aria-pressed'),'false');
     let writes=0;const count=request=>{if(request.method()==='PUT'&&new URL(request.url()).pathname.endsWith('/medications'))writes++;};
     page.on('request',count);await page.getByRole('button',{name:'حفظ ومتابعة',exact:true}).click();await page.waitForTimeout(250);page.off('request',count);
     assert.equal(writes,0,'a missing selection must not issue an invoice write');
     const current=(await api('GET',`dossiers/${c.id}/visits/${c.visit.id}/progress`)).body.data;
     assert.deepEqual(current.clinical.prescriptions.find(p=>p.id===first.id),first);
-    await page.getByRole('button',{name:'فاتورة 2 · مسودة',exact:true}).click();
+    await page.getByRole('button',{name:'وصفة 2 · مسودة',exact:true}).click();
     assert.equal(await page.locator('[name="prescription.note"]').inputValue(),'Third invoice draft preserved');
   } finally {await context.close();}
 });
@@ -293,7 +302,7 @@ test('funding empty/error states are explicit and retry preserves the invoice dr
     let mode='empty';
     await page.route('**/hospital-api/dossiers/prescription-funding?*',route=>mode==='empty'?route.fulfill({json:{data:{funding_sources:[]}}}):mode==='error'?route.fulfill({status:503,json:{error:{code:'LOCAL_TEST_UNAVAILABLE',message:'تعذر تحميل بيانات الاختبار'}}}):route.continue());
     await page.getByRole('tab',{name:'أدوية مرتبطة بالجرعة',exact:true}).click();
-    await page.getByText(/لا توجد مصادر تمويل فعالة/).waitFor();
+    await page.getByText(/لا توجد مصادر دواء فعالة/).waitFor();
     await page.locator('[name="prescription.note"]').fill('Draft survives funding failures');
     mode='error';await page.getByRole('button',{name:'إعادة تحميل التمويل',exact:true}).click();
     await page.getByRole('alert').filter({hasText:'تعذّر تحميل مصادر التمويل'}).waitFor();

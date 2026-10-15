@@ -16,6 +16,7 @@ use App\Services\Dossiers\DossierReports;
 use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\DossierWizardQueries;
 use App\Services\Dossiers\DossierWrites;
+use App\Services\Dossiers\MedicationSources;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -52,7 +53,7 @@ class DossierCompletionController extends Controller
         $this->scope($r, 'visits.view');
         $this->scope($r, 'prescriptions.update');
 
-        return response()->json(['data' => ['funding_sources' => DB::table('funding_sources')->where('is_active', true)->orderBy('display_order')->orderBy('id')->get(['id', 'code', 'name_ar'])]]);
+        return response()->json(['data' => ['funding_sources' => app(MedicationSources::class)->choices()]]);
     }
 
     public function newVisit(Request $r, int $dossier)

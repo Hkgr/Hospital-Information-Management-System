@@ -28,9 +28,9 @@ identity reservation, personal validator/writer, clinical validators/writers,
 auditing and scope checks, with a trusted internal option to create a legacy
 context without a visit. It does not change the interactive API contract.
 
-## Workbook v1
+## Workbook v5
 
-`template_version=patient-import-1`. Exact ordered sheets:
+`template_version=patient-import-5`. Exact ordered sheets:
 Instructions, Patients, Visits, Diagnoses, Services, Procedures, Prescriptions,
 Medications, Outcomes, Reference_Data. Hidden row 1 contains stable machine keys;
 row 2 contains Arabic labels; data starts at row 3. Template/reference metadata
@@ -63,7 +63,21 @@ contexts remain drafts; import never infers completion, activation or readiness.
 The first explicit recorded visit is the registration visit, not a lifetime-first
 claim. Existing completed/voided visits are never changed through reimport.
 
-Prescriptions is one header per visit, with clinic, doctor and explicit date.
+Prescriptions is one header per visit, with clinic, doctor, explicit date and
+mandatory `funding_source_id`. Select an explicit numeric ID from the active
+`funding_sources` rows in Reference_Data (`ref_funding_sources` dropdown). These
+are the same IDs, codes and names returned by general medication-source and
+prescription-funding options. There is no default or inference from the patient.
+Preview validates activity/existence, and commit reloads/locks the references
+and revalidates within the patient transaction. A disabled or missing source
+prevents the whole patient's write; no partial patient/visit is committed.
+
+Earlier template versions are rejected with instructions to download v5 and
+choose funding explicitly. Previously uploaded old-version batches stay
+readable and cancellable, but cannot validate/commit. Do not renumber committed
+source IDs or refill historical prescription sources automatically; a changed
+committed source payload still requires review under the existing replay rules.
+
 Medications contains its items, with immutable medication snapshots written by
 the existing prescription writer. These rows never enter `visit_medications`.
 Services/procedures use their current dossier-managed, period-optional contract.

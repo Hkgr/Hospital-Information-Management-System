@@ -142,10 +142,7 @@ class DossierClinicalWriter
         if (! $old || $old->prescribing_clinic_id != $row['prescribing_clinic_id'] || $old->prescribing_staff_id != $row['prescribing_staff_id']) {
             $this->context->check($f, $row['prescribing_clinic_id'], $row['prescribing_staff_id'], $v->visit_date, 'prescription.prescribing_staff_id', false);
         }
-        $funding = $kind === 'dose_linked' ? $row['funding_source_id'] : null;
-        if ($kind === 'dose_linked' && (! $old || $old->funding_source_id != $funding) && ! DB::table('funding_sources')->where('id', $funding)->where('is_active', true)->exists()) {
-            throw ValidationException::withMessages(['prescription.funding_source_id' => 'اختر مصدر تمويل فعالًا للوصفة المرتبطة بالجرعة.']);
-        }
+        $funding = app(MedicationSources::class)->selected((int) ($row['funding_source_id'] ?? 0), 'id', $old?->funding_source_id, 'prescription.funding_source_id')->id;
         $reason = $kind === 'outside' ? trim((string) ($row['unavailable_reason'] ?? '')) : null;
         if ($kind === 'outside' && $reason === '') {
             throw ValidationException::withMessages(['prescription.unavailable_reason' => 'اذكر سبب عدم تواجد هذه الأدوية في المشفى.']);

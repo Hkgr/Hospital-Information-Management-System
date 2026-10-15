@@ -37,6 +37,7 @@ if ($mode === 'prepare') {
     }
     $f['session_medication'] = SessionDoseFixture::medication($f['tag']);
     $f['funding'] = DB::table('funding_sources')->insertGetId(['code' => 'ONC-LIVE-'.$f['tag'], 'name_ar' => 'تمويل اصطناعي للتحقق']);
+    $f['historical_funding'] = DB::table('funding_sources')->insertGetId(['code' => 'ONC-HISTORY-'.$f['tag'], 'name_ar' => 'مصدر تاريخي اصطناعي', 'is_active' => true]);
     $f['period'] = DB::table('reporting_periods')->insertGetId(['facility_id' => $f['facility'], 'starts_on' => '2001-01-01', 'ends_on' => '2001-12-31', 'status' => 'open']);
     $f['user_id'] = $f['user']->id;
     $f['viewer_id'] = $f['viewer']->id;
@@ -66,6 +67,12 @@ if ($mode === 'prepare') {
             throw new RuntimeException('Missing actual oncology facts.');
         }
         echo "Verified actual stored oncology facts and unchanged other clinical domains/periods.\n";
+    } elseif ($mode === 'disable-funding') {
+        $changed = DB::table('funding_sources')->where('id', $f['historical_funding'])->where('code', 'ONC-HISTORY-'.$f['tag'])->update(['is_active' => false]);
+        if ($changed !== 1) {
+            throw new RuntimeException('Expected the owned synthetic source.');
+        }
+        echo 'Disabled owned source only.'.PHP_EOL;
     } elseif ($mode === 'concurrency') {
         $access = app(DossierAccess::class)->facility(User::findOrFail($f['user_id']), $f['facility'], 'treatment.administer');
         $s = app(OncologyQueries::class)->scheduled($access)->orderBy('s.id')->first(['s.*']);

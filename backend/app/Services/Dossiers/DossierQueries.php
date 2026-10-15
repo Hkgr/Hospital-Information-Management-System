@@ -104,6 +104,7 @@ class DossierQueries
         return DB::transaction(function () use ($f, $id) {
             $d = $this->dossiers($f)->where('d.id', $id)->select('d.*')->first();
             abort_unless($d, 404);
+            $source = DB::table('funding_sources')->where('code', $d->medication_source)->first();
             $patient = DB::table('patients as p')->leftJoin('governorates as g', 'g.id', '=', 'p.governorate_id')
                 ->leftJoin('cities as c', fn ($j) => $j->on('c.id', '=', 'p.city_id')->on('c.governorate_id', '=', 'p.governorate_id'))
                 ->where('p.id', $d->patient_id)->first(['p.patient_code', 'p.first_name', 'p.family_name', 'p.father_name', 'p.mother_name', 'p.birth_date', 'p.birth_date_accuracy', 'p.gender', 'p.phone', 'p.alt_phone', 'p.paper_file_number', 'p.national_id', 'g.name_ar as governorate', 'c.name_ar as city', 'p.address_line', 'p.displacement_status', 'p.marital_status', 'p.permanent_address', 'p.occupation', 'p.smoking_status', 'p.alcohol_status']);
@@ -112,7 +113,7 @@ class DossierQueries
 
             return ['id' => (int) $d->id, 'card_id' => (int) $d->patient_id, 'facility_id' => (int) $d->facility_id, 'code' => $patient->patient_code, 'legacy_without_visits' => ! DB::table('visits')->where('dossier_id', $id)->exists(), 'status' => $d->status, 'opening_date' => $d->opening_date,
                 'disability_text' => $d->disability_text, 'clinical_history' => $d->clinical_history, 'weight_kg' => $d->weight_kg, 'height_cm' => $d->height_cm, 'is_oncology' => (bool) $d->is_oncology,
-                'oncology' => $d->is_oncology ? ['previous_examinations' => $d->previous_examinations, 'medication_source' => $d->medication_source, 'other_organization' => $d->other_organization,
+                'oncology' => $d->is_oncology ? ['previous_examinations' => $d->previous_examinations, 'medication_source' => $d->medication_source, 'medication_source_name' => $source?->name_ar, 'medication_source_id' => $source?->id, 'other_organization' => $d->other_organization,
                     'selections' => DB::table('dossier_oncology_selections')->where('dossier_id', $id)->where('facility_id', $f['id'])->where('is_active', true)->orderBy('selection_group')->orderBy('code')->get(['selection_group', 'code'])->all()] : null,
                 'patient' => (array) $patient, 'visit_count' => $v->count(), 'latest_visit' => $latest ? $this->visit($f, $id, (int) $latest) : null,
                 'pathology_summary' => app(DossierPathology::class)->summaries($f)->where('dossier_id', $id)->first(['disposition', 'visit_id', 'fact_date']),

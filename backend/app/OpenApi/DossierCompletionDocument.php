@@ -42,7 +42,7 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
         $required = array_keys($fields);
         $row = ['id' => $i(), 'lock_version' => $i(), 'remove' => new BooleanType, 'void_reason' => $null(), 'note' => $null()];
         if ($route === 'dossiers/prescription-funding') {
-            $op->description = 'Active funding definitions for visit invoices. Requires same-facility dossiers.visits.view and dossiers.prescriptions.update; does not require treatment.view or directory creation. Private, no-store. Empty funding_sources means approved definitions need operator setup; errors are not empty results.';
+            $op->description = 'Active shared medication-source definitions (funding_sources IDs), identical to dossiers/options medication_sources. Required for every prescription kind; legacy NULL is readable, and an unchanged historical disabled source may be retained when editing. Requires same-facility dossiers.visits.view and dossiers.prescriptions.update; does not require treatment.view or directory creation. Private, no-store. Empty funding_sources means approved definitions need operator setup; errors are not empty results.';
             $op->responses = [];
             $op->addResponse(Response::make(200)->setDescription('Active approved sources')->setContent('application/json', Schema::fromType($this->object(['data' => $this->object(['funding_sources' => $this->list($this->object(['id' => $i(), 'code' => $s(), 'name_ar' => $s()]))])]))));
 
@@ -61,12 +61,12 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
             $item = $this->object($row + ['medication_id' => $i(), 'display_order' => $i()]);
             $item->required = ['medication_id', 'display_order'];
             $rx = $this->object($row + ['kind' => $s()->enum(['unlinked', 'dose_linked', 'outside']), 'prescribing_clinic_id' => $i(), 'prescribing_staff_id' => $i(), 'prescribed_on' => $s()->format('date'), 'funding_source_id' => $i()->nullable(true), 'unavailable_reason' => $null(), 'items' => $this->list($item)])->nullable(true);
-            $rx->required = ['kind', 'prescribing_clinic_id', 'prescribing_staff_id', 'prescribed_on', 'items'];
+            $rx->required = ['funding_source_id', 'kind', 'prescribing_clinic_id', 'prescribing_staff_id', 'prescribed_on', 'items'];
             $out = $this->object($row + ['code' => $s()->enum(array_keys(DossierOutcomeSeeder::OUTCOMES)), 'clinic_id' => $i(), 'doctor_id' => $i(), 'outcome_on' => $s()->format('date'), 'referral_target' => $null(), 'outgoing_referral_date' => $null(), 'outgoing_referral_reason' => $null()])->nullable(true);
             $out->required = ['code', 'clinic_id', 'doctor_id', 'outcome_on'];
             $fields += ['prescription' => $rx, 'outcome' => $out];
             $required = [...$required, 'prescription', 'outcome'];
-            $op->description .= ' Requires dossiers.visits.view plus dossiers.prescriptions.update for an invoice, and dossiers.outcomes.update for an outcome. Multiple active invoices per kind (unlinked hospital dispense, dose-linked with funding_source_id, outside-hospital with unavailable_reason). Each prescription has one or more items. Each write sends one selected invoice with its own row version; all omitted invoices/kinds and a null prescription are left unchanged. One current outcome, saved independently of prescriptions. Dates must not be future. DOS-REFER requires all three outgoing fields; other outcomes prohibit them. Incoming referral stays independent.';
+            $op->description .= ' Requires dossiers.visits.view plus dossiers.prescriptions.update for an prescription, and dossiers.outcomes.update for an outcome. Multiple active prescriptions per kind (unlinked hospital dispense, dose-linked, outside-hospital with unavailable_reason; all kinds require explicit funding_source_id from the same funding_sources rows/IDs exposed as general medication sources). Each prescription has one or more items. Each write sends one selected prescription with its own row version; all omitted prescriptions/kinds and a null prescription are left unchanged. One current outcome, saved independently of prescriptions. Dates must not be future. DOS-REFER requires all three outgoing fields; other outcomes prohibit them. Incoming referral stays independent.';
         } elseif (str_ends_with($route, '/complete')) {
             $fields += ['dossier_lock_version' => $i(), 'confirmed' => new BooleanType, 'clinic_id' => $i(), 'attending_staff_id' => $i()];
             $required = array_keys($fields);

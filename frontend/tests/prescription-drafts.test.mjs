@@ -9,6 +9,16 @@ const clinical = await import(`data:text/javascript;base64,${Buffer.from(code).t
 const rx = (id, kind = 'dose_linked') => ({ id, lock_version: 1, kind, prescribing_clinic_id: 1, prescribing_staff_id: 2, clinic_name: 'Clinic', doctor_name: 'Doctor', prescribed_on: '2001-03-02', funding_source_id: id, note: `Invoice ${id}`, items: [{ id: id * 10, lock_version: 1, medication_id: id, name_ar: `Medication ${id}`, code: `0${id}`, note: null, display_order: 0 }] });
 const snapshot = rows => ({ clinical: { services: [], procedures: [], prescriptions: rows, outcome: null } });
 
+test('each prescription kind sends its explicitly selected source without borrowing from another tab', () => {
+  for (const kind of ['unlinked', 'dose_linked', 'outside']) {
+    const draft = clinical.clinicalDraft(snapshot([rx(7, kind)]));
+    draft.selectedPrescription = '7';
+    assert.equal(clinical.clinicalPayload(draft, 4, kind).prescription.funding_source_id, 7);
+    draft.prescriptions[kind][0].funding_source_id = null;
+    assert.equal(clinical.clinicalPayload(draft, 4, kind).prescription.funding_source_id, null);
+  }
+});
+
 test('loading three same-kind invoices preserves every ID, item and independent funding', () => {
   const draft = clinical.clinicalDraft(snapshot([rx(1), rx(2), rx(3)]));
   const rows=Array.isArray(draft.prescriptions.dose_linked)?draft.prescriptions.dose_linked:[draft.prescriptions.dose_linked];

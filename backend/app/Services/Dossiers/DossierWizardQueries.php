@@ -14,6 +14,9 @@ class DossierWizardQueries
 
         return DB::transaction(function () use ($f, $id, $selected, $newVisit) {
             $d = app(DossierWrites::class)->dossier($f, $id, false);
+            $source = DB::table('funding_sources')->where('code', $d['medication_source'])->first();
+            $d['medication_source_name'] = $source?->name_ar;
+            $d['medication_source_id'] = $source?->id;
             $d['is_oncology'] = (bool) $d['is_oncology'];
             $p = DB::table('patients')->where('id', $d['patient_id'])->first(['id', 'patient_code', 'lock_version', 'paper_file_number', ...SaveDossierSection::PERSON]);
             $context = app(DossierWorkflowActions::class)->forDossiers($f, [$d])[$id];
@@ -40,7 +43,7 @@ class DossierWizardQueries
             $prior = $this->priorVisit($f, $id, $visitId);
 
             return ['id' => $id, 'card_id' => (int) $p->id, 'code' => $p->patient_code, 'status' => $d['status'], 'lock_version' => $d['lock_version'], 'opening_date' => $d['opening_date'], 'patient' => $p, 'workflow' => $context['workflow'],
-                'medical' => Arr::only($d, ['disability_text', 'clinical_history', 'weight_kg', 'height_cm', 'is_oncology', 'previous_examinations', 'medication_source', 'other_organization']) + ['history' => $selections->where('selection_group', 'history')->pluck('code')->values()->all(), 'treatment' => $selections->where('selection_group', 'treatment')->pluck('code')->values()->all()],
+                'medical' => Arr::only($d, ['disability_text', 'clinical_history', 'weight_kg', 'height_cm', 'is_oncology', 'previous_examinations', 'medication_source', 'medication_source_name', 'medication_source_id', 'other_organization']) + ['history' => $selections->where('selection_group', 'history')->pluck('code')->values()->all(), 'treatment' => $selections->where('selection_group', 'treatment')->pluck('code')->values()->all()],
                 'clinical' => $visit ? app(DossierVisitSections::class)->read($f, $visit->id) : ['services' => [], 'procedures' => [], 'prescription' => null, 'prescriptions' => [], 'outcome' => null, 'attachment_count' => 0],
                 'progress' => collect(['personal', 'medical', 'visit', 'clinical', 'medications', 'attachments'])->map(fn ($s) => $progress->has($s) ? (array) $progress->get($s) + ['unchanged' => (bool) ($progress->get($s)->unchanged ?? false)] : ['section' => $s, 'state' => 'not_started', 'unchanged' => false, 'last_saved_by' => null, 'last_saved_at' => null, 'lock_version' => 0, 'visit_id' => null])->all(),
                 'prior_visit' => $prior,

@@ -3,7 +3,7 @@ import type { Choice } from "../blood-bank/api";
 export type Fields = Record<string, string>;
 export type DiagnosisDraft = { key: string; id?: number; lock_version?: number; diagnosis: Choice | null; clinic: Choice | null; doctor: Choice | null; diagnosed_on: string; remove?: boolean; void_reason?: string };
 export type WorkflowActions = { sections?: boolean[]; subsequent_create?: boolean; personal_update: boolean; paper_file_number_update?: boolean; medical_update: boolean; resume_section: number | null; visit: { id: number | null; action: "create" | "update" | null; label: string | null } };
-export type WizardOptions = { capabilities: Record<string, boolean>; creation: { allowed: boolean; reason: string | null }; today: string; governorates: Choice[] };
+export type WizardOptions = { medication_sources: {id:number;code:string;name_ar:string}[]; capabilities: Record<string, boolean>; creation: { allowed: boolean; reason: string | null }; today: string; governorates: Choice[] };
 export type Snapshot = {
   id: number; code: string; status: "draft" | "active"; opening_date: string; lock_version: number;
   workflow: WorkflowActions;
