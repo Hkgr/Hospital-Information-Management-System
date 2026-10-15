@@ -136,6 +136,9 @@ class ImportBatches
                     return;
                 }
                 $allowed = $operation === 'validate' ? ['uploaded', 'validating', 'needs_review', 'failed'] : ['validated', 'committing', 'completed_with_errors'];
+                if ($batch->template_version !== ImportWorkbook::VERSION) {
+                    throw ValidationException::withMessages(['template_version' => 'هذه دفعة بقالب سابق. نزّل '.ImportWorkbook::VERSION.' وحدد funding_source_id صراحة لكل وصفة ثم ارفع دفعة جديدة؛ تبقى الدفعة السابقة محفوظة ويمكن إلغاؤها دون حذف الوقائع.']);
+                }
                 if (! in_array($batch->status, $allowed) || $batch->file_deleted_at) {
                     DossierWrites::conflict('حالة الدفعة لا تسمح بهذه العملية. اجلب أحدث نسخة.');
                 }

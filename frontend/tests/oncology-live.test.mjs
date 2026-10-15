@@ -18,6 +18,40 @@ async function create(){let r=await api('POST','',{person_mode:'new',opening_dat
  const path=`/${d.id}/visits/${d.visit.id}`;r=await api('POST',`${path}/pathology`,{clinic_id:f.clinics[0],doctor_id:f.workflow_doctors[0],source:'external',external_organization:'مختبر اصطناعي',status:'completed',result_on:'2001-02-01',conclusion:'دليل اصطناعي مكتمل'});assert.equal(r.status,201);const evidence=r.body.data.id;r=await api('PUT',`${path}/diagnostic-assessment`,{lock_version:0,disposition:'pathology_confirmed',evidence_pathology_id:evidence,assessed_on:'2001-03-02'});assert.equal(r.status,200);return{...d,evidence};}
 async function save(page,method,suffix,label='حفظ'){const response=page.waitForResponse(r=>r.request().method()===method&&r.url().split('?')[0].endsWith(suffix));await page.getByRole('dialog').getByRole('button',{name:label,exact:true}).click();const r=await response;assert.ok(r.ok(),await r.text());await page.getByRole('dialog').waitFor({state:'hidden'});return(await r.json()).data;}
 async function shot(page,name){await page.evaluate(async()=>{await document.fonts.ready;});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),name);assert.ok(await page.getByRole('dialog').locator('button[aria-pressed]').evaluateAll(buttons=>buttons.every(button=>{const label=button.querySelector('span');if(!label)return true;const box=button.getBoundingClientRect(),text=label.getBoundingClientRect();return !box.width||text.height<=box.height+2;})),name+' readable picker labels');await page.screenshot({path:fileURLToPath(new URL(name+'.png',artifacts)),fullPage:true});await page.screenshot({path:fileURLToPath(new URL(name+'-viewport.png',artifacts))});}
+test('each saved dose item retains only its own disabled source through correction and conflict review',async()=>{
+ const d=await create(),root=`/${d.id}`,vp=`${root}/visits/${d.visit.id}`;
+ let r=await api('POST',`${root}/treatment-plans`,planBody('Historical item sources'));assert.equal(r.status,201);let p=r.body.data;
+ r=await api('POST',`${root}/treatment-plans/${p.id}/sessions`,{lock_version:p.lock_version,sessions:[{planned_on:d.visit.visit_date}]});assert.equal(r.status,201);
+ const s=(await api('GET',`${root}/treatment-sessions`)).body.data[0];p=(await api('GET',`${root}/treatment-plans/${p.id}`)).body.data;
+ const oldCode=`ONC-HISTORY-${f.tag}`;
+ r=await api('POST',`${vp}/doses`,{session_id:s.id,session_lock_version:s.lock_version,plan_lock_version:p.lock_version,visit_lock_version:d.visit.lock_version,administered_on:d.visit.visit_date,supervising_staff_id:f.workflow_doctors[0],administered_by:f.workflow_doctors[0],items:[{...item(),medication_source:oldCode,note:'First item'},{...item(),note:'Second item'}]});assert.equal(r.status,201,JSON.stringify(r.body));
+ let dose=r.body.data;fixture('disable-funding');
+ const active=(await api('GET','/treatment-options?date=2001-03-02')).body.data.medication_sources;assert.equal(active.some(x=>x.code===oldCode),false);
+ const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'});await context.addInitScript(t=>sessionStorage.setItem('hospital.bearer',t),f.token);const page=await context.newPage();page.setDefaultTimeout(20000);
+ const read=async()=>{const data=(await api('GET',`${vp}/doses`)).body.data;return data.doses.find(x=>x.id===dose.id);};
+ try{
+  await page.goto(`${base}/patient-cards/new?card=${d.id}&visit=${d.visit.id}&facility_id=${f.facility}&section=8`);
+  await page.getByRole('button',{name:'تصحيح الإعطاء',exact:true}).click();let dialog=page.getByRole('dialog');
+  const source=i=>dialog.locator(`[name="items.${i}.medication_source"]`);
+  assert.equal(await source(0).inputValue(),oldCode,'disabled source must remain visibly selected for its saved item');
+  assert.match(await source(0).locator('option:checked').textContent(),/مصدر تاريخي اصطناعي/);
+  assert.equal(await source(0).locator(`option[value="${oldCode}"]`).evaluate(x=>x.disabled),true,await source(0).evaluate(x=>x.outerHTML));
+  assert.equal(await source(1).locator(`option[value="${oldCode}"]`).count(),0,'another saved item must not inherit the inactive choice');
+  await dialog.getByRole('button',{name:'إضافة دواء معطى',exact:true}).click();assert.equal(await source(2).locator(`option[value="${oldCode}"]`).count(),0);
+  await dialog.getByRole('button',{name:'إزالة البند من المسودة',exact:true}).click();
+  await dialog.locator('[name="items.0.note"]').fill('Corrected first note');await dialog.locator('[name="reason"]').fill('Explicit historical item correction');
+  await save(page,'PUT',`/doses/${dose.id}`);dose=await read();assert.deepEqual(dose.items.map(x=>x.medication_source),[oldCode,'ministry_of_health']);assert.equal(dose.items[0].note,'Corrected first note');
+  await page.reload();await page.getByRole('button',{name:'تصحيح الإعطاء',exact:true}).click();dialog=page.getByRole('dialog');assert.equal(await source(0).inputValue(),oldCode);
+  await dialog.locator('[name="items.0.note"]').fill('My reviewed item note');await dialog.locator('[name="reason"]').fill('Review concurrent correction');
+  r=await api('PUT',`${vp}/doses/${dose.id}`,{...dose,reason:'Other session note',note:'Concurrent header note',items:dose.items});assert.equal(r.status,200,JSON.stringify(r.body));
+  const conflict=page.waitForResponse(x=>x.request().method()==='PUT'&&x.status()===409);await dialog.getByRole('button',{name:'حفظ',exact:true}).click();await conflict;
+  await dialog.getByRole('button',{name:'جلب أحدث نسخة',exact:true}).click();await dialog.getByRole('checkbox',{name:'استخدام بنود مسودتي بعد مقارنتها بالبنود الحالية أدناه',exact:true}).check();await dialog.getByRole('checkbox',{name:/سبب الإجراء أو التصحيح/}).check();await dialog.getByRole('button',{name:'اعتماد الاختيارات للمراجعة قبل الحفظ',exact:true}).click();
+  assert.equal(await source(0).inputValue(),oldCode);assert.match(await source(0).locator('option:checked').textContent(),/مصدر تاريخي اصطناعي/);assert.equal(await source(1).locator(`option[value="${oldCode}"]`).count(),0);
+  await save(page,'PUT',`/doses/${dose.id}`);dose=await read();assert.deepEqual(dose.items.map(x=>x.medication_source),[oldCode,'ministry_of_health']);assert.equal(dose.items[0].note,'My reviewed item note');assert.equal(dose.note,'Concurrent header note');
+  const bad=await api('PUT',`${vp}/doses/${dose.id}`,{...dose,reason:'Invalid source transfer',items:dose.items.map((x,i)=>i===1?{...x,medication_source:oldCode}:x)});assert.equal(bad.status,422);assert.deepEqual((await read()).items,dose.items);
+ }finally{await context.close();}
+});
+
 test('real plan, explicit scheduling, administration, dispensing and reports at all responsive widths',async()=>{
  for(const width of [390,768,1440]){const d=await create();last=d;const ctx=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'});await ctx.addInitScript(t=>sessionStorage.setItem('hospital.bearer',t),f.token);const page=await ctx.newPage();page.setDefaultTimeout(20000);
  try{await page.goto(`${base}/patient-cards/new?card=${d.id}&visit=${d.visit.id}&facility_id=${f.facility}&section=7`);await page.getByRole('button',{name:'إضافة خطة علاجية',exact:true}).click();let dialog=page.getByRole('dialog');

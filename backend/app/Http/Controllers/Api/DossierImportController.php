@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\Imports\ImportBatches;
 use App\Services\Dossiers\Imports\ImportWorkbook;
+use App\Services\Dossiers\MedicationSources;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -73,6 +74,9 @@ class DossierImportController extends Controller
         $f = $this->scope($r, 'download');
         $this->metadata($r);
         $refs = [];
+        foreach (app(MedicationSources::class)->choices() as $source) {
+            $refs[] = ['funding_sources', $source->id, $source->code, $source->name_ar, ''];
+        }
         foreach (['diagnoses', 'services', 'procedures', 'medications', 'visit_results'] as $table) {
             $q = DB::table($table)->where('is_active', true);
             if (in_array($table, ['services', 'procedures'])) {

@@ -156,6 +156,32 @@ class OncologyTreatmentTest extends DossierCompletionCase
         return $extra + ['session_id' => $s['id'], 'session_lock_version' => $s['lock_version'], 'plan_lock_version' => DB::table('oncology_plans')->where('id', $s['plan_id'])->value('lock_version'), 'visit_lock_version' => $this->s['visit']['lock_version'], 'administered_on' => '2001-03-02', 'reporting_period_id' => $this->period, 'supervising_staff_id' => $this->f['workflow_doctors'][0], 'administered_by' => $this->f['workflow_doctors'][0], 'items' => [$this->item()]];
     }
 
+    public function test_each_saved_dose_item_keeps_its_disabled_source_without_lending_it_to_other_items(): void
+    {
+        $this->ready();
+        $s = $this->schedule($this->makePlan());
+        $source = DB::table('funding_sources')->where('id', $this->funding)->first();
+        $dose = $this->callApi('POST', $this->path('/doses'), $this->dose($s, ['items' => [array_replace($this->item(), ['medication_source' => $source->code]), $this->item()]]))->assertCreated()->json('data');
+        DB::table('funding_sources')->where('id', $source->id)->update(['is_active' => false]);
+        $read = fn () => collect($this->callApi('GET', $this->path('/doses'))->assertOk()->json('data.doses'))->firstWhere('id', $dose['id']);
+        $stored = $read();
+        $this->assertSame($source->name_ar, $stored['items'][0]['medication_source_name']);
+        $this->assertSame('ministry_of_health', $stored['items'][1]['medication_source']);
+        $items = $stored['items'];
+        $items[0]['note'] = 'Historical item note corrected';
+        $this->callApi('PUT', $this->path('/doses/'.$dose['id']), array_replace($stored, ['reason' => 'Correct item note', 'items' => $items]))->assertOk();
+        $stored = $read();
+        $this->assertSame($source->code, $stored['items'][0]['medication_source']);
+        $this->assertSame('Historical item note corrected', $stored['items'][0]['note']);
+        $bad = $stored['items'];
+        $bad[1]['medication_source'] = $source->code;
+        $this->callApi('PUT', $this->path('/doses/'.$dose['id']), array_replace($stored, ['reason' => 'Invalid transfer', 'items' => $bad]))->assertUnprocessable();
+        $bad = $stored['items'];
+        $bad[] = array_replace($this->item(), ['medication_source' => $source->code]);
+        $this->callApi('PUT', $this->path('/doses/'.$dose['id']), array_replace($stored, ['reason' => 'Invalid new item', 'items' => $bad]))->assertUnprocessable();
+        $this->assertSame($stored['items'], $read()['items']);
+    }
+
     private function historicalSession(array $p): array
     {
         $this->callApi('POST', $this->planPath($p['id']).'/sessions', ['lock_version' => $p['lock_version'], 'sessions' => [['session_number' => 1, 'planned_on' => '2001-03-02']]])->assertCreated();

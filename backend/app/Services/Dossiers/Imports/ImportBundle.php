@@ -47,7 +47,7 @@ class ImportBundle
 
     public function prime(array $rows, array $f, bool $lock): void
     {
-        $fields = ['Diagnoses' => ['diagnoses', 'diagnosis_id'], 'Services' => ['services', 'catalog_id'], 'Procedures' => ['procedures', 'catalog_id'], 'Medications' => ['medications', 'medication_id']];
+        $fields = ['Diagnoses' => ['diagnoses', 'diagnosis_id'], 'Services' => ['services', 'catalog_id'], 'Procedures' => ['procedures', 'catalog_id'], 'Medications' => ['medications', 'medication_id'], 'Prescriptions' => ['funding_sources', 'funding_source_id']];
         foreach ($rows as $row) {
             if (isset($fields[$row['sheet']])) {
                 [$table, $field] = $fields[$row['sheet']];
@@ -57,6 +57,9 @@ class ImportBundle
                 }
             }
         }
+        // Rebuilt for every preview/commit step; the commit transaction holds
+        // these reference locks through the existing clinical writer's save.
+        $this->references['funding_sources'] = array_fill_keys(DB::table('funding_sources')->whereIn('id', $this->referenceIds['funding_sources'] ?? [])->where('is_active', true)->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->pluck('id')->all(), true);
         $people = array_column(array_values(array_filter($rows, fn ($r) => $r['sheet'] === 'Patients')), 'data');
         $codes = array_values(array_unique(array_filter([...array_column($people, 'patient_code'), ...array_column($people, 'legacy_code')])));
         $canonical = DB::table('patients')->whereIn('patient_code', $codes)->when($lock, fn ($q) => $q->lockForUpdate())->get();
@@ -242,6 +245,7 @@ class ImportBundle
                 }
             }
             if ($rx = $medications['prescription']) {
+                $this->active('funding_sources', $rx['funding_source_id'], 'prescription.funding_source_id');
                 $this->require(count($items) > 0, 'prescription', 'الوصفة تحتاج دواء واحدًا على الأقل؛ لا تُنشأ وصفة من دواء غير موثق.');
                 $this->context($f, $rx['prescribing_clinic_id'], $rx['prescribing_staff_id'], $v['visit_date']);
                 $this->require($rx['prescribed_on'] >= $v['visit_date'] && $rx['prescribed_on'] <= $f['today'], 'prescribed_on', 'تاريخ الوصفة خارج مجال الزيارة.');

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\Imports\ImportBundle;
 use App\Services\Dossiers\Imports\ImportWorkbook;
+use App\Services\Dossiers\MedicationSources;
 use Database\Seeders\DossierAuditPermissionsSeeder;
 use Database\Seeders\DossierImportPermissionsSeeder;
 use Illuminate\Contracts\Debug\ExceptionHandler;
@@ -15,9 +16,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\DossierCompletionFixture;
@@ -65,9 +68,9 @@ class DossierImportTest extends TestCase
         return $replace + ['source_record_id' => 'patient-'.$this->f['tag'], 'local_patient_ref' => 'P1', 'opening_date' => '2000-01-01', 'first_name' => 'مريض اصطناعي', 'family_name' => 'للاستيراد', 'birth_date_accuracy' => 'unknown', 'gender' => 'unknown', 'displacement_status' => 'unknown'];
     }
 
-    private function file(array $sheets): UploadedFile
+    private function file(array $sheets, ?Spreadsheet $book = null): UploadedFile
     {
-        $book = app(ImportWorkbook::class)->template(['id' => $this->f['facility']], 'legacy_migration', '2026-09-01', []);
+        $book ??= app(ImportWorkbook::class)->template(['id' => $this->f['facility']], 'legacy_migration', '2026-09-01', []);
         foreach ($sheets as $name => $rows) {
             foreach ($rows as $i => $row) {
                 foreach (ImportWorkbook::SHEETS[$name] as $j => $key) {
@@ -107,7 +110,7 @@ class DossierImportTest extends TestCase
             'Diagnoses' => [['source_record_id' => 'DX-'.$this->f['tag'], 'local_visit_ref' => 'L1', 'diagnosis_id' => $this->f['diagnosis'], 'clinic_id' => $context['clinic_id'], 'diagnosing_staff_id' => $context['doctor_id']]],
             'Services' => [$context + ['source_record_id' => 'S-'.$this->f['tag'], 'catalog_id' => $this->f['service']]],
             'Procedures' => [$context + ['source_record_id' => 'PR-'.$this->f['tag'], 'catalog_id' => $this->f['procedure']]],
-            'Prescriptions' => [['source_record_id' => 'RX-'.$this->f['tag'], 'local_visit_ref' => 'L1', 'prescribing_clinic_id' => $context['clinic_id'], 'prescribing_staff_id' => $context['doctor_id'], 'prescribed_on' => '2001-02-03']],
+            'Prescriptions' => [['source_record_id' => 'RX-'.$this->f['tag'], 'local_visit_ref' => 'L1', 'prescribing_clinic_id' => $context['clinic_id'], 'prescribing_staff_id' => $context['doctor_id'], 'prescribed_on' => '2001-02-03', 'funding_source_id' => $this->f['prescription_funding']]],
             'Medications' => [['source_record_id' => 'M-'.$this->f['tag'], 'local_visit_ref' => 'L1', 'medication_id' => $this->f['medication'], 'display_order' => 1]],
             'Outcomes' => [$context + ['source_record_id' => 'O-'.$this->f['tag'], 'code' => 'DOS-RX', 'outcome_on' => '2001-02-03']],
         ];
@@ -117,6 +120,106 @@ class DossierImportTest extends TestCase
     {
         return collect(['patients', 'patient_dossiers', 'visits', 'visit_diagnoses', 'visit_services', 'visit_procedures', 'visit_prescriptions', 'visit_prescription_items', 'visit_outcomes', 'visit_medications', 'oncology_plans', 'blood_bank_events'])
             ->mapWithKeys(fn ($table) => [$table => DB::table($table)->count()])->all();
+    }
+
+    public function test_downloaded_template_explicit_funding_survives_upload_commit_and_reimport(): void
+    {
+        $off = DB::table('funding_sources')->insertGetId(['code' => 'OFF-IMPORT-'.$this->f['tag'], 'name_ar' => 'Disabled import source', 'is_active' => false]);
+        $response = $this->api('GET', '/import-template.xlsx', ['purpose' => 'legacy_migration', 'cutover_date' => '2026-09-01'])->assertOk();
+        $path = tempnam(sys_get_temp_dir(), 'funding-template-');
+        file_put_contents($path, $response->streamedContent());
+        try {
+            $book = IOFactory::load($path);
+        } finally {
+            unlink($path);
+        }
+        $this->assertSame('patient-import-5', $book->getSheetByName('Instructions')->getCell('B1')->getValue());
+        $keys = ImportWorkbook::SHEETS['Prescriptions'];
+        $col = Coordinate::stringFromColumnIndex(array_search('funding_source_id', $keys, true) + 1);
+        $prescriptions = $book->getSheetByName('Prescriptions');
+        $this->assertSame('funding_source_id', $prescriptions->getCell($col.'1')->getValue());
+        $this->assertNull($prescriptions->getCell($col.'3')->getValue());
+        $this->assertSame('ref_funding_sources', $prescriptions->getCell($col.'3')->getDataValidation()->getFormula1());
+        $this->assertFalse($prescriptions->getCell($col.'3')->getDataValidation()->getAllowBlank());
+        $references = collect($book->getSheetByName('Reference_Data')->toArray())->filter(fn ($r) => $r[0] === 'funding_sources');
+        $expected = app(MedicationSources::class)->choices()->map(fn ($s) => [(string) $s->id, $s->code, $s->name_ar])->all();
+        $this->assertSame($expected, $references->map(fn ($r) => array_slice($r, 1, 3))->values()->all());
+        $this->assertNotContains((string) $off, $references->pluck(1)->all());
+        $file = $this->file($this->replaySheets(), $book);
+        $upload = fn ($file) => $this->withHeaders(['Authorization' => 'Bearer '.$this->token, 'Accept' => 'application/json'])->post('/api/dossiers/imports', ['facility_id' => $this->f['facility'], 'purpose' => 'legacy_migration', 'cutover_date' => '2026-09-01', 'file' => $file])->assertCreated()->json('data');
+        $batch = $upload($file);
+        $before = $this->clinicalCounts();
+        $batch = $this->step($batch, 'validate');
+        $this->assertSame('validated', $batch['status']);
+        $this->assertSame($before, $this->clinicalCounts());
+        $batch = $this->step($batch, 'commit');
+        $this->assertSame('completed', $batch['status']);
+        $visit = collect($batch['rows']['data'])->firstWhere('sheet', 'Visits')['visit_id'];
+        $this->assertSame($this->f['prescription_funding'], DB::table('visit_prescriptions')->where('visit_id', $visit)->value('funding_source_id'));
+        $saved = $this->clinicalCounts();
+        $this->assertSame($batch['id'], $upload($file)['id']);
+        $other = app(ImportWorkbook::class)->template(['id' => $this->f['facility']], 'legacy_migration', '2026-09-01', []);
+        $other->getSheetByName('Instructions')->setCellValueExplicit('B5', 'reimport-same-sources', DataType::TYPE_STRING);
+        $replay = $this->step($upload($this->file($this->replaySheets(), $other)), 'validate');
+        $replay = $this->step($replay, 'commit');
+        $this->assertSame('completed', $replay['status']);
+        $this->assertSame(count($this->replaySheets()), $replay['counts']['skipped']);
+        $this->assertSame($saved, $this->clinicalCounts());
+    }
+
+    public function test_import_missing_unknown_and_disabled_funding_are_review_errors_without_clinical_writes(): void
+    {
+        $off = DB::table('funding_sources')->insertGetId(['code' => 'DISABLED-'.$this->f['tag'], 'name_ar' => 'Disabled', 'is_active' => false]);
+        $before = $this->clinicalCounts();
+        foreach ([null, 999999999, $off] as $index => $source) {
+            $sheets = $this->replaySheets();
+            foreach ($sheets as &$rows) {
+                foreach ($rows as &$row) {
+                    $row['source_record_id'] .= '-fund-'.$index;
+                }
+                unset($row);
+            }
+            unset($rows);
+            $sheets['Prescriptions'][0]['funding_source_id'] = $source;
+            $batch = $this->step($this->upload($sheets), 'validate');
+            $this->assertSame('needs_review', $batch['status']);
+            $this->assertArrayHasKey('prescription.funding_source_id', $batch['rows']['data'][0]['errors']);
+            $this->assertSame($before, $this->clinicalCounts());
+        }
+    }
+
+    public function test_funding_disabled_after_preview_rejects_the_atomic_patient_commit(): void
+    {
+        $batch = $this->step($this->upload($this->replaySheets()), 'validate');
+        $this->assertSame('validated', $batch['status']);
+        $before = $this->clinicalCounts();
+        DB::table('funding_sources')->where('id', $this->f['prescription_funding'])->update(['is_active' => false]);
+        $batch = $this->step($batch, 'commit');
+        $this->assertSame('completed_with_errors', $batch['status']);
+        $this->assertSame($before, $this->clinicalCounts());
+        $this->assertArrayHasKey('prescription.funding_source_id', $batch['rows']['data'][0]['errors']);
+    }
+
+    public function test_previous_template_has_an_explicit_funding_upgrade_message_without_batch_writes(): void
+    {
+        $book = app(ImportWorkbook::class)->template(['id' => $this->f['facility']], 'legacy_migration', '2026-09-01', []);
+        $book->getSheetByName('Instructions')->setCellValueExplicit('B1', 'patient-import-4', DataType::TYPE_STRING);
+        $before = $this->clinicalCounts();
+        $batches = DB::table('dossier_import_batches')->count();
+        $this->withHeaders(['Authorization' => 'Bearer '.$this->token, 'Accept' => 'application/json'])->post('/api/dossiers/imports', ['facility_id' => $this->f['facility'], 'purpose' => 'legacy_migration', 'cutover_date' => '2026-09-01', 'file' => $this->file($this->replaySheets(), $book)])->assertUnprocessable()->assertSee('funding_source_id');
+        $this->assertSame($before, $this->clinicalCounts());
+        $this->assertSame($batches, DB::table('dossier_import_batches')->count());
+    }
+
+    public function test_previously_uploaded_old_batch_cannot_commit_but_can_still_be_read_and_cancelled(): void
+    {
+        $batch = $this->step($this->upload($this->replaySheets()), 'validate');
+        DB::table('dossier_import_batches')->where('id', $batch['id'])->update(['template_version' => 'patient-import-4']);
+        $before = $this->clinicalCounts();
+        $this->api('POST', '/imports/'.$batch['id'].'/commit', ['lock_version' => $batch['lock_version'], 'confirm' => true])->assertUnprocessable()->assertJsonValidationErrors('template_version')->assertSee('funding_source_id');
+        $this->api('GET', '/imports/'.$batch['id'])->assertOk()->assertJsonPath('data.template_version', 'patient-import-4');
+        $this->assertSame($before, $this->clinicalCounts());
+        $this->assertSame('cancelled', $this->step($batch, 'cancel')['status']);
     }
 
     public static function replayConflicts(): array
@@ -385,7 +488,7 @@ class DossierImportTest extends TestCase
             'Diagnoses' => [['source_record_id' => 'DX-'.$this->f['tag'], 'local_visit_ref' => 'V1', 'diagnosis_id' => $this->f['diagnosis'], 'clinic_id' => $context['clinic_id'], 'diagnosing_staff_id' => $context['doctor_id']]],
             'Services' => [array_merge($context, ['source_record_id' => 'S-'.$this->f['tag'], 'catalog_id' => $this->f['service'], 'note' => '=HYPERLINK("synthetic")'])],
             'Procedures' => [array_merge($context, ['source_record_id' => 'PR-'.$this->f['tag'], 'catalog_id' => $this->f['procedure']])],
-            'Prescriptions' => [['source_record_id' => 'RX-'.$this->f['tag'], 'local_visit_ref' => 'V1', 'prescribing_clinic_id' => $context['clinic_id'], 'prescribing_staff_id' => $context['doctor_id'], 'prescribed_on' => '2001-02-03']],
+            'Prescriptions' => [['source_record_id' => 'RX-'.$this->f['tag'], 'local_visit_ref' => 'V1', 'prescribing_clinic_id' => $context['clinic_id'], 'prescribing_staff_id' => $context['doctor_id'], 'prescribed_on' => '2001-02-03', 'funding_source_id' => $this->f['prescription_funding']]],
             'Medications' => [['source_record_id' => 'M-'.$this->f['tag'], 'local_visit_ref' => 'V1', 'medication_id' => $this->f['medication'], 'display_order' => 1]],
             'Outcomes' => [array_merge($context, ['source_record_id' => 'O-'.$this->f['tag'], 'code' => 'DOS-RX', 'outcome_on' => '2001-02-03'])],
         ];

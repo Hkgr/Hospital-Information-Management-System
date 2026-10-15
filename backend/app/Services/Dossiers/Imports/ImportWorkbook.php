@@ -14,7 +14,7 @@ use ZipArchive;
 
 class ImportWorkbook
 {
-    public const VERSION = 'patient-import-4';
+    public const VERSION = 'patient-import-5';
 
     public const MAX_BYTES = 10485760;
 
@@ -28,7 +28,7 @@ class ImportWorkbook
         'Diagnoses' => ['source_record_id', 'local_visit_ref', 'diagnosis_id', 'diagnosed_on', 'clinic_id', 'diagnosing_staff_id'],
         'Services' => ['source_record_id', 'local_visit_ref', 'catalog_id', 'clinic_id', 'doctor_id', 'note'],
         'Procedures' => ['source_record_id', 'local_visit_ref', 'catalog_id', 'clinic_id', 'doctor_id', 'note'],
-        'Prescriptions' => ['source_record_id', 'local_visit_ref', 'prescribing_clinic_id', 'prescribing_staff_id', 'prescribed_on', 'note'],
+        'Prescriptions' => ['source_record_id', 'local_visit_ref', 'prescribing_clinic_id', 'prescribing_staff_id', 'prescribed_on', 'funding_source_id', 'note'],
         // Medication items belong to the visit's one explicit prescription, never dispensing.
         'Medications' => ['source_record_id', 'local_visit_ref', 'medication_id', 'display_order', 'note'],
         'Outcomes' => ['source_record_id', 'local_visit_ref', 'code', 'clinic_id', 'doctor_id', 'outcome_on', 'referral_target', 'outgoing_referral_date', 'outgoing_referral_reason', 'note'],
@@ -55,6 +55,7 @@ class ImportWorkbook
             'الميلاد' => 'exact / year_only / estimated / unknown. لا تحوّل السنة وحدها إلى تاريخ دقيق. اكتب السنة نصًا عند year_only.',
             'القيم' => 'الجنس: male / female / unknown. النزوح: resident / idp / unknown. الوضع العائلي: single / married / divorced / widowed / unknown. التدخين والكحول: yes / no / former / unknown. عنوان الإقامة الدائم يُحفظ عند النزوح فقط. الوزن بالكغ والطول بالسم رقمان موجبان اختياريان. التواريخ الأخرى تواريخ Excel أو YYYY-MM-DD.',
             'الأدوية' => 'Medications عناصر الوصفة المسجلة في Prescriptions؛ ليست صرف أدوية ولا جلسة علاج أورام.',
+            'تمويل الوصفات' => 'funding_source_id إلزامي لكل وصفة: اختر معرّفًا صريحًا من funding_sources في Reference_Data. لا مصدر افتراضي ولا استنتاج من ملف المريض. تُراجع صلاحية المصدر ونشاطه عند المعاينة والاعتماد. نزّل الإصدار الحالي بدل القوالب السابقة.',
             'خارج النطاق' => 'لا تستورد التشريح المرضي أو خطط وجلسات وجرعات الأورام أو الدم أو المرفقات. تُسجل لاحقًا في مساراتها المعتمدة.',
             'الحدود' => '5000 مريض، 30000 سطر إجمالي، 10 MiB ملف مضغوط. لا صيغ ولا وحدات ماكرو ولا روابط خارجية.'];
         foreach ($meta as $key => $value) {
@@ -72,7 +73,7 @@ class ImportWorkbook
             foreach ($keys as $i => $key) {
                 $col = Coordinate::stringFromColumnIndex($i + 1);
                 $s->setCellValueExplicit($col.'1', $key, DataType::TYPE_STRING);
-                $s->setCellValueExplicit($col.'2', self::LABELS[$key], DataType::TYPE_STRING);
+                $s->setCellValueExplicit($col.'2', $key === 'funding_source_id' ? 'مصدر تمويل الوصفة — معرّف إلزامي *' : self::LABELS[$key], DataType::TYPE_STRING);
                 $s->getColumnDimension($col)->setWidth(str_contains($key, 'note') ? 38 : 24);
                 $numeric = str_ends_with($key, '_id') && $key !== 'source_record_id' || in_array($key, ['is_referred', 'display_order', 'weight_kg', 'height_cm']);
                 $s->getStyle($col.':'.$col)->getNumberFormat()->setFormatCode(self::isDate($key) && $key !== 'birth_date' ? 'yyyy-mm-dd' : ($numeric ? '0' : '@'));
@@ -111,13 +112,13 @@ class ImportWorkbook
         foreach (self::SHEETS as $name => $keys) {
             foreach ($keys as $i => $key) {
                 $kind = match ($key) {
-                    'diagnosis_id' => 'diagnoses', 'medication_id' => 'medications',
+                    'diagnosis_id' => 'diagnoses', 'medication_id' => 'medications', 'funding_source_id' => 'funding_sources',
                     'clinic_id', 'prescribing_clinic_id' => 'clinics', 'doctor_id', 'diagnosing_staff_id', 'prescribing_staff_id' => 'doctors',
                     'governorate_id' => 'governorates', 'city_id' => 'cities', 'catalog_id' => strtolower($name), default => null,
                 };
                 if ($kind && isset($ranges[$kind])) {
                     $col = Coordinate::stringFromColumnIndex($i + 1);
-                    $book->getSheetByName($name)->getCell($col.'3')->getDataValidation()->setType(DataValidation::TYPE_LIST)->setFormula1('ref_'.$kind)->setAllowBlank(true)->setShowDropDown(true)->setShowErrorMessage(true)->setSqref($col.'3:'.$col.'5002');
+                    $book->getSheetByName($name)->getCell($col.'3')->getDataValidation()->setType(DataValidation::TYPE_LIST)->setFormula1('ref_'.$kind)->setAllowBlank($key !== 'funding_source_id')->setShowDropDown(true)->setShowErrorMessage(true)->setSqref($col.'3:'.$col.'5002');
                 }
             }
         }
@@ -150,6 +151,9 @@ class ImportWorkbook
                 $this->invalid('القالب قديم أو غير معتمد. نزّل قالب الاستيراد الحالي وانقل الحقول المدعومة فقط؛ لا يمكن رفع نموذج الإضبارات القديم مباشرة.');
             }
             $meta = iterator_to_array($book->rows('Instructions'));
+            if (($meta[1][2] ?? null) !== self::VERSION) {
+                $this->invalid('قالب الاستيراد قديم أو غير معتمد. نزّل patient-import-5 وحدد مصدر تمويل صريحًا لكل وصفة في funding_source_id من الدليل المرفق؛ لا يمكن اعتماد القالب السابق أو تعيين مصدر افتراضي.');
+            }
             foreach ([1 => ['template_version', self::VERSION], 2 => ['facility_id', (string) $facility], 3 => ['purpose', $purpose], 4 => ['cutover_date', $cutover]] as $row => [$key, $value]) {
                 if (($meta[$row][1] ?? null) !== $key || (string) ($meta[$row][2] ?? '') !== $value) {
                     $this->invalid('إصدار القالب أو المنشأة أو غرض الدفعة أو تاريخ الانتقال لا يطابق الطلب.');
