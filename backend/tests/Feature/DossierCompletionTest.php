@@ -121,7 +121,7 @@ class DossierCompletionTest extends DossierCompletionCase
     {
         $funding = DB::table('funding_sources')->insertGetId(['code' => 'RXF-'.$this->f['tag'], 'name_ar' => 'تمويل وصفة اختبار', 'is_active' => true]);
         $this->s = $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'unlinked'], 'outcome' => null])->assertOk()->json('data');
-        $this->s = $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'dose_linked', 'funding_source_id' => $funding], 'outcome' => null])->assertOk()->json('data');
+        $this->s = $this->saveSection('medications', ['prescription' => array_replace($this->rx(), ['kind' => 'dose_linked', 'funding_source_id' => $funding]), 'outcome' => null])->assertOk()->json('data');
         $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'outside'], 'outcome' => null])->assertUnprocessable()->assertJsonValidationErrors('prescription.unavailable_reason');
         $this->s = $this->saveSection('medications', ['prescription' => $this->rx() + ['kind' => 'outside', 'unavailable_reason' => 'غير متوفر في مخزون المشفى'], 'outcome' => null])->assertOk()->assertJsonCount(3, 'data.clinical.prescriptions')->json('data');
         $this->assertSame('unlinked', $this->s['clinical']['prescription']['kind']);

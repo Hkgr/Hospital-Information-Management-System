@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\Dossiers\OncologyQueries;
+use App\Services\Dossiers\MedicationSources;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -28,22 +28,13 @@ class SetupPrescriptionFunding extends Command
                 if ($apply && ! DB::table('facilities')->where('id', $facility)->where('is_active', true)->exists()) {
                     throw new \RuntimeException('The audit facility must exist and be active.');
                 }
-                $existing = DB::table('funding_sources')->orderBy('id')->lockForUpdate()->get();
-                $plan = [];
-                foreach (OncologyQueries::MEDICATION_SOURCES as $code => $name) {
-                    $matches = $existing->filter(fn ($s) => mb_strtolower(trim($s->code)) === $code || trim($s->name_ar) === $name);
-                    if ($matches->count() > 1) {
-                        throw new \RuntimeException("Ambiguous existing funding source: $code. Review existing records; no definitions changed.");
-                    }
-                    $old = $matches->first();
-                    $plan[] = [$old ? ($old->is_active ? 'KEEP' : 'KEEP DISABLED') : 'ADD', $code, $name, $old?->id];
-                }
+                $plan = app(MedicationSources::class)->bootstrap($apply);
                 if ($apply) {
                     foreach ($plan as [$action, $code, $name]) {
                         if ($action !== 'ADD') {
                             continue;
                         }
-                        $id = DB::table('funding_sources')->insertGetId(['code' => $code, 'name_ar' => $name, 'display_order' => array_search($code, array_keys(OncologyQueries::MEDICATION_SOURCES), true), 'is_active' => true, 'created_at' => now(), 'updated_at' => now()]);
+                        $id = DB::table('funding_sources')->where('code', $code)->value('id');
                         DB::table('audit_logs')->insert(['facility_id' => (int) $facility, 'actor_id' => null, 'entity_type' => 'funding_source', 'entity_id' => $id, 'event' => 'created', 'new_values' => json_encode(['code' => $code, 'name_ar' => $name, 'source' => 'approved_general_medication_sources', 'execution_reference' => $reference], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), 'reason' => $reference, 'request_id' => (string) Str::uuid(), 'occurred_at' => now()]);
                     }
                 }

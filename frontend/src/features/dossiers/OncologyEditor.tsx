@@ -6,7 +6,7 @@ import Modal from "../clinics/Modal";
 import Picker from "./DossierPicker";
 import {ClinicalContext} from "./ClinicalEditor";
 import type {Context} from "./clinical";
-import {sourceLabels, type Visit} from "./api";
+import {type Visit} from "./api";
 import {facilityToday,intents,modalities,sessionStates,type Dose,type Dispensing,type Plan,type Session,type SessionDose,type TreatmentItem,type TreatmentOptions,type Values,type EditorKind} from "./oncology";
 import styles from "../clinics/clinics.module.css";
 import layout from "./wizard.module.css";
@@ -70,6 +70,8 @@ export default function OncologyEditor(p:Props){
   try{await apiRequest(path,{method:(kind==="session-dose"&&!!sessionDose)||kind==="session"||(kind==="plan"&&plan)||(kind==="dose"&&dose)||(kind==="dispense"&&dispensing)?"PUT":"POST",signal:c.signal,body:JSON.stringify({...payload,request_id:reservation.current.id})});if(!c.signal.aborted)onSaved();}
   catch(e){if(!c.signal.aborted){const failure=e as AuthError;setError(failure);if(failure.code==="ONCOLOGY_DUPLICATE_PLAN")setDuplicate(true);else if(failure.status===409)setConflict(true);}}
   finally{if(pending.current===c)pending.current=null;if(!c.signal.aborted)setBusy(false);}}
+ const sourceLabels=Object.fromEntries((options.data?.medication_sources??[]).map(s=>[s.code,s.name_ar]));
+ if(original&&"medication_source" in original&&original.medication_source&&!sourceLabels[String(original.medication_source)])sourceLabels[String(original.medication_source)]=String((original as Values).medication_source_name??original.medication_source)+" · محفوظ";
  const doctors=Object.fromEntries(options.data?.doctors.map(x=>[x.id,x.name_ar])??[]);
  const staff=Object.fromEntries(options.data?.staff.map(x=>[x.id,x.name_ar])??[]);
  for(const [key, choices] of [["supervising_staff_id",doctors],["administered_by",staff],["prescribing_staff_id",doctors]] as const){

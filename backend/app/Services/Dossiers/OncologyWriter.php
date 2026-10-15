@@ -210,9 +210,8 @@ class OncologyWriter
                 if (! $old) {
                     throw ValidationException::withMessages(['medication_source' => 'اختر مصدر الجرعات.']);
                 }
-            } elseif (! array_key_exists($source, OncologyQueries::MEDICATION_SOURCES)) {
-                throw ValidationException::withMessages(['medication_source' => 'اختر مصدر تمويل من مصادر الدواء المعتمدة.']);
             } else {
+                app(MedicationSources::class)->selected($source, 'code', $old?->medication_source, 'medication_source');
                 $fields['medication_source'] = $source;
             }
 
@@ -329,8 +328,8 @@ class OncologyWriter
                 throw ValidationException::withMessages([$sourceKey => 'اختر مصدر التمويل.']);
             }
             unset($item['medication_source']);
-        } elseif (! array_key_exists($source, OncologyQueries::MEDICATION_SOURCES)) {
-            throw ValidationException::withMessages([$sourceKey => 'اختر مصدر تمويل من مصادر الدواء المعتمدة.']);
+        } else {
+            app(MedicationSources::class)->selected($source, 'code', $old?->medication_source, $sourceKey);
         }
 
         return $item;

@@ -92,7 +92,7 @@ class SaveOncology extends FormRequest
         if ($op === 'session-dose') {
             $creating = ! $this->route('sessionDose');
 
-            return $rules + ['given_on' => $date, 'medication_id' => [$creating ? 'required' : 'sometimes', 'nullable', 'integer', 'min:1'], 'dose_name' => ['prohibited'], 'complaint' => ['required', 'string', 'max:10000'], 'recommendations' => ['required', 'string', 'max:10000'], 'nurse_name' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:200', 'regex:/\S/u'], 'nurse_id' => ['prohibited'], 'medication_source' => [$creating ? 'required' : 'nullable', 'string', Rule::in(array_keys(OncologyQueries::MEDICATION_SOURCES))]];
+            return $rules + ['given_on' => $date, 'medication_id' => [$creating ? 'required' : 'sometimes', 'nullable', 'integer', 'min:1'], 'dose_name' => ['prohibited'], 'complaint' => ['required', 'string', 'max:10000'], 'recommendations' => ['required', 'string', 'max:10000'], 'nurse_name' => [$creating ? 'required' : 'sometimes', 'required', 'string', 'max:200', 'regex:/\S/u'], 'nurse_id' => ['prohibited'], 'medication_source' => [$creating ? 'required' : 'nullable', 'string', 'max:50']];
         }
         if ($op === 'schedule') {
             return $rules + ['sessions' => ['required', 'array', 'min:1', 'max:24'], 'sessions.*.planned_on' => $date, 'sessions.*.session_number' => ['sometimes', 'nullable', 'integer', 'min:1'], 'sessions.*.note' => $text];
@@ -124,7 +124,7 @@ class SaveOncology extends FormRequest
         }
         $prefix = $op === 'dispense' ? '' : 'items.*.';
         $creating = ($op === 'administer' && ! $this->route('dose')) || ($op === 'dispense' && ! $this->route('dispensing'));
-        $source = [$creating ? 'required' : 'nullable', 'string', Rule::in(array_keys(OncologyQueries::MEDICATION_SOURCES))];
+        $source = [$creating ? 'required' : 'nullable', 'string', 'max:50'];
         $rules += [$prefix.'medication_id' => $optionalId, $prefix.'medication_name_snapshot' => ['nullable', 'string', 'max:200'], $prefix.'medication_code_snapshot' => ['nullable', 'string', 'max:100'], $prefix.'funding_source_id' => $optionalId, $prefix.'medication_source' => $source, $prefix.'note' => $text];
         if ($op !== 'dispense') {
             $rules += [$prefix.'dose_value' => $positive, $prefix.'dose_unit' => ['required', 'string', 'max:40'], $prefix.'route' => ['required', 'string', 'max:100']];

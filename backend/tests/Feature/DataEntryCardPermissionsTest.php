@@ -216,11 +216,6 @@ class DataEntryCardPermissionsTest extends TestCase
     {
         $codes = array_keys(OncologyQueries::MEDICATION_SOURCES);
         $names = array_values(OncologyQueries::MEDICATION_SOURCES);
-        // Preserve any existing referenced test definitions and their IDs; isolate
-        // the approved names/codes temporarily within this rolled-back fixture.
-        foreach (DB::table('funding_sources')->whereIn('code', $codes)->orWhereIn('name_ar', $names)->get() as $row) {
-            DB::table('funding_sources')->where('id', $row->id)->update(['code' => 'OLD-'.$row->id.'-'.$this->f['tag'], 'name_ar' => 'Old '.$row->id]);
-        }
         $before = DB::table('funding_sources')->orderBy('id')->get()->toJson();
         $this->artisan('dossiers:setup-prescription-funding')->assertSuccessful();
         $this->assertSame($before, DB::table('funding_sources')->orderBy('id')->get()->toJson());
@@ -228,7 +223,7 @@ class DataEntryCardPermissionsTest extends TestCase
         $this->artisan('dossiers:setup-prescription-funding', $args)->assertSuccessful();
         $this->assertSame(5, DB::table('funding_sources')->whereIn('code', $codes)->count());
         DB::table('funding_sources')->where('code', 'none')->update(['is_active' => false]);
-        DB::table('funding_sources')->where('code', 'ministry_of_health')->update(['code' => 'HISTORICAL-MOH-'.$this->f['tag']]);
+        DB::table('funding_sources')->where('code', 'ministry_of_health')->update(['name_ar' => 'Edited source name']);
         $after = DB::table('funding_sources')->orderBy('id')->get()->toJson();
         $audit = DB::table('audit_logs')->count();
         $this->artisan('dossiers:setup-prescription-funding', $args)->assertSuccessful();
@@ -267,7 +262,7 @@ class DataEntryCardPermissionsTest extends TestCase
         $s = $this->api('PUT', $path.'/clinical', ['lock_version' => $s['visit']['lock_version'], 'services' => [['catalog_id' => $this->f['service']] + $this->context()], 'procedures' => [['catalog_id' => $this->f['procedure']] + $this->context()]])->assertOk()->json('data');
         $funding = DB::table('funding_sources')->insertGetId(['code' => 'ENTRY-'.$this->f['tag'], 'name_ar' => 'مصدر اختبار', 'is_active' => true]);
         foreach (['unlinked', 'dose_linked', 'outside'] as $kind) {
-            $extra = $kind === 'dose_linked' ? ['funding_source_id' => $funding] : ($kind === 'outside' ? ['unavailable_reason' => 'الدواء غير متوفر في المشفى'] : []);
+            $extra = ['funding_source_id' => $funding] + ($kind === 'outside' ? ['unavailable_reason' => 'الدواء غير متوفر في المشفى'] : []);
             $outcome = ['code' => 'DOS-NORX', 'outcome_on' => '2001-03-02'] + $this->context();
             if ($s['clinical']['outcome']) {
                 $outcome += ['id' => $s['clinical']['outcome']['id'], 'lock_version' => $s['clinical']['outcome']['lock_version']];

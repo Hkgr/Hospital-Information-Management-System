@@ -38,7 +38,7 @@ class SaveVisitClinical extends FormRequest
             $rules['outcome'] = ['present', 'nullable', 'array'];
             if ($this->input('prescription') !== null) {
                 $kind = $this->input('prescription.kind', 'unlinked');
-                foreach ($row + ['kind' => ['required', 'in:unlinked,dose_linked,outside'], 'prescribing_clinic_id' => ['required', 'integer', 'min:1'], 'prescribing_staff_id' => ['required', 'integer', 'min:1'], 'prescribed_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'], 'funding_source_id' => [$kind === 'dose_linked' ? 'required' : 'prohibited', 'nullable', 'integer', 'min:1'], 'unavailable_reason' => [$kind === 'outside' ? 'required' : 'prohibited', 'nullable', 'string', 'max:10000'], 'items' => ['present', 'array', 'max:100']] as $key => $value) {
+                foreach ($row + ['kind' => ['required', 'in:unlinked,dose_linked,outside'], 'prescribing_clinic_id' => ['required', 'integer', 'min:1'], 'prescribing_staff_id' => ['required', 'integer', 'min:1'], 'prescribed_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'], 'funding_source_id' => [Rule::requiredIf(! $this->boolean('prescription.remove')), 'nullable', 'integer', 'min:1'], 'unavailable_reason' => [$kind === 'outside' ? 'required' : 'prohibited', 'nullable', 'string', 'max:10000'], 'items' => ['present', 'array', 'max:100']] as $key => $value) {
                     $rules["prescription.$key"] = str_replace('ROW', 'prescription', $value);
                 }
                 foreach ($row + ['medication_id' => ['required', 'integer', 'min:1'], 'display_order' => ['required', 'integer', 'min:0', 'max:1000']] as $key => $value) {

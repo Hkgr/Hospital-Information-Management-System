@@ -55,7 +55,7 @@ abstract class DossierCompletionCase extends TestCase
 
     protected function rx(): array
     {
-        return ['prescribing_clinic_id' => $this->f['clinics'][0], 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'prescribed_on' => '2001-03-02', 'items' => [['medication_id' => $this->f['medication'], 'display_order' => 0, 'note' => 'تعليمات الوصفة'], ['medication_id' => $this->f['medication'], 'display_order' => 1, 'note' => 'بند ثانٍ']]];
+        return ['funding_source_id' => $this->f['prescription_funding'], 'prescribing_clinic_id' => $this->f['clinics'][0], 'prescribing_staff_id' => $this->f['workflow_doctors'][0], 'prescribed_on' => '2001-03-02', 'items' => [['medication_id' => $this->f['medication'], 'display_order' => 0, 'note' => 'تعليمات الوصفة'], ['medication_id' => $this->f['medication'], 'display_order' => 1, 'note' => 'بند ثانٍ']]];
     }
 
     protected function saveSection(string $section, array $data)

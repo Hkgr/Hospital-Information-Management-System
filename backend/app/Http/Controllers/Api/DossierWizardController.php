@@ -14,6 +14,7 @@ use App\Services\Dossiers\DossierVisitWriter;
 use App\Services\Dossiers\DossierWizardQueries;
 use App\Services\Dossiers\DossierWorkflowActions;
 use App\Services\Dossiers\DossierWrites;
+use App\Services\Dossiers\MedicationSources;
 use Database\Seeders\DossierOutcomeSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
@@ -74,7 +75,7 @@ class DossierWizardController extends Controller
         $f = $this->scope($r);
         $caps = $f['capabilities'];
 
-        return response()->json(['data' => ['capabilities' => $caps, 'creation' => DossierWorkflowActions::creation($caps), 'today' => $f['today'], 'governorates' => DB::table('governorates')->where('country_code', 'SY')->orderBy('name_ar')->get(['id', 'name_ar'])]]);
+        return response()->json(['data' => ['medication_sources' => app(MedicationSources::class)->choices(), 'capabilities' => $caps, 'creation' => DossierWorkflowActions::creation($caps), 'today' => $f['today'], 'governorates' => DB::table('governorates')->where('country_code', 'SY')->orderBy('name_ar')->get(['id', 'name_ar'])]]);
     }
 
     public function lookup(Request $r): JsonResponse

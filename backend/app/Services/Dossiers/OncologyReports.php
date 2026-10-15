@@ -31,6 +31,7 @@ class OncologyReports
         if (! ($f['capabilities']['treatment_view'] ?? false)) {
             return [];
         }
+        $sources = app(MedicationSources::class)->labels();
         $max = config('dossiers.report_detail_limit');
         $result = [];
         $total = 0;
@@ -83,7 +84,7 @@ class OncologyReports
         $check($items->count());
         $rows = [];
         foreach ($items as $i) {
-            array_push($rows, ...$this->facts('إعطاء #'.$i->dose_session_id, ['اسم محفوظ' => $i->medication_name_snapshot, 'كود محفوظ' => $i->medication_code_snapshot, 'التاريخ الفعلي' => $i->administered_on, 'قيمة الجرعة' => $i->dose_value, 'وحدة الجرعة' => $i->dose_unit, 'الكمية' => $i->quantity, 'وحدة الكمية' => $i->quantity_unit, 'طريق الإعطاء' => $i->route, 'تعليمات الجرعة' => $i->dose_text, 'التمويل' => OncologyQueries::MEDICATION_SOURCES[$i->medication_source ?? ''] ?? $i->funding, 'ملاحظة' => $i->note, 'حالة الإعطاء الحاوي' => $i->parent_voided_at ? 'إعطاء مبطل — محفوظ تاريخيًا' : 'أُعطيت فعليًا', 'سبب إبطال الإعطاء' => $i->parent_void_reason, 'تاريخ إبطال الإعطاء' => $i->parent_voided_at, 'حالة البند' => $i->voided_at ? 'بند مبطل' : 'بند محفوظ', 'سبب إبطال البند' => $i->void_reason], ['تاريخ إبطال الإعطاء' => 'datetime', 'التاريخ الفعلي' => 'date', 'قيمة الجرعة' => 'decimal', 'الكمية' => 'decimal']));
+            array_push($rows, ...$this->facts('إعطاء #'.$i->dose_session_id, ['اسم محفوظ' => $i->medication_name_snapshot, 'كود محفوظ' => $i->medication_code_snapshot, 'التاريخ الفعلي' => $i->administered_on, 'قيمة الجرعة' => $i->dose_value, 'وحدة الجرعة' => $i->dose_unit, 'الكمية' => $i->quantity, 'وحدة الكمية' => $i->quantity_unit, 'طريق الإعطاء' => $i->route, 'تعليمات الجرعة' => $i->dose_text, 'التمويل' => $sources[$i->medication_source ?? ''] ?? $i->funding, 'ملاحظة' => $i->note, 'حالة الإعطاء الحاوي' => $i->parent_voided_at ? 'إعطاء مبطل — محفوظ تاريخيًا' : 'أُعطيت فعليًا', 'سبب إبطال الإعطاء' => $i->parent_void_reason, 'تاريخ إبطال الإعطاء' => $i->parent_voided_at, 'حالة البند' => $i->voided_at ? 'بند مبطل' : 'بند محفوظ', 'سبب إبطال البند' => $i->void_reason], ['تاريخ إبطال الإعطاء' => 'datetime', 'التاريخ الفعلي' => 'date', 'قيمة الجرعة' => 'decimal', 'الكمية' => 'decimal']));
         }
         $check(count($rows));
         $result[] = $this->section('تفاصيل الأدوية المعطاة', $rows);
@@ -92,7 +93,7 @@ class OncologyReports
         $rows = [];
         foreach ($dispensed as $i) {
             $purpose = ['unlinked' => 'صرف غير مرتبط بالجرعة', 'take_home' => 'صرف خارج المشفى', 'supportive' => 'دواء مرتبط بالجرعة'][$i->dispensing_purpose] ?? $i->dispensing_purpose;
-            array_push($rows, ...$this->facts('صرف #'.$i->id, ['اسم محفوظ' => $i->medication_name_snapshot, 'كود محفوظ' => $i->medication_code_snapshot, 'تاريخ الصرف الفعلي' => $i->dispensed_on, 'الغرض' => $purpose, 'حالة الإعطاء المرتبط' => $i->dose_session_id ? ($i->parent_voided_at ? 'إعطاء مبطل — الصرف واقعة مستقلة' : 'إعطاء فعال') : 'غير مرتبط بجرعة', 'جلسة الإعطاء المرتبطة' => $i->dose_session_id ? (string) $i->dose_session_id : null, 'الكمية' => $i->quantity, 'وحدة الكمية' => $i->quantity_unit, 'التعليمات' => $i->dose_text, 'التمويل' => OncologyQueries::MEDICATION_SOURCES[$i->medication_source ?? ''] ?? $i->funding, 'الطبيب' => $i->doctor, 'ملاحظة' => $i->note, 'سبب الإبطال' => $i->void_reason], ['تاريخ الصرف الفعلي' => 'date', 'الكمية' => 'decimal']));
+            array_push($rows, ...$this->facts('صرف #'.$i->id, ['اسم محفوظ' => $i->medication_name_snapshot, 'كود محفوظ' => $i->medication_code_snapshot, 'تاريخ الصرف الفعلي' => $i->dispensed_on, 'الغرض' => $purpose, 'حالة الإعطاء المرتبط' => $i->dose_session_id ? ($i->parent_voided_at ? 'إعطاء مبطل — الصرف واقعة مستقلة' : 'إعطاء فعال') : 'غير مرتبط بجرعة', 'جلسة الإعطاء المرتبطة' => $i->dose_session_id ? (string) $i->dose_session_id : null, 'الكمية' => $i->quantity, 'وحدة الكمية' => $i->quantity_unit, 'التعليمات' => $i->dose_text, 'التمويل' => $sources[$i->medication_source ?? ''] ?? $i->funding, 'الطبيب' => $i->doctor, 'ملاحظة' => $i->note, 'سبب الإبطال' => $i->void_reason], ['تاريخ الصرف الفعلي' => 'date', 'الكمية' => 'decimal']));
         }
         $check(count($rows));
         $result[] = $this->section('تفاصيل الصرف مع الجرعة', $rows);
@@ -104,7 +105,7 @@ class OncologyReports
         $check($courses->count());
         $rows = [];
         foreach ($courses as $course) {
-            array_push($rows, ...$this->facts('جلسة #'.$course->session_id.' / جرعة #'.$course->id, ['اسم الجرعة' => $course->dose_name, 'تاريخ الجرعة' => $course->given_on, 'اسم الممرض' => $course->nurse_display_name, 'شكاية المريض' => $course->complaint, 'توصيات الطبيب' => $course->recommendations, 'مصدر الدواء' => OncologyQueries::MEDICATION_SOURCES[$course->medication_source ?? ''] ?? null], ['تاريخ الجرعة' => 'date']));
+            array_push($rows, ...$this->facts('جلسة #'.$course->session_id.' / جرعة #'.$course->id, ['اسم الجرعة' => $course->dose_name, 'تاريخ الجرعة' => $course->given_on, 'اسم الممرض' => $course->nurse_display_name, 'شكاية المريض' => $course->complaint, 'توصيات الطبيب' => $course->recommendations, 'مصدر الدواء' => $sources[$course->medication_source ?? ''] ?? null], ['تاريخ الجرعة' => 'date']));
         }
         $check(count($rows));
         $result[] = $this->section('جرعات الجلسات العلاجية', $rows);

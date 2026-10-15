@@ -18,6 +18,7 @@ class DossierCompletionFixture
         }
         $f['service'] = DB::table('services')->where('is_active', true)->whereNull('archived_at')->value('id');
         $f['procedure'] = DB::table('procedures')->where('is_active', true)->whereNull('archived_at')->value('id');
+        $f['prescription_funding'] = DB::table('funding_sources')->where('is_active', true)->value('id');
         $f['medication'] = DB::table('medications')->insertGetId(['code' => 'RX-'.$f['tag'], 'name_ar' => 'دواء اختبار '.$f['tag'], 'is_active' => true]);
 
         return $f;
