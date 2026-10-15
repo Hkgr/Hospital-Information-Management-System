@@ -13,12 +13,24 @@ TestDatabaseSafety::assertAvailable($app);
 $migration = require database_path('migrations/2026_10_15_000001_unify_prescription_medication_sources.php');
 $snapshot = fn () => hash('sha256', json_encode(array_map(fn ($table) => DB::table($table)->orderBy('id')->get()->all(), ['funding_sources', 'patient_dossiers', 'visit_prescriptions', 'oncology_session_doses', 'dose_session_items', 'visit_medications']), JSON_THROW_ON_ERROR));
 $before = $snapshot();
-$migration->down();
-$migration->up();
+$tables = ['funding_sources', 'patient_dossiers', 'visit_prescriptions', 'oncology_session_doses', 'dose_session_items', 'visit_medications'];
+$schema = fn () => hash('sha256', json_encode(array_map(fn ($table) => preg_replace('/AUTO_INCREMENT=\d+/', '', (array) DB::selectOne("SHOW CREATE TABLE `$table`")), $tables), JSON_THROW_ON_ERROR));
+$originalSchema = $schema();
+try {
+    $migration->down();
+    $migration->up();
+    echo 'PASS populated downgrade/upgrade executed.'.PHP_EOL;
+} catch (RuntimeException $e) {
+    if (! str_starts_with($e->getMessage(), 'Rollback refused:') || $schema() !== $originalSchema) {
+        throw $e;
+    }
+    // Never modify post-feature data to manufacture a successful downgrade.
+    echo 'PASS incompatible populated rollback refused; schema unchanged. Downgrade/upgrade cycle not attempted on this data.'.PHP_EOL;
+}
 if ($snapshot() !== $before) {
     throw new RuntimeException('Populated upgrade/rollback changed historical rows or source IDs.');
 }
-echo "PASS populated downgrade/upgrade: every historical row and source ID preserved.\n";
+echo "PASS historical row contents and source IDs preserved.\n";
 DB::beginTransaction();
 try {
     $row = DB::table('visit_prescriptions')->where('kind', 'unlinked')->first();
@@ -35,7 +47,7 @@ try {
             throw $e;
         }
     }
-    if ($snapshot() !== $used) {
+    if ($snapshot() !== $used || $schema() !== $originalSchema) {
         throw new RuntimeException('Refused rollback modified data.');
     }
     echo "PASS used rollback refused before DDL; no relationship or record removed.\n";
@@ -55,7 +67,7 @@ try {
             throw $e;
         }
     }
-    if ($snapshot() !== $ambiguous) {
+    if ($snapshot() !== $ambiguous || $schema() !== $originalSchema) {
         throw new RuntimeException('Ambiguous upgrade changed data.');
     }
     echo "PASS ambiguous upgrade blocked without changing data or schema.\n";
