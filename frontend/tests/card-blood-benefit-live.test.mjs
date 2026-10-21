@@ -63,6 +63,8 @@ for (const width of [390, 768, 1440]) test(`real card → blood benefit flow at 
   const page = await context.newPage(); page.setDefaultTimeout(30000);
   page.on('dialog', dialog => dialog.accept());
   const errors = []; page.on('pageerror', e => errors.push(e.message));
+  const clinicalWrites = [];
+  page.on('request', r => { if (r.url().endsWith('/clinical') && r.method() === 'PUT') clinicalWrites.push(r); });
   try {
     await page.goto(`${base}/patient-cards/new?card=${d.id}&section=3&facility_id=${f.facility}`);
     await page.getByRole('button', { name: 'إضافة الخدمة للزيارة', exact: true }).waitFor();
@@ -103,8 +105,9 @@ for (const width of [390, 768, 1440]) test(`real card → blood benefit flow at 
     await modal.waitFor({ state: 'hidden' });
     assert.equal((await api('GET', `${path}/progress`)).body.data.clinical.services.length, 0, 'Staging writes nothing');
     const response = page.waitForResponse(r => r.url().endsWith('/clinical') && r.request().method() === 'PUT');
-    await page.getByRole('button', { name: 'حفظ ومتابعة', exact: true }).click();
+    await page.getByRole('button', { name: 'حفظ ومتابعة', exact: true }).dblclick({ delay: 20 });
     const saved = await response; assert.equal(saved.status(), 200, await saved.text());
+    assert.equal(clinicalWrites.length, 1, 'Double click sends one clinical write');
     const snapshot = (await saved.json()).data;
     assert.equal(snapshot.clinical.services.length, 2);
     const blood = snapshot.clinical.services[1], event = blood.blood_benefit;
