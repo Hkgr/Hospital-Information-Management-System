@@ -84,6 +84,9 @@ class DossierClinicalContext
 
     public function retained(array $f, int $visit, string $date, bool $diagnoses = true): void
     {
+        if (DB::table('visit_services as s')->join('blood_bank_events as b', 'b.id', '=', 's.blood_bank_event_id')->where('s.visit_id', $visit)->where('s.facility_id', $f['id'])->whereNull('s.voided_at')->where('b.occurred_on', '<>', $date)->exists()) {
+            throw ValidationException::withMessages(['visit_date' => 'توجد استفادة دم مرتبطة بتاريخ الزيارة الحالي؛ صحح الواقعة والخدمة صراحة قبل تغيير تاريخ الزيارة.']);
+        }
         // A visit-date edit must not silently move separately documented treatment facts.
         foreach (['dose_sessions' => 'administered_on', 'visit_medications' => 'dispensed_on'] as $table => $field) {
             if (DB::table($table)->where('visit_id', $visit)->where('facility_id', $f['id'])->whereNull('voided_at')->where($field, '<>', $date)->when($table === 'dose_sessions', fn ($q) => $q->whereNotNull('oncology_session_id'), fn ($q) => $q->where(fn ($q) => $q->whereNotNull('dose_session_id')->orWhereNotNull('dispensing_purpose')))->lockForUpdate()->exists()) {

@@ -3,9 +3,11 @@
 namespace App\Services\BloodBank;
 
 use App\Exceptions\BloodBankException;
+use App\Http\Requests\BloodBank\SaveBloodEvent;
 use App\Http\Requests\BloodBank\SaveBloodProfile;
 use App\Services\Clinics\ClinicAudit;
 use App\Services\Directory\ClinicStaffLinks;
+use App\Services\Dossiers\DossierAccess;
 use App\Services\Dossiers\DossierClinicalContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -68,6 +70,14 @@ class BloodEventWriter
             }
         }
         $fields += ['patient_id' => $patient, 'blood_group' => $data['blood_group'] ?? null, 'rh' => $data['rh'] ?? null, 'updated_by' => $request->user()->id, 'updated_at' => now(), 'lock_version' => ($old->lock_version ?? 0) + 1];
+
+        return $this->persistPerson($request, $f, $fields, $old);
+    }
+
+    private function persistPerson(Request $request, array $f, array $fields, ?object $old = null): int
+    {
+        $id = $old?->id;
+        $fields += ['updated_by' => $request->user()->id, 'updated_at' => now(), 'lock_version' => ($old->lock_version ?? 0) + 1];
         if ($old) {
             DB::table('blood_bank_people')->where('id', $id)->update($fields);
         } else {
@@ -83,13 +93,77 @@ class BloodEventWriter
     {
         $this->access->facility($request->user(), $f['id'], ($data['kind'] === 'donation' ? 'donations.' : $data['benefit_kind'].'.').($id ? 'update' : 'create'));
 
-        return app(BloodBankWriter::class)->once($request, $f, $data, 'unified-event:'.($id ?? 'new'), function () use ($request, $f, $data, $id) {
+        return $this->persistEvent($request, $f, $data, $id);
+    }
+
+    /** A narrowly scoped entry to the same writer, never a general blood-bank grant. */
+    public function forVisitService(Request $request, array $f, object $visit, int $service, array $input, ?int $eventId): int
+    {
+        app(DossierAccess::class)->facility($request->user(), $f['id'], 'services.update');
+        app(DossierAccess::class)->facility($request->user(), $f['id'], 'visits.view');
+        abort_unless($visit->facility_id === $f['id'] && $visit->status === 'draft' && ! $visit->voided_at, 409);
+        abort_unless(DB::table('services')->where('id', $service)->where('code', 'SER-4-001')->exists(), 422);
+        foreach (['patient_id', 'person_id', 'person', 'facility_id', 'visit_id', 'request_id'] as $key) {
+            if (array_key_exists($key, $input)) {
+                throw ValidationException::withMessages([$key => 'هوية المريض والمشفى والزيارة مأخوذة من البطاقة ولا تقبل التغيير.']);
+            }
+        }
+        if ((int) ($input['id'] ?? 0) !== (int) $eventId) {
+            throw ValidationException::withMessages(['id' => 'لا يمكن ربط استفادة أخرى بدل الواقعة المحفوظة.']);
+        }
+        if (($input['kind'] ?? 'benefit') !== 'benefit') {
+            throw ValidationException::withMessages(['kind' => 'هذا المسار لتسجيل استفادة فقط.']);
+        }
+        $input['kind'] = 'benefit';
+        $input['person'] = ['patient_id' => $visit->patient_id];
+        $input['facility_id'] = $f['id'];
+        $input['request_id'] = (string) Str::uuid();
+        $form = SaveBloodEvent::create('/', $eventId ? 'PUT' : 'POST', $input);
+        $data = Validator::make($input, $form->rules(), $form->messages())->validate();
+        DB::table('facilities')->where('id', $f['id'])->lockForUpdate()->first();
+        $patient = DB::table('patients')->where('id', $visit->patient_id)->lockForUpdate()->first();
+        abort_unless($patient, 404);
+        foreach (['blood_donors', 'blood_recipients'] as $table) {
+            if (DB::table($table)->where('facility_id', $f['id'])->where('patient_id', $patient->id)->whereNull('person_id')->exists()) {
+                throw new BloodBankException('BLOOD_BANK_RECONCILIATION_REQUIRED', 'يلزم ربط سجل بنك الدم التاريخي لهذا المريض بواسطة المسؤول قبل تسجيل استفادة من البطاقة.', 409);
+            }
+        }
+        if (DB::table('blood_transfusions')->where('facility_id', $f['id'])->where('patient_id', $patient->id)->whereNotIn('id', DB::table('blood_bank_events')->whereNotNull('blood_transfusion_id')->select('blood_transfusion_id'))->exists()) {
+            throw new BloodBankException('BLOOD_BANK_RECONCILIATION_REQUIRED', 'يلزم استكمال ربط وقائع الدم التاريخية لهذا المريض بواسطة المسؤول؛ لم تُنشأ استفادة جديدة.', 409);
+        }
+        $person = DB::table('blood_bank_people')->where('facility_id', $f['id'])->where('patient_id', $visit->patient_id)->lockForUpdate()->first();
+        if ($eventId) {
+            abort_unless($person && DB::table('blood_bank_events')->where('id', $eventId)->where('facility_id', $f['id'])->where('person_id', $person->id)->where('kind', 'benefit')->exists(), 404);
+        }
+        if (! $person) {
+            if ($patient->status !== 'active') {
+                throw ValidationException::withMessages(['person_id' => 'المريض غير متاح لإنشاء ارتباط جديد ببنك الدم.']);
+            }
+            $personId = $this->persistPerson($request, $f, ['patient_id' => $patient->id, 'blood_group' => $data['blood_group'] ?? null, 'rh' => $data['rh'] ?? null]);
+        } else {
+            $personId = $person->id;
+        }
+        unset($data['person']);
+        $data['person_id'] = $personId;
+
+        return $this->persistEvent($request, $f, $data, $eventId, $visit->id);
+    }
+
+    private function persistEvent(Request $request, array $f, array $data, ?int $id, ?int $visitId = null): int
+    {
+        return app(BloodBankWriter::class)->once($request, $f, $data, 'unified-event:'.($id ?? 'new'), function () use ($request, $f, $data, $id, $visitId) {
             DB::table('facilities')->where('id', $f['id'])->lockForUpdate()->first();
             $old = $id ? DB::table('blood_bank_events')->where('id', $id)->where('facility_id', $f['id'])->lockForUpdate()->first() : null;
             if ($id && ! $old) {
                 throw new BloodBankException('BLOOD_BANK_NOT_FOUND', 'الواقعة غير موجودة.', 404);
             }
             $this->version($old, $data);
+            if ($old) {
+                $linked = DB::table('visit_services as s')->join('visits as v', 'v.id', '=', 's.visit_id')->where('s.blood_bank_event_id', $id)->lockForUpdate()->first(['s.clinic_id', 's.performed_by', 'v.visit_date', 'v.patient_id', 'v.status', 'v.voided_at']);
+                if ($linked && $visitId === null && ($linked->status !== 'draft' || $linked->voided_at || $linked->visit_date !== $data['occurred_on'] || (int) $linked->clinic_id !== (int) $data['clinic_id'] || (int) $linked->performed_by !== (int) $data['responsible_staff_id'])) {
+                    throw ValidationException::withMessages(['occurred_on' => 'الاستفادة مرتبطة بخدمة في زيارة؛ يجب تصحيحها من البطاقة وبالسياق نفسه، والزيارة المكتملة للقراءة فقط.']);
+                }
+            }
             $before = $old ? $this->queries->event($id, $f['id']) : null;
             if ($old && ($old->voided_at || ($old->kind === 'donation' && $old->status !== 'pending'))) {
                 throw new BloodBankException('BLOOD_BANK_STATE_CONFLICT', 'لا يمكن تعديل الواقعة في حالتها الحالية.');
@@ -160,6 +234,9 @@ class BloodEventWriter
                 $fields['blood_donation_id'] = $sourceId;
                 $fields['status'] = 'pending';
             } elseif ($data['benefit_kind'] === 'transfusion') {
+                if ($visitId !== null) {
+                    $clinical['visit_id'] = $visitId;
+                }
                 $clinical += ['patient_id' => $person->patient_id, 'external_recipient_name' => $person->patient_id ? null : $this->queries->person($personId, $f['id'])['name'], 'transfused_on' => $data['occurred_on'], 'blood_component_id' => $data['blood_component_id'], 'beneficiary_entity' => $data['beneficiary_entity'] ?? null];
                 if ($old) {
                     // A correction to the event must not rewrite the historical identity

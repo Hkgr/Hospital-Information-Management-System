@@ -12,7 +12,8 @@ export function FormSection({ number, title, hint, children }: { number: string;
   </section>;
 }
 
-export function PersonSummary({ person, hint = "تعديل زمرة الواقعة لا يغيّر ملف هذا الشخص." }: { person: Person; hint?: string }) {
+export type SummaryPerson = Pick<Person, "name" | "code" | "blood_group" | "rh" | "person" | "patient_code">;
+export function PersonSummary({ person, hint = "تعديل زمرة الواقعة لا يغيّر ملف هذا الشخص." }: { person: SummaryPerson; hint?: string }) {
   return <aside className={layout.personSummary} aria-label="ملخص الشخص المحدد">
     <span className={layout.personIcon}><LuUserRound aria-hidden="true" /></span>
     <div><small>الشخص المحدد</small><strong>{person.name} · <bdi>{person.code}</bdi></strong>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LuBuilding2, LuCalendarClock, LuClipboardPlus, LuDroplet, LuFolderHeart, LuHospital, LuPackage, LuPill, LuSparkles, LuStethoscope, LuUserRound } from "react-icons/lu";
+import { LuBuilding2, LuCalendarClock, LuClipboardPlus, LuFolderHeart, LuHospital, LuPackage, LuPill, LuSparkles, LuStethoscope, LuUserRound } from "react-icons/lu";
 import type { IconType } from "react-icons";
 import type { DashboardAppointment, DashboardData } from "./api";
 import { BarChart, CounterCard, DonutChart, RankTable, Reveal } from "./HomeVisuals";
@@ -15,7 +15,6 @@ const destinations: Record<string, { href: string; icon: IconType }> = {
   "services-procedures": { href: "/services-procedures", icon: LuClipboardPlus },
   medications: { href: "/medications", icon: LuPill },
   stock: { href: "/stock/receipts", icon: LuPackage },
-  "blood-bank": { href: "/blood-bank", icon: LuDroplet },
 };
 
 export default function GeneralDashboard({ data }: { data: DashboardData }) {
