@@ -34,6 +34,47 @@ class DossierImportTest extends TestCase
 
     private string $token;
 
+    public function test_preview_rejects_blood_service_with_sheet_row_and_card_guidance_before_writing(): void
+    {
+        $book = app(ImportWorkbook::class)->template(['id' => $this->f['facility']], 'legacy_migration', '2026-09-01', []);
+        $instructions = json_encode($book->getSheetByName('Instructions')->toArray(), JSON_UNESCAPED_UNICODE);
+        $this->assertStringContainsString('SER-4-001', $instructions);
+        $this->assertStringContainsString('بطاقة المريض', $instructions);
+        $book->disconnectWorksheets();
+        $service = DB::table('services')->where('code', 'SER-4-001')->value('id')
+            ?? DB::table('services')->insertGetId(['category_id' => DB::table('services')->where('id', $this->f['service'])->value('category_id'), 'code' => 'SER-4-001', 'name_ar' => 'نقل دم', 'is_active' => true]);
+        $sheets = $this->replaySheets();
+        $sheets['Services'][0]['catalog_id'] = $service;
+        $before = $this->clinicalCounts();
+        $blood = DB::table('blood_bank_events')->count();
+        $batch = $this->step($this->upload($sheets), 'validate');
+        $this->assertSame('needs_review', $batch['status']);
+        $error = $batch['rows']['data'][0]['errors']['Services.3.catalog_id'][0];
+        foreach (['Services', '3', 'SER-4-001', 'بطاقة المريض'] as $text) {
+            $this->assertStringContainsString($text, $error);
+        }
+        $this->assertSame($before, $this->clinicalCounts());
+        $this->api('POST', '/imports/'.$batch['id'].'/commit', ['lock_version' => $batch['lock_version'], 'confirm' => true])->assertConflict();
+        $this->assertSame($before, $this->clinicalCounts());
+        $this->assertSame($blood, DB::table('blood_bank_events')->count());
+    }
+
+    public function test_commit_rechecks_service_code_and_rejects_a_new_blood_requirement_atomically(): void
+    {
+        $sheets = $this->replaySheets();
+        $batch = $this->step($this->upload($sheets), 'validate');
+        $this->assertSame('validated', $batch['status']);
+        $before = $this->clinicalCounts();
+        // Test-only directory changes model a batch previewed before the
+        // service acquired its blood-benefit requirement.
+        DB::table('services')->where('code', 'SER-4-001')->update(['code' => 'OLD-BLOOD-'.$this->f['tag']]);
+        DB::table('services')->where('id', $this->f['service'])->update(['code' => 'SER-4-001']);
+        $batch = $this->step($batch, 'commit');
+        $this->assertSame('completed_with_errors', $batch['status']);
+        $this->assertArrayHasKey('Services.3.catalog_id', $batch['rows']['data'][0]['errors']);
+        $this->assertSame($before, $this->clinicalCounts());
+    }
+
     public function test_import_preview_rejects_radiology_procedure_in_a_clinic(): void
     {
         DB::table('procedures')->where('id', $this->f['procedure'])->update(['execution_location' => 'radiology', 'guidance_method' => 'ultrasound']);

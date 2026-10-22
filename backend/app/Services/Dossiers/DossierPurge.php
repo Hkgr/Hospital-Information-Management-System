@@ -15,10 +15,11 @@ class DossierPurge
             $patientId = (int) $dossier['patient_id'];
             $visits = DB::table('visits')->where('dossier_id', $id)->where('facility_id', $f['id'])->lockForUpdate()->pluck('id');
             $visitIds = $visits->all();
+            $blood = $this->bloodPurgePlan($f['id'], $patientId, $visitIds);
             if (Schema::hasColumn('patient_dossiers', 'registration_visit_id')) {
                 DB::table('patient_dossiers')->where('id', $id)->where('facility_id', $f['id'])->update(['registration_visit_id' => null, 'updated_at' => now()]);
             }
-            $this->purgeVisits($f['id'], $id, $visitIds);
+            $this->purgeVisits($f['id'], $id, $visitIds, $blood);
             $this->purgeOncology($f['id'], $id);
             if (Schema::hasTable('dossier_import_rows')) {
                 DB::table('dossier_import_rows')->where('dossier_id', $id)->where('facility_id', $f['id'])->delete();
@@ -39,7 +40,55 @@ class DossierPurge
         });
     }
 
-    private function purgeVisits(int $facility, int $dossier, array $visits): void
+    /** Preflight all blood links before changing any part of the card. */
+    private function bloodPurgePlan(int $facility, int $patient, array $visits): array
+    {
+        if (! $visits) {
+            return ['events' => [], 'transfusions' => []];
+        }
+        // The shared blood writer also holds this lock when linking an issue
+        // to a transfusion. No external child can appear after this preflight.
+        DB::table('facilities')->where('id', $facility)->lockForUpdate()->first();
+        $linked = DB::table('visit_services')->where('facility_id', $facility)->whereIn('visit_id', $visits)->whereNotNull('blood_bank_event_id')->orderBy('id')->lockForUpdate()->pluck('blood_bank_event_id')->all();
+        $transfusions = DB::table('blood_transfusions')->where('facility_id', $facility)->whereIn('visit_id', $visits)->orderBy('id')->lockForUpdate()->get();
+        $events = DB::table('blood_bank_events')->where(fn ($q) => $q->whereIn('id', $linked)->orWhereIn('blood_transfusion_id', $transfusions->pluck('id')))->orderBy('id')->lockForUpdate()->get();
+        $ids = $events->pluck('id')->all();
+        $people = DB::table('blood_bank_people')->whereIn('id', $events->pluck('person_id'))->where('facility_id', $facility)->where('patient_id', $patient)->lockForUpdate()->pluck('id')->all();
+        $conflict = 'لا يمكن حذف البطاقة: توجد علاقة دم خارج نطاقها أو نقل مستقل مرتبط بصرف منها. راجع الوقائع المرتبطة أولًا؛ لم يُحذف أي جزء من البطاقة.';
+        foreach ($events as $event) {
+            if ((int) $event->facility_id !== $facility || $event->kind !== 'benefit' || ! in_array($event->person_id, $people, true)) {
+                app(DossierWrites::class)->conflict($conflict);
+            }
+        }
+        // A child inside the card may refer to a prior issue outside it; that
+        // parent is retained. The inverse would break an external blood fact.
+        $externalChild = DB::table('blood_bank_events')->whereIn('issue_event_id', $ids)->whereNotIn('id', $ids)->orderBy('id')->lockForUpdate()->get(['id'])->isNotEmpty();
+        $externalService = DB::table('visit_services')->whereIn('blood_bank_event_id', $ids)->whereNotIn('visit_id', $visits)->orderBy('id')->lockForUpdate()->get(['id'])->isNotEmpty();
+        if ($externalChild || $externalService) {
+            app(DossierWrites::class)->conflict($conflict);
+        }
+        $transfusions = DB::table('blood_transfusions')->whereIn('id', $transfusions->pluck('id')->merge($events->pluck('blood_transfusion_id'))->filter()->unique())->orderBy('id')->lockForUpdate()->get();
+        foreach ($transfusions as $transfusion) {
+            if ((int) $transfusion->facility_id !== $facility || (int) $transfusion->patient_id !== $patient || ($transfusion->visit_id !== null && ! in_array($transfusion->visit_id, $visits, true))) {
+                app(DossierWrites::class)->conflict($conflict);
+            }
+        }
+
+        return ['events' => $ids, 'transfusions' => $transfusions->pluck('id')->all()];
+    }
+
+    private function purgeBlood(array $blood): void
+    {
+        DB::table('blood_bank_event_codes')->whereIn('event_id', $blood['events'])->delete();
+        DB::table('blood_bank_event_screenings')->whereIn('event_id', $blood['events'])->delete();
+        // Delete linked transfusion children before their owned issue parents.
+        DB::table('blood_bank_events')->whereIn('id', $blood['events'])->whereNotNull('issue_event_id')->delete();
+        DB::table('blood_bank_events')->whereIn('id', $blood['events'])->delete();
+        DB::table('blood_recipient_procedures')->whereIn('blood_transfusion_id', $blood['transfusions'])->delete();
+        DB::table('blood_transfusions')->whereIn('id', $blood['transfusions'])->delete();
+    }
+
+    private function purgeVisits(int $facility, int $dossier, array $visits, array $blood): void
     {
         if (! $visits) {
             return;
@@ -90,11 +139,9 @@ class DossierPurge
         if (Schema::hasTable('admissions')) {
             DB::table('admissions')->whereIn('visit_id', $visits)->delete();
         }
-        if (Schema::hasTable('blood_transfusions')) {
-            DB::table('blood_transfusions')->whereIn('visit_id', $visits)->delete();
-        }
-        DB::table('visit_diagnoses')->whereIn('visit_id', $visits)->delete();
         DB::table('visit_services')->whereIn('visit_id', $visits)->delete();
+        $this->purgeBlood($blood);
+        DB::table('visit_diagnoses')->whereIn('visit_id', $visits)->delete();
         DB::table('visit_procedures')->whereIn('visit_id', $visits)->delete();
         DB::table('visit_outcomes')->whereIn('visit_id', $visits)->delete();
         DB::table('visit_demographics')->whereIn('visit_id', $visits)->delete();

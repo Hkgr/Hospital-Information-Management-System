@@ -10,8 +10,8 @@ const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3199';
 assert.ok(['localhost', '127.0.0.1'].includes(new URL(base).hostname), 'Local isolated testing only');
 const gallery = new URL('../.superdesign/card-blood-benefit/', import.meta.url);
 let f, browser;
-function fixture(mode) {
-  const r = spawnSync('php', ['tests/Support/card-blood-benefit-live.php', mode], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: { ...process.env, APP_ENV: 'testing' }, encoding: 'utf8', timeout: 60000 });
+function fixture(mode, ...args) {
+  const r = spawnSync('php', ['tests/Support/card-blood-benefit-live.php', mode, ...args], { cwd: fileURLToPath(new URL('../../backend/', import.meta.url)), env: { ...process.env, APP_ENV: 'testing' }, encoding: 'utf8', timeout: 60000 });
   assert.equal(r.status, 0, r.stdout + r.stderr); process.stdout.write(r.stdout);
 }
 before(async () => {
@@ -38,6 +38,56 @@ async function choose(page, label, search) {
   await group.getByRole('searchbox').fill(search);
   await group.getByRole('button', { name: new RegExp(search) }).first().click();
 }
+test('switching a staged blood service to a regular service clears only its benefit and never resurrects it', async () => {
+  const d = await initial('switch'), path = `dossiers/${d.id}/visits/${d.visit.id}`;
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  await context.addInitScript(token => sessionStorage.setItem('hospital.bearer', token), f.token);
+  const page = await context.newPage(); page.setDefaultTimeout(15000);
+  try {
+    await page.goto(`${base}/patient-cards/new?card=${d.id}&section=3&facility_id=${f.facility}`);
+    await page.getByRole('button', { name: 'إضافة الخدمة للزيارة', exact: true }).click();
+    await choose(page, 'الخدمة من الدليل 1', 'SER-4-001');
+    const modal = page.getByRole('dialog'); await modal.waitFor();
+    await modal.locator('[name="benefit_kind"]').selectOption('transfusion');
+    await modal.locator('[name="quantity"]').fill('0.4500');
+    await modal.locator('[name="hemoglobin_g_dl"]').fill('9.1');
+    await modal.locator('[name="crossmatch_result"]').selectOption('compatible');
+    await modal.locator('[name="benefit_link_mode"]').selectOption('independent');
+    await modal.locator('[name="blood_group"]').selectOption('A');
+    await modal.locator('[name="rh"]').selectOption('positive');
+    await modal.locator('[name="blood_component_id"]').selectOption(String(f.component));
+    await modal.getByRole('group', { name: 'العيادة', exact: true }).getByRole('button', { name: /عيادة التشخيص 1/ }).click();
+    await modal.getByRole('group', { name: 'الطبيب المسؤول', exact: true }).getByRole('button', { name: /الطبيب المسؤول 1/ }).click();
+    await modal.getByRole('button', { name: 'اعتماد الاستفادة في المسودة', exact: true }).click();
+    await modal.waitFor({ state: 'hidden' });
+    await page.locator('[name="services.0.note"]').fill('ملاحظة السطر تبقى');
+    await page.getByRole('button', { name: 'إضافة الخدمة للزيارة', exact: true }).click();
+    await page.locator('[name="services.1.note"]').fill('مسودة أخرى لا تتغير');
+    await choose(page, 'الخدمة من الدليل 1', f.service_name);
+    await page.getByRole('button', { name: 'اختيار: العيادة · الخدمة 1', exact: true }).waitFor();
+    assert.equal(await page.locator('[name="services.0.note"]').inputValue(), 'ملاحظة السطر تبقى');
+    assert.equal(await page.locator('[name="services.1.note"]').inputValue(), 'مسودة أخرى لا تتغير');
+    await choose(page, 'الخدمة من الدليل 1', 'SER-4-001');
+    await modal.waitFor();
+    assert.equal(await modal.locator('[name="quantity"]').inputValue(), '', 'Canceled blood data must not return');
+    assert.equal(await modal.locator('[name="benefit_kind"]').inputValue(), '');
+    await modal.locator('[name="benefit_kind"]').selectOption('transfusion');
+    assert.equal(await modal.locator('[name="hemoglobin_g_dl"]').inputValue(), '');
+    await modal.getByRole('button', { name: 'إلغاء', exact: true }).click();
+    await page.getByRole('region', { name: 'الخدمة 2', exact: true }).getByRole('button', { name: 'إزالة الخدمة', exact: true }).click();
+    const response = page.waitForResponse(r => r.url().endsWith('/clinical') && r.request().method() === 'PUT');
+    await page.getByRole('button', { name: 'حفظ ومتابعة', exact: true }).click();
+    const saved = await response; assert.equal(saved.status(), 200, await saved.text());
+    const payload = saved.request().postDataJSON();
+    assert.equal('blood_benefit' in payload.services[0], false);
+    const read = (await api('GET', `${path}/progress`)).body.data;
+    assert.equal(read.clinical.services.length, 1);
+    assert.equal(read.clinical.services[0].catalog_id, f.service);
+    assert.equal(read.clinical.services[0].blood_bank_event_id, null);
+    assert.equal(read.clinical.services[0].note, 'ملاحظة السطر تبقى');
+    fixture('assert-no-benefit', String(d.id));
+  } finally { await context.close(); }
+});
 async function capture(page, width) {
   await page.evaluate(() => document.fonts.ready);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

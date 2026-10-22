@@ -42,6 +42,13 @@ if (($argv[1] ?? '') === 'prepare') {
     });
     file_put_contents($path, json_encode($f, JSON_THROW_ON_ERROR));
     echo "Prepared isolated synthetic card/blood data-entry fixture.\n";
+} elseif (($argv[1] ?? '') === 'assert-no-benefit') {
+    $f = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+    $dossier = DB::table('patient_dossiers')->where('id', (int) ($argv[2] ?? 0))->where('facility_id', $f['facility'])->first();
+    if (! $dossier || DB::table('blood_bank_people')->where('patient_id', $dossier->patient_id)->where('facility_id', $f['facility'])->exists() || DB::table('blood_transfusions')->where('patient_id', $dossier->patient_id)->where('facility_id', $f['facility'])->exists()) {
+        throw new RuntimeException('Expected a synthetic card without a blood identity or benefit.');
+    }
+    echo "Verified that switching the synthetic service created no blood facts.\n";
 } elseif (($argv[1] ?? '') === 'cleanup') {
     $f = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
     foreach ([$f['clerk_id'], $f['user_id'], $f['viewer_id']] as $id) {
