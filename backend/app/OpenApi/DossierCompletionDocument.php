@@ -15,9 +15,29 @@ use Dedoc\Scramble\Support\Generator\Types\StringType;
 
 class DossierCompletionDocument extends ClinicDocumentTransformer
 {
+    private function bloodBenefit(bool $input = false): ObjectType
+    {
+        $i = fn () => new IntegerType;
+        $s = fn () => new StringType;
+
+        $schema = $this->object([
+            'id' => $i(), 'lock_version' => $i(), 'code' => $s(), 'kind' => $s()->enum(['benefit']),
+            'benefit_kind' => $s()->enum(['issue', 'transfusion']), 'benefit_link_mode' => $s()->enum(['independent', 'linked']), 'issue_event_id' => $i()->nullable(true),
+            'occurred_on' => $s()->format('date'), 'quantity' => $s()->example('0.4500'), 'quantity_unit' => $s()->enum(['kg', 'unit']),
+            'blood_component_id' => $i(), 'component_name' => $s()->nullable(true), 'blood_group' => $s()->nullable(true), 'rh' => $s()->nullable(true),
+            'clinic_id' => $i(), 'responsible_staff_id' => $i(), 'clinic_name' => $s()->nullable(true), 'doctor_name' => $s()->nullable(true),
+            'hemoglobin_g_dl' => $s()->nullable(true), 'crossmatch_result' => $s()->nullable(true), 'beneficiary_entity' => $s()->nullable(true), 'entity_address' => $s()->nullable(true),
+            'screenings' => $this->list($this->object(['analyte' => $s()->enum(['HBsAg', 'HCV', 'HIV']), 'status' => $s()->enum(['not_requested', 'requested', 'pending', 'complete', 'cancelled'])])),
+        ]);
+
+        return $schema->setRequired($input
+            ? ['benefit_kind', 'occurred_on', 'quantity', 'quantity_unit', 'blood_component_id', 'clinic_id', 'responsible_staff_id']
+            : ['id', 'lock_version', 'kind', 'benefit_kind', 'occurred_on', 'quantity', 'quantity_unit', 'blood_component_id', 'clinic_id', 'responsible_staff_id', 'screenings']);
+    }
+
     public static function matches(string $route): bool
     {
-        return $route === 'dossiers/medications' || $route === 'dossiers/prescription-funding' || preg_match('#/(clinical|medications|review|complete|uploads|attachments|export|report|subsequent|new)(/|$)#', $route) === 1;
+        return $route === 'dossiers/medications' || $route === 'dossiers/prescription-funding' || preg_match('#/(blood-benefit-context|blood-benefit-issues|clinical|medications|review|complete|uploads|attachments|export|report|subsequent|new)(/|$)#', $route) === 1;
     }
 
     public function clinical(): ObjectType
@@ -25,6 +45,8 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
         $s = fn () => (new StringType)->nullable(true);
         $i = fn () => new IntegerType;
         $row = $this->object(['id' => $i(), 'lock_version' => $i(), 'catalog_id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'clinic_id' => $i()->nullable(true), 'clinic_name' => $s(), 'doctor_id' => $i()->nullable(true), 'doctor_name' => $s(), 'manual_doctor_name' => $s(), 'execution_location' => $s(), 'guidance_method' => $s(), 'note' => $s()]);
+        $row->addProperty('blood_bank_event_id', $i()->nullable(true));
+        $row->addProperty('blood_benefit', $this->bloodBenefit()->nullable(true));
         $rx = $this->object(['id' => $i(), 'lock_version' => $i(), 'kind' => $s(), 'prescribing_clinic_id' => $i(), 'prescribing_staff_id' => $i(), 'clinic_name' => $s(), 'doctor_name' => $s(), 'prescribed_on' => $s(), 'note' => $s(), 'funding_source_id' => $i()->nullable(true), 'funding_name' => $s(), 'unavailable_reason' => $s(), 'items' => $this->list($this->object(['id' => $i(), 'lock_version' => $i(), 'medication_id' => $i(), 'code' => $s(), 'name_ar' => $s(), 'note' => $s(), 'display_order' => $i()]))])->nullable(true);
         $out = $this->object(['id' => $i(), 'lock_version' => $i(), 'code' => $s(), 'name_ar' => $s(), 'clinic_id' => $i(), 'doctor_id' => $i(), 'clinic_name' => $s(), 'doctor_name' => $s(), 'outcome_on' => $s(), 'note' => $s(), 'referral_target' => $s(), 'outgoing_referral_date' => $s(), 'outgoing_referral_reason' => $s()])->nullable(true);
 
@@ -41,7 +63,22 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
         $fields = ['facility_id' => $i(), 'request_id' => $s()->format('uuid'), 'lock_version' => $i()];
         $required = array_keys($fields);
         $row = ['id' => $i(), 'lock_version' => $i(), 'remove' => new BooleanType, 'void_reason' => $null(), 'note' => $null()];
-        if ($route === 'dossiers/prescription-funding') {
+        if (str_ends_with($route, '/blood-benefit-context') || str_ends_with($route, '/blood-benefit-issues')) {
+            $op->description = 'Read-only patient-bound blood-benefit form context. Requires dossiers.medical.view, dossiers.visits.view and dossiers.services.update in this active facility; never grants blood-bank administration or patient search. Dossier, visit, patient and facility must match. No record is created. The issues endpoint is paginated/searchable and returns only this patient’s unlinked prior issues. All responses private, no-store. Saving uses the existing clinical endpoint, not this GET.';
+            $op->responses = [];
+            $choice = $this->object(['id' => $i(), 'code' => $s(), 'name_ar' => $s()]);
+            $data = str_ends_with($route, '/blood-benefit-issues') ? $this->list($this->bloodBenefit()) : $this->object([
+                'patient' => $this->object(['patient_id' => $i(), 'name' => $s(), 'code' => $s(), 'patient_code' => $s(), 'blood_group' => $null(), 'rh' => $null(), 'person' => $this->object(['phone' => $null()])]),
+                'options' => $this->object(['facility' => $choice, 'capabilities' => $this->object(['issue_create' => new BooleanType, 'transfusion_create' => new BooleanType]), 'can_add_doctor' => new BooleanType, 'blood_components' => $this->list($choice), 'screening_tests' => $this->list(new ObjectType), 'governorates' => $this->list($choice)]),
+            ]);
+            $body = ['data' => $data];
+            if (str_ends_with($route, '/blood-benefit-issues')) {
+                $body['meta'] = $this->object(array_fill_keys(['page', 'per_page', 'total', 'last_page'], $i()));
+            }
+            $op->addResponse(Response::make(200)->setDescription('Patient-bound form context')->setContent('application/json', Schema::fromType($this->object($body))));
+
+            return;
+        } elseif ($route === 'dossiers/prescription-funding') {
             $op->description = 'Active shared medication-source definitions (funding_sources IDs), identical to dossiers/options medication_sources. Required for every prescription kind; legacy NULL is readable, and an unchanged historical disabled source may be retained when editing. Requires same-facility dossiers.visits.view and dossiers.prescriptions.update; does not require treatment.view or directory creation. Private, no-store. Empty funding_sources means approved definitions need operator setup; errors are not empty results.';
             $op->responses = [];
             $op->addResponse(Response::make(200)->setDescription('Active approved sources')->setContent('application/json', Schema::fromType($this->object(['data' => $this->object(['funding_sources' => $this->list($this->object(['id' => $i(), 'code' => $s(), 'name_ar' => $s()]))])]))));
@@ -49,10 +86,11 @@ class DossierCompletionDocument extends ClinicDocumentTransformer
             return;
         } elseif (str_ends_with($route, '/clinical')) {
             $event = $this->object($row + ['catalog_id' => $i(), 'clinic_id' => $i(), 'doctor_id' => $i()->nullable(true), 'manual_doctor_name' => $null()]);
+            $event->addProperty('blood_benefit', $this->bloodBenefit(true));
             $event->required = ['catalog_id', 'clinic_id'];
             $fields += ['services' => $this->list($event), 'procedures' => $this->list($event)];
             $required = [...$required, 'services', 'procedures'];
-            $op->description .= ' Requires dossiers.clinical.update. performed_on is the visit date; correction propagates atomically to dossier-managed events.';
+            $op->description .= ' Services require dossiers.services.update; procedures require dossiers.procedures.update. A newly selected service with server code SER-4-001 requires blood_benefit, using the existing blood event contract: kind=benefit, explicit issue/transfusion, positive kg quantity, date/clinic/responsible doctor matching the visit service, component and conditional transfusion fields. The patient/facility/visit are derived server-side; person_id, person, patient_id, facility_id, visit_id and request_id inside blood_benefit are prohibited. Existing benefits send their linked id/lock_version. Both records and audit are atomic under the outer request_id; retries replay, omission preserves history. Linked services cannot be removed or replaced. Legacy unlinked services are not backfilled. No inventory movement, funding default or reporting period is invented.';
         } elseif ($route === 'dossiers/medications') {
             $fields = ['facility_id' => $i(), 'request_id' => $s()->format('uuid'), 'name_ar' => $s()];
             $required = array_keys($fields);

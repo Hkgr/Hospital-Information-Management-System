@@ -32,6 +32,7 @@ class SaveVisitClinical extends FormRequest
                     $rules["$section.*.$key"] = str_replace('ROW', "$section.*", $value);
                 }
                 $rules["$section.*.id"][] = 'distinct';
+                $rules["$section.*.blood_benefit"] = $section === 'services' ? ['sometimes', 'nullable', 'array'] : ['prohibited'];
             }
         } else {
             $rules['prescription'] = ['present', 'nullable', 'array'];

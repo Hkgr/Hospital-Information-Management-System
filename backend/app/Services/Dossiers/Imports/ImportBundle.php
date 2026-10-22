@@ -60,6 +60,7 @@ class ImportBundle
         // Rebuilt for every preview/commit step; the commit transaction holds
         // these reference locks through the existing clinical writer's save.
         $this->references['funding_sources'] = array_fill_keys(DB::table('funding_sources')->whereIn('id', $this->referenceIds['funding_sources'] ?? [])->where('is_active', true)->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->pluck('id')->all(), true);
+        $this->references['blood_benefit_services'] = array_fill_keys(DB::table('services')->whereIn('id', $this->referenceIds['services'] ?? [])->where('code', 'SER-4-001')->orderBy('id')->when($lock, fn ($q) => $q->lockForUpdate())->pluck('id')->all(), true);
         $people = array_column(array_values(array_filter($rows, fn ($r) => $r['sheet'] === 'Patients')), 'data');
         $codes = array_values(array_unique(array_filter([...array_column($people, 'patient_code'), ...array_column($people, 'legacy_code')])));
         $canonical = DB::table('patients')->whereIn('patient_code', $codes)->when($lock, fn ($q) => $q->lockForUpdate())->get();
@@ -199,7 +200,10 @@ class ImportBundle
                 switch ($child['sheet']) {
                     case 'Diagnoses': $v['diagnoses'][] = $x;
                         break;
-                    case 'Services': $clinical['services'][] = $x;
+                    case 'Services':
+                        $line = (int) $child['row_number'];
+                        $this->require(! isset($this->references['blood_benefit_services'][(int) $x['catalog_id']]), "Services.$line.catalog_id", "ورقة Services، الصف {$line}، الخدمة SER-4-001 (نقل دم): قالب الاستيراد لا يتضمن بيانات الاستفادة المطلوبة. سجّل الخدمة والاستفادة معًا من بطاقة المريض.");
+                        $clinical['services'][] = $x;
                         break;
                     case 'Procedures': $clinical['procedures'][] = $x;
                         break;

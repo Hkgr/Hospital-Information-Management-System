@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\ClinicalAssignmentController;
 use App\Http\Controllers\Api\ClinicController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DoctorController;
+use App\Http\Controllers\Api\DossierBloodBenefitController;
 use App\Http\Controllers\Api\DossierCompletionController;
 use App\Http\Controllers\Api\DossierController;
 use App\Http\Controllers\Api\DossierImportController;
@@ -79,6 +80,9 @@ Route::middleware(['auth:sanctum', 'account.active', 'abilities:api', 'web.idle'
         Route::get('/treatment-options', [$oncology, 'options'])->name('treatment.options');
         Route::get('/session-dose-medications', [$oncology, 'sessionDoseMedications'])->name('session-dose.medications');
         Route::get('/prescription-funding', [DossierCompletionController::class, 'prescriptionFunding'])->name('prescription.funding');
+        foreach (['blood-benefit-context' => false, 'blood-benefit-issues' => true] as $path => $issues) {
+            Route::get('/{dossier}/visits/{visit}/'.$path, [DossierBloodBenefitController::class, 'context'])->whereNumber(['dossier', 'visit'])->defaults('issues', $issues)->name($path);
+        }
         Route::get('/{dossier}/treatment-plans', [$oncology, 'index'])->whereNumber('dossier')->name('treatment.index');
         Route::post('/{dossier}/treatment-plans', [$oncology, 'savePlan'])->whereNumber('dossier')->name('treatment.create');
         Route::get('/{dossier}/treatment-plans/{plan}', [$oncology, 'show'])->whereNumber(['dossier', 'plan'])->name('treatment.show');

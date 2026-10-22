@@ -15,7 +15,6 @@ class DashboardHome
         'services-procedures' => ['title' => 'الخدمات والإجراءات', 'permission' => 'catalog.view'],
         'medications' => ['title' => 'الأدوية', 'permission' => 'catalog.view'],
         'stock' => ['title' => 'المخزون', 'permission' => 'stock.view'],
-        'blood-bank' => ['title' => 'بنك الدم', 'permission' => 'blood_bank.view'],
     ];
 
     public function assemble(array $access): array

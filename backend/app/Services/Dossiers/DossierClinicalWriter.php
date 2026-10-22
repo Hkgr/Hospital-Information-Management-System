@@ -2,6 +2,7 @@
 
 namespace App\Services\Dossiers;
 
+use App\Services\BloodBank\BloodEventWriter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +41,10 @@ class DossierClinicalWriter
                     foreach ($data[$kind] as $i => $row) {
                         $table = 'visit_'.$kind;
                         $old = $this->row($table, $row, ['visit_id' => $visit, 'facility_id' => $f['id']]);
+                        $bloodLink = $kind === 'services' ? ($old->blood_bank_event_id ?? null) : null;
+                        if ($bloodLink && (! empty($row['remove']) || $row['catalog_id'] != $old->$catalog)) {
+                            throw ValidationException::withMessages(["$kind.$i.catalog_id" => 'الخدمة مرتبطة باستفادة دم محفوظة؛ لا يمكن حذفها أو استبدالها وإخفاء الواقعة. يلزم تصحيح الاستفادة وفق قواعدها.']);
+                        }
                         if (! empty($row['remove'])) {
                             $this->void($r, $f, $table, $old, $row, "$kind.$i");
 
@@ -70,6 +75,30 @@ class DossierClinicalWriter
                             throw ValidationException::withMessages(["$kind.$i.catalog_id" => 'اختر عنصرًا فعالًا غير مؤرشف من الدليل.']);
                         }
                         $fields = $location + [$catalog => $row['catalog_id'], 'clinic_id' => $row['clinic_id'], $doctor => $doctorId, 'manual_doctor_name' => $manual, 'note' => $row['note'] ?? null, 'performed_on' => $v->visit_date, 'dossier_managed' => true];
+                        if ($kind === 'services') {
+                            $bloodService = DB::table('services')->where('id', $row['catalog_id'])->where('code', 'SER-4-001')->exists();
+                            if (! empty($row['blood_benefit']) && ! $bloodService) {
+                                throw ValidationException::withMessages(["$kind.$i.blood_benefit" => 'تسجيل الاستفادة متاح لخدمة نقل الدم فقط.']);
+                            }
+                            if ($bloodService && (! $old || $row['catalog_id'] != $old->$catalog) && empty($row['blood_benefit'])) {
+                                throw ValidationException::withMessages(["$kind.$i.blood_benefit" => 'أكمل نموذج تسجيل الاستفادة قبل حفظ خدمة نقل الدم.']);
+                            }
+                            if (! empty($row['blood_benefit'])) {
+                                if (($row['blood_benefit']['occurred_on'] ?? null) !== $v->visit_date || (int) ($row['blood_benefit']['clinic_id'] ?? 0) !== (int) $row['clinic_id'] || (int) ($row['blood_benefit']['responsible_staff_id'] ?? 0) !== (int) $doctorId || $manual) {
+                                    throw ValidationException::withMessages(["$kind.$i.blood_benefit" => 'تاريخ الاستفادة وعيادتها وطبيبها يجب أن يطابقوا سياق الخدمة والزيارة.']);
+                                }
+                                try {
+                                    $fields['blood_bank_event_id'] = app(BloodEventWriter::class)->forVisitService($r, $f, $v, $row['catalog_id'], $row['blood_benefit'], $bloodLink);
+                                } catch (ValidationException $e) {
+                                    throw ValidationException::withMessages(collect($e->errors())->mapWithKeys(fn ($messages, $key) => ["$kind.$i.blood_benefit.$key" => $messages])->all());
+                                }
+                            } elseif ($bloodLink) {
+                                $event = DB::table('blood_bank_events')->where('id', $bloodLink)->where('facility_id', $f['id'])->first();
+                                if (! $event || $event->voided_at || $event->occurred_on !== $v->visit_date || (int) $event->clinic_id !== (int) $row['clinic_id'] || (int) $event->responsible_staff_id !== (int) $doctorId || $manual) {
+                                    throw ValidationException::withMessages(["$kind.$i.blood_benefit" => 'راجع الاستفادة المرتبطة وصحح سياقها مع الخدمة قبل الحفظ.']);
+                                }
+                            }
+                        }
                         $this->persist($r, $f, $table, $old, $fields, ['visit_id' => $visit, 'facility_id' => $f['id'], 'reporting_period_id' => null, 'client_request_id' => (string) Str::uuid()]);
                     }
                 }

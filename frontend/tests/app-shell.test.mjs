@@ -168,6 +168,17 @@ test("desktop and tablet collapse controls retain usable navigation names withou
   } finally { await context.close(); }
 });
 
+test("blood bank navigation is absent even with all blood permissions on desktop and mobile", async () => {
+  for (const width of [390, 1440]) {
+    const access = [{ ...shellAccess[0], roles: [{ code: "super_admin", name_ar: "مدير النظام الشامل" }], permissions: [...shellAccess[0].permissions, "blood_bank.view", "blood_bank.create", "blood_bank.update", "blood_bank.issue.create", "blood_bank.transfusion.create"] }];
+    const { page, context } = await openShell({ width, access });
+    try {
+      if (width === 390) await page.getByRole("button", { name: "فتح قائمة التنقل", exact: true }).click();
+      assert.equal(await page.locator('a[href^="/blood-bank"]').count(), 0);
+    } finally { await context.close(); }
+  }
+});
+
 test("users navigation appears only with users.view", async () => {
   const { context, page } = await openShell({ access: [{ facility: { id: 1, code: "TEST", name_ar: "منشأة اختبار", timezone: "Asia/Damascus" }, roles: [], permissions: ["users.view"] }] });
   try {

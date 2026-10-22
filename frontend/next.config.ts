@@ -36,6 +36,7 @@ const nextConfig: NextConfig = {
       "dossiers/treatment-options",
       "dossiers/session-dose-medications",
       "dossiers/prescription-funding",
+      "dossiers/:dossier(\\d+)/visits/:visit(\\d+)/:lookup(blood-benefit-context|blood-benefit-issues)",
       "dossiers/:dossier(\\d+)/treatment-plans",
       "dossiers/:dossier(\\d+)/treatment-plans/:plan(\\d+)",
       "dossiers/:dossier(\\d+)/treatment-plans/:plan(\\d+)/status",
