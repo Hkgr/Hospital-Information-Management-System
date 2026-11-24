@@ -95,8 +95,8 @@ class DossierQueries
             ->leftJoin('clinics as c', fn ($j) => $j->on('c.id', '=', 'e.clinic_id')->on('c.facility_id', '=', 'e.facility_id'))
             ->where('e.facility_id', $f['id'])->whereIn('e.visit_id', $ids)->whereNull('e.voided_at')
             ->where(fn ($q) => $q->whereNull('e.diagnosed_on')->orWhere('e.diagnosed_on', '<=', $f['today']))
-            ->orderBy('e.id')->get(['e.id', 'e.visit_id', 'n.code', 'n.name_ar as name', 'e.diagnosed_on', 'c.name_ar as clinic', 's.full_name as doctor'])
-            ->groupBy('visit_id')->map(fn ($rows) => $rows->map(fn ($r) => ['id' => (int) $r->id, 'code' => $r->code, 'name' => $r->name, 'diagnosed_on' => $r->diagnosed_on, 'clinic' => $r->clinic, 'doctor' => $r->doctor])->all())->all();
+            ->orderBy('e.id')->get(['e.id', 'e.visit_id', 'n.code', 'n.name_ar as name', 'e.diagnosed_on', 'e.note', 'c.name_ar as clinic', 's.full_name as doctor'])
+            ->groupBy('visit_id')->map(fn ($rows) => $rows->map(fn ($r) => ['id' => (int) $r->id, 'code' => $r->code, 'name' => $r->name, 'diagnosed_on' => $r->diagnosed_on, 'note' => $r->note, 'clinic' => $r->clinic, 'doctor' => $r->doctor])->all())->all();
     }
 
     public function detail(array $f, int $id): array

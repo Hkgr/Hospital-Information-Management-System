@@ -20,6 +20,7 @@ export default function DiagnosisEditor({ row, index, facility, date, canCreate,
       <label>تاريخ التشخيص (اختياري)<input name={`diagnoses.${index}.diagnosed_on`} type="date" value={row.diagnosed_on} onChange={e => change({ ...row, diagnosed_on: e.target.value })} /><small className={styles.hint}>اتركه فارغًا إذا كان غير معروف.</small>{error(`diagnoses.${index}.diagnosed_on`)}</label>
       <div><Picker name={`diagnoses.${index}.clinic_id`} label={`العيادة للتشخيص ${index + 1}`} path={`${base}/clinics?${scope}`} selected={row.clinic} onSelect={clinic => change({ ...row, clinic, doctor: clinic.id === row.clinic?.id ? row.doctor : null })} />{error(`diagnoses.${index}.clinic_id`)}</div>
       <div><ClinicDoctorPicker saved={!!row.id} facility={facility} clinic={row.clinic} date={date} name={`diagnoses.${index}.diagnosing_staff_id`} label={`الطبيب المسؤول عن التشخيص ${index + 1}`} selected={row.doctor} onSelect={doctor=>change({...row,doctor})}/>{error(`diagnoses.${index}.diagnosing_staff_id`)}</div>
+      {row.diagnosis && <label className={styles.full}>ملاحظة التشخيص<textarea name={`diagnoses.${index}.note`} rows={2} maxLength={10000} placeholder="مثل: ناكس، نقائلي، أو تفاصيل إضافية" value={row.note} onChange={e => change({ ...row, note: e.target.value })} />{error(`diagnoses.${index}.note`)}</label>}
     </div>}
     {adding && <NewDirectoryEntry facility={facility} onClose={() => setAdding(false)} onSaved={diagnosis => { change({ ...row, diagnosis }); setRevision(x => x + 1); setAdding(false); }} />}
   </section>;

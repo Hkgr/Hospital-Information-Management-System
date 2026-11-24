@@ -47,7 +47,7 @@ class DossierWizardQueries
                 'clinical' => $visit ? app(DossierVisitSections::class)->read($f, $visit->id) : ['services' => [], 'procedures' => [], 'prescription' => null, 'prescriptions' => [], 'outcome' => null, 'attachment_count' => 0],
                 'progress' => collect(['personal', 'medical', 'visit', 'clinical', 'medications', 'attachments'])->map(fn ($s) => $progress->has($s) ? (array) $progress->get($s) + ['unchanged' => (bool) ($progress->get($s)->unchanged ?? false)] : ['section' => $s, 'state' => 'not_started', 'unchanged' => false, 'last_saved_by' => null, 'last_saved_at' => null, 'lock_version' => 0, 'visit_id' => null])->all(),
                 'prior_visit' => $prior,
-                'visit' => $visit ? (array) $visit + ['diagnoses' => DB::table('visit_diagnoses as e')->join('diagnoses as n', 'n.id', '=', 'e.diagnosis_id')->leftJoin('clinics as c', 'c.id', '=', 'e.clinic_id')->join('staff as s', 's.id', '=', 'e.diagnosing_staff_id')->where('e.visit_id', $visitId)->where('e.facility_id', $f['id'])->whereNull('e.voided_at')->orderBy('e.id')->get(['e.id', 'e.lock_version', 'e.diagnosis_id', 'e.diagnosed_on', 'e.clinic_id', 'e.diagnosing_staff_id', 'n.name_ar as diagnosis_name', 'c.name_ar as clinic_name', 's.full_name as doctor_name'])->all()] : null];
+                'visit' => $visit ? (array) $visit + ['diagnoses' => DB::table('visit_diagnoses as e')->join('diagnoses as n', 'n.id', '=', 'e.diagnosis_id')->leftJoin('clinics as c', 'c.id', '=', 'e.clinic_id')->join('staff as s', 's.id', '=', 'e.diagnosing_staff_id')->where('e.visit_id', $visitId)->where('e.facility_id', $f['id'])->whereNull('e.voided_at')->orderBy('e.id')->get(['e.id', 'e.lock_version', 'e.diagnosis_id', 'e.diagnosed_on', 'e.note', 'e.clinic_id', 'e.diagnosing_staff_id', 'n.name_ar as diagnosis_name', 'c.name_ar as clinic_name', 's.full_name as doctor_name'])->all()] : null];
         });
     }
 
@@ -62,7 +62,7 @@ class DossierWizardQueries
         $clinical = app(DossierVisitSections::class)->read($f, $row->id);
         $diagnoses = DB::table('visit_diagnoses as e')->join('diagnoses as n', 'n.id', '=', 'e.diagnosis_id')->leftJoin('clinics as c', 'c.id', '=', 'e.clinic_id')->join('staff as s', 's.id', '=', 'e.diagnosing_staff_id')
             ->where('e.visit_id', $row->id)->where('e.facility_id', $f['id'])->whereNull('e.voided_at')->orderBy('e.id')
-            ->get(['n.name_ar as diagnosis_name', 'c.name_ar as clinic_name', 's.full_name as doctor_name', 'e.diagnosed_on'])->all();
+            ->get(['n.name_ar as diagnosis_name', 'c.name_ar as clinic_name', 's.full_name as doctor_name', 'e.diagnosed_on', 'e.note'])->all();
 
         return (array) $row + ['diagnoses' => $diagnoses] + $clinical;
     }
