@@ -70,10 +70,11 @@ class SaveDossierSection extends FormRequest
                 'referring_hospital' => [$this->boolean('is_referred') ? 'required' : 'prohibited', 'nullable', 'string', 'max:200'],
                 'referral_date' => [$this->boolean('is_referred') ? 'required' : 'prohibited', 'nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-01', 'before_or_equal:visit_date'],
                 'referral_reason' => [$this->boolean('is_referred') ? 'required' : 'prohibited', 'nullable', 'string', 'max:10000'],
-                'diagnoses' => ['required', 'array', 'max:100'], 'diagnoses.*' => ['array:id,lock_version,diagnosis_id,diagnosed_on,clinic_id,diagnosing_staff_id,remove,void_reason'],
+                'diagnoses' => ['required', 'array', 'max:100'], 'diagnoses.*' => ['array:id,lock_version,diagnosis_id,diagnosed_on,clinic_id,diagnosing_staff_id,note,remove,void_reason'],
                 'diagnoses.*.id' => ['nullable', 'integer', 'min:1', 'distinct'], 'diagnoses.*.lock_version' => ['required_with:diagnoses.*.id', 'integer', 'min:1'],
                 'diagnoses.*.diagnosis_id' => ['required', 'integer', 'min:1'], 'diagnoses.*.diagnosed_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:1000-01-01'],
                 'diagnoses.*.clinic_id' => ['required', 'integer', 'min:1'], 'diagnoses.*.diagnosing_staff_id' => ['required', 'integer', 'min:1'],
+                'diagnoses.*.note' => ['nullable', 'string', 'max:10000'],
                 'diagnoses.*.remove' => ['sometimes', 'boolean'], 'diagnoses.*.void_reason' => ['nullable', 'string', 'max:255'],
                 'unchanged' => ['sometimes', 'boolean']];
             // An empty diagnoses array is a valid partial visit.

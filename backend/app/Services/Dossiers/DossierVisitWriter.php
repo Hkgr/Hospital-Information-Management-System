@@ -88,7 +88,7 @@ class DossierVisitWriter
                     if (! $unchanged && ! app(ClinicCounts::class)->currentDoctors(array_replace($f, ['today' => $input['visit_date']]))->where('c.id', $row['clinic_id'])->where('s.id', $row['diagnosing_staff_id'])->exists()) {
                         throw ValidationException::withMessages(["diagnoses.$index.diagnosing_staff_id" => 'اختر طبيبًا فعالًا من العيادة وله ارتباط يغطي تاريخ الزيارة.']);
                     }
-                    $values = Arr::only($row, ['diagnosis_id', 'clinic_id', 'diagnosing_staff_id']) + ['diagnosed_on' => $row['diagnosed_on'] ?? null, 'updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($previous?->lock_version ?? 0) + 1];
+                    $values = Arr::only($row, ['diagnosis_id', 'clinic_id', 'diagnosing_staff_id']) + ['diagnosed_on' => $row['diagnosed_on'] ?? null, 'note' => array_key_exists('note', $row) ? $row['note'] : $previous?->note, 'updated_by' => $r->user()->id, 'updated_at' => now(), 'lock_version' => ($previous?->lock_version ?? 0) + 1];
                 }
                 if ($previous) {
                     $rowId = $previous->id;

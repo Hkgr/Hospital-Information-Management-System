@@ -21,7 +21,7 @@ class DossierDocumentTransformer extends ClinicDocumentTransformer
         $integer = fn () => new IntegerType;
         $dossierStatus = fn () => (new StringType)->enum(['draft', 'active']);
         $visitStatus = fn () => (new StringType)->enum(['draft', 'complete']);
-        $diagnosis = $this->object(['id' => $integer(), 'code' => $text(), 'name' => $text(), 'diagnosed_on' => $nullable(), 'clinic' => $nullable(), 'doctor' => $nullable()]);
+        $diagnosis = $this->object(['id' => $integer(), 'code' => $text(), 'name' => $text(), 'diagnosed_on' => $nullable(), 'note' => $nullable(), 'clinic' => $nullable(), 'doctor' => $nullable()]);
         $clinical = $this->object(['id' => $integer(), 'name' => $text(), 'date' => $text()]);
         $visit = $this->object(['id' => $integer(), 'visit_no' => $text(), 'visit_date' => $text(), 'status' => $visitStatus(), 'visit_clinic' => $nullable(), 'attending_doctor' => $nullable(), 'diagnoses' => $this->list($diagnosis)]);
         $catalogItem = $clinical->clone()->addProperty('code', $text());
